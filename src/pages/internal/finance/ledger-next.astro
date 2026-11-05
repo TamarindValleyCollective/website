@@ -5,7 +5,8 @@
 // still needs, row-specific control names, a themed action bar that says why Post is disabled, Ctrl+Enter to accept a row's
 // suggestions and move to the next, and a card layout on a phone. It also adds a party from the cell, shows the months with Close
 // month, and keeps a post failure on screen until dismissed. It has the line sheet too (split into rows, refunds,
-// review decisions, add a party). Not here yet: the "apply to the other N" prompt.
+// review decisions, add a party), asks before applying a change to the other ticked lines, and Alt+Up / Alt+Down move to the same cell
+// on the line above or below. Everything the current ledger does is here.
 import StaffLayout from '../../../layouts/StaffLayout.astro';
 import SignInGate from '../../../components/SignInGate.astro';
 ---
@@ -41,6 +42,7 @@ import SignInGate from '../../../components/SignInGate.astro';
         <button type="button" id="accept-all" class="button button--outline" hidden>Fill in the suggestions</button>
       </div>
       <div id="postnote" class="postnote" role="alert" hidden></div>
+      <div id="applyprompt" class="postnote applyprompt" role="status" hidden></div>
       <p id="progress" class="progress" aria-live="polite"></p>
 
       <div class="grid" id="grid" role="table" aria-label="Bank lines">
@@ -53,7 +55,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       <div id="empty" class="hint" aria-live="polite" hidden></div>
       <h2 class="list-title">Months</h2>
       <ul class="list" id="months"></ul>
-      <p class="hint">Click a heading to sort, type under one to search that column; click a narration to split the line, refund it, or see its history. Tab moves through the cells; Ctrl+Enter on a line accepts its suggestions and moves to the next.</p>
+      <p class="hint">Click a heading to sort, type under one to search that column; click a narration to split the line, refund it, or see its history. Tab moves through the cells; Alt+Up and Alt+Down go to the same cell on the line above or below; Ctrl+Enter on a line accepts its suggestions and moves to the next.</p>
     </div>
     <div id="actionbar" class="abar" role="region" aria-label="Selected lines" hidden></div>
     <dialog id="party-sheet" class="sheet" aria-labelledby="party-title"></dialog>
@@ -640,6 +642,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       box.title = filterErrors[box.dataset.col!] ?? '';
     }
     if (toTop) scrollEl.scrollTop = 0;
+    $('applyprompt').hidden = true;
     renderChips();
     renderHead();
     renderProgress(crumbs);
@@ -775,6 +778,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       setDraft(l.id, { nature: nature.value });
       syncRow(l);
     });
+    nature.addEventListener('change', () => offerToOthers(l, 'nature', nature.value));
     const natureTick = tick(`Accept the suggested wording for ${who}`, () => edit(l, 'nature', ghostOf(l, 'nature')));
     const natureText = h('span', { class: 'lcell-text' });
     const pillSlot = h('span', { class: 'pillslot' });
@@ -797,6 +801,11 @@ import SignInGate from '../../../components/SignInGate.astro';
         e.preventDefault();
         acceptRow(l);
         focusRow(index + 1, 'categoryId');
+      } else if (e.altKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+        e.preventDefault();
+        const field: Field = e.target === nature ? 'nature' : e.target === party ? 'partyId' : 'categoryId';
+        const step = e.key === 'ArrowDown' ? 1 : -1;
+        focusRow(index + step, field, step);
       } else if (e.key === 'Enter' && e.target === nature) {
         e.preventDefault();
         focusRow(index + 1, 'nature');
@@ -878,6 +887,31 @@ import SignInGate from '../../../components/SignInGate.astro';
   function edit(l: Line, field: Field, value: string) {
     setDraft(l.id, { [field]: value } as Partial<Draft>);
     syncRow(l);
+    offerToOthers(l, field, value);
+  }
+  // Changing a cell on a line that is ticked, with others ticked too, asks whether to set the same on all of them (never silently).
+  function offerToOthers(l: Line, field: Field, value: string) {
+    const box = $('applyprompt');
+    const others = selectedLines().filter((x) => x.id !== l.id);
+    if (!value || !tstate.rowSelection[l.id] || !others.length) {
+      box.hidden = true;
+      return;
+    }
+    const lk = data!.lookups;
+    const what = field === 'categoryId' ? `category ${nameOf(lk.categories, value)}` : field === 'partyId' ? `party ${nameOf(lk.parties, value)}` : `the wording “${value}”`;
+    box.replaceChildren(
+      h('span', { text: `Also set ${what} on the other ${others.length} selected ${others.length === 1 ? 'line' : 'lines'}?` }),
+      button('Apply', () => {
+        for (const x of others) {
+          setDraft(x.id, { [field]: value } as Partial<Draft>);
+          syncRow(x);
+        }
+        box.hidden = true;
+        showToast(`Applied to ${others.length} ${others.length === 1 ? 'line' : 'lines'}.`);
+      }, 'button button--small'),
+      button('No', () => (box.hidden = true), 'button button--outline button--small'),
+    );
+    box.hidden = false;
   }
   // ---- adding a party that is not in the register, from the cell or the suggestion
   const NEW_PARTY = '__new_party__';
@@ -948,9 +982,9 @@ import SignInGate from '../../../components/SignInGate.astro';
     setDraft(l.id, patch);
     syncRow(l);
   }
-  function focusRow(index: number, field: Field) {
+  function focusRow(index: number, field: Field, step = 1) {
     let i = index;
-    while (lines[i] && !editable(lines[i])) i++;
+    while (lines[i] && !editable(lines[i])) i += step;
     if (!lines[i]) return;
     pendingFocus = { index: i, field };
     virtualizer.scrollToIndex(i, { align: 'auto' });
@@ -1341,6 +1375,12 @@ import SignInGate from '../../../components/SignInGate.astro';
     border-radius: var(--radius);
     background: var(--tvc-error-bg);
     color: var(--tvc-error-text);
+  }
+
+  .lnext .applyprompt {
+    border-color: var(--tvc-line-strong);
+    background: var(--tvc-surface);
+    color: var(--tvc-ink);
   }
 
   .lnext .postnote[hidden] {

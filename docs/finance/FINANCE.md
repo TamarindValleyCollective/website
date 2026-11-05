@@ -369,6 +369,8 @@ Modelled on how ServiceNow lists work, because the sheet's convenience was selec
   (or after a write) pays the full 1-2 s. Any write through `/api/finance-admin` drops the cache, and the pages add `fresh=1` to the first
   list read after a write, because another warm instance may not have seen it. Anything that writes behind the function's back (the
   history load, a script) shows up within 10 s.
+  The prototype also asks "Also set category X on the other N selected lines?" when a ticked line's cell is changed, and Alt+Up / Alt+Down
+  move to the same cell on the line above or below.
   **The unit and year of maintenance can now be set.** `fin_allocations.household_id` and `maintenance_year` (migration 0084) were read
   by the page but nothing could write them. The line sheet (both pages) shows **Unit** and **Maintenance year** when the category is
   maintenance (year defaults to the financial year of the payment); the save endpoint validates them (the unit must exist, the year looks
