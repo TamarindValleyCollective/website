@@ -38,8 +38,10 @@ export const BLOCKS = [
     icon: 'finance',
     pages: [
       { id: 'finance', label: 'Overview', path: '/internal/finance/', module: 'finance' },
+      { id: 'finance-ledger', label: 'Ledger', path: '/internal/finance/ledger/', module: 'finance' },
       { id: 'finance-parties', label: 'Parties', path: '/internal/finance/parties/', module: 'finance' },
       { id: 'finance-import', label: 'Import', path: '/internal/finance/import/', module: 'finance' },
+      { id: 'finance-rules', label: 'Rules', path: '/internal/finance/rules/', module: 'finance' },
       { id: 'finance-requests', label: 'Requests', path: '/internal/finance-requests/', module: 'finance-requests' },
       { id: 'event-payments', label: 'Payments', path: '/internal/event-payments/', module: 'event-payments' },
     ],

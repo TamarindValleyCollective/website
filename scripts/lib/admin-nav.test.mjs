@@ -27,9 +27,9 @@ test('page ids and paths are unique, and every path is an internal page', () => 
   assert.equal(HOME.path, '/internal/');
 });
 
-test('Finance holds the money pages: Overview, Parties, Import, Requests and Payments', () => {
+test('Finance holds the money pages: Overview, Ledger, Parties, Import, Rules, Requests and Payments', () => {
   const finance = BLOCKS.find((b) => b.id === 'finance');
-  assert.deepEqual(finance.pages.map((p) => p.label), ['Overview', 'Parties', 'Import', 'Requests', 'Payments']);
+  assert.deepEqual(finance.pages.map((p) => p.label), ['Overview', 'Ledger', 'Parties', 'Import', 'Rules', 'Requests', 'Payments']);
 });
 
 test('Community holds Members and Photos; Photos moved out of Operations', () => {
@@ -53,7 +53,7 @@ test('a person sees only the pages their roles open: no roles, only Today', () =
 test('a finance person sees the finance pages their module opens, and Requests only with that module', () => {
   const nav = visibleNav(admin(['finance']), 'finance');
   assert.deepEqual(nav.map((b) => b.id), ['finance']);
-  assert.deepEqual(pageIds(nav), ['finance', 'finance-parties', 'finance-import']);
+  assert.deepEqual(pageIds(nav), ['finance', 'finance-ledger', 'finance-parties', 'finance-import', 'finance-rules']);
   const withRequests = visibleNav(admin(['finance', 'finance-requests']), 'finance');
   assert.ok(pageIds(withRequests).includes('finance-requests'));
 });

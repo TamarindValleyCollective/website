@@ -41,10 +41,17 @@ Sign-off on the category list and on which rule results should always be reviewe
 > Read `docs/finance/README.md`, `DESIGN.md` and `sessions/05-ledger-and-review.md`, plus the notes in sessions 03 and 04. Build session 05 test-first with the tdd skill, starting from the posting trigger and the rules engine.
 
 ## Done
-**In progress (started 2026-11-05, branch `worktree-finance-05-ledger`).**
+**Built 2026-11-05** on branch `worktree-finance-05-ledger` (draft PR #529). Migration `0083_finance_ledger.sql` is **not yet applied**.
 
-Slice 1 done: `finance-allocation.mjs`, `finance-rules.mjs` (with tests), and migration `0083_finance_ledger.sql` (not applied; its
-guards were exercised on a throwaway Postgres). Details in [FINANCE.md](../FINANCE.md), "Ledger".
+What exists: `finance-allocation.mjs` and `finance-rules.mjs` (pure, tested); `lib/finance-ledger.ts` with its routes in
+`finance-admin.mts`; the Ledger page (to allocate, to review, all; split editor; refunds; bulk apply; months and close) and the Rules
+page (rules, categories with merge, the requester); the Overview's "Needs you" counts. Details in [FINANCE.md](../FINANCE.md), "Ledger".
 
-Next slices: the store and routes, then the Ledger and Review screens, rules page, period close, endpoint test, `ARCHITECTURE.md`.
-Needs from Sharath, before the screens are final: sign-off on the category list and on which rule results should always be reviewed.
+Verified: unit tests, an endpoint test through the real function, the migration's guards on a throwaway Postgres, and the pages in a
+browser against invented data. **Not verified:** anything against the real 1,376 lines, the light appearance, or a phone.
+
+Deviations from the brief: `fin_vouchers` is a table only, so "reimbursement without a bill" flags every reimbursement until session 08;
+a UPI-id rule condition is not offered (the Paytm import keeps no UPI id); recategorising a category's entries has a route but no screen.
+
+Needs from Sharath: which rule results should always be reviewed (today only the five flags, plus a per-rule switch), and a trial run on
+one real month before 06 loads history.

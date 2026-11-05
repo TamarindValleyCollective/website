@@ -21,7 +21,7 @@ import { attentionOf } from '../../scripts/lib/finance-attention.mjs';
 import { PARTY_ID, addPayeeAccount, createParty, listParties, mergeParty, retirePayeeAccount, revealPayeeAccount, reviewParty, unmergeParty, updateParty, verifyPayeeAccount } from './lib/finance-parties';
 import { heldCoverage, reconciliationOf, runImport } from './lib/finance-import';
 import { supabaseImportStore } from './lib/finance-import-store';
-import { LEDGER_ID, bulkAllocate, closePeriod, ledgerLine, listLedger, listPeriods, listRules, recategorise, reviewAllocation, saveAllocations, saveCategory, saveRule, setRequester } from './lib/finance-ledger';
+import { LEDGER_ID, bulkAllocate, closePeriod, ledgerCounts, ledgerLine, listLedger, listPeriods, listRules, recategorise, reviewAllocation, saveAllocations, saveCategory, saveRule, setRequester } from './lib/finance-ledger';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
@@ -60,7 +60,8 @@ async function handleOverview(req: Request): Promise<Response> {
       heldCoverage(store),
       reconciliationOf(store),
     ]);
-    const attention = attentionOf({ parties, accounts, coverage, reconciliation, batches, bankAccountCount: bankAccounts, today: todayIST() });
+    const ledger = await ledgerCounts().catch(() => ({ unallocated: 0, review: 0 }));
+    const attention = { ...attentionOf({ parties, accounts, coverage, reconciliation, batches, bankAccountCount: bankAccounts, today: todayIST() }), toAllocate: ledger.unallocated, toReview: ledger.review };
     return jsonResponse({
       entity: entities[0]?.name ?? null,
       role: staff.role,

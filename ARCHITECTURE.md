@@ -109,7 +109,7 @@ flowchart TD
         FUNC_SRC14["netlify/functions/event-payments-admin.mts<br/>Serverless function, Google Sign-In gated —<br/>per-event registrations/cancellations/money<br/>collected from Supabase, issues real Razorpay<br/>refunds (tier-suggested, admin-confirmed)"]
         FUNC_SRC15["netlify/functions/usage-collect.mts<br/>Scheduled function (cron, every 6 hours) — appends<br/>the Supabase database size, open connections + biggest tables, Netlify's plan<br/>credits + billing cycle and Resend's email quota to usage_snapshots for<br/>the free-tier usage dashboard. Optional secrets:<br/>NETLIFY_ACCESS_TOKEN, RESEND_USAGE_API_KEY,<br/>CLOUDFLARE_ANALYTICS_TOKEN"]
         FUNC_SRC16["netlify/functions/usage-admin.mts<br/>Serverless function, Google Sign-In gated (usage module) —<br/>overview of free-tier/credit usage, live domain<br/>expiry lookups, typed-in provider readings and<br/>price/limit settings (admins only, audit-logged)"]
-        FUNC_SRC20["netlify/functions/finance-admin.mts<br/>Serverless function, Google Sign-In gated (finance module) —<br/>session 01: overview (counts, access); session 03: statement import<br/>(Axis yearly Excel files, Paytm UPI export) and bank account setup;<br/>auditor visits and imports are written to fin_audit_log"]
+        FUNC_SRC20["netlify/functions/finance-admin.mts<br/>Serverless function, Google Sign-In gated (finance module) —<br/>session 01: overview (counts, access); session 03: statement import<br/>(Axis yearly Excel files, Paytm UPI export) and bank account setup;<br/>auditor visits and imports are written to fin_audit_log;<br/>session 05: ledger (allocations, review, rules, categories, period close)"]
         FUNC_SRC17["netlify/functions/usage-alerts.mts<br/>Scheduled function (cron, hourly) — evaluates the<br/>usage rules and emails core-team@tvc.farm one digest<br/>per new or worsened warning; remembers what it sent"]
         SCRIPT_SRC["scripts/build-chat-context.mjs<br/>Strips nav/footer from built HTML →<br/>content corpus for the chatbot"]
     end
@@ -476,6 +476,14 @@ outside both the local machine and Netlify (the member-update-email workflow).
   existing beneficiary list is loaded by the operator script `scripts/import-fin-parties.mjs`, which reads a Google
   Sheet (shared with the Drive service account) and runs against Supabase; it is not deployed. Rotating
   `FINANCE_PAYEE_KEY` (or the key in use) makes stored payee details unreadable until re-entered; it is separate from `STAFF_MFA_KEY`, so rotating one never breaks the other.
+  **Ledger (session 05, migration `0083_finance_ledger.sql`, applied separately):** `finance-admin.mts` also serves the ledger
+  (`/api/finance-admin/ledger`, `/allocations/:id/review`, `/rules`, `/categories`, `/periods`; code in `lib/finance-ledger.ts`,
+  pages `/internal/finance/ledger/` and `/internal/finance/rules/`). `fin_allocations` explains each bank line (a line posts only
+  when its allocations add up to it exactly; posted rows are frozen; a refund is a reversing row), `fin_rules` suggests a
+  category, and `fin_vouchers` is the table for bills (no screen yet). `fin_save_allocations`, `fin_close_period`,
+  `fin_merge_category` and `fin_recategorise_allocations` run in one transaction each, service role only, and three triggers
+  repeat the money rules in the database. Every change is written to `fin_audit_log` first, with ids and counts only. No new
+  external service.
 - **`netlify/functions/lib/site-retrieval.ts`** — shared retrieval + Anthropic-call plumbing
   factored out of `chat.mts` so it and `search-ai.mts` below can't drift apart:
   `selectRelevantPages()`, `matchMembers()`, `formatPages()`/`formatMembers()`, the

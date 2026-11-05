@@ -14,7 +14,7 @@ model are in [DESIGN.md](DESIGN.md); how to build it is in [README.md](README.md
 | 01 follow-up | `0078_finance_categories_and_projects.sql` **applied to TVC ERP on 2026-11-02**. |
 | 03 Statement import | Built on branch `finance-03-statement-import` (draft PR). Migration `0080` **applied to TVC ERP on 2026-11-02**. |
 | 04 Parties & payees | Built on branch `finance-04-parties` (draft PR). Migration `0079` **applied to TVC ERP on 2026-11-02** (recorded as `finance_parties`); checked afterwards: both tables empty, RLS on, no anon/authenticated grants, guard trigger present. |
-| 05 Ledger & review | **In progress** on branch `worktree-finance-05-ledger` (draft PR). Slice 1 built: posting rules, rules engine, review flags, migration `0083` (**NOT yet applied**). Endpoints and screens not built. |
+| 05 Ledger & review | **Built, draft PR #529** (branch `worktree-finance-05-ledger`): posting rules, rules engine, ledger and rules screens, period close. Migration `0083` **NOT yet applied**; apply it before this merges. Not yet tried against real data. |
 | 02, 06-13 | Not started |
 
 ## Access
@@ -219,30 +219,54 @@ Page `/internal/finance/import/`; routes in `finance-admin.mts` (`GET /imports`,
   A bank API would feed the same planning/storing step; none is built.
 - **Audit.** `finance.import_committed` (counts only) is written before anything is stored; `finance.bank_account_added`.
 
-## Ledger (session 05, slice 1: logic and migration only)
+## Ledger (session 05, migration `0083_finance_ledger.sql`, NOT yet applied)
 
-**Not live.** No endpoint or screen yet; migration `0083_finance_ledger.sql` is **not applied** to TVC ERP. Apply it before
-any code that reads `fin_allocations` is merged.
+Pages `/internal/finance/ledger/` (the Ledger, with the review queue and the months) and `/internal/finance/rules/` (rules,
+categories, the requester); routes in `lib/finance-ledger.ts`. **Apply `0083` before this merges**; the pages and routes
+read `fin_allocations`, `fin_rules` and `fin_periods` and fail without it. Not yet tried against the real statement.
 
-- **Posting rule** (`scripts/lib/finance-allocation.mjs`, mirrored in the database). A bank line has one or more allocations; each
+- **Posting rule** (`scripts/lib/finance-allocation.mjs`, repeated in the database). A bank line has one or more allocations; each
   amount is positive whole paise and its direction is the line's. A line is *unallocated*, *partly allocated* or *allocated*. Saved
   rows are drafts (`posted_at` null) until they add up to the line exactly, then every row is posted in one step. Posted rows are
   frozen except their review fields; a line already posted is corrected by a reversal, never by editing.
 - **Refunds and corrections.** A reversal is a row on a line that moves money the other way, with `reverses_allocation_id` and a
-  reason. It must reverse a posted, non-reversal allocation and never more than is left of it. Reports net by direction.
+  reason. It must reverse a posted, non-reversal allocation and never more than is left of it, and it takes its category and party
+  from the original. Reports net by direction.
 - **Periods.** `period` is the first day of a month and defaults to the line's month; a salary paid in May can sit in April. A
   closed month refuses a save unless the person holds `close-period` and gives a reason (`periodWriteDecision`); the database
-  refuses unless the app passes `p_override`.
-- **Rules** (`scripts/lib/finance-rules.mjs`, table `fin_rules`). A matcher is a set of conditions that must all hold (narration
-  text, UPI id, any of some remark keywords, direction, amount range); one with no condition never matches. Lowest priority number
-  wins, ties go to the older rule. A rule gives party, category, a nature template (`{counterparty}`, `{remark}`) and `needs_review`.
-  With no rule, the farm manager's own UPI remark seeds the nature, and a payment to the requester's own party is a reimbursement.
-- **Review flags** (`reviewReasons`): nothing explains the line; a circle payment to the requester's own party; a payment to an
-  account that is new, changed or unverified; a reimbursement with no bill; a rule marked always-review.
-- **Database guards** (checked on a throwaway local Postgres, 2026-11-04): a short sum cannot be posted, an over-sum cannot be
+  refuses unless the app passes `p_override`. A month closes (`close-period`) only when every line dated in it is posted and no
+  allocation in it waits for review; otherwise the answer says how many.
+- **Rules** (`finance-rules.mjs`, table `fin_rules`, page Rules). A matcher is a set of conditions that must all hold (narration
+  text, any of some remark keywords, direction, amount range); one with no condition never matches. Lowest priority number wins, ties
+  go to the older rule. A rule gives party, category, a nature template (`{counterparty}`, `{remark}`) and `needs_review`. With no
+  rule, the farm manager's own UPI remark seeds the nature, and a payment to the requester's own party is a reimbursement. The party
+  of a line is guessed only from an exact name match (Paytm counterparty, then the UPI narration); two parties with one name give none.
+  A UPI-id condition is in the engine but not offered: the Paytm import keeps no UPI id.
+- **Review flags** (`reviewReasons`): nothing explains the line; a circle payment to the requester's own party; a payment to a party
+  whose live account is unverified (a party with no account on record is not flagged); a reimbursement with no bill (there is no
+  bill capture yet, so every reimbursement is flagged until session 08); a rule marked always-review. Flags are worked out by the
+  server when rows are saved, from the same rules the screen showed. The person who entered a flagged row cannot mark it checked
+  (a director can).
+- **The requester** is `fin_entities.requester_party_id`, set on the Rules page by a director.
+- **Categories can be merged or split later.** Rename, add and retire work at any time. `fin_merge_category` moves every allocation,
+  rule and project line to another category of the **same type** (so no budget figure changes) and retires the old one.
+  `fin_recategorise_allocations` moves chosen allocations (splitting a category); changing type asks for confirmation. These two
+  are the only way a posted allocation's category changes (a session setting the guard trigger looks for), and both are audited.
+  The merge is on the Rules page; recategorising has a route (`POST /categories/recategorise`) but no screen yet.
+- **Screens.** Ledger: filter chips (To allocate, To review, All) with counts, search, "Select several" for one category on many
+  lines, a sheet per line with what the bank and Paytm said, the rule's suggestion, and an editor that splits the line into rows
+  until nothing is left (Save draft, Post), a refund picker, and a reason box when a closed month is touched. Verified in a browser
+  (desktop and 500px, dark appearance) with invented data; not yet with real data or in the light appearance.
+- **Audit.** Every save, review decision, rule and category change, period close and recategorisation is written to `fin_audit_log`
+  first, with ids and counts only (never a name, narration or amount); if it cannot be written nothing changes.
+- **Scale.** The ledger list works the state of every line out in the function (a few thousand lines today). Move it into SQL
+  before the ledger reaches tens of thousands of rows.
+- **Database guards** (checked on a throwaway local Postgres, 2026-11-05): a short sum cannot be posted, an over-sum cannot be
   saved, a split posts, a posted row cannot be changed or deleted, a reversal needs the opposite direction and cannot exceed what is
-  left or be reversed itself, a closed month refuses without the override, and the functions run for `service_role` only.
+  left or be reversed itself, a closed month refuses without the override, a merge refuses across types, and the functions run for
+  `service_role` only.
 - **Tables and functions** (`0083`): `fin_rules`, `fin_allocations`, `fin_vouchers` (table only; capture is session 08),
-  `fin_save_allocations(line, rows, actor, post, override)`, `fin_close_period(entity, month, actor)`.
-- **Still to build in this session:** the store and routes in `finance-admin.mts`, the Ledger and Review screens (split editor,
-  bulk apply, rules page), reimbursement handling in the screens, period close, an endpoint test, and the `ARCHITECTURE.md` entry.
+  `fin_entities.requester_party_id`, `fin_save_allocations`, `fin_close_period`, `fin_merge_category`, `fin_recategorise_allocations`.
+- **Tests:** `finance-allocation`, `finance-rules`, `finance-ui` (pure) and `finance-ledger-endpoint` (the real function through
+  `requireStaff` with Supabase stubbed: posting, splits, closed months, flags, maker-is-not-checker, refunds, period close, bulk,
+  rules, categories, the requester).

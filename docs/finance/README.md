@@ -69,5 +69,6 @@ run at any time. Run 13 last.
 | 01 | Built 2026-11-02, draft PR (`finance-01-foundation`) | Registry modules, grant expiry, reference tables, overview endpoint and page. Migration `0077` applied 2026-11-02. See [FINANCE.md](FINANCE.md). |
 | 03 | Built 2026-11-02, draft PR (`finance-03-statement-import`) | Yearly Axis files (any number, any order, chain checked across years) and the Paytm export; preview then confirm. Migration `0080` applied 2026-11-02; real statements and Paytm export imported and verified the same day (PRs #525, #526). See [FINANCE.md](FINANCE.md). |
 | 04 | Built 2026-11-02, draft PR (`finance-04-parties`) | Parties directory, encrypted payee accounts, reveal/verify behind the step-up, shared-account flags, operator import from a Google Sheet. Migration `0079` **applied 2026-11-02**. See [FINANCE.md](FINANCE.md). |
-| 04 follow-up | Design-review changes, draft PR #528 | Admin navigation by blocks, needs-you Overview, verification work queue and evidence (migration `0082`, **not yet applied**), states, Import regrouped. See [FINANCE.md](FINANCE.md). |
-| 02, 05-13 | Not started | |
+| 04 follow-up | Design-review changes, draft PR #528 | Admin navigation by blocks, needs-you Overview, verification work queue and evidence (migration `0082`, applied 2026-11-02), states, Import regrouped. See [FINANCE.md](FINANCE.md). |
+| 05 | Built 2026-11-05, draft PR #529 (`worktree-finance-05-ledger`) | Posting rules, rules engine and review flags, ledger and rules screens, bulk apply, refunds, period close, category merge. Migration `0083` **not yet applied**. See [FINANCE.md](FINANCE.md). |
+| 02, 06-13 | Not started | |

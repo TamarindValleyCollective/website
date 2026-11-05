@@ -157,7 +157,7 @@ async function reversibleFor(line: Json): Promise<Json[]> {
 }
 
 // What the server would suggest for a line, and why it would need a person. Shared by the detail view and by save.
-async function reviewContext(line: Json, upi: Json | null, ctx: Awaited<ReturnType<typeof lookups>>) {
+async function reviewContext(ctx: Awaited<ReturnType<typeof lookups>>) {
   const [rules, allAccounts] = await Promise.all([
     rows('/fin_rules?select=id,priority,matcher,party_id,category_id,nature_template,needs_review,active&active=eq.true'),
     rows('/fin_party_accounts?select=party_id,status,retired_on&status=neq.superseded'),
@@ -182,7 +182,7 @@ export async function ledgerLine(req: Request, lineId: string): Promise<Response
     const [upi] = await rows(`/fin_upi_lines?bank_line_id=eq.${lineId}&select=counterparty,remarks,is_circle,upi_ref`);
     const allocations = await rows(`/fin_allocations?bank_line_id=eq.${lineId}&select=id,party_id,category_id,project_id,amount_paise,period,nature,remarks,source,rule_id,review_state,review_reason,reverses_allocation_id,reversal_reason,posted_at&order=created_at.asc`);
     const ctx = await lookups();
-    const rc = await reviewContext(line, upi ?? null, ctx);
+    const rc = await reviewContext(ctx);
     const requesterIds = ctx.requesterPartyId ? [ctx.requesterPartyId] : [];
     const posted = allocations.some((a) => a.posted_at);
     let proposal = null as Json | null;
@@ -247,7 +247,7 @@ async function saveLine(staff: { id: string }, capabilities: string[], lineId: s
   const partyIds = new Set(ctx.parties.map((p) => p.id as string));
   const projectIds = new Set(ctx.projects.map((p) => p.id as string));
   const [upi] = await rows(`/fin_upi_lines?bank_line_id=eq.${lineId}&select=counterparty,remarks,is_circle`);
-  const rc = await reviewContext(line, upi ?? null, ctx);
+  const rc = await reviewContext(ctx);
   const requesterIds = ctx.requesterPartyId ? [ctx.requesterPartyId] : [];
 
   // Reversal rows take their category and party from the allocation they undo.
@@ -268,7 +268,7 @@ async function saveLine(staff: { id: string }, capabilities: string[], lineId: s
     } else prepared.push({ ...r, source: ['manual', 'rule', 'upi_remark'].includes(r.source) ? r.source : 'manual' });
   }
 
-  const plan = planPosting(line, prepared, { allowRemainder: !post });
+  const plan = planPosting(line, prepared, { allowRemainder: !post }) as { ok: boolean; errors: string[]; rows: Json[] };
   if (!plan.ok) return { ok: false, status: 400, error: plan.errors[0] };
   for (const [i, r] of plan.rows.entries()) {
     const category = categoryById.get(r.categoryId);
@@ -278,7 +278,7 @@ async function saveLine(staff: { id: string }, capabilities: string[], lineId: s
   }
 
   // A closed month needs close-period and a reason.
-  const months = [...new Set(plan.rows.map((r) => r.period))];
+  const months = [...new Set(plan.rows.map((r) => r.period as string))];
   const closed = new Set(ctx.closedMonths.map((m) => String(m).slice(0, 10)));
   let override = false;
   for (const m of months) {
@@ -334,7 +334,7 @@ async function saveLine(staff: { id: string }, capabilities: string[], lineId: s
     console.error('[finance-admin] save allocations failed', err instanceof Error ? err.message : err);
     return { ok: false, status: 409, error: 'This line changed while you were editing it, or does not add up. Reload and try again.' };
   }
-  for (const id of new Set(dbRows.map((r) => r.rule_id).filter(Boolean))) {
+  for (const id of new Set(dbRows.map((r) => r.rule_id).filter((x): x is string => Boolean(x)))) {
     if (post) {
       const [rule] = await rows(`/fin_rules?id=eq.${id}&select=hit_count`);
       if (rule) await rest(`/fin_rules?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify({ hit_count: rule.hit_count + 1 }) });
@@ -618,4 +618,17 @@ export async function closePeriod(req: Request, month: string): Promise<Response
   } catch (err) {
     return serverError(err, 'close period');
   }
+}
+
+// For the Overview's "Needs you": how many lines are not posted yet and how many allocations wait for a second look.
+export async function ledgerCounts(): Promise<{ unallocated: number; review: number }> {
+  const { lines, byLine } = await loadLedger(null, null);
+  let unallocated = 0;
+  let review = 0;
+  for (const l of lines) {
+    const allocs = byLine.get(l.id) ?? [];
+    if (!allocs.some((a) => a.posted_at)) unallocated++;
+    if (allocs.some((a) => a.review_state !== 'ok')) review++;
+  }
+  return { unallocated, review };
 }
