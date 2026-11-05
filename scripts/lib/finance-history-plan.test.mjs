@@ -26,7 +26,9 @@ test('the sheet\'s labels map to categories', () => {
   assert.equal(cat('CS Charges'), 'Professional fees');
   assert.equal(cat('CA/CS Charges'), 'Professional fees');
   assert.equal(cat('Insurance'), 'Insurance');
-  assert.equal(cat('Donations'), 'Other income');
+  assert.equal(cat('Donations'), 'Operational and miscellaneous', 'a donation paid out is an expense');
+  assert.equal(mapLabels('Donations', '', 'debit').categoryName, 'Operational and miscellaneous');
+  assert.equal(mapLabels('Donations', '', 'credit').categoryName, 'Other income', 'one received is income');
 });
 
 test('CBDT tax is a direct tax: Income tax', () => {

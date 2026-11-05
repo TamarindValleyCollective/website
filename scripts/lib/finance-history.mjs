@@ -186,18 +186,19 @@ const SIMPLE = {
   'cs charges': 'Professional fees',
   'ca/cs charges': 'Professional fees',
   insurance: 'Insurance',
-  donations: 'Other income',
 };
 const PROJECT_CATEGORY = 'Structures and infrastructure';
 
 /**
- * What a tracker row's Details and Type mean for the ledger. Returns { status: 'mapped' | 'blank' | 'unmapped', categoryName?, project?, maintenanceYear?,
+ * What a tracker row's Details and Type mean for the ledger (`direction` matters only for Donations). Returns { status: 'mapped' | 'blank' | 'unmapped', categoryName?, project?, maintenanceYear?,
  * defaulted? }. `maintenanceYear` is the year a "Maintenance (24-25)" label names, which can be earlier than the year it was paid in. `project` marks a
  * Farm Project row (the Project bucket). `defaulted` marks a label whose category was a default choice, not a certainty (Farm Capex).
  */
-export function mapLabels(details, type) {
+export function mapLabels(details, type, direction = 'debit') {
   const d = norm(details);
   const t = norm(type);
+  // A donation is an expense when TVC pays it (the first load filed three paid-out ones under income, and they were moved), income only if received.
+  if (d === 'donations') return { status: 'mapped', categoryName: direction === 'credit' ? 'Other income' : 'Operational and miscellaneous' };
   if (d === 'farm project' || (d === '' && t === 'project')) return { status: 'mapped', categoryName: PROJECT_CATEGORY, project: true };
   const maintenance = /^maintenance \((\d{2})-(\d{2})\)$/.exec(d);
   if (maintenance) {
@@ -262,7 +263,7 @@ export function planAllocations(matches, { categories, parties, people = [], hou
 
   // One row's allocation, or the reason it cannot be made.
   function build(row, paise, how) {
-    const m = mapLabels(row.details, row.type);
+    const m = mapLabels(row.details, row.type, row.direction);
     if (m.status === 'blank') return { skip: { kind: 'blank', reason: 'No label (Details and Type are blank).' } };
     if (m.status === 'unmapped') return { skip: { kind: 'unmapped', reason: 'The label is not one the load knows.' } };
     const id = categoryId.get(m.categoryName.toLowerCase());

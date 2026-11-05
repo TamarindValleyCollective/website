@@ -366,7 +366,7 @@ pure rules in `scripts/lib/finance-history.mjs` (tested on invented rows). Count
   miscellaneous; Groceries, Bank Charges, Petty Cash, Insurance → same-named; Telecom Charges, Power → Utility bills; Online Services → Software and
   subscriptions; Visit/Camp Revenue → Hospitality receipts; Event Revenue → Event receipts; Taxes, Land Tax → Land and local taxes; **CBDT Tax and Tax
   Refund → Income tax (CBDT taxes are direct taxes)**; Interest Earned → Interest income; FD Investment → Sinking fund deposits; CS and CA/CS Charges →
-  Professional fees; Donations → Other income; **Farm Capex → Structures and infrastructure (a default, counted and flagged)**. A row with no Details
+  Professional fees; Donations → Operational and miscellaneous when paid out (Other income only if received); **Farm Capex → Structures and infrastructure (a default, counted and flagged)**. A row with no Details
   is left unallocated for a person (92 of them), as is any label the load does not know.
 - **Member maintenance keeps the year it is FOR.** "Maintenance (24-25)" becomes category Member maintenance with `maintenance_year` 2024-25 (migration
   `0084`, **applied 2026-11-05**), while `period` stays the month the money moved. A member sometimes pays an earlier year late (13 payments in the first dry run), and the
@@ -391,7 +391,12 @@ pure rules in `scripts/lib/finance-history.mjs` (tested on invented rows). Count
   TVC ERP: all posted, source `import`, no actor; every line adds up to its bank line; a salary batch became 10 allocations on one line; a maintenance payment for 2023-24
   carried its year and a household; the Farm Project line created the placeholder project for FY 2024 (status proposed); one approximate match was sent to review;
   every period is the first of a month and within one month of the bank date; one counts-only audit row was written (its detail shows the whole plan's counts, not
-  just the canary's). **The full load has not run.** Posted allocations cannot be deleted, so a wrong load can only be
+  just the canary's). **Full load run 2026-11-05: 778 more lines, 0 failed.** In total **1,031 allocations on 783 bank lines**, all posted (source `import`), every line adding up to its
+  bank line, ₹2,34,94,151 loaded; 178 maintenance rows each with a year and a household (2023-24: 12, 2024-25: 64, 2025-26: 55, 2026-27: 47); 21 Farm Project rows on placeholder
+  projects for FY 2024, 2025 and 2026; 8 sent to review; 440 with a party in the register. 117 bank lines since April 2024 are still unallocated (92 with no label in the tracker,
+  25 the tracker does not mention). Per category the counts equal the plan's. **Corrected the same day:** the 3 "Donations" rows were payments OUT (₹30,000) that the load had filed under Other
+  income; they were moved to Operational and miscellaneous with `fin_recategorise_allocations` (one audit row, `finance.allocations_recategorised`), and the mapping now
+  files a paid-out donation as an expense. Posted allocations cannot be deleted, so a wrong load can only be
   corrected by reversals: that is why the canary comes first, and why a purpose-built, audited "unload imports" function (import-sourced allocations only) was
   proposed to Sharath.
 - **Pre-load audit (5 Nov 2026, counts only):** every planned line adds up to its bank line; the tracker's total equals loaded + unlabeled + no-bank-line
