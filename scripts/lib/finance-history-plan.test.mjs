@@ -3,7 +3,7 @@
 // Every name, narration and amount here is invented.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applyPlans, mapLabels, planAllocations } from './finance-history.mjs';
+import { applyPlans, mapLabels, memberNamesFromMaster, parseHouseholdOverrides, planAllocations } from './finance-history.mjs';
 
 test('the sheet\'s labels map to categories', () => {
   const cat = (details, type = '') => mapLabels(details, type).categoryName;
@@ -131,7 +131,8 @@ test('a couple written as "First & First" finds the one household that has both 
   assert.equal(asHousehold('Rahul & Kavya'), 'h-singh');
   assert.equal(asHousehold('PRIYA & RAHUL'), 'h-verma', 'either order, any case');
   assert.equal(asHousehold('Rahul & Meera'), null, 'no household has both');
-  assert.equal(asHousehold('Rahul & Sunita'), null);
+  assert.equal(asHousehold('Rahul & Sunita'), null, 'Rahul is in two households and Sunita in none: a tie');
+  assert.equal(asHousehold('Priya & Sunita'), 'h-verma', 'only one of the pair is known, but only one household has her');
   assert.equal(asHousehold('Rahul Verma & Priya Verma'), 'h-verma', 'full names work too');
   assert.equal(asHousehold('Rahul'), null, 'one first name alone is not enough');
   assert.equal(asHousehold('Meera Das'), 'h-das');
@@ -233,4 +234,49 @@ test('re-running changes nothing: the second run finds every line already alloca
   assert.equal(result.saved, 0);
   assert.equal(result.skippedExisting, 2);
   assert.equal(second.saved.length, 0);
+});
+
+test('the sheet\'s Member Master gives member names by farm unit, matched to the ledger\'s households by farm unit', () => {
+  const grid = [
+    ['#', 'Name', 'Farm Unit #', 'Cluster', 'House #'],
+    ['1', 'Ramjee Iyer', 'F-12', '', ''],
+    ['2', 'Harshadha Iyer', ' f-12 ', '', ''],
+    ['3', 'Meera Das', 'F-7', '', ''],
+    ['4', 'Unknown Person', 'F-99', '', ''],
+    ['5', '', 'F-1', '', ''],
+  ];
+  const households = [{ id: 'h12', farm_unit: 'F-12' }, { id: 'h7', farm_unit: 'F-7' }];
+  const people = memberNamesFromMaster(grid, households);
+  assert.deepEqual(people.map((p) => [p.name, p.household_id]), [['Ramjee Iyer', 'h12'], ['Harshadha Iyer', 'h12'], ['Meera Das', 'h7']]);
+  // The couple as the tracker writes it finds the household, though neither full name was typed.
+  const r = row(2, { direction: 'credit', fromName: 'Ramjee & Harshadha', details: 'Maintenance (23-24)', type: 'Member Contribution' });
+  const out = planAllocations(match([{ row: r, line: { ...line('L1'), direction: 'credit' }, how: 'exact' }]), { categories, parties, people });
+  assert.equal(out.plans[0].rows[0].household_id, 'h12');
+});
+
+test('a sheet without the headings it needs gives no names rather than guessing', () => {
+  assert.deepEqual(memberNamesFromMaster([['A', 'B'], ['x', 'y']], [{ id: 'h', farm_unit: 'F-1' }]), []);
+});
+
+test('a person\'s answers (name -> farm unit) are read back from the worklist file, and unknown units are reported, not guessed', () => {
+  const csv = [
+    '"name in the sheet","rows","which household is it? (fill in the farm unit)"',
+    '"Ramya & Karthik","3","F-12"',
+    '"Nisha, Paul","2"," f-7 "',
+    '"Somebody Else","1",""',
+    '"Odd Name","1","F-99"',
+  ].join('\n');
+  const { overrides, unknownUnits } = parseHouseholdOverrides(csv, [{ id: 'h12', farm_unit: 'F-12' }, { id: 'h7', farm_unit: 'F-7' }]);
+  assert.equal(overrides.get('ramya karthik'), 'h12');
+  assert.equal(overrides.get('nisha paul'), 'h7');
+  assert.equal(overrides.size, 2, 'a blank answer is no answer');
+  assert.deepEqual(unknownUnits, ['Odd Name']);
+});
+
+test('an answer from a person wins over the automatic matching, whatever the name looks like', () => {
+  const r = row(2, { direction: 'credit', fromName: 'Ramya & Karthik', details: 'Maintenance (25-26)', type: 'Member Contribution' });
+  const overrides = new Map([['ramya karthik', 'h-given']]);
+  const out = planAllocations(match([{ row: r, line: { ...line('L1'), direction: 'credit' }, how: 'exact' }]), { categories, parties, people, householdOverrides: overrides });
+  assert.equal(out.plans[0].rows[0].household_id, 'h-given');
+  assert.equal(out.counts.maintenanceWithoutHousehold, 0);
 });

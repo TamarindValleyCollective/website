@@ -225,7 +225,7 @@ const fyOfDate = (iso) => (Number(iso.slice(5, 7)) >= 4 ? Number(iso.slice(0, 4)
  * sheet row number and why. An approximate match is planned but sent to review. `householdWanted` lists the maintenance rows loaded without a
  * household (by sheet row), for a person to attribute.
  */
-export function planAllocations(matches, { categories, parties, people = [] }) {
+export function planAllocations(matches, { categories, parties, people = [], householdOverrides = new Map() }) {
   // A person can be found by name; they count only if that name leads to exactly one household.
   const personEntries = [...new Map(people.map((p) => [p.id, { id: p.id, name: p.name }])).values()];
   const householdsOf = new Map();
@@ -235,11 +235,17 @@ export function planAllocations(matches, { categories, parties, people = [] }) {
   for (const p of people) firstNames.set(p.household_id, new Set([...(firstNames.get(p.household_id) ?? []), normaliseName(p.name).split(' ')[0]]));
   const householdFor = (name) => {
     if (!name) return null;
+    // What a person decided (the worklist file) beats any guess.
+    const decided = householdOverrides.get(normaliseName(name));
+    if (decided) return decided;
     const parts = String(name).split(/\s*(?:&|,|\band\b)\s*/i).map((x) => normaliseName(x).split(' ')[0]).filter(Boolean);
     if (parts.length >= 2) {
-      // Two or more people named: the one household that has all of them.
-      const found = [...firstNames].filter(([, set]) => parts.every((first) => set.has(first))).map(([household]) => household);
-      return found.length === 1 ? found[0] : null;
+      // Two or more people named: the one household that has the most of them. A couple may be only half in the records, so one name is enough
+      // when no other household matches as well; a tie finds no household.
+      const scored = [...firstNames].map(([household, set]) => [household, parts.filter((first) => set.has(first)).length]).filter(([, n]) => n > 0);
+      const best = Math.max(0, ...scored.map(([, n]) => n));
+      const top = scored.filter(([, n]) => n === best);
+      return top.length === 1 ? top[0][0] : null;
     }
     const hit = matchParty(name, personEntries);
     const set = hit ? householdsOf.get(hit.partyId) : null;
@@ -345,4 +351,74 @@ export async function applyPlans(plans, store) {
     }
   }
   return result;
+}
+
+/**
+ * Member names from the sheet's Member Master tab (heading names "Name" and "Farm Unit #"), tied to the ledger's households by farm unit
+ * ({ id, farm_unit }). The sheet lists each member of a household, so it names people the member records do not. Returns rows like
+ * { id, name, household_id }, one per person; a unit the ledger does not know, or a blank name, is left out.
+ */
+export function memberNamesFromMaster(grid, households) {
+  const header = (grid[0] ?? []).map((h) => text(h).toLowerCase());
+  const name = header.indexOf('name');
+  const unit = header.indexOf('farm unit #');
+  if (name < 0 || unit < 0) return [];
+  const unitKey = (u) => text(u).toLowerCase().replace(/\s+/g, '');
+  const householdOf = new Map(households.map((h) => [unitKey(h.farm_unit), h.id]));
+  const out = [];
+  grid.slice(1).forEach((r, i) => {
+    const household = householdOf.get(unitKey(r[unit]));
+    if (text(r[name]) && household) out.push({ id: `master-${i + 2}`, name: text(r[name]), household_id: household });
+  });
+  return out;
+}
+
+// A small CSV reader: quoted fields, doubled quotes, commas and newlines inside quotes.
+function csvRows(textIn) {
+  const rows = [];
+  let row = [];
+  let cell = '';
+  let quoted = false;
+  for (let i = 0; i < textIn.length; i++) {
+    const c = textIn[i];
+    if (quoted) {
+      if (c === '"' && textIn[i + 1] === '"') (cell += '"', i++);
+      else if (c === '"') quoted = false;
+      else cell += c;
+    } else if (c === '"') quoted = true;
+    else if (c === ',') (row.push(cell), (cell = ''));
+    else if (c === '\n' || c === '\r') {
+      if (c === '\r' && textIn[i + 1] === '\n') i++;
+      row.push(cell);
+      cell = '';
+      if (row.some((x) => x !== '')) rows.push(row);
+      row = [];
+    } else cell += c;
+  }
+  row.push(cell);
+  if (row.some((x) => x !== '')) rows.push(row);
+  return rows;
+}
+
+/**
+ * Read back the worklist file the directors fill in: the heading "name in the sheet" and the heading that starts "which household" (the farm unit).
+ * Returns { overrides: Map(normalised name -> household id), unknownUnits: [names whose unit the ledger does not know] }. A blank answer is no answer.
+ */
+export function parseHouseholdOverrides(csvText, households) {
+  const [header = [], ...body] = csvRows(csvText);
+  const lower = header.map((h) => text(h).toLowerCase());
+  const nameAt = lower.indexOf('name in the sheet');
+  const unitAt = lower.findIndex((h) => h.startsWith('which household'));
+  const overrides = new Map();
+  const unknownUnits = [];
+  if (nameAt < 0 || unitAt < 0) return { overrides, unknownUnits };
+  const unitKey = (u) => text(u).toLowerCase().replace(/\s+/g, '');
+  const householdOf = new Map(households.map((h) => [unitKey(h.farm_unit), h.id]));
+  for (const r of body) {
+    if (!text(r[unitAt])) continue;
+    const id = householdOf.get(unitKey(r[unitAt]));
+    if (id) overrides.set(normaliseName(r[nameAt]), id);
+    else unknownUnits.push(text(r[nameAt]));
+  }
+  return { overrides, unknownUnits };
 }

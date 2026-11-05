@@ -5,7 +5,9 @@
 // it again changes nothing. Needs migration 0084 (the maintenance year and household columns) applied first.
 //
 //   netlify dev:exec -- node scripts/load-fin-history.mjs --sheet <spreadsheetId> [--tab "<tab name>"] [--since 2024-04-01] [--out review.csv]
-//   netlify dev:exec -- node scripts/load-fin-history.mjs --sheet <spreadsheetId> [--tab ...] [--since ...] --apply
+//   netlify dev:exec -- node scripts/load-fin-history.mjs --sheet <spreadsheetId> [--tab ...] [--since ...] [--households answers.csv] --apply
+//
+// --households reads the worklist of payers whose household could not be found, with the farm unit a person has filled in against each name.
 //
 // The sheet id is passed in (or FIN_HISTORY_SHEET_ID), never kept in this public repo, and the sheet must be shared with the Drive
 // service account (as for scripts/import-fin-parties.mjs). `netlify dev:exec` injects SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY and the
@@ -14,7 +16,8 @@
 import { writeFileSync } from 'node:fs';
 import { getSheetValues } from './lib/google-drive.mjs';
 import { restHeaders } from './lib/supabase.mjs';
-import { applyPlans, matchTracker, parseTracker, planAllocations } from './lib/finance-history.mjs';
+import { readFileSync } from 'node:fs';
+import { applyPlans, matchTracker, memberNamesFromMaster, parseHouseholdOverrides, parseTracker, planAllocations } from './lib/finance-history.mjs';
 
 const args = process.argv.slice(2);
 const arg = (name) => (args.includes(name) ? args[args.indexOf(name) + 1] : undefined);
@@ -78,8 +81,15 @@ const parties = (await pages('/fin_parties?select=id,name,kind,active,merged_int
 const names = await pages('/member_people?select=id,full_name&order=id.asc');
 const links = await pages('/member_household_members?select=household_id,person_id&order=person_id.asc,household_id.asc');
 const nameOf = new Map(names.map((p) => [p.id, p.full_name]));
-const people = links.filter((l) => nameOf.get(l.person_id)).map((l) => ({ id: l.person_id, name: nameOf.get(l.person_id), household_id: l.household_id }));
-const plan = planAllocations(m, { categories, parties, people });
+const households = await pages('/member_households?select=id,farm_unit&order=id.asc');
+const fromMaster = memberNamesFromMaster(await getSheetValues(sheetId, "'Member Master'!A:J"), households);
+const people = [...links.filter((l) => nameOf.get(l.person_id)).map((l) => ({ id: l.person_id, name: nameOf.get(l.person_id), household_id: l.household_id })), ...fromMaster];
+console.log(`Member names for finding a household: ${people.length} (${fromMaster.length} from the sheet's Member Master).`);
+// What the directors decided about payers the names could not place (the worklist file with the farm unit filled in).
+const householdsFile = arg('--households');
+const { overrides: householdOverrides, unknownUnits } = householdsFile ? parseHouseholdOverrides(readFileSync(householdsFile, 'utf8'), households) : { overrides: new Map(), unknownUnits: [] };
+if (householdsFile) console.log(`Households decided by a person: ${householdOverrides.size}${unknownUnits.length ? `; ${unknownUnits.length} name(s) with a farm unit the ledger does not know: ${unknownUnits.join('; ')}` : ''}.`);
+const plan = planAllocations(m, { categories, parties, people, householdOverrides });
 console.log('');
 console.log(`Plan: ${plan.plans.length} bank lines get ${plan.counts.allocations} allocations.`);
 console.log(`  by category: ${show(plan.counts.byCategory)}`);

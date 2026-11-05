@@ -48,7 +48,7 @@ Decisions (Sharath, 2026-11-05): the default label mapping, with Farm Project in
 later), member maintenance keeping its year and finding the payer's household, CBDT tax as Income tax. Details in [FINANCE.md](../FINANCE.md), "History load".
 
 Still to do: review the dry run; run `--apply`; the month-by-category reconciliation report; load FY 2023-24 if wanted; then the
-placeholder-project TODO and the 65 maintenance payments that need a household.
+placeholder-project TODO and the 41 maintenance payments (14 names) that need a household from a person (`--households`).
 
 Deviation from the brief: it says the script creates bank lines and allocations; the bank lines were imported from the statements in session 03, so
 this load only matches the tracker to them and creates allocations. Rules are not seeded from the sheet (see FINANCE.md).

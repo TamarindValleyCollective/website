@@ -370,10 +370,11 @@ pure rules in `scripts/lib/finance-history.mjs` (tested on invented rows). Count
   is left unallocated for a person (92 of them), as is any label the load does not know.
 - **Member maintenance keeps the year it is FOR.** "Maintenance (24-25)" becomes category Member maintenance with `maintenance_year` 2024-25 (migration
   `0084`, **applied 2026-11-05**), while `period` stays the month the money moved. A member sometimes pays an earlier year late (13 payments in the first dry run), and the
-  year is what lets it be set against that year's outstanding. The payer's **household** is found from the "From" name against the members' names:
-  a full name or the shortened form the bank prints, or a couple written "First & First" (the one household that has both). A name that fits two
-  households finds none. 113 of 178 found a household in the first dry run; the other 65 are loaded without one and listed by sheet row in the review
-  file for a person to attribute (session 10, the maintenance dues, builds on this).
+  year is what lets it be set against that year's outstanding. The payer's **household** is found from the "From" name against member names, taken from the member records AND the sheet's *Member Master*
+  tab (name and Farm Unit #, tied to a household by farm unit; the sheet lists spouses the records do not): a full name or the shortened form the bank
+  prints, or a couple written "First & First" (the one household that has the most of them; a tie finds none). 137 of 178 found a household; the other
+  41 come from only 14 distinct names. They are loaded without a household and listed in a worklist file (one line per name, with candidate farm
+  units); `--households answers.csv` reads back the farm unit a person fills in, and an answer beats any guess. Session 10 (the dues) builds on this.
 - **Farm Project → the Project bucket.** Each such row names a placeholder project for its financial year, "Farm projects (details to add)", status
   proposed, created by `--apply`, under the category Structures and infrastructure. **TODO (Sharath asked to be reminded): record the real projects
   (owner, approval date, planned breakdown) and move these allocations onto them.** Allocations are frozen once posted, so moving one is a reversal and a
