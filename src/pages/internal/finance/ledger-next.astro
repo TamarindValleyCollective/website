@@ -675,6 +675,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   if (getToken()) void load();
   else showGate();
 </script>
+<script is:inline src="https://accounts.google.com/gsi/client"></script>
 
 <style is:global>
   .lnext .proto-tag {
