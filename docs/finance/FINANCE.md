@@ -275,3 +275,31 @@ categories, the requester); routes in `lib/finance-ledger.ts`. `0083` is applied
 - **Tests:** `finance-allocation`, `finance-rules`, `finance-ui` (pure) and `finance-ledger-endpoint` (the real function through
   `requireStaff` with Supabase stubbed: posting, splits, closed months, flags, maker-is-not-checker, refunds, period close, bulk,
   rules, categories, the requester).
+
+## Suggestions (session 05 follow-up: a category, a party and "what it was for" for every line)
+
+`scripts/lib/finance-suggest.mjs` (pure, tested in `finance-suggest.test.mjs` with invented narrations in the real statement's
+shapes), used by `lib/finance-ledger.ts`. It only proposes; a person posts, and nothing is created or posted without a click.
+
+- **Where the clues come from, strongest first:** (1) a rule a director wrote; (2) what was posted before for the same party or the
+  same name in the same direction (3 or more earlier postings, 80% or more to one category, is confident; fewer is fairly sure or a
+  guess; a coin toss suggests no category); (3) the bank's own entries, matched to a category by name (service charges and the tax on
+  them to Bank charges, interest to Interest income, ATM cash to Petty cash; a renamed or retired category is simply not suggested);
+  (4) the narration: the counterparty's name and the remark the payer typed (the Paytm remark when there is one).
+- **Reading a narration** (`parseNarration`): UPI (name is the 4th part, payer's remark the 6th), net-banking NEFT and RTGS (the payee is
+  the part after the transaction reference), IMPS, internal transfers, card payments (merchant), and the bank's own entries. A remark is
+  ignored if it looks like a bank name, an IFSC, a generic word or fewer than three characters.
+- **Party:** an exact match to the register (case, punctuation and "Pvt Ltd" ignored), or the shortened form a bank prints (every word
+  is the start of a distinct word of exactly one party's name). Two parties that fit, or one short word, match no one.
+- **A name that is not in the register** is offered as a **new party** (vendor for a payment out, customer for money in). In the editor
+  the add-party form opens by itself, pre-filled; "Add a new party…" in any party picker does the same. It uses the existing create-party
+  route (needs `allocate`), warns if the name is already there, and adds the party to every picker in the sheet. Bank details are added
+  and verified later on the Parties page.
+- **The list** shows "Suggested: category, party, wording (confident)" under each unallocated line. **"Post these N as suggested"** posts
+  the confident ones on the page after a confirmation: the client sends only line ids; the server works the suggestion out again, skips
+  any line that already has rows or is not high confidence (and says why), uses the category name as the wording when none is known, and
+  audits each post like any other. The line's sheet explains the suggestion in plain words ("4 earlier payments like this were all
+  Materials and supplies").
+- **It improves as you post:** each posted line teaches the next. Loading the sheet's history (session 06) will teach it far more at once.
+- **Not done:** suggestions are not yet turned into rules with one click; the amount (a repeating figure such as a rent or a salary) is
+  not a clue yet; merchants on cards are only matched to the register by name.

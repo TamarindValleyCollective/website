@@ -10,7 +10,8 @@ import { rest } from './staff-mfa-store';
 import { capabilitiesForRole } from './staff-registry';
 import { logFinanceAction } from './finance-audit';
 import { financialYearOf, lineState, periodOf, periodWriteDecision, planPosting, planReversal } from '../../../scripts/lib/finance-allocation.mjs';
-import { REVIEW_REASONS, guessPartyId, proposeAllocation, reviewReasons, validateRule } from '../../../scripts/lib/finance-rules.mjs';
+import { REVIEW_REASONS, reviewReasons, validateRule } from '../../../scripts/lib/finance-rules.mjs';
+import { buildHistory, suggest } from '../../../scripts/lib/finance-suggest.mjs';
 
 type Json = Record<string, any>;
 export const LEDGER_ID = /^[0-9a-f-]{36}$/i;
@@ -83,7 +84,7 @@ async function loadLedger(from: string | null, to: string | null) {
   const range = `${from ? `&tran_date=gte.${from}` : ''}${to ? `&tran_date=lte.${to}` : ''}`;
   const [lines, allocations] = await Promise.all([
     rowsAll(`/fin_bank_lines?select=id,bank_account_id,tran_date,narration,direction,amount_paise&order=tran_date.desc,created_at.desc,id.asc${range}`) as Promise<LineRow[]>,
-    rowsAll('/fin_allocations?select=bank_line_id,amount_paise,review_state,posted_at&order=id.asc'),
+    rowsAll('/fin_allocations?select=bank_line_id,amount_paise,review_state,posted_at,party_id,category_id,nature,reverses_allocation_id&order=id.asc'),
   ]);
   const byLine = new Map<string, Json[]>();
   for (const a of allocations) byLine.set(a.bank_line_id, [...(byLine.get(a.bank_line_id) ?? []), a]);
@@ -120,6 +121,8 @@ export async function listLedger(req: Request): Promise<Response> {
     });
     const page = matched.slice(offset, offset + PAGE);
     const ids = page.map((l) => l.id);
+    const ctx = await lookups();
+    const sc = await suggestionContext(lines, byLine, ctx);
     const upi = ids.length ? await rows(`/fin_upi_lines?select=bank_line_id,counterparty,remarks,is_circle&bank_line_id=in.(${ids.join(',')})`) : [];
     const upiOf = new Map(upi.map((u) => [u.bank_line_id as string, u]));
     const accounts = await rows('/fin_bank_accounts?select=id,label');
@@ -143,8 +146,9 @@ export async function listLedger(req: Request): Promise<Response> {
         isCircle: Boolean(upiOf.get(l.id)?.is_circle),
         allocatedPaise: (byLine.get(l.id) ?? []).reduce((n, a) => n + a.amount_paise, 0),
         ...summarise(l),
+        suggestion: summarise(l).state === 'allocated' ? null : compactSuggestion(suggestFor(l, upiOf.get(l.id) ?? null, ctx, sc)),
       })),
-      lookups: await lookups(),
+      lookups: ctx,
       reasons: REVIEW_REASONS,
     });
   } catch (err) {
@@ -170,6 +174,29 @@ async function reversibleFor(line: Json): Promise<Json[]> {
 }
 
 // What the server would suggest for a line, and why it would need a person. Shared by the detail view and by save.
+// What the suggestion engine needs besides the line: the rules, the account states, and an index of what was posted before.
+async function suggestionContext(lines: LineRow[], byLine: Map<string, Json[]>, ctx: Awaited<ReturnType<typeof lookups>>) {
+  const rc = await reviewContext(ctx);
+  const past: Json[] = [];
+  for (const l of lines) {
+    for (const a of byLine.get(l.id) ?? []) {
+      if (a.posted_at && !a.reverses_allocation_id) past.push({ narration: l.narration, direction: l.direction, party_id: a.party_id, category_id: a.category_id, nature: a.nature });
+    }
+  }
+  const requesterIds: string[] = ctx.requesterPartyId ? [ctx.requesterPartyId] : [];
+  return { rc, history: buildHistory(past), requesterIds };
+}
+type SuggestionContext = Awaited<ReturnType<typeof suggestionContext>>;
+
+const suggestFor = (line: Json, upi: Json | null, ctx: Awaited<ReturnType<typeof lookups>>, sc: SuggestionContext): Json =>
+  suggest({ line, upi, rules: sc.rc.rules, parties: ctx.parties, categories: ctx.categories, history: sc.history, requesterPartyIds: sc.requesterIds }) as Json;
+
+// The short form shown in the list: no reasons (the line's own sheet has those).
+const compactSuggestion = (x: Json) =>
+  x.categoryId || x.partyId || x.nature || x.newParty
+    ? { categoryId: x.categoryId, partyId: x.partyId, nature: x.nature, confidence: x.confidence, newPartyName: x.newParty?.name ?? null }
+    : null;
+
 async function reviewContext(ctx: Awaited<ReturnType<typeof lookups>>) {
   const [rules, allAccounts] = await Promise.all([
     rows('/fin_rules?select=id,priority,matcher,party_id,category_id,nature_template,needs_review,active&active=eq.true'),
@@ -195,17 +222,20 @@ export async function ledgerLine(req: Request, lineId: string): Promise<Response
     const [upi] = await rows(`/fin_upi_lines?bank_line_id=eq.${lineId}&select=counterparty,remarks,is_circle,upi_ref`);
     const allocations = await rows(`/fin_allocations?bank_line_id=eq.${lineId}&select=id,party_id,category_id,project_id,amount_paise,period,nature,remarks,source,rule_id,review_state,review_reason,reverses_allocation_id,reversal_reason,posted_at&order=created_at.asc`);
     const ctx = await lookups();
-    const rc = await reviewContext(ctx);
-    const requesterIds = ctx.requesterPartyId ? [ctx.requesterPartyId] : [];
+    const { lines: everyLine, byLine } = await loadLedger(null, null);
+    const sc = await suggestionContext(everyLine, byLine, ctx);
     const posted = allocations.some((a) => a.posted_at);
     let proposal = null as Json | null;
+    let suggestion = null as Json | null;
     let reasons: string[] = [];
     if (!posted && allocations.length === 0) {
-      const partyId = guessPartyId(line, upi ?? null, ctx.parties);
-      proposal = proposeAllocation(line, upi ?? null, rc.rules, { requesterPartyIds: requesterIds, partyId, reimbursementCategoryId: rc.reimbursementCategoryId });
-      if (proposal) {
-        const category = ctx.categories.find((c) => c.id === proposal!.categoryId);
-        reasons = reviewReasons({ line, upi, proposal, requesterPartyIds: requesterIds, partyAccountState: rc.stateOfParty(proposal.partyId), categoryType: category?.type, hasVoucher: false });
+      suggestion = suggestFor(line, upi ?? null, ctx, sc);
+      if (suggestion.categoryId || suggestion.partyId || suggestion.nature) {
+        proposal = { categoryId: suggestion.categoryId, partyId: suggestion.partyId, nature: suggestion.nature, amountPaise: line.amount_paise, period: suggestion.period, source: suggestion.source, ruleId: suggestion.ruleId };
+      }
+      if (suggestion.categoryId) {
+        const category = ctx.categories.find((c) => c.id === suggestion!.categoryId);
+        reasons = reviewReasons({ line, upi, proposal: { partyId: suggestion.partyId, categoryId: suggestion.categoryId, source: suggestion.source, needsReview: suggestion.needsReview }, requesterPartyIds: sc.requesterIds, partyAccountState: sc.rc.stateOfParty(suggestion.partyId), categoryType: category?.type, hasVoucher: false });
       } else reasons = ['unexplained'];
     }
     const capabilities = capabilitiesForRole('finance', auth.staff.role) as string[];
@@ -231,6 +261,7 @@ export async function ledgerLine(req: Request, lineId: string): Promise<Response
         posted: Boolean(a.posted_at),
       })),
       proposal,
+      suggestion,
       reasons,
       reversible: capabilities.includes('allocate') && !posted ? await reversibleFor(line) : [],
       lookups: ctx,
@@ -366,6 +397,54 @@ export async function saveAllocations(req: Request, lineId: string): Promise<Res
     return result.ok ? jsonResponse({ saved: result.saved, posted: result.posted }) : fail(result.error, result.status);
   } catch (err) {
     return serverError(err, 'save allocations');
+  }
+}
+
+// Post the suggestions the engine is confident about, for the lines a person picked (or the page they are looking at).
+// The server works the suggestions out itself; the client only says which lines, never what to post. A line that already has
+// rows, or whose suggestion is not high confidence, is left alone and reported.
+export async function acceptSuggestions(req: Request): Promise<Response> {
+  const auth = await requireStaff(req, 'finance', 'allocate');
+  if (!auth.ok) return fail(auth.error, auth.status);
+  const body = await readBody(req);
+  const lineIds: string[] = Array.isArray(body?.lineIds) ? body!.lineIds : [];
+  if (!body || !lineIds.length || lineIds.length > 100 || !lineIds.every((id) => LEDGER_ID.test(String(id)))) return fail('Choose between 1 and 100 lines.');
+  try {
+    const capabilities = capabilitiesForRole('finance', auth.staff.role) as string[];
+    const ctx = await lookups();
+    const { lines, byLine } = await loadLedger(null, null);
+    const sc = await suggestionContext(lines, byLine, ctx);
+    const lineById = new Map(lines.map((l) => [l.id, l]));
+    const upiRows = await rowsAll('/fin_upi_lines?select=bank_line_id,counterparty,remarks,is_circle&bank_line_id=not.is.null&order=id.asc');
+    const upiOf = new Map(upiRows.map((u) => [u.bank_line_id as string, u]));
+    const categoryName = new Map(ctx.categories.map((c) => [c.id as string, c.name as string]));
+    const skipped: { lineId: string; why: string }[] = [];
+    let accepted = 0;
+    for (const lineId of lineIds) {
+      const line = lineById.get(lineId);
+      if (!line) {
+        skipped.push({ lineId, why: 'No such line.' });
+        continue;
+      }
+      if ((byLine.get(lineId) ?? []).length) {
+        skipped.push({ lineId, why: 'Already has allocations.' });
+        continue;
+      }
+      const sg = suggestFor(line, upiOf.get(lineId) ?? null, ctx, sc);
+      if (sg.confidence !== 'high' || !sg.categoryId) {
+        skipped.push({ lineId, why: 'Not confident enough to post without a person looking.' });
+        continue;
+      }
+      const result = await saveLine(auth.staff, capabilities, lineId, {
+        post: true,
+        rows: [{ amountPaise: line.amount_paise, categoryId: sg.categoryId, partyId: sg.partyId, nature: sg.nature || categoryName.get(sg.categoryId) || 'Payment', source: sg.source === 'rule' ? 'rule' : 'manual', ruleId: sg.ruleId }],
+      });
+      if (result.ok) accepted++;
+      else skipped.push({ lineId, why: result.error });
+    }
+    return jsonResponse({ accepted, skipped });
+  } catch (err) {
+    return serverError(err, 'accept suggestions');
   }
 }
 

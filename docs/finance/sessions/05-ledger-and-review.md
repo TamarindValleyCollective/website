@@ -53,5 +53,7 @@ browser against invented data. **Not verified:** a person working real lines thr
 Deviations from the brief: `fin_vouchers` is a table only, so "reimbursement without a bill" flags every reimbursement until session 08;
 a UPI-id rule condition is not offered (the Paytm import keeps no UPI id); recategorising a category's entries has a route but no screen.
 
+Added after the first look at real data: suggestions for every line (category, party, wording) from the narration, the register and what was posted before, one-click "post the confident ones", and adding a new party from the editor. See FINANCE.md, "Suggestions".
+
 Needs from Sharath: which rule results should always be reviewed (today only the five flags, plus a per-rule switch), and a trial run on
 one real month before 06 loads history.

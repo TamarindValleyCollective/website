@@ -28,6 +28,10 @@ import SignInGate from '../../../components/SignInGate.astro';
         <button type="button" id="select-toggle" class="button button--outline" hidden>Select several</button>
       </div>
       <div class="segmented chips" id="chips" role="group" aria-label="Show"></div>
+      <div id="acceptbar" class="bulkbar" hidden>
+        <span id="accept-count" class="hint"></span>
+        <button type="button" id="accept-all" class="button button--primary"></button>
+      </div>
       <div id="bulkbar" class="bulkbar" hidden>
         <span id="bulk-count" class="hint"></span>
         <button type="button" id="bulk-apply" class="button button--primary" disabled>Give them the same category</button>
@@ -46,14 +50,15 @@ import SignInGate from '../../../components/SignInGate.astro';
 </StaffLayout>
 
 <script>
-  import { StaffAuthError, clearStepUp, clearToken, closeOnBackdrop, decodeTokenEmail, getToken, setToken, showToast, staffFetch } from '../../../../scripts/lib/staff-client.mjs';
+  import { StaffAuthError, askSheet, clearStepUp, clearToken, closeOnBackdrop, decodeTokenEmail, getToken, setToken, showToast, staffFetch } from '../../../../scripts/lib/staff-client.mjs';
   import { clearState, showEmpty, showFailure, showLoading } from '../../../../scripts/lib/staff-states.mjs';
   import { button, categorySelect, h, input, labelled, niceDate, niceMonth, parseRupees, partySelect, pill, present, rupees } from '../../../../scripts/lib/finance-ui.mjs';
 
   declare const google: any;
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
 
-  type Line = { id: string; date: string; narration: string; direction: 'debit' | 'credit'; amountPaise: number; account: string; remark: string | null; counterparty: string | null; isCircle: boolean; allocatedPaise: number; state: 'unallocated' | 'partly_allocated' | 'allocated'; review: boolean };
+  type Line = { id: string; date: string; narration: string; direction: 'debit' | 'credit'; amountPaise: number; account: string; remark: string | null; counterparty: string | null; isCircle: boolean; allocatedPaise: number; state: 'unallocated' | 'partly_allocated' | 'allocated'; review: boolean; suggestion: Suggestion | null };
+  type Suggestion = { categoryId: string | null; partyId: string | null; nature: string; confidence: 'high' | 'medium' | 'low' | 'none'; newPartyName: string | null };
   type Category = { id: string; name: string; type: string; active: boolean };
   type Party = { id: string; name: string; kind: string };
   type Project = { id: string; name: string; kind: string; financial_year: number; status: string };
@@ -176,6 +181,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       { class: 'line-main', attrs: { type: 'button' } },
       h('span', { class: 'title', text: l.narration }),
       h('span', { class: 'detail', text: [niceDate(l.date), l.account, l.remark ? `Remark: ${l.remark}` : ''].filter(Boolean).join(' · ') }),
+      suggestionLine(l),
     );
     main.addEventListener('click', () => (canPick ? togglePick(l.id) : void openLine(l.id)));
     const [word, kind] = stateWords(l);
@@ -190,6 +196,17 @@ import SignInGate from '../../../components/SignInGate.astro';
     return h('li', {}, row);
   }
 
+  const CONFIDENCE_WORDS: Record<string, string> = { high: 'confident', medium: 'fairly sure', low: 'a guess' };
+  // "Suggested: Materials and supplies · Green Nursery (confident)". Only for lines nobody has allocated.
+  function suggestionLine(l: Line): HTMLElement | null {
+    const sg = l.suggestion;
+    if (!sg || l.state === 'allocated' || !data) return null;
+    const lk = data.lookups;
+    const parts = [sg.categoryId ? nameOf(lk.categories, sg.categoryId) : '', sg.partyId ? nameOf(lk.parties, sg.partyId) : sg.newPartyName ? `new party: ${sg.newPartyName}` : '', sg.nature ? `“${sg.nature}”` : ''].filter(Boolean);
+    if (!parts.length) return null;
+    return h('span', { class: `detail suggest suggest--${sg.confidence}`, text: `Suggested: ${parts.join(' · ')}${sg.categoryId ? ` (${CONFIDENCE_WORDS[sg.confidence] ?? ''})` : ''}` });
+  }
+
   function togglePick(id: string) {
     if (selected.has(id)) selected.delete(id);
     else if (selected.size < 50) selected.add(id);
@@ -197,6 +214,35 @@ import SignInGate from '../../../components/SignInGate.astro';
     renderBulkBar();
     render();
   }
+  // Lines on this page the server is confident enough to post as suggested. The server decides again when asked.
+  const confident = () => lines.filter((l) => l.state === 'unallocated' && l.suggestion?.confidence === 'high' && l.suggestion.categoryId);
+  function renderAcceptBar() {
+    const n = confident().length;
+    const show = Boolean(data?.canAllocate) && n > 0 && !selecting;
+    $('acceptbar').hidden = !show;
+    $('accept-count').textContent = `${n} ${n === 1 ? 'line has' : 'lines have'} a confident suggestion on this page.`;
+    $('accept-all').textContent = `Post ${n === 1 ? 'it' : `these ${n}`} as suggested`;
+  }
+  $('accept-all').addEventListener('click', async () => {
+    const picked = confident();
+    if (!picked.length) return;
+    const lk = data!.lookups;
+    const sample = picked.slice(0, 3).map((l) => `${niceDate(l.date)}: ${nameOf(lk.categories, l.suggestion!.categoryId!)}${l.suggestion!.partyId ? `, ${nameOf(lk.parties, l.suggestion!.partyId)}` : ''}`).join('\n');
+    const ok = await askSheet({
+      title: `Post ${picked.length} ${picked.length === 1 ? 'line' : 'lines'} as suggested?`,
+      text: `Each is allocated in full to the category shown on it. Posted lines cannot be edited, only refunded or reversed.\n\nFor example:\n${sample}`,
+      actions: [{ label: 'Post them', value: true, kind: 'primary' }, { label: 'Cancel', value: false }],
+    });
+    if (!ok) return;
+    const { status, data: out } = await call('/api/finance-admin/ledger/accept', 'POST', { lineIds: picked.map((l) => l.id) });
+    if (status !== 200) {
+      showToast(out?.error ?? 'Could not post them.');
+      return;
+    }
+    showToast(`${out.accepted} posted${out.skipped.length ? `, ${out.skipped.length} left for you` : ''}.`);
+    void load();
+  });
+
   function renderBulkBar() {
     $('bulkbar').hidden = !selecting;
     $('bulk-count').textContent = selected.size ? `${selected.size} selected` : 'Pick the lines that share a category.';
@@ -211,6 +257,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     if (!canSelect) selecting = false;
     $('select-toggle').textContent = selecting ? 'Done selecting' : 'Select several';
     renderBulkBar();
+    renderAcceptBar();
     $('list').replaceChildren(...lines.map(lineRow));
     $('more').hidden = lines.length >= data.total;
     const empty = $('empty');
@@ -251,6 +298,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     state: string;
     allocations: Alloc[];
     proposal: { categoryId: string | null; partyId: string | null; nature: string; amountPaise: number; period: string; source: string; ruleId: string | null } | null;
+    suggestion: (Suggestion & { reasons: string[]; newParty: { name: string; kind: string } | null }) | null;
     reasons: string[];
     reversible: Reversible[];
     lookups: Lookups;
@@ -334,6 +382,16 @@ import SignInGate from '../../../components/SignInGate.astro';
     );
   }
 
+  const NEW_PARTY = '__new_party__';
+  const PARTY_KINDS: Record<string, string> = { vendor: 'Vendor', customer: 'Customer', member: 'Member', employee: 'Employee', bank: 'Bank', government: 'Government', director: 'Director', other: 'Other' };
+
+  // Why the form is filled in the way it is, in plain words. Nothing here is posted until a person presses Post.
+  function suggestionNote(d: Detail): HTMLElement | null {
+    const sg = d.suggestion;
+    if (!sg || !sg.reasons.length) return null;
+    return h('div', { class: 'suggest-note' }, h('p', { class: 'field-label', text: `Why this suggestion (${CONFIDENCE_WORDS[sg.confidence] ?? 'a guess'})` }), h('ul', { class: 'why' }, ...sg.reasons.map((r) => h('li', { text: r }))));
+  }
+
   // ---- the editor: rows that add up to the line
   function editor(dlg: HTMLDialogElement, d: Detail): HTMLElement {
     const lk = d.lookups;
@@ -345,6 +403,46 @@ import SignInGate from '../../../components/SignInGate.astro';
     const msg = h('p', { class: 'error', attrs: { hidden: '' } });
     const closedReason = input('closedReason', { placeholder: 'Why is a closed month being changed?' }) as HTMLInputElement;
     const closedBox = h('div', { class: 'stack-form', attrs: { hidden: '' } }, labelled('Reason for changing a closed month', closedReason));
+
+    // Every party picker in this sheet, so a party added in one row is available in all of them.
+    const partySelects: HTMLSelectElement[] = [];
+    function addPartyEverywhere(p: Party) {
+      lk.parties.push(p);
+      for (const sel of partySelects) {
+        const opt = h('option', { text: p.name, attrs: { value: p.id } });
+        sel.insertBefore(opt, sel.querySelector(`option[value="${NEW_PARTY}"]`));
+      }
+    }
+    // Add a party that is not in the register yet, right here. Bank details are added later on the Parties page and verified there.
+    function openNewParty(box: HTMLElement, name: string, kind: string, onAdded: (id: string) => void) {
+      const nameInput = input('newPartyName', { placeholder: 'Name as it should appear in the register' }) as HTMLInputElement;
+      nameInput.value = name;
+      const kindSel = h('select', { attrs: { name: 'newPartyKind' } }, ...Object.entries(PARTY_KINDS).map(([k, label]) => h('option', { text: label, attrs: { value: k } }))) as HTMLSelectElement;
+      kindSel.value = kind;
+      const note = h('p', { class: 'error', attrs: { hidden: '' } });
+      const add = button('Add to register', async () => {
+        const typed = nameInput.value.trim().replace(/\s+/g, ' ');
+        const twin = lk.parties.find((x) => x.name.toLowerCase() === typed.toLowerCase());
+        if (twin) {
+          note.hidden = false;
+          note.textContent = `${twin.name} is already in the register. Choose them from the list.`;
+          return;
+        }
+        const { status, data: out } = await call('/api/finance-admin/parties', 'POST', { name: typed, kind: kindSel.value });
+        if (status !== 201) {
+          note.hidden = false;
+          note.textContent = out?.error ?? 'Could not add that.';
+          return;
+        }
+        addPartyEverywhere({ id: out.party.id, name: out.party.name, kind: out.party.kind });
+        box.hidden = true;
+        onAdded(out.party.id);
+        showToast(`${out.party.name} added to the register. Add their bank details on the Parties page.`);
+      }, 'button button--primary button--small');
+      box.replaceChildren(labelled('Name', nameInput), labelled('What kind of party', kindSel), note, h('div', { class: 'sheet-actions' }, add, button('Cancel', () => (box.hidden = true), 'button button--outline button--small')));
+      box.hidden = false;
+      nameInput.focus();
+    }
 
     const sumPaise = () => rowsUi.reduce((n, r) => n + (parseRupees(r.amount.value) ?? 0), 0);
     function refresh() {
@@ -360,6 +458,20 @@ import SignInGate from '../../../components/SignInGate.astro';
       amount.value = init.amountPaise ? (init.amountPaise / 100).toFixed(2) : '';
       const category = categorySelect(lk.categories, { selected: init.categoryId ?? '' });
       const party = partySelect(lk.parties, { selected: init.partyId ?? '' });
+      party.append(h('option', { text: 'Add a new party…', attrs: { value: NEW_PARTY } }));
+      const newBox = h('div', { class: 'stack-form new-party', attrs: { hidden: '' } });
+      party.addEventListener('change', () => {
+        if (party.value !== NEW_PARTY) {
+          newBox.hidden = true;
+          return;
+        }
+        party.value = '';
+        openNewParty(newBox, d.suggestion?.newParty?.name ?? '', d.suggestion?.newParty?.kind ?? (line.direction === 'credit' ? 'customer' : 'vendor'), (id) => {
+          party.value = id;
+          refresh();
+        });
+      });
+      partySelects.push(party);
       const nature = input('nature', { placeholder: 'What it was for, in plain words' }) as HTMLInputElement;
       nature.value = init.nature ?? '';
       const period = input('period', { type: 'month', 'aria-label': 'Month it belongs to' }) as HTMLInputElement;
@@ -371,7 +483,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       const reason = input('reason', { placeholder: 'Why is it being refunded?' }) as HTMLInputElement;
       const reasonBox = labelled('Reason', reason);
       reasonBox.hidden = true;
-      const normal = h('div', { class: 'stack-form' }, labelled('Category', category), labelled('Party', party), labelled('What it was for', nature), project ? labelled('Project', project) : null);
+      const normal = h('div', { class: 'stack-form' }, labelled('Category', category), labelled('Party', party), newBox, labelled('What it was for', nature), project ? labelled('Project', project) : null);
       const el = h('fieldset', { class: 'alloc-edit' });
       const ui: RowUi = { el, amount, category, party, nature, period, project, reverses, reason, ruleId: init.ruleId ?? null, source: init.source ?? 'manual' };
       reverses?.addEventListener('change', () => {
@@ -402,6 +514,12 @@ import SignInGate from '../../../components/SignInGate.astro';
     // Start from the rule's suggestion when there is one, otherwise a blank row for the whole line.
     const p = d.proposal;
     addRow({ amountPaise: line.amountPaise, categoryId: p?.categoryId ?? '', partyId: p?.partyId ?? '', nature: p?.nature ?? '', ruleId: p?.ruleId ?? null, source: p?.source === 'rule' ? 'rule' : p?.source === 'upi_remark' ? 'upi_remark' : 'manual' });
+    // A name in the narration that is not in the register: open the add-party form for the first row, ready to confirm.
+    if (d.suggestion?.newParty && !p?.partyId) {
+      const first = rowsUi[0].party;
+      first.value = NEW_PARTY;
+      first.dispatchEvent(new Event('change'));
+    }
     const why = d.reasons.map((r) => d.reasonLabels[r]).filter(Boolean);
 
     async function submit(post: boolean) {
@@ -425,6 +543,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     const wrap = h(
       'div',
       { class: 'editor' },
+      suggestionNote(d),
       why.length ? h('p', { class: 'note', text: `${why.join('. ')}.` }) : null,
       rowsBox,
       h('div', { class: 'editor-tools' }, button('Add another row', () => { const left = line.amountPaise - sumPaise(); addRow({ amountPaise: left > 0 ? left : undefined }); })),
@@ -645,6 +764,37 @@ import SignInGate from '../../../components/SignInGate.astro';
   .ledger .sheet .note {
     margin: 10px 0;
     font-size: var(--text-sm);
+  }
+
+  .ledger .suggest {
+    color: var(--tvc-ink-soft);
+  }
+
+  .ledger .suggest--high {
+    color: var(--tvc-green);
+  }
+
+  .ledger .suggest-note {
+    margin: 10px 0;
+  }
+
+  .ledger .suggest-note .field-label {
+    margin: 0 0 4px;
+    font-size: var(--text-sm);
+    font-weight: 600;
+  }
+
+  .ledger .why {
+    margin: 0;
+    padding-left: 1.2em;
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  .ledger .new-party {
+    padding: 10px 12px;
+    border: 1px dashed var(--tvc-line-strong);
+    border-radius: var(--radius-sm);
   }
 
   .ledger .alloc-rows {

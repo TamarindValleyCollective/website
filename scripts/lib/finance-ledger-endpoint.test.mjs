@@ -441,3 +441,116 @@ test('a month with more than 1,000 lines closes when they are all posted, and a 
   db.fin_allocations[1099].review_state = 'ok';
   assert.equal((await api(director, '/periods/2026-07-01/close', { method: 'POST' })).status, 200);
 });
+
+// ---- suggestions (docs/finance/FINANCE.md, "Suggestions")
+const CAT_BANK = ID(15);
+const L_CHRG = ID(61);
+const L_STRANGER = ID(62);
+const addBankCategory = () => db.fin_categories.push({ id: CAT_BANK, name: 'Bank charges', type: 'opex', active: true });
+const addLines = () =>
+  db.fin_bank_lines.push(
+    { id: L_CHRG, entity_id: E, bank_account_id: ID(2), tran_date: '2026-10-05', narration: 'Monthly Service Chrgs', direction: 'debit', amount_paise: 29500 },
+    { id: L_STRANGER, entity_id: E, bank_account_id: ID(2), tran_date: '2026-10-06', narration: 'INB/NEFT/AXIC123456789012/Brand New Supplier/Fertiliser', direction: 'debit', amount_paise: 80000 },
+  );
+const suggestionOf = async (email, lineId) => (await (await api(email, '/ledger?filter=all')).json()).lines.find((l) => l.id === lineId).suggestion;
+
+test('the list suggests a category for the bank\'s own entries, a party from the register, and a new party for a stranger', async () => {
+  reset();
+  addBankCategory();
+  addLines();
+  const op = sign('u1', 'user');
+  const charges = await suggestionOf(op, L_CHRG);
+  assert.equal(charges.categoryId, CAT_BANK);
+  assert.equal(charges.confidence, 'high');
+  assert.equal(charges.nature, 'Bank charges');
+  const named = await suggestionOf(op, L_DEBIT); // UPI to a party in the register
+  assert.equal(named.partyId, P_NURSERY);
+  assert.equal(named.categoryId, null);
+  const stranger = await suggestionOf(op, L_STRANGER);
+  assert.equal(stranger.partyId, null);
+  assert.equal(stranger.newPartyName, 'Brand New Supplier');
+  assert.equal(stranger.nature, 'Fertiliser');
+});
+
+test('the line\'s detail explains the suggestion in words', async () => {
+  reset();
+  addBankCategory();
+  addLines();
+  const op = sign('u1', 'user');
+  const detail = await (await api(op, `/ledger/${L_STRANGER}`)).json();
+  assert.equal(detail.suggestion.newParty.kind, 'vendor');
+  assert.ok(detail.suggestion.reasons.some((r) => /not in the register/i.test(r)));
+  assert.equal(detail.proposal.nature, 'Fertiliser');
+});
+
+test('accepting suggestions posts only the confident ones, skips the rest, and says why', async () => {
+  reset();
+  addBankCategory();
+  addLines();
+  const op = sign('u1', 'user');
+  const res = await api(op, '/ledger/accept', { method: 'POST', body: { lineIds: [L_CHRG, L_STRANGER, L_DEBIT, L_SEP] } });
+  assert.equal(res.status, 200);
+  const out = await res.json();
+  assert.equal(out.accepted, 1); // only the bank charge is high confidence; L_SEP is in a closed month with no suggestion either
+  assert.equal(out.skipped.length, 3);
+  const posted = db.fin_allocations.filter((a) => a.posted_at);
+  assert.equal(posted.length, 1);
+  assert.equal(posted[0].bank_line_id, L_CHRG);
+  assert.equal(posted[0].category_id, CAT_BANK);
+  assert.equal(posted[0].amount_paise, 29500);
+  assert.ok(db.audit.some((a) => a.action === 'finance.allocations_posted' && a.target === L_CHRG));
+  // Asking again leaves it alone.
+  const again = await (await api(op, '/ledger/accept', { method: 'POST', body: { lineIds: [L_CHRG] } })).json();
+  assert.equal(again.accepted, 0);
+  assert.match(again.skipped[0].why, /already/i);
+});
+
+test('accepting needs allocate rights, a sensible list of lines, and never trusts the client for what to post', async () => {
+  reset();
+  addBankCategory();
+  addLines();
+  const viewer = sign('v1', 'read_only');
+  const op = sign('u1', 'user');
+  assert.equal((await api(viewer, '/ledger/accept', { method: 'POST', body: { lineIds: [L_CHRG] } })).status, 403);
+  assert.equal((await api(op, '/ledger/accept', { method: 'POST', body: { lineIds: [] } })).status, 400);
+  assert.equal((await api(op, '/ledger/accept', { method: 'POST', body: { lineIds: ['not-an-id'] } })).status, 400);
+  // Extra fields from a client change nothing: the category still comes from the engine.
+  await api(op, '/ledger/accept', { method: 'POST', body: { lineIds: [L_CHRG], categoryId: CAT_OPEX, nature: 'Sneaky' } });
+  assert.equal(db.fin_allocations[0].category_id, CAT_BANK);
+  assert.equal(db.fin_allocations[0].nature, 'Bank charges');
+});
+
+test('it learns: after a party has been posted to a few times the next payment is suggested the same way', async () => {
+  reset();
+  addBankCategory();
+  const op = sign('u1', 'user');
+  // Three earlier, already posted payments to the nursery, all Materials and supplies.
+  const earlier = [ID(71), ID(72), ID(73)].map((id, i) => ({ id, entity_id: E, bank_account_id: ID(2), tran_date: `2026-09-0${i + 1}`, narration: `UPI/P2A/12345678900${i}/Green Nursery/Okbank/Seedlings`, direction: 'debit', amount_paise: 50000 }));
+  db.fin_bank_lines.push(...earlier);
+  db.fin_allocations = earlier.map((l, i) => ({ id: ID(80 + i), entity_id: E, bank_line_id: l.id, party_id: P_NURSERY, category_id: CAT_OPEX, amount_paise: 50000, period: '2026-09-01', nature: 'Seedlings', source: 'manual', review_state: 'ok', reverses_allocation_id: null, posted_at: '2026-11-04T00:00:00Z' }));
+  const s = await suggestionOf(op, L_DEBIT);
+  assert.equal(s.partyId, P_NURSERY);
+  assert.equal(s.categoryId, CAT_OPEX);
+  assert.equal(s.confidence, 'high');
+  // And accepting it posts it that way.
+  const out = await (await api(op, '/ledger/accept', { method: 'POST', body: { lineIds: [L_DEBIT] } })).json();
+  assert.equal(out.accepted, 1);
+  const stored = db.fin_allocations.find((a) => a.bank_line_id === L_DEBIT);
+  assert.equal(stored.party_id, P_NURSERY);
+  assert.equal(stored.category_id, CAT_OPEX);
+});
+
+test('a party that is not in the register can be added from the ledger by anyone who may allocate, and is then recognised', async () => {
+  reset();
+  addLines();
+  const op = sign('u1', 'user');
+  const viewer = sign('v1', 'read_only');
+  assert.equal((await api(viewer, '/parties', { method: 'POST', body: { name: 'Brand New Supplier', kind: 'vendor' } })).status, 403);
+  const created = await api(op, '/parties', { method: 'POST', body: { name: 'Brand New Supplier', kind: 'vendor' } });
+  assert.equal(created.status, 201);
+  const s = await suggestionOf(op, L_STRANGER);
+  assert.equal(s.newPartyName, null, 'no longer a stranger');
+  assert.ok(s.partyId);
+  const lookups = (await (await api(op, '/ledger')).json()).lookups;
+  assert.ok(lookups.parties.some((p) => p.name === 'Brand New Supplier'));
+});

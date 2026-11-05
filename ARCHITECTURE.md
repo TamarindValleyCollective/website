@@ -480,7 +480,7 @@ outside both the local machine and Netlify (the member-update-email workflow).
   (`/api/finance-admin/ledger`, `/allocations/:id/review`, `/rules`, `/categories`, `/periods`; code in `lib/finance-ledger.ts`,
   pages `/internal/finance/ledger/` and `/internal/finance/rules/`). `fin_allocations` explains each bank line (a line posts only
   when its allocations add up to it exactly; posted rows are frozen; a refund is a reversing row), `fin_rules` suggests a
-  category, and `fin_vouchers` is the table for bills (no screen yet). `fin_save_allocations`, `fin_close_period`,
+  category, `scripts/lib/finance-suggest.mjs` proposes a category, party and wording for each line from the narration, the register and earlier postings, and `fin_vouchers` is the table for bills (no screen yet). `fin_save_allocations`, `fin_close_period`,
   `fin_merge_category` and `fin_recategorise_allocations` run in one transaction each, service role only, and three triggers
   repeat the money rules in the database. Every change is written to `fin_audit_log` first, with ids and counts only. No new
   external service.
