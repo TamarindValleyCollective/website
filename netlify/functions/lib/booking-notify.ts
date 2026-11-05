@@ -15,6 +15,13 @@ const FROM = 'Tamarind Valley Collective <noreply@tvc.farm>';
 const APPROVER_EMAILS = ['core-team@tvc.farm', 'stay@linger.in'];
 const SITE_ORIGIN = 'https://tvc.farm';
 
+// A request whose guest name starts with "TEST" is a dry run by the core team:
+// the email alert goes to core-team only, so Linger aren't paged for it. The
+// WhatsApp alert still goes to the configured approver numbers.
+function isDryRunRequest(name: string): boolean {
+  return /^test\b/i.test(name.trim());
+}
+
 export function isTestMode(): boolean {
   return (process.env.RAZORPAY_KEY_ID ?? '').startsWith('rzp_test_');
 }
@@ -79,7 +86,7 @@ export async function notifyApprovers(req: BookingRequestSummary, token: string,
       }),
     ),
     sendEmail({
-      to: APPROVER_EMAILS,
+      to: isDryRunRequest(req.name) ? ['core-team@tvc.farm'] : APPROVER_EMAILS,
       subject: `Booking request — ${req.event_title} (${req.name})`,
       replyTo: req.email,
       html: renderStaffEmail(`  <p style="margin-top:0;">A guest has asked to book <strong>${escapeHtml(req.event_title)}</strong>. Please speak to them before approving — the payment link is only sent once you approve.</p>

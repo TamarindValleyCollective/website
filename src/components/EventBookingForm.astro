@@ -28,9 +28,15 @@ interface Props {
   // should look and read the same way whichever of the two flows an event
   // uses.
   heading?: string;
+  // For an event sold in more than one option at different prices (content
+  // field `razorpayOptions`). Each option is its own base Payment Link; the
+  // guest picks one and that option's referenceId is what gets submitted.
+  // referenceId/unitAmount above are then just the first option's, the
+  // pre-selected default.
+  options?: { referenceId: string; label: string; amount: string }[];
 }
 
-const { referenceId, unitAmount, unitLabel, eventDate, heading } = Astro.props;
+const { referenceId, unitAmount, unitLabel, eventDate, heading, options } = Astro.props;
 const fieldId = referenceId.replace(/[^a-z0-9]+/gi, '-');
 const MAX_ATTENDEES = 10;
 const counts = Array.from({ length: MAX_ATTENDEES }, (_, i) => i + 1);
@@ -46,6 +52,20 @@ const counts = Array.from({ length: MAX_ATTENDEES }, (_, i) => i + 1);
       <strong>Where is the farm?</strong> Tamarind Valley Collective is in the village of Thaggatti, Tamil Nadu, in the Melagiri hills near the Karnataka border. It is <strong>not in Bengaluru</strong>, and the last stretch is a country road. Please check the <a href="/visit/how-to-reach">directions</a> before you request a spot.
     </p>
     <p class="form-required-note">All fields are required except the WhatsApp option.</p>
+
+    {options && options.length > 1 && (
+      <fieldset class="booking-form__options">
+        <legend>Choose one</legend>
+        {options.map((o, i) => (
+          <label class="booking-form__option" for={`${fieldId}-opt-${i}`}>
+            <input id={`${fieldId}-opt-${i}`} type="radio" name="option" value={o.referenceId} data-amount={o.amount} checked={i === 0} required />
+            <span class="booking-form__option-label">{o.label}</span>
+            <span class="booking-form__option-amount">{o.amount} per person</span>
+          </label>
+        ))}
+        <p class="booking-form__option-note">Booking a mix of options? Send one request for each.</p>
+      </fieldset>
+    )}
 
     <div class="site-form-grid">
       <div>
@@ -74,7 +94,7 @@ const counts = Array.from({ length: MAX_ATTENDEES }, (_, i) => i + 1);
     </label>
 
     <div class="field-total">
-      <span class="field-total__label">Total ({unitAmount} {unitLabel})</span>
+      <span class="field-total__label">Total (<span class="field-total__unit">{unitAmount}</span> {unitLabel})</span>
       <span class="field-total__amount" id={`${fieldId}-total`}>{unitAmount}</span>
     </div>
 
@@ -125,6 +145,59 @@ const counts = Array.from({ length: MAX_ATTENDEES }, (_, i) => i + 1);
     height: 18px;
     margin: 2px 0 0;
     accent-color: var(--tvc-green);
+  }
+
+  .booking-form__options {
+    margin: 0 0 16px;
+    padding: 0;
+    border: 0;
+  }
+
+  .booking-form__options legend {
+    padding: 0;
+    margin-bottom: 8px;
+    font-weight: 600;
+  }
+
+  .booking-form__option {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 10px 14px;
+    margin-bottom: 8px;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius-field);
+    font-weight: 400;
+    cursor: pointer;
+  }
+
+  .booking-form__option:has(input:checked) {
+    border-color: var(--tvc-green);
+    background: var(--tvc-green-tint);
+  }
+
+  .booking-form__option input {
+    flex: 0 0 auto;
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    accent-color: var(--tvc-green);
+  }
+
+  .booking-form__option-label {
+    flex: 1 1 auto;
+    font-weight: 600;
+  }
+
+  .booking-form__option-amount {
+    font-size: 0.9rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .booking-form__option-note {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--tvc-ink-soft);
   }
 
   .field-total {
@@ -230,9 +303,20 @@ const counts = Array.from({ length: MAX_ATTENDEES }, (_, i) => i + 1);
   }
 
   document.querySelectorAll<HTMLFormElement>('.event-booking-form').forEach((form) => {
-    const referenceId = form.dataset.referenceId ?? '';
     const eventDate = form.dataset.eventDate ?? '';
-    const unitAmount = toIntOrNull(form.dataset.unitAmount ?? '');
+    // With options (an event sold at more than one price) the picked radio
+    // decides both which Payment Link the request is for and the price shown;
+    // otherwise the form's own single reference and price apply.
+    function selectedOption() {
+      return form.querySelector<HTMLInputElement>('input[name="option"]:checked');
+    }
+    function currentReferenceId() {
+      return selectedOption()?.value ?? form.dataset.referenceId ?? '';
+    }
+    function currentUnitAmount() {
+      return toIntOrNull(selectedOption()?.dataset.amount ?? form.dataset.unitAmount ?? '');
+    }
+    const unitEl = form.querySelector<HTMLElement>('.field-total__unit');
     const nameInput = form.querySelector<HTMLInputElement>('input[name="name"]');
     const emailInput = form.querySelector<HTMLInputElement>('input[name="email"]');
     const phoneInput = form.querySelector<HTMLInputElement>('input[name="phone"]');
@@ -252,11 +336,14 @@ const counts = Array.from({ length: MAX_ATTENDEES }, (_, i) => i + 1);
     }
 
     function updateTotal() {
+      const unitAmount = currentUnitAmount();
       if (!countSelect || !totalEl || unitAmount === null) return;
       const count = Number(countSelect.value) || 1;
+      if (unitEl) unitEl.textContent = `₹${unitAmount.toLocaleString('en-IN')}`;
       totalEl.textContent = `₹${(unitAmount * count).toLocaleString('en-IN')}`;
     }
     countSelect?.addEventListener('change', updateTotal);
+    form.querySelectorAll('input[name="option"]').forEach((r) => r.addEventListener('change', updateTotal));
     updateTotal();
 
     // Two-step when the server reports this email already has a paid
@@ -279,7 +366,7 @@ const counts = Array.from({ length: MAX_ATTENDEES }, (_, i) => i + 1);
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
-            referenceId,
+            referenceId: currentReferenceId(),
             eventDate,
             name: data.get('name'),
             email: data.get('email'),
