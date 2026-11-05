@@ -254,10 +254,11 @@ categories, the requester); routes in `lib/finance-ledger.ts`. `0083` is applied
   `fin_recategorise_allocations` moves chosen allocations (splitting a category); changing type asks for confirmation. These two
   are the only way a posted allocation's category changes (a session setting the guard trigger looks for), and both are audited.
   The merge is on the Rules page; recategorising has a route (`POST /categories/recategorise`) but no screen yet.
-- **Screens.** Ledger: filter chips (To allocate, To review, All) with counts, search, "Select several" for one category on many
-  lines, a sheet per line with what the bank and Paytm said, the rule's suggestion, and an editor that splits the line into rows
-  until nothing is left (Save draft, Post), a refund picker, and a reason box when a closed month is touched. Verified in a browser
-  (desktop and 500px, dark appearance) with invented data; not yet with real data or in the light appearance.
+- **The Ledger is a table** (docs/finance/FINANCE.md, "The table", below). Filter chips (To allocate, To review, All) with counts and a
+  search; a checkbox on every line, shift-click for a range; category, party and wording are cells you edit in place; a bar for what
+  to do to the selected lines; posting is a separate, confirmed step. A line that needs splitting, a refund or a review decision opens
+  in a sheet (click its narration). Months close at the bottom. Verified in a browser (desktop, dark appearance) with invented data; not
+  yet with real data, the light appearance or a phone.
 - **Audit.** Every save, review decision, rule and category change, period close and recategorisation is written to `fin_audit_log`
   first, with ids and counts only (never a name, narration or amount); if it cannot be written nothing changes.
 - **Scale, and the 1,000-row cap.** Supabase's API returns at most 1,000 rows per request whatever `limit` is asked for. The first
@@ -273,7 +274,7 @@ categories, the requester); routes in `lib/finance-ledger.ts`. `0083` is applied
 - **Tables and functions** (`0083`): `fin_rules`, `fin_allocations`, `fin_vouchers` (table only; capture is session 08),
   `fin_entities.requester_party_id`, `fin_save_allocations`, `fin_close_period`, `fin_merge_category`, `fin_recategorise_allocations`.
 - **Tests:** `finance-allocation`, `finance-rules`, `finance-ui` (pure) and `finance-ledger-endpoint` (the real function through
-  `requireStaff` with Supabase stubbed: posting, splits, closed months, flags, maker-is-not-checker, refunds, period close, bulk,
+  `requireStaff` with Supabase stubbed: posting, splits, closed months, flags, maker-is-not-checker, refunds, period close, batch posting,
   rules, categories, the requester).
 
 ## Suggestions (session 05 follow-up: a category, a party and "what it was for" for every line)
@@ -295,11 +296,38 @@ shapes), used by `lib/finance-ledger.ts`. It only proposes; a person posts, and 
   the add-party form opens by itself, pre-filled; "Add a new party…" in any party picker does the same. It uses the existing create-party
   route (needs `allocate`), warns if the name is already there, and adds the party to every picker in the sheet. Bank details are added
   and verified later on the Parties page.
-- **The list** shows "Suggested: category, party, wording (confident)" under each unallocated line. **"Post these N as suggested"** posts
-  the confident ones on the page after a confirmation: the client sends only line ids; the server works the suggestion out again, skips
-  any line that already has rows or is not high confidence (and says why), uses the category name as the wording when none is known, and
-  audits each post like any other. The line's sheet explains the suggestion in plain words ("4 earlier payments like this were all
-  Materials and supplies").
+- **In the table** each unallocated line shows its suggestion as an italic ghost value in the cell, with a tick to accept it ("Fill in the
+  suggestions on this page" and "Accept suggestions" fill every empty cell at once; nothing is posted). A suggested NEW party is never
+  added in bulk: the tick in that Party cell adds them to the register. The line's sheet explains the suggestion in plain words
+  ("4 earlier payments like this were all Materials and supplies").
 - **It improves as you post:** each posted line teaches the next. Loading the sheet's history (session 06) will teach it far more at once.
 - **Not done:** suggestions are not yet turned into rules with one click; the amount (a repeating figure such as a rent or a salary) is
   not a clue yet; merchants on cards are only matched to the register by name.
+
+## The table (the Ledger's list view, session 05 follow-up)
+
+Modelled on how ServiceNow lists work, because the sheet's convenience was selecting many lines and giving them details at once.
+
+- **Rows and cells.** One row per bank line: date, narration (click it to open the line), amount, **category**, **party**, **what it was
+  for**, status. Those three cells are editable in place on an unallocated line; a posted line shows what it was allocated to, read-only.
+  Status: *Needs details*, *Suggested* (an empty cell has a suggestion), *Ready* (category and wording filled), *To review*, *Partly*,
+  *Allocated*.
+- **Drafts.** What you type is a draft that lives in the page only; a warning appears if you try to leave with unposted drafts. Posting
+  is the second step: **"Post N ready"** (the bar) asks first, then posts the ready lines, each in full. Two steps by decision: filling
+  cells is reversible, posting is not.
+- **Selecting.** A checkbox on every editable line; the header checkbox selects the page; shift-click selects the run between two
+  lines. Lines that cannot be edited here (already posted, partly allocated, waiting for review) cannot be ticked.
+- **The bar** appears under the table when lines are selected and sticks to the bottom of the screen: *Set category*, *Set party*, *Set
+  wording* (to all selected), *Accept suggestions*, *Fill from first* (copy the first selected line's three cells to the others, the
+  sheet's fill-down), *Post N ready*, *Clear*.
+- **Apply to the others.** Change a cell on a line that is one of several selected and the bar asks "Apply this to the other N
+  selected lines too?" (Apply to all / Only this line).
+- **Keyboard.** Enter in a wording cell moves to the next line's wording cell.
+- **Posting many.** `POST /api/finance-admin/ledger/post` takes up to 15 lines, each `{ lineId, categoryId, partyId, nature }`; the amount
+  is always the line's. It reads the lookups, rules and accounts once for the batch, writes an audit row before each save, and returns
+  `{ posted, flagged, failed: [{ lineId, error }] }`: a line that cannot be posted (already posted, a closed month, a retired category,
+  a party not in the register) is reported and does not stop the others. The page sends 10 at a time and shows progress; failed lines
+  keep their draft, stay selected, and show the reason in red. This replaced the earlier one-category "bulk" sheet and the server-side
+  "post the confident suggestions" route.
+- **Not done:** column chooser, sorting by other columns, group by month, saved filters, a date filter; drafts are not saved on the
+  server (the earlier `Save draft` of the sheet still is).

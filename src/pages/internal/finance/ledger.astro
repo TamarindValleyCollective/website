@@ -25,27 +25,40 @@ import SignInGate from '../../../components/SignInGate.astro';
           <span class="visually-hidden">Search the narration</span>
           <input id="q" type="search" placeholder="Search the bank's narration" autocomplete="off" />
         </label>
-        <button type="button" id="select-toggle" class="button button--outline" hidden>Select several</button>
+        <div class="segmented chips" id="chips" role="group" aria-label="Show"></div>
+        <span class="grow"></span>
+        <button type="button" id="accept-all" class="button button--outline" hidden>Fill in the suggestions on this page</button>
       </div>
-      <div class="segmented chips" id="chips" role="group" aria-label="Show"></div>
-      <div id="acceptbar" class="bulkbar" hidden>
-        <span id="accept-count" class="hint"></span>
-        <button type="button" id="accept-all" class="button button--primary"></button>
+
+      <div class="tablewrap">
+        <div class="ltable" role="table" aria-label="Bank lines">
+          <div class="lrow lhead" role="row">
+            <span class="lcell lcell--check" role="columnheader"><input type="checkbox" id="head-check" aria-label="Select every line on this page" /></span>
+            <span class="lcell" role="columnheader">Date</span>
+            <span class="lcell" role="columnheader">Bank narration</span>
+            <span class="lcell lcell--amount" role="columnheader">Amount</span>
+            <span class="lcell" role="columnheader">Category</span>
+            <span class="lcell" role="columnheader">Party</span>
+            <span class="lcell" role="columnheader">What it was for</span>
+            <span class="lcell" role="columnheader">Status</span>
+          </div>
+          <div id="tbody" role="rowgroup"></div>
+        </div>
       </div>
-      <div id="bulkbar" class="bulkbar" hidden>
-        <span id="bulk-count" class="hint"></span>
-        <button type="button" id="bulk-apply" class="button button--primary" disabled>Give them the same category</button>
-      </div>
-      <ul class="list" id="list"></ul>
+      <div id="actionbar" class="actionbar" role="region" aria-label="Selected lines" hidden></div>
       <div id="empty" aria-live="polite" hidden></div>
-      <p class="more"><button type="button" id="more" class="button button--outline" hidden>Show more</button></p>
+      <div class="foot">
+        <span id="range" class="hint"></span>
+        <button type="button" id="more" class="button button--outline" hidden>Show more</button>
+      </div>
+      <p class="hint tips">Tick a checkbox (shift-click for a range) to change many lines at once. Change a cell in place, or tick an italic suggestion to accept it. Click a narration to open the line (to split it or refund it). Nothing is posted until you press Post.</p>
 
       <h2 class="list-title">Months</h2>
       <ul class="list" id="months"></ul>
     </div>
 
     <dialog id="line-sheet" class="sheet" aria-labelledby="line-title"></dialog>
-    <dialog id="bulk-sheet" class="sheet" aria-labelledby="bulk-title"></dialog>
+    <dialog id="party-sheet" class="sheet" aria-labelledby="party-title"></dialog>
   </section>
 </StaffLayout>
 
@@ -57,7 +70,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   declare const google: any;
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
 
-  type Line = { id: string; date: string; narration: string; direction: 'debit' | 'credit'; amountPaise: number; account: string; remark: string | null; counterparty: string | null; isCircle: boolean; allocatedPaise: number; state: 'unallocated' | 'partly_allocated' | 'allocated'; review: boolean; suggestion: Suggestion | null };
+  type Line = { id: string; date: string; narration: string; direction: 'debit' | 'credit'; amountPaise: number; account: string; remark: string | null; counterparty: string | null; isCircle: boolean; allocatedPaise: number; state: 'unallocated' | 'partly_allocated' | 'allocated'; review: boolean; suggestion: Suggestion | null; allocation: { categoryId: string; partyId: string | null; nature: string; count: number } | null };
   type Suggestion = { categoryId: string | null; partyId: string | null; nature: string; confidence: 'high' | 'medium' | 'low' | 'none'; newPartyName: string | null };
   type Category = { id: string; name: string; type: string; active: boolean };
   type Party = { id: string; name: string; kind: string };
@@ -78,7 +91,6 @@ import SignInGate from '../../../components/SignInGate.astro';
   let lines: Line[] = [];
   let filter: Filter = (['unallocated', 'review', 'all'] as const).find((f) => f === new URLSearchParams(location.search).get('filter')) ?? 'unallocated';
   let query = '';
-  let selecting = false;
   const selected = new Set<string>();
 
   // ---- sign-in
@@ -154,7 +166,43 @@ import SignInGate from '../../../components/SignInGate.astro';
     }
   }
 
-  // ---- the list
+  // ---- drafts: what you have typed into the table but not posted yet. They live in this page only; posting is a separate step.
+  type Field = 'categoryId' | 'partyId' | 'nature';
+  type Draft = Record<Field, string>;
+  const drafts = new Map<string, Draft>();
+  const rowErrors = new Map<string, string>();
+  const rowEls = new Map<string, HTMLElement>();
+  let lastPicked: string | null = null;
+  let pending: { field: Field; value: string; label: string; ids: string[] } | null = null;
+  let barRefs: { post?: HTMLButtonElement; count?: HTMLElement } = {};
+
+  const CONFIDENCE_WORDS: Record<string, string> = { high: 'confident', medium: 'fairly sure', low: 'a guess' };
+  const draftOf = (id: string): Draft => drafts.get(id) ?? { categoryId: '', partyId: '', nature: '' };
+  const setDraft = (id: string, patch: Partial<Draft>) => {
+    drafts.set(id, { ...draftOf(id), ...patch });
+    rowErrors.delete(id);
+  };
+  const editable = (l: Line) => Boolean(data?.canAllocate) && l.state === 'unallocated' && !l.review;
+  const isReady = (l: Line) => {
+    const d = draftOf(l.id);
+    return Boolean(d.categoryId && d.nature.trim());
+  };
+  const kindFor = (l: Line) => (l.direction === 'credit' ? 'customer' : 'vendor');
+  // The suggestion's value for a field while the cell is still empty (shown in italics, accepted with the tick).
+  const ghostOf = (l: Line, f: Field): string => {
+    const s = l.suggestion;
+    if (!s || draftOf(l.id)[f]) return '';
+    return f === 'categoryId' ? s.categoryId ?? '' : f === 'partyId' ? s.partyId ?? '' : s.nature ?? '';
+  };
+  const newPartyOf = (l: Line): string => (!draftOf(l.id).partyId && !l.suggestion?.partyId ? l.suggestion?.newPartyName ?? '' : '');
+  const hasGhost = (l: Line) => Boolean(ghostOf(l, 'categoryId') || ghostOf(l, 'partyId') || ghostOf(l, 'nature') || newPartyOf(l));
+  const selectedRows = () => lines.filter((l) => selected.has(l.id) && editable(l));
+  const hasUnposted = () => [...drafts.values()].some((d) => d.categoryId || d.partyId || d.nature);
+  window.addEventListener('beforeunload', (e) => {
+    if (hasUnposted()) e.preventDefault();
+  });
+
+  // ---- the table
   const FILTERS: [Filter, string][] = [['unallocated', 'To allocate'], ['review', 'To review'], ['all', 'All']];
   function renderChips() {
     $('chips').replaceChildren(
@@ -164,6 +212,7 @@ import SignInGate from '../../../components/SignInGate.astro';
         b.addEventListener('click', () => {
           filter = f;
           selected.clear();
+          pending = null;
           void load();
         });
         return b;
@@ -171,95 +220,132 @@ import SignInGate from '../../../components/SignInGate.astro';
     );
   }
 
-  const stateWords = (l: Line): [string, 'ok' | 'warn' | 'crit' | undefined] =>
-    l.review ? ['To review', 'crit'] : l.state === 'allocated' ? ['Allocated', 'ok'] : l.state === 'partly_allocated' ? ['Partly', 'warn'] : ['To allocate', undefined];
+  // "9 Oct", or "9 Oct 25" when it is not this year.
+  const shortDate = (iso: string) => {
+    const d = new Date(`${iso.slice(0, 10)}T00:00:00`);
+    const text = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+    return d.getFullYear() === new Date().getFullYear() ? text : `${text} ${String(d.getFullYear()).slice(2)}`;
+  };
+  const tick = (label: string, onClick: () => void) => h('button', { class: 'tick', text: '✓', attrs: { type: 'button', 'aria-label': label, title: label }, on: { click: onClick } });
+  const cell = (cls: string, ...kids: (Node | string | null)[]) => h('span', { class: `lcell ${cls}`, attrs: { role: 'cell' } }, ...kids);
 
-  function lineRow(l: Line): HTMLElement {
-    const canPick = selecting && l.state === 'unallocated';
-    const main = h(
-      'button',
-      { class: 'line-main', attrs: { type: 'button' } },
-      h('span', { class: 'title', text: l.narration }),
-      h('span', { class: 'detail', text: [niceDate(l.date), l.account, l.remark ? `Remark: ${l.remark}` : ''].filter(Boolean).join(' · ') }),
-      suggestionLine(l),
-    );
-    main.addEventListener('click', () => (canPick ? togglePick(l.id) : void openLine(l.id)));
-    const [word, kind] = stateWords(l);
-    const row = h(
-      'div',
-      { class: 'row line-row' },
-      canPick ? (h('input', { attrs: { type: 'checkbox', 'aria-label': `Select ${l.narration}`, ...(selected.has(l.id) ? { checked: '' } : {}) }, on: { change: () => togglePick(l.id) } }) as HTMLElement) : null,
-      main,
-      h('span', { class: `amount amount--${l.direction}`, text: `${l.direction === 'debit' ? '−' : '+'}${rupees(l.amountPaise)}` }),
-      pill(word, kind),
-    );
-    return h('li', {}, row);
+  function statusPill(l: Line): HTMLElement {
+    if (l.review) return pill('To review', 'crit');
+    if (l.state === 'allocated') return pill('Allocated', 'ok');
+    if (l.state === 'partly_allocated') return pill('Partly', 'warn');
+    if (!editable(l)) return pill('To allocate');
+    return isReady(l) ? pill('Ready', 'ok') : hasGhost(l) ? pill('Suggested', 'warn') : pill('Needs details');
+  }
+  function updateStatus(l: Line) {
+    const slot = rowEls.get(l.id)?.querySelector('.pillslot');
+    slot?.replaceChildren(statusPill(l));
+    renderBarCounts();
   }
 
-  const CONFIDENCE_WORDS: Record<string, string> = { high: 'confident', medium: 'fairly sure', low: 'a guess' };
-  // "Suggested: Materials and supplies · Green Nursery (confident)". Only for lines nobody has allocated.
-  function suggestionLine(l: Line): HTMLElement | null {
-    const sg = l.suggestion;
-    if (!sg || l.state === 'allocated' || !data) return null;
-    const lk = data.lookups;
-    const parts = [sg.categoryId ? nameOf(lk.categories, sg.categoryId) : '', sg.partyId ? nameOf(lk.parties, sg.partyId) : sg.newPartyName ? `new party: ${sg.newPartyName}` : '', sg.nature ? `“${sg.nature}”` : ''].filter(Boolean);
-    if (!parts.length) return null;
-    return h('span', { class: `detail suggest suggest--${sg.confidence}`, text: `Suggested: ${parts.join(' · ')}${sg.categoryId ? ` (${CONFIDENCE_WORDS[sg.confidence] ?? ''})` : ''}` });
-  }
-
-  function togglePick(id: string) {
-    if (selected.has(id)) selected.delete(id);
-    else if (selected.size < 50) selected.add(id);
-    else showToast('You can pick up to 50 at a time.');
-    renderBulkBar();
-    render();
-  }
-  // Lines on this page the server is confident enough to post as suggested. The server decides again when asked.
-  const confident = () => lines.filter((l) => l.state === 'unallocated' && l.suggestion?.confidence === 'high' && l.suggestion.categoryId);
-  function renderAcceptBar() {
-    const n = confident().length;
-    const show = Boolean(data?.canAllocate) && n > 0 && !selecting;
-    $('acceptbar').hidden = !show;
-    $('accept-count').textContent = `${n} ${n === 1 ? 'line has' : 'lines have'} a confident suggestion on this page.`;
-    $('accept-all').textContent = `Post ${n === 1 ? 'it' : `these ${n}`} as suggested`;
-  }
-  $('accept-all').addEventListener('click', async () => {
-    const picked = confident();
-    if (!picked.length) return;
+  function rowFor(l: Line): HTMLElement {
     const lk = data!.lookups;
-    const sample = picked.slice(0, 3).map((l) => `${niceDate(l.date)}: ${nameOf(lk.categories, l.suggestion!.categoryId!)}${l.suggestion!.partyId ? `, ${nameOf(lk.parties, l.suggestion!.partyId)}` : ''}`).join('\n');
-    const ok = await askSheet({
-      title: `Post ${picked.length} ${picked.length === 1 ? 'line' : 'lines'} as suggested?`,
-      text: `Each is allocated in full to the category shown on it. Posted lines cannot be edited, only refunded or reversed.\n\nFor example:\n${sample}`,
-      actions: [{ label: 'Post them', value: true, kind: 'primary' }, { label: 'Cancel', value: false }],
-    });
-    if (!ok) return;
-    const { status, data: out } = await call('/api/finance-admin/ledger/accept', 'POST', { lineIds: picked.map((l) => l.id) });
-    if (status !== 200) {
-      showToast(out?.error ?? 'Could not post them.');
-      return;
-    }
-    showToast(`${out.accepted} posted${out.skipped.length ? `, ${out.skipped.length} left for you` : ''}.`);
-    void load();
-  });
+    const can = editable(l);
+    const d = draftOf(l.id);
+    const checkbox = h('input', { attrs: { type: 'checkbox', 'aria-label': `Select ${l.narration}`, ...(selected.has(l.id) ? { checked: '' } : {}), ...(can ? {} : { disabled: '' }) } }) as HTMLInputElement;
+    checkbox.addEventListener('click', (e) => pick(l.id, (e as MouseEvent).shiftKey));
 
-  function renderBulkBar() {
-    $('bulkbar').hidden = !selecting;
-    $('bulk-count').textContent = selected.size ? `${selected.size} selected` : 'Pick the lines that share a category.';
-    ($('bulk-apply') as HTMLButtonElement).disabled = selected.size === 0;
+    let catCell: HTMLElement;
+    let partyCell: HTMLElement;
+    let natureCell: HTMLElement;
+    if (can) {
+      const ghostCat = ghostOf(l, 'categoryId');
+      const cat = categorySelect(lk.categories, { selected: d.categoryId, blank: ghostCat ? nameOf(lk.categories, ghostCat) : 'Choose…' });
+      cat.className = `cellfield${ghostCat ? ' ghost' : ''}`;
+      cat.setAttribute('aria-label', 'Category');
+      cat.addEventListener('change', () => setField(l, 'categoryId', cat.value, nameOf(lk.categories, cat.value)));
+      catCell = cell('lcell--edit', cat, ghostCat ? tick('Accept the suggested category', () => setField(l, 'categoryId', ghostCat, nameOf(lk.categories, ghostCat))) : null);
+
+      const ghostParty = ghostOf(l, 'partyId');
+      const stranger = newPartyOf(l);
+      const party = partySelect(lk.parties, { selected: d.partyId, blank: ghostParty ? nameOf(lk.parties, ghostParty) : stranger ? `+ New: ${stranger}` : 'No one in particular' });
+      party.append(h('option', { text: 'Add a new party…', attrs: { value: NEW_PARTY } }));
+      party.className = `cellfield${ghostParty || stranger ? ' ghost' : ''}`;
+      party.setAttribute('aria-label', 'Party');
+      party.addEventListener('change', () => {
+        if (party.value !== NEW_PARTY) return setField(l, 'partyId', party.value, nameOf(lk.parties, party.value));
+        party.value = d.partyId;
+        openAddParty(stranger, kindFor(l), (id) => setField(l, 'partyId', id, nameOf(data!.lookups.parties, id)));
+      });
+      partyCell = cell(
+        'lcell--edit',
+        party,
+        ghostParty
+          ? tick('Accept the suggested party', () => setField(l, 'partyId', ghostParty, nameOf(lk.parties, ghostParty)))
+          : stranger
+            ? tick(`Add ${stranger} to the register and use them`, async () => {
+                const id = await createParty(stranger, kindFor(l));
+                if (id) setField(l, 'partyId', id, stranger);
+              })
+            : null,
+      );
+
+      const ghostNature = ghostOf(l, 'nature');
+      const nature = h('input', { class: `cellfield${ghostNature ? ' ghost' : ''}`, attrs: { type: 'text', 'aria-label': 'What it was for', placeholder: ghostNature || 'What it was for', value: d.nature, autocomplete: 'off' } }) as HTMLInputElement;
+      nature.addEventListener('input', () => {
+        setDraft(l.id, { nature: nature.value });
+        updateStatus(l);
+      });
+      nature.addEventListener('change', () => offerToOthers(l, 'nature', nature.value, nature.value));
+      nature.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        const all = [...document.querySelectorAll<HTMLInputElement>('#tbody input[aria-label="What it was for"]:not(:disabled)')];
+        all[all.indexOf(nature) + 1]?.focus();
+      });
+      natureCell = cell('lcell--edit', nature, ghostNature ? tick('Accept the suggested wording', () => setField(l, 'nature', ghostNature)) : null);
+    } else {
+      const a = l.allocation;
+      const lk2 = data!.lookups;
+      catCell = cell('lcell--text', a ? `${nameOf(lk2.categories, a.categoryId)}${a.count > 1 ? ` +${a.count - 1} more` : ''}` : '');
+      partyCell = cell('lcell--text', a?.partyId ? nameOf(lk2.parties, a.partyId) : '');
+      natureCell = cell('lcell--text', a?.nature ?? '');
+    }
+
+    const error = rowErrors.get(l.id);
+    const hint = [l.account, l.remark ? `Remark: ${l.remark}` : ''].filter(Boolean).join(' · ');
+    return h(
+      'div',
+      { class: `lrow${selected.has(l.id) ? ' is-selected' : ''}${can ? '' : ' is-locked'}`, attrs: { role: 'row' } },
+      cell('lcell--check', checkbox),
+      cell('lcell--date', shortDate(l.date)),
+      cell('lcell--narr', h('button', { class: 'narr narr--link', text: l.narration, attrs: { type: 'button', title: `${l.narration}\nOpen this line to split it or see its history` }, on: { click: () => void openLine(l.id) } }), h('span', { class: `detail${error ? ' detail--warn' : ''}`, text: error ?? hint })),
+      cell(`lcell--amount amount--${l.direction}`, `${l.direction === 'debit' ? '−' : '+'}${rupees(l.amountPaise)}`),
+      catCell,
+      partyCell,
+      natureCell,
+      cell('lcell--status pillslot', statusPill(l)),
+    );
+  }
+
+  function refreshRow(id: string) {
+    const l = lines.find((x) => x.id === id);
+    const old = rowEls.get(id);
+    if (!l || !old) return;
+    const next = rowFor(l);
+    old.replaceWith(next);
+    rowEls.set(id, next);
   }
 
   function render() {
     if (!data) return;
+    for (const id of [...selected]) if (!lines.some((l) => l.id === id && editable(l))) selected.delete(id);
     renderChips();
-    const canSelect = data.canAllocate && filter === 'unallocated';
-    $('select-toggle').hidden = !canSelect;
-    if (!canSelect) selecting = false;
-    $('select-toggle').textContent = selecting ? 'Done selecting' : 'Select several';
-    renderBulkBar();
-    renderAcceptBar();
-    $('list').replaceChildren(...lines.map(lineRow));
+    $('accept-all').hidden = !(data.canAllocate && filter === 'unallocated' && lines.some((l) => editable(l) && hasGhost(l)));
+    rowEls.clear();
+    $('tbody').replaceChildren(
+      ...lines.map((l) => {
+        const el = rowFor(l);
+        rowEls.set(l.id, el);
+        return el;
+      }),
+    );
     $('more').hidden = lines.length >= data.total;
+    $('range').textContent = data.total ? `1 to ${lines.length} of ${data.total}` : '';
     const empty = $('empty');
     if (lines.length === 0) {
       empty.hidden = false;
@@ -271,6 +357,288 @@ import SignInGate from '../../../components/SignInGate.astro';
       clearState(empty);
       empty.hidden = true;
     }
+    chrome();
+  }
+
+  // The header checkbox and the bar under the table.
+  function chrome() {
+    const pickable = lines.filter(editable);
+    const head = $<HTMLInputElement>('head-check');
+    const n = pickable.filter((l) => selected.has(l.id)).length;
+    head.checked = pickable.length > 0 && n === pickable.length;
+    head.indeterminate = n > 0 && n < pickable.length;
+    head.disabled = pickable.length === 0;
+    renderBar();
+  }
+  $('head-check').addEventListener('click', () => {
+    const pickable = lines.filter(editable);
+    const all = pickable.length > 0 && pickable.every((l) => selected.has(l.id));
+    for (const l of pickable) {
+      if (all) selected.delete(l.id);
+      else selected.add(l.id);
+    }
+    pending = null;
+    for (const l of pickable) refreshRow(l.id);
+    chrome();
+  });
+
+  // Click selects or clears one line; shift-click selects the run between this line and the last one clicked.
+  function pick(id: string, shift: boolean) {
+    const order = lines.filter(editable).map((l) => l.id);
+    const touched = [id];
+    if (shift && lastPicked && order.includes(lastPicked) && order.includes(id)) {
+      const [a, b] = [order.indexOf(lastPicked), order.indexOf(id)].sort((x, y) => x - y);
+      for (const i of order.slice(a, b + 1)) {
+        selected.add(i);
+        touched.push(i);
+      }
+    } else if (selected.has(id)) selected.delete(id);
+    else selected.add(id);
+    lastPicked = id;
+    pending = null;
+    for (const t of touched) refreshRow(t);
+    chrome();
+  }
+
+  // ---- editing: a cell changes one line; if that line is one of several selected, offer to change the rest too (like ServiceNow)
+  function setField(l: Line, field: Field, value: string, label?: string) {
+    setDraft(l.id, { [field]: value });
+    refreshRow(l.id);
+    offerToOthers(l, field, value, label ?? value);
+    chrome();
+  }
+  function offerToOthers(l: Line, field: Field, value: string, label: string) {
+    if (!value.trim() || !selected.has(l.id)) return;
+    const others = selectedRows().filter((x) => x.id !== l.id);
+    if (!others.length) return;
+    pending = { field, value, label, ids: others.map((x) => x.id) };
+    renderBar();
+  }
+  function applyPending() {
+    if (!pending) return;
+    const p = pending;
+    pending = null;
+    for (const id of p.ids) {
+      setDraft(id, { [p.field]: p.value });
+      refreshRow(id);
+    }
+    showToast(`Applied to ${p.ids.length + 1} lines.`);
+    chrome();
+  }
+  function bulkSet(field: Field, value: string, what: string) {
+    const rows = selectedRows();
+    for (const l of rows) {
+      setDraft(l.id, { [field]: value });
+      refreshRow(l.id);
+    }
+    pending = null;
+    showToast(`${what} set on ${rows.length} ${rows.length === 1 ? 'line' : 'lines'}.`);
+    chrome();
+  }
+  // Fill the empty cells from the suggestions. A suggested NEW party is never added for you in bulk: that is a click per party.
+  function acceptFor(rows: Line[]) {
+    let needParty = 0;
+    for (const l of rows) {
+      const patch: Partial<Draft> = {};
+      const d = draftOf(l.id);
+      if (!d.categoryId && l.suggestion?.categoryId) patch.categoryId = l.suggestion.categoryId;
+      if (!d.partyId && l.suggestion?.partyId) patch.partyId = l.suggestion.partyId;
+      if (!d.nature && l.suggestion?.nature) patch.nature = l.suggestion.nature;
+      if (!d.partyId && !l.suggestion?.partyId && l.suggestion?.newPartyName) needParty++;
+      setDraft(l.id, patch);
+      refreshRow(l.id);
+    }
+    pending = null;
+    showToast(`Suggestions filled in on ${rows.length} ${rows.length === 1 ? 'line' : 'lines'}. Nothing is posted yet.${needParty ? ` ${needParty} need a new party added: use the tick in their Party cell.` : ''}`);
+    chrome();
+  }
+  $('accept-all').addEventListener('click', () => acceptFor(lines.filter(editable)));
+  function fillFromFirst() {
+    const rows = selectedRows();
+    const first = rows[0];
+    if (!first || rows.length < 2) return;
+    const d = draftOf(first.id);
+    for (const l of rows.slice(1)) {
+      setDraft(l.id, { ...d });
+      refreshRow(l.id);
+    }
+    pending = null;
+    showToast(`Copied from the first line to ${rows.length - 1} more.`);
+    chrome();
+  }
+
+  // ---- adding a party that is not in the register
+  async function createParty(name: string, kind: string): Promise<string | null> {
+    const typed = name.trim().replace(/\s+/g, ' ');
+    const twin = data!.lookups.parties.find((x) => x.name.toLowerCase() === typed.toLowerCase());
+    if (twin) return twin.id;
+    const { status, data: out } = await call('/api/finance-admin/parties', 'POST', { name: typed, kind });
+    if (status !== 201) {
+      showToast(out?.error ?? 'Could not add that party.');
+      return null;
+    }
+    const lk = data!.lookups;
+    lk.parties.push({ id: out.party.id, name: out.party.name, kind: out.party.kind });
+    lk.parties.sort((a, b) => a.name.localeCompare(b.name));
+    showToast(`${out.party.name} added to the register. Add their bank details on the Parties page.`);
+    return out.party.id as string;
+  }
+  function openAddParty(name: string, kind: string, onAdded: (id: string) => void) {
+    const dlg = $<HTMLDialogElement>('party-sheet');
+    const nameInput = input('newPartyName', { placeholder: 'Name as it should appear in the register' }) as HTMLInputElement;
+    nameInput.value = name;
+    const kindSel = h('select', { attrs: { name: 'newPartyKind' } }, ...Object.entries(PARTY_KINDS).map(([k, label]) => h('option', { text: label, attrs: { value: k } }))) as HTMLSelectElement;
+    kindSel.value = kind;
+    const msg = h('p', { class: 'error', attrs: { hidden: '' } });
+    const form = h(
+      'form',
+      { class: 'stack-form' },
+      h('p', { class: 'hint', text: 'Bank details are added and verified later, on the Parties page.' }),
+      labelled('Name', nameInput),
+      labelled('What kind of party', kindSel),
+      msg,
+      h('div', { class: 'sheet-actions' }, button('Cancel', () => dlg.close()), h('button', { class: 'button button--primary', text: 'Add to register', attrs: { type: 'submit' } })),
+    );
+    form.addEventListener('submit', async (e: Event) => {
+      e.preventDefault();
+      if (nameInput.value.trim().length < 2) {
+        msg.hidden = false;
+        msg.textContent = 'Enter the name.';
+        return;
+      }
+      const id = await createParty(nameInput.value, kindSel.value);
+      if (!id) return;
+      dlg.close();
+      onAdded(id);
+    });
+    dlg.addEventListener('close', () => dlg.replaceChildren(), { once: true });
+    present(dlg, closeOnBackdrop, h('h2', { text: 'Add a party', attrs: { id: 'party-title' } }), form);
+  }
+
+  // ---- the bar under the table: what you can do to the lines you have selected
+  const readyCount = () => selectedRows().filter(isReady).length;
+  function renderBarCounts() {
+    if (barRefs.count) barRefs.count.textContent = `${selectedRows().length} selected`;
+    if (barRefs.post) {
+      const n = readyCount();
+      barRefs.post.textContent = `Post ${n} ready`;
+      barRefs.post.disabled = n === 0;
+    }
+  }
+  function renderBar() {
+    const bar = $('actionbar');
+    const rows = selectedRows();
+    if (!data || !rows.length) {
+      bar.hidden = true;
+      bar.replaceChildren();
+      barRefs = {};
+      return;
+    }
+    const lk = data.lookups;
+    const stack: HTMLElement[] = [];
+    if (pending) {
+      const n = pending.ids.length;
+      stack.push(
+        h(
+          'div',
+          { class: 'prompt', attrs: { role: 'status' } },
+          h('span', { class: 'grow', text: `Apply “${pending.label}” to the other ${n} selected ${n === 1 ? 'line' : 'lines'} too?` }),
+          button('Apply to all', applyPending, 'button button--primary button--small'),
+          button('Only this line', () => {
+            pending = null;
+            renderBar();
+          }, 'button button--outline button--small'),
+        ),
+      );
+    }
+    const cat = categorySelect(lk.categories, { blank: 'Set category…' });
+    cat.className = 'barfield';
+    cat.setAttribute('aria-label', 'Set the category on the selected lines');
+    cat.addEventListener('change', () => cat.value && bulkSet('categoryId', cat.value, nameOf(lk.categories, cat.value)));
+    const party = partySelect(lk.parties, { blank: 'Set party…' });
+    party.className = 'barfield';
+    party.setAttribute('aria-label', 'Set the party on the selected lines');
+    party.addEventListener('change', () => party.value && bulkSet('partyId', party.value, nameOf(lk.parties, party.value)));
+    const words = input('bulkWording', { placeholder: 'Set wording…', 'aria-label': 'Set the wording on the selected lines' }) as HTMLInputElement;
+    words.className = 'barfield';
+    const applyWords = () => {
+      if (!words.value.trim()) return;
+      bulkSet('nature', words.value.trim(), 'Wording');
+      words.value = '';
+    };
+    words.addEventListener('keydown', (e) => e.key === 'Enter' && (e.preventDefault(), applyWords()));
+    const count = h('span', { class: 'barcount', text: `${rows.length} selected` });
+    const post = button(`Post ${readyCount()} ready`, () => void postReady(), 'button barpost') as HTMLButtonElement;
+    post.disabled = readyCount() === 0;
+    barRefs = { post, count };
+    const fill = button('Fill from first', fillFromFirst, 'button button--outline button--small') as HTMLButtonElement;
+    fill.disabled = rows.length < 2;
+    fill.title = "Copy the first selected line's category, party and wording to the others";
+    stack.push(
+      h(
+        'div',
+        { class: 'barrow' },
+        count,
+        cat,
+        party,
+        words,
+        button('Apply', applyWords, 'button button--outline button--small'),
+        button('Accept suggestions', () => acceptFor(rows), 'button button--outline button--small'),
+        fill,
+        h('span', { class: 'grow' }),
+        post,
+        button('Clear', () => {
+          selected.clear();
+          pending = null;
+          for (const l of rows) refreshRow(l.id);
+          chrome();
+        }, 'button button--outline button--small'),
+      ),
+    );
+    bar.replaceChildren(...stack);
+    bar.hidden = false;
+  }
+
+  // ---- posting: the second step. Asks first, because a posted line is only ever refunded or reversed.
+  async function postReady() {
+    const ready = selectedRows().filter(isReady);
+    if (!ready.length) return;
+    const lk = data!.lookups;
+    const sample = ready.slice(0, 3).map((l) => `${niceDate(l.date)}: ${nameOf(lk.categories, draftOf(l.id).categoryId)}${draftOf(l.id).partyId ? `, ${nameOf(lk.parties, draftOf(l.id).partyId)}` : ''}`).join('\n');
+    const ok = await askSheet({
+      title: `Post ${ready.length} ${ready.length === 1 ? 'line' : 'lines'}?`,
+      text: `Each line is allocated in full to what you chose. Posted lines cannot be edited, only refunded or reversed.\n\nFor example:\n${sample}`,
+      actions: [{ label: 'Post them', value: true, kind: 'primary' }, { label: 'Cancel', value: false }],
+    });
+    if (!ok) return;
+    let posted = 0;
+    let flagged = 0;
+    const failed: { lineId: string; error: string }[] = [];
+    // The server takes a few at a time, so a long run shows its progress and cannot run out of time.
+    for (let i = 0; i < ready.length; i += 10) {
+      const chunk = ready.slice(i, i + 10);
+      showToast(`Posting ${Math.min(i + 10, ready.length)} of ${ready.length}…`);
+      const items = chunk.map((l) => ({ lineId: l.id, categoryId: draftOf(l.id).categoryId, partyId: draftOf(l.id).partyId || null, nature: draftOf(l.id).nature.trim() }));
+      const { status, data: out } = await call('/api/finance-admin/ledger/post', 'POST', { items });
+      if (status !== 200) {
+        for (const l of chunk) failed.push({ lineId: l.id, error: out?.error ?? 'Could not post this line.' });
+        continue;
+      }
+      posted += out.posted;
+      flagged += out.flagged;
+      failed.push(...(out.failed as { lineId: string; error: string }[]));
+    }
+    const failedIds = new Set(failed.map((f) => f.lineId));
+    for (const l of ready) {
+      if (failedIds.has(l.id)) continue;
+      drafts.delete(l.id);
+      selected.delete(l.id);
+    }
+    rowErrors.clear();
+    for (const f of failed) rowErrors.set(f.lineId, f.error);
+    pending = null;
+    showToast([`${posted} posted`, flagged ? `${flagged} sent to review` : '', failed.length ? `${failed.length} could not be posted (see the red notes)` : ''].filter(Boolean).join(', ') + '.');
+    await load();
   }
 
   let searchTimer: ReturnType<typeof setTimeout> | undefined;
@@ -282,11 +650,6 @@ import SignInGate from '../../../components/SignInGate.astro';
     }, 250);
   });
   $('more').addEventListener('click', () => void load(true));
-  $('select-toggle').addEventListener('click', () => {
-    selecting = !selecting;
-    selected.clear();
-    render();
-  });
 
   // ---- one line: what it says, and the allocation editor
   type Alloc = { id: string; partyId: string | null; categoryId: string; projectId: string | null; amountPaise: number; period: string; nature: string; remarks: string | null; source: string; reviewState: string; reviewReason: string | null; reversesAllocationId: string | null; reversalReason: string | null; posted: boolean };
@@ -556,49 +919,6 @@ import SignInGate from '../../../components/SignInGate.astro';
     return wrap;
   }
 
-  // ---- the same category for many lines
-  $('bulk-apply').addEventListener('click', () => {
-    if (!data) return;
-    const dlg = $<HTMLDialogElement>('bulk-sheet');
-    const lk = data.lookups;
-    const category = categorySelect(lk.categories);
-    const party = partySelect(lk.parties);
-    const nature = input('nature', { placeholder: 'What they were for, in plain words' }) as HTMLInputElement;
-    const msg = h('p', { class: 'error', attrs: { hidden: '' } });
-    const form = h(
-      'form',
-      { class: 'stack-form' },
-      h('p', { class: 'hint', text: `${selected.size === 1 ? 'This line is' : `Each of the ${selected.size} lines is`} allocated in full to this category. Anything that needs a second look still goes to review.` }),
-      labelled('Category', category),
-      labelled('Party', party),
-      labelled('What it was for', nature),
-      msg,
-      h('div', { class: 'sheet-actions' }, button('Cancel', () => dlg.close()), h('button', { class: 'button button--primary', text: 'Post them', attrs: { type: 'submit' } })),
-    );
-    form.addEventListener('submit', async (e: Event) => {
-      e.preventDefault();
-      const { status, data: out } = await call('/api/finance-admin/ledger/bulk', 'POST', { lineIds: [...selected], row: { categoryId: category.value, partyId: party.value || null, nature: nature.value } });
-      if (status !== 200) {
-        msg.hidden = false;
-        msg.textContent = out?.error ?? 'Could not do that.';
-        return;
-      }
-      const failed = (out.failed ?? []) as { error: string }[];
-      if (failed.length) {
-        msg.hidden = false;
-        msg.textContent = `${out.saved} posted. ${failed.length} could not be: ${failed[0].error}`;
-      } else {
-        dlg.close();
-        showToast(`${out.saved} posted.`);
-      }
-      selected.clear();
-      selecting = false;
-      void load();
-    });
-    dlg.addEventListener('close', () => dlg.replaceChildren(), { once: true });
-    present(dlg, closeOnBackdrop, h('h2', { text: `Allocate ${selected.size} ${selected.size === 1 ? 'line' : 'lines'}`, attrs: { id: 'bulk-title' } }), form);
-  });
-
   // ---- months: close one when everything in it is posted and checked
   type Month = { month: string; financialYear: number; status: 'open' | 'closed'; unallocated: number; review: number };
   async function loadMonths() {
@@ -671,6 +991,287 @@ import SignInGate from '../../../components/SignInGate.astro';
     color: var(--tvc-error-text);
   }
 
+  .ledger .bar .grow {
+    flex: 1;
+  }
+
+  .ledger .foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 10px;
+  }
+
+  .ledger .foot .hint,
+  .ledger .tips {
+    margin: 0;
+  }
+
+  .ledger .tips {
+    margin-top: 10px;
+  }
+
+  /* The table: a grid of rows that scrolls sideways on a phone, a spreadsheet's shape for working through many lines. */
+  .ledger .tablewrap {
+    overflow-x: auto;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    background: var(--tvc-white);
+  }
+
+  .ledger .ltable {
+    min-width: 1010px;
+  }
+
+  .ledger .lrow {
+    display: grid;
+    grid-template-columns: 40px 64px minmax(170px, 1.3fr) 104px minmax(150px, 1fr) minmax(140px, 1fr) minmax(160px, 1.1fr) 96px;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--tvc-line);
+  }
+
+  .ledger .lrow:last-child {
+    border-bottom: 0;
+  }
+
+  .ledger .lhead {
+    padding-top: 9px;
+    padding-bottom: 9px;
+    background: color-mix(in srgb, var(--tvc-line) 45%, var(--tvc-white));
+    font-size: var(--text-sm);
+    font-weight: 650;
+    color: var(--tvc-ink-soft);
+  }
+
+  .ledger #tbody .lrow:hover {
+    background: color-mix(in srgb, var(--tvc-line) 30%, transparent);
+  }
+
+  .ledger #tbody .lrow.is-selected {
+    background: color-mix(in srgb, var(--tvc-green) 12%, transparent);
+  }
+
+  .ledger #tbody .lrow.is-locked .lcell--narr,
+  .ledger #tbody .lrow.is-locked .lcell--date {
+    color: var(--tvc-ink-soft);
+  }
+
+  .ledger .lcell {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-width: 0;
+  }
+
+  .ledger .lcell--edit {
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .ledger .lcell--date {
+    color: var(--tvc-ink-soft);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .ledger .lcell--amount {
+    text-align: right;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .ledger .lcell--amount.amount--credit {
+    color: var(--tvc-green);
+  }
+
+  .ledger .lcell--text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .ledger .lcell--check input {
+    width: 18px;
+    height: 18px;
+  }
+
+  .ledger .narr--link {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-weight: 550;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .ledger .narr--link:hover {
+    text-decoration: underline;
+  }
+
+  .ledger .narr--link:focus-visible {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  .ledger .narr {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 550;
+  }
+
+  .ledger .detail {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* A cell you edit in place: it looks like text until you point at it. */
+  .ledger .cellfield {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    min-height: 34px;
+    padding: 4px 8px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    background: transparent;
+  }
+
+  .ledger .cellfield:hover {
+    border-color: var(--tvc-line-strong);
+    background: var(--tvc-white);
+  }
+
+  .ledger .cellfield:focus {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 0;
+    background: var(--tvc-white);
+  }
+
+  .ledger .cellfield.ghost,
+  .ledger .cellfield.ghost::placeholder {
+    font-style: italic;
+    color: var(--tvc-ink-soft);
+  }
+
+  .ledger .tick {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid var(--tvc-green);
+    border-radius: var(--radius-sm);
+    background: var(--tvc-white);
+    color: var(--tvc-green);
+    cursor: pointer;
+  }
+
+  .ledger .tick:hover {
+    background: color-mix(in srgb, var(--tvc-green) 14%, var(--tvc-white));
+  }
+
+  /* The bar for the lines you have selected: under the table, sticking to the bottom of the screen while you scroll, inverted so it cannot be missed. */
+  .ledger .actionbar {
+    position: sticky;
+    bottom: 16px;
+    z-index: 30;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .ledger .actionbar[hidden] {
+    display: none;
+  }
+
+  .ledger .barrow,
+  .ledger .prompt {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .ledger .barrow {
+    background: var(--tvc-ink);
+    color: var(--tvc-white);
+  }
+
+  .ledger .prompt {
+    border: 1px solid var(--tvc-line-strong);
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+  }
+
+  .ledger .prompt .grow,
+  .ledger .barrow .grow {
+    flex: 1 1 120px;
+  }
+
+  .ledger .barcount {
+    margin-right: 4px;
+    font-weight: 650;
+  }
+
+  .ledger .barfield {
+    min-height: 36px;
+    max-width: 190px;
+    padding: 4px 10px;
+    border: 1px solid color-mix(in srgb, var(--tvc-white) 45%, transparent);
+    border-radius: var(--radius-sm);
+    background: color-mix(in srgb, var(--tvc-white) 12%, transparent);
+    color: inherit;
+  }
+
+  .ledger .barfield option,
+  .ledger .barfield optgroup {
+    color: var(--tvc-ink);
+    background: var(--tvc-white);
+  }
+
+  .ledger .barrow .button--outline {
+    border-color: color-mix(in srgb, var(--tvc-white) 45%, transparent);
+    background: transparent;
+    color: inherit;
+  }
+
+  .ledger .barrow .barpost {
+    min-height: 36px;
+    padding: 4px 16px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+    font-weight: 700;
+  }
+
+  .ledger .barrow .barpost:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+
+  @media (max-width: 800px) {
+    /* Above the phone's bottom tab bar. */
+    .ledger .actionbar {
+      bottom: 76px;
+    }
+  }
+
   .ledger .list-title {
     margin: 26px 0 8px 14px;
     font-size: var(--text-sm);
@@ -678,55 +1279,11 @@ import SignInGate from '../../../components/SignInGate.astro';
     color: var(--tvc-ink-soft);
   }
 
-  .ledger .bulkbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    margin: 12px 0;
-  }
 
-  .ledger .bulkbar .hint {
-    margin: 0;
-  }
-
-  .ledger .more {
-    margin: 14px 0 0;
-    text-align: center;
-  }
 
   /* A line: the narration and its small print, then the amount and where it stands. */
-  .ledger .line-row {
-    gap: 12px;
-  }
 
-  .ledger .line-main {
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-    min-height: 40px;
-    padding: 0;
-    border: 0;
-    background: none;
-    font: inherit;
-    color: inherit;
-    text-align: left;
-    cursor: pointer;
-  }
 
-  .ledger .line-main:focus-visible {
-    outline: 2px solid var(--tvc-orange);
-    outline-offset: 2px;
-    border-radius: var(--radius-sm);
-  }
-
-  .ledger .line-main .title {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
 
   .ledger .detail {
     display: block;
@@ -738,16 +1295,6 @@ import SignInGate from '../../../components/SignInGate.astro';
     color: var(--tvc-error-text);
   }
 
-  .ledger .amount {
-    flex: none;
-    font-variant-numeric: tabular-nums;
-    font-weight: 600;
-    text-align: right;
-  }
-
-  .ledger .amount--credit {
-    color: var(--tvc-green);
-  }
 
   .ledger.section dialog.sheet {
     width: min(620px, calc(100vw - 32px));
@@ -766,13 +1313,6 @@ import SignInGate from '../../../components/SignInGate.astro';
     font-size: var(--text-sm);
   }
 
-  .ledger .suggest {
-    color: var(--tvc-ink-soft);
-  }
-
-  .ledger .suggest--high {
-    color: var(--tvc-green);
-  }
 
   .ledger .suggest-note {
     margin: 10px 0;

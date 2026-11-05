@@ -477,7 +477,7 @@ outside both the local machine and Netlify (the member-update-email workflow).
   Sheet (shared with the Drive service account) and runs against Supabase; it is not deployed. Rotating
   `FINANCE_PAYEE_KEY` (or the key in use) makes stored payee details unreadable until re-entered; it is separate from `STAFF_MFA_KEY`, so rotating one never breaks the other.
   **Ledger (session 05, migration `0083_finance_ledger.sql`, applied 2026-11-05):** `finance-admin.mts` also serves the ledger
-  (`/api/finance-admin/ledger`, `/allocations/:id/review`, `/rules`, `/categories`, `/periods`; code in `lib/finance-ledger.ts`,
+  (`/api/finance-admin/ledger`, `/ledger/post` (up to 15 lines at once), `/allocations/:id/review`, `/rules`, `/categories`, `/periods`; code in `lib/finance-ledger.ts`,
   pages `/internal/finance/ledger/` and `/internal/finance/rules/`). `fin_allocations` explains each bank line (a line posts only
   when its allocations add up to it exactly; posted rows are frozen; a refund is a reversing row), `fin_rules` suggests a
   category, `scripts/lib/finance-suggest.mjs` proposes a category, party and wording for each line from the narration, the register and earlier postings, and `fin_vouchers` is the table for bills (no screen yet). `fin_save_allocations`, `fin_close_period`,

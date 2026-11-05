@@ -21,7 +21,7 @@ import { attentionOf } from '../../scripts/lib/finance-attention.mjs';
 import { PARTY_ID, addPayeeAccount, createParty, listParties, mergeParty, retirePayeeAccount, revealPayeeAccount, reviewParty, unmergeParty, updateParty, verifyPayeeAccount } from './lib/finance-parties';
 import { heldCoverage, reconciliationOf, runImport } from './lib/finance-import';
 import { supabaseImportStore } from './lib/finance-import-store';
-import { LEDGER_ID, acceptSuggestions, bulkAllocate, closePeriod, ledgerCounts, ledgerLine, listLedger, listPeriods, listRules, recategorise, reviewAllocation, saveAllocations, saveCategory, saveRule, setRequester } from './lib/finance-ledger';
+import { LEDGER_ID, closePeriod, ledgerCounts, ledgerLine, listLedger, listPeriods, listRules, postBatch, recategorise, reviewAllocation, saveAllocations, saveCategory, saveRule, setRequester } from './lib/finance-ledger';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
@@ -194,8 +194,7 @@ export default async (req: Request): Promise<Response> => {
   }
   // Ledger and review (session 05)
   if (route === '/ledger' && req.method === 'GET') return listLedger(req);
-  if (route === '/ledger/bulk' && req.method === 'POST') return bulkAllocate(req);
-  if (route === '/ledger/accept' && req.method === 'POST') return acceptSuggestions(req);
+  if (route === '/ledger/post' && req.method === 'POST') return postBatch(req);
   const line = /^\/ledger\/([^/]+)(\/allocations)?$/.exec(route);
   if (line && LEDGER_ID.test(line[1])) {
     if (!line[2] && req.method === 'GET') return ledgerLine(req, line[1]);

@@ -18,7 +18,6 @@ export const LEDGER_ID = /^[0-9a-f-]{36}$/i;
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])-01$/;
 const CATEGORY_TYPES = ['opex', 'capex', 'revenue', 'member_contribution', 'sinking_fund', 'interest', 'tax', 'reimbursement', 'transfer'];
 const PAGE = 100;
-const BULK_MAX = 50;
 
 const jsonResponse = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
 const fail = (error: string, status = 400, extra: Json = {}) => jsonResponse({ error, ...extra }, status);
@@ -77,13 +76,13 @@ async function lookups() {
 }
 
 // ---------------------------------------------------------------- list
-type LineRow = { id: string; bank_account_id: string; tran_date: string; narration: string; direction: string; amount_paise: number };
+type LineRow = { id: string; entity_id: string; bank_account_id: string; tran_date: string; narration: string; direction: string; amount_paise: number };
 
 // The whole ledger is a few thousand lines, so state is worked out here instead of in SQL; the page is capped.
 async function loadLedger(from: string | null, to: string | null) {
   const range = `${from ? `&tran_date=gte.${from}` : ''}${to ? `&tran_date=lte.${to}` : ''}`;
   const [lines, allocations] = await Promise.all([
-    rowsAll(`/fin_bank_lines?select=id,bank_account_id,tran_date,narration,direction,amount_paise&order=tran_date.desc,created_at.desc,id.asc${range}`) as Promise<LineRow[]>,
+    rowsAll(`/fin_bank_lines?select=id,entity_id,bank_account_id,tran_date,narration,direction,amount_paise&order=tran_date.desc,created_at.desc,id.asc${range}`) as Promise<LineRow[]>,
     rowsAll('/fin_allocations?select=bank_line_id,amount_paise,review_state,posted_at,party_id,category_id,nature,reverses_allocation_id&order=id.asc'),
   ]);
   const byLine = new Map<string, Json[]>();
@@ -147,6 +146,8 @@ export async function listLedger(req: Request): Promise<Response> {
         allocatedPaise: (byLine.get(l.id) ?? []).reduce((n, a) => n + a.amount_paise, 0),
         ...summarise(l),
         suggestion: summarise(l).state === 'allocated' ? null : compactSuggestion(suggestFor(l, upiOf.get(l.id) ?? null, ctx, sc)),
+        // What a posted line was allocated to (the first row, and how many there are), so the table can show it.
+        allocation: postedSummary(byLine.get(l.id) ?? []),
       })),
       lookups: ctx,
       reasons: REVIEW_REASONS,
@@ -192,6 +193,11 @@ const suggestFor = (line: Json, upi: Json | null, ctx: Awaited<ReturnType<typeof
   suggest({ line, upi, rules: sc.rc.rules, parties: ctx.parties, categories: ctx.categories, history: sc.history, requesterPartyIds: sc.requesterIds }) as Json;
 
 // The short form shown in the list: no reasons (the line's own sheet has those).
+const postedSummary = (allocs: Json[]) => {
+  const posted = allocs.filter((a) => a.posted_at && !a.reverses_allocation_id);
+  return posted.length ? { categoryId: posted[0].category_id, partyId: posted[0].party_id, nature: posted[0].nature, count: posted.length } : null;
+};
+
 const compactSuggestion = (x: Json) =>
   x.categoryId || x.partyId || x.nature || x.newParty
     ? { categoryId: x.categoryId, partyId: x.partyId, nature: x.nature, confidence: x.confidence, newPartyName: x.newParty?.name ?? null }
@@ -273,25 +279,29 @@ export async function ledgerLine(req: Request, lineId: string): Promise<Response
 }
 
 // ---------------------------------------------------------------- save
-type SaveResult = { ok: true; saved: number; posted: boolean; override: boolean } | { ok: false; status: number; error: string };
+type SaveResult = { ok: true; saved: number; posted: boolean; override: boolean; flagged: number } | { ok: false; status: number; error: string };
+
+// What saveLine needs besides the rows, read once when many lines are saved together (a batch of 15 would otherwise read the
+// lookups, rules and accounts 15 times and run out of time).
+type SharedSave = { ctx: Awaited<ReturnType<typeof lookups>>; rc: Awaited<ReturnType<typeof reviewContext>>; lines: Map<string, Json>; byLine: Map<string, Json[]>; upiOf: Map<string, Json> };
 
 // Validates a person's rows for one line, works out the review flags, writes the audit row, then saves through the database
 // function (which checks the sums again). `input`: { rows, post, overrideReason }.
-async function saveLine(staff: { id: string }, capabilities: string[], lineId: string, input: Json): Promise<SaveResult> {
-  const [line] = await rows(`/fin_bank_lines?id=eq.${lineId}&select=id,entity_id,tran_date,direction,amount_paise`);
+async function saveLine(staff: { id: string }, capabilities: string[], lineId: string, input: Json, shared?: SharedSave): Promise<SaveResult> {
+  const line = shared?.lines.get(lineId) ?? (await rows(`/fin_bank_lines?id=eq.${lineId}&select=id,entity_id,tran_date,direction,amount_paise`))[0];
   if (!line) return { ok: false, status: 404, error: 'That line does not exist.' };
-  const existing = await rows(`/fin_allocations?bank_line_id=eq.${lineId}&select=id,posted_at`);
+  const existing = shared ? shared.byLine.get(lineId) ?? [] : await rows(`/fin_allocations?bank_line_id=eq.${lineId}&select=id,posted_at`);
   if (existing.some((a) => a.posted_at)) return { ok: false, status: 409, error: 'This line is already posted. Correct it with a refund or reversal, not by editing.' };
   const post = Boolean(input.post);
   const inputRows: Json[] = Array.isArray(input.rows) ? input.rows : [];
   if (inputRows.length > 40) return { ok: false, status: 400, error: 'That is too many rows for one line.' };
 
-  const ctx = await lookups();
+  const ctx = shared?.ctx ?? (await lookups());
   const categoryById = new Map(ctx.categories.map((c) => [c.id as string, c]));
   const partyIds = new Set(ctx.parties.map((p) => p.id as string));
   const projectIds = new Set(ctx.projects.map((p) => p.id as string));
-  const [upi] = await rows(`/fin_upi_lines?bank_line_id=eq.${lineId}&select=counterparty,remarks,is_circle`);
-  const rc = await reviewContext(ctx);
+  const upi = shared ? shared.upiOf.get(lineId) : (await rows(`/fin_upi_lines?bank_line_id=eq.${lineId}&select=counterparty,remarks,is_circle`))[0];
+  const rc = shared?.rc ?? (await reviewContext(ctx));
   const requesterIds = ctx.requesterPartyId ? [ctx.requesterPartyId] : [];
 
   // Reversal rows take their category and party from the allocation they undo.
@@ -317,7 +327,7 @@ async function saveLine(staff: { id: string }, capabilities: string[], lineId: s
   for (const [i, r] of plan.rows.entries()) {
     const category = categoryById.get(r.categoryId);
     if (!category || (!category.active && !r.reversesAllocationId)) return { ok: false, status: 400, error: `Row ${i + 1}: choose an active category.` };
-    if (r.partyId && !partyIds.has(r.partyId) && !r.reversesAllocationId) return { ok: false, status: 400, error: `Row ${i + 1}: that party is not in the directory.` };
+    if (r.partyId && !partyIds.has(r.partyId) && !r.reversesAllocationId) return { ok: false, status: 400, error: `Row ${i + 1}: that party is not in the register.` };
     if (r.projectId && !projectIds.has(r.projectId)) return { ok: false, status: 400, error: `Row ${i + 1}: that project does not exist.` };
   }
 
@@ -384,7 +394,7 @@ async function saveLine(staff: { id: string }, capabilities: string[], lineId: s
       if (rule) await rest(`/fin_rules?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify({ hit_count: rule.hit_count + 1 }) });
     }
   }
-  return { ok: true, saved: dbRows.length, posted: post, override };
+  return { ok: true, saved: dbRows.length, posted: post, override, flagged: dbRows.filter((r) => r.review_state !== 'ok').length };
 }
 
 export async function saveAllocations(req: Request, lineId: string): Promise<Response> {
@@ -400,85 +410,51 @@ export async function saveAllocations(req: Request, lineId: string): Promise<Res
   }
 }
 
-// Post the suggestions the engine is confident about, for the lines a person picked (or the page they are looking at).
-// The server works the suggestions out itself; the client only says which lines, never what to post. A line that already has
-// rows, or whose suggestion is not high confidence, is left alone and reported.
-export async function acceptSuggestions(req: Request): Promise<Response> {
+// Post many lines at once, each in full to its own category, party and wording: what the table's "Post N ready" sends. The
+// client only says which lines and what to put on them (the same trust as posting by hand); the amount is always the line's.
+// A line that cannot be posted (already posted, a closed month, a retired category) is left alone and reported with its reason.
+// At most BATCH_MAX a request, because each save is an audit write and a database call and a function has a time limit.
+const BATCH_MAX = 15;
+export async function postBatch(req: Request): Promise<Response> {
   const auth = await requireStaff(req, 'finance', 'allocate');
   if (!auth.ok) return fail(auth.error, auth.status);
   const body = await readBody(req);
-  const lineIds: string[] = Array.isArray(body?.lineIds) ? body!.lineIds : [];
-  if (!body || !lineIds.length || lineIds.length > 100 || !lineIds.every((id) => LEDGER_ID.test(String(id)))) return fail('Choose between 1 and 100 lines.');
+  const items: Json[] = Array.isArray(body?.items) ? body!.items : [];
+  if (!body || !items.length || items.length > BATCH_MAX || !items.every((i) => i && LEDGER_ID.test(String(i.lineId)))) return fail(`Send between 1 and ${BATCH_MAX} lines.`);
+  if (new Set(items.map((i) => i.lineId)).size !== items.length) return fail('A line was sent twice.');
   try {
     const capabilities = capabilitiesForRole('finance', auth.staff.role) as string[];
     const ctx = await lookups();
-    const { lines, byLine } = await loadLedger(null, null);
-    const sc = await suggestionContext(lines, byLine, ctx);
-    const lineById = new Map(lines.map((l) => [l.id, l]));
-    const upiRows = await rowsAll('/fin_upi_lines?select=bank_line_id,counterparty,remarks,is_circle&bank_line_id=not.is.null&order=id.asc');
-    const upiOf = new Map(upiRows.map((u) => [u.bank_line_id as string, u]));
-    const categoryName = new Map(ctx.categories.map((c) => [c.id as string, c.name as string]));
-    const skipped: { lineId: string; why: string }[] = [];
-    let accepted = 0;
-    for (const lineId of lineIds) {
-      const line = lineById.get(lineId);
-      if (!line) {
-        skipped.push({ lineId, why: 'No such line.' });
-        continue;
-      }
-      if ((byLine.get(lineId) ?? []).length) {
-        skipped.push({ lineId, why: 'Already has allocations.' });
-        continue;
-      }
-      const sg = suggestFor(line, upiOf.get(lineId) ?? null, ctx, sc);
-      if (sg.confidence !== 'high' || !sg.categoryId) {
-        skipped.push({ lineId, why: 'Not confident enough to post without a person looking.' });
-        continue;
-      }
-      const result = await saveLine(auth.staff, capabilities, lineId, {
-        post: true,
-        rows: [{ amountPaise: line.amount_paise, categoryId: sg.categoryId, partyId: sg.partyId, nature: sg.nature || categoryName.get(sg.categoryId) || 'Payment', source: sg.source === 'rule' ? 'rule' : 'manual', ruleId: sg.ruleId }],
-      });
-      if (result.ok) accepted++;
-      else skipped.push({ lineId, why: result.error });
-    }
-    return jsonResponse({ accepted, skipped });
-  } catch (err) {
-    return serverError(err, 'accept suggestions');
-  }
-}
-
-// One category, party and nature applied to many lines, each in full. Lines that already have rows are skipped and listed.
-export async function bulkAllocate(req: Request): Promise<Response> {
-  const auth = await requireStaff(req, 'finance', 'allocate');
-  if (!auth.ok) return fail(auth.error, auth.status);
-  const body = await readBody(req);
-  const lineIds: string[] = Array.isArray(body?.lineIds) ? body!.lineIds : [];
-  if (!body || !lineIds.length || lineIds.length > BULK_MAX || !lineIds.every((id) => LEDGER_ID.test(String(id)))) {
-    return fail(`Choose between 1 and ${BULK_MAX} lines.`);
-  }
-  try {
-    const capabilities = capabilitiesForRole('finance', auth.staff.role) as string[];
-    const t = (body.row ?? {}) as Json;
+    const rc = await reviewContext(ctx);
+    const lineIds = items.map((i) => i.lineId as string);
+    const found = await rows(`/fin_bank_lines?id=in.(${lineIds.join(',')})&select=id,entity_id,tran_date,direction,amount_paise`);
+    const existing = await rows(`/fin_allocations?bank_line_id=in.(${lineIds.join(',')})&select=bank_line_id,id,posted_at`);
+    const upi = await rows(`/fin_upi_lines?bank_line_id=in.(${lineIds.join(',')})&select=bank_line_id,counterparty,remarks,is_circle`);
+    const byLine = new Map<string, Json[]>();
+    for (const a of existing) byLine.set(a.bank_line_id, [...(byLine.get(a.bank_line_id) ?? []), a]);
+    const shared: SharedSave = { ctx, rc, lines: new Map(found.map((l) => [l.id as string, l])), byLine, upiOf: new Map(upi.map((u) => [u.bank_line_id as string, u])) };
     const failed: { lineId: string; error: string }[] = [];
-    let saved = 0;
-    for (const lineId of lineIds) {
-      const [line] = await rows(`/fin_bank_lines?id=eq.${lineId}&select=amount_paise,tran_date`);
+    let posted = 0;
+    let flagged = 0;
+    for (const item of items) {
+      const line = shared.lines.get(item.lineId);
       if (!line) {
-        failed.push({ lineId, error: 'No such line.' });
+        failed.push({ lineId: item.lineId, error: 'No such line.' });
         continue;
       }
-      const result = await saveLine(auth.staff, capabilities, lineId, {
-        post: true,
-        overrideReason: body.overrideReason,
-        rows: [{ amountPaise: line.amount_paise, categoryId: t.categoryId, partyId: t.partyId || null, projectId: t.projectId || null, nature: t.nature, remarks: t.remarks, period: t.period || undefined, source: 'manual' }],
-      });
-      if (result.ok) saved++;
-      else failed.push({ lineId, error: result.error });
+      const result = await saveLine(
+        auth.staff, capabilities, item.lineId,
+        { post: true, overrideReason: body.overrideReason, rows: [{ amountPaise: line.amount_paise, categoryId: item.categoryId, partyId: item.partyId || null, projectId: item.projectId || null, nature: item.nature, period: item.period || undefined, source: 'manual' }] },
+        shared,
+      );
+      if (result.ok) {
+        posted++;
+        flagged += result.flagged;
+      } else failed.push({ lineId: item.lineId, error: result.error });
     }
-    return jsonResponse({ saved, failed });
+    return jsonResponse({ posted, flagged, failed });
   } catch (err) {
-    return serverError(err, 'bulk allocate');
+    return serverError(err, 'post batch');
   }
 }
 
@@ -555,7 +531,7 @@ export async function saveRule(req: Request, ruleId: string | null): Promise<Res
     if (!checked.ok) return fail(checked.errors[0]);
     const ctx = await lookups();
     if (!ctx.categories.some((c) => c.id === r.categoryId && c.active)) return fail('Choose an active category.');
-    if (r.partyId && !ctx.parties.some((p) => p.id === r.partyId)) return fail('That party is not in the directory.');
+    if (r.partyId && !ctx.parties.some((p) => p.id === r.partyId)) return fail('That party is not in the register.');
     const row = { matcher: r.matcher, category_id: r.categoryId, party_id: r.partyId, nature_template: r.natureTemplate, needs_review: r.needsReview, priority: r.priority };
     if (ruleId) {
       await audit(auth.staff.id, entity, 'finance.rule_changed', ruleId);
@@ -648,7 +624,7 @@ export async function setRequester(req: Request): Promise<Response> {
   if (!body || (body.partyId !== null && !LEDGER_ID.test(String(body.partyId)))) return fail('Choose a party, or none.');
   try {
     const entity = await entityId();
-    if (body.partyId && !(await lookups()).parties.some((p) => p.id === body.partyId)) return fail('That party is not in the directory.');
+    if (body.partyId && !(await lookups()).parties.some((p) => p.id === body.partyId)) return fail('That party is not in the register.');
     await audit(auth.staff.id, entity, 'finance.requester_set', body.partyId ?? undefined);
     await rest(`/fin_entities?id=eq.${entity}`, { method: 'PATCH', body: JSON.stringify({ requester_party_id: body.partyId }) });
     return jsonResponse({ ok: true });

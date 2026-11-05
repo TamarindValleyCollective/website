@@ -115,6 +115,7 @@ globalThis.fetch = async (url, init = {}) => {
   if (table.startsWith('fin_')) {
     const rows = db[table] ?? [];
     if (method === 'GET') {
+      db.calls[table] = (db.calls[table] ?? 0) + 1;
       // Like Supabase's API: offset and limit are honoured, but a request never returns more than 1,000 rows.
       const offset = Number(u.searchParams.get('offset') ?? 0);
       const limit = Math.min(Number(u.searchParams.get('limit') ?? 1000), 1000);
@@ -137,7 +138,7 @@ globalThis.fetch = async (url, init = {}) => {
 
 const reset = () => {
   db = {
-    users: [], roles: [], audit: [], rpc: [],
+    users: [], roles: [], audit: [], rpc: [], calls: {},
     fin_entities: [{ id: E, requester_party_id: P_MANAGER, created_at: '2026-01-01' }],
     fin_categories: [
       { id: CAT_OPEX, name: 'Materials and supplies', type: 'opex', active: true },
@@ -340,18 +341,6 @@ test('a month closes only when every line is posted and nothing waits for review
   assert.equal(periods.months.find((m) => m.month === '2026-10-01').status, 'closed');
 });
 
-test('bulk apply puts one category on many lines and reports the ones it could not', async () => {
-  reset();
-  const op = sign('u1', 'user');
-  const res = await api(op, '/ledger/bulk', { method: 'POST', body: { lineIds: [L_DEBIT, L_CIRCLE], row: { categoryId: CAT_OPEX, partyId: P_NURSERY, nature: 'Garden supplies' } } });
-  assert.equal(res.status, 200);
-  assert.equal((await res.json()).saved, 2);
-  const again = await (await api(op, '/ledger/bulk', { method: 'POST', body: { lineIds: [L_DEBIT], row: { categoryId: CAT_OPEX, nature: 'x1' } } })).json();
-  assert.equal(again.saved, 0);
-  assert.equal(again.failed.length, 1);
-  assert.equal((await api(op, '/ledger/bulk', { method: 'POST', body: { lineIds: [], row: {} } })).status, 400);
-});
-
 test('rules need configure; an invalid rule is refused; a director adds one', async () => {
   reset();
   const op = sign('u1', 'user');
@@ -483,43 +472,6 @@ test('the line\'s detail explains the suggestion in words', async () => {
   assert.equal(detail.proposal.nature, 'Fertiliser');
 });
 
-test('accepting suggestions posts only the confident ones, skips the rest, and says why', async () => {
-  reset();
-  addBankCategory();
-  addLines();
-  const op = sign('u1', 'user');
-  const res = await api(op, '/ledger/accept', { method: 'POST', body: { lineIds: [L_CHRG, L_STRANGER, L_DEBIT, L_SEP] } });
-  assert.equal(res.status, 200);
-  const out = await res.json();
-  assert.equal(out.accepted, 1); // only the bank charge is high confidence; L_SEP is in a closed month with no suggestion either
-  assert.equal(out.skipped.length, 3);
-  const posted = db.fin_allocations.filter((a) => a.posted_at);
-  assert.equal(posted.length, 1);
-  assert.equal(posted[0].bank_line_id, L_CHRG);
-  assert.equal(posted[0].category_id, CAT_BANK);
-  assert.equal(posted[0].amount_paise, 29500);
-  assert.ok(db.audit.some((a) => a.action === 'finance.allocations_posted' && a.target === L_CHRG));
-  // Asking again leaves it alone.
-  const again = await (await api(op, '/ledger/accept', { method: 'POST', body: { lineIds: [L_CHRG] } })).json();
-  assert.equal(again.accepted, 0);
-  assert.match(again.skipped[0].why, /already/i);
-});
-
-test('accepting needs allocate rights, a sensible list of lines, and never trusts the client for what to post', async () => {
-  reset();
-  addBankCategory();
-  addLines();
-  const viewer = sign('v1', 'read_only');
-  const op = sign('u1', 'user');
-  assert.equal((await api(viewer, '/ledger/accept', { method: 'POST', body: { lineIds: [L_CHRG] } })).status, 403);
-  assert.equal((await api(op, '/ledger/accept', { method: 'POST', body: { lineIds: [] } })).status, 400);
-  assert.equal((await api(op, '/ledger/accept', { method: 'POST', body: { lineIds: ['not-an-id'] } })).status, 400);
-  // Extra fields from a client change nothing: the category still comes from the engine.
-  await api(op, '/ledger/accept', { method: 'POST', body: { lineIds: [L_CHRG], categoryId: CAT_OPEX, nature: 'Sneaky' } });
-  assert.equal(db.fin_allocations[0].category_id, CAT_BANK);
-  assert.equal(db.fin_allocations[0].nature, 'Bank charges');
-});
-
 test('it learns: after a party has been posted to a few times the next payment is suggested the same way', async () => {
   reset();
   addBankCategory();
@@ -532,12 +484,6 @@ test('it learns: after a party has been posted to a few times the next payment i
   assert.equal(s.partyId, P_NURSERY);
   assert.equal(s.categoryId, CAT_OPEX);
   assert.equal(s.confidence, 'high');
-  // And accepting it posts it that way.
-  const out = await (await api(op, '/ledger/accept', { method: 'POST', body: { lineIds: [L_DEBIT] } })).json();
-  assert.equal(out.accepted, 1);
-  const stored = db.fin_allocations.find((a) => a.bank_line_id === L_DEBIT);
-  assert.equal(stored.party_id, P_NURSERY);
-  assert.equal(stored.category_id, CAT_OPEX);
 });
 
 test('a party that is not in the register can be added from the ledger by anyone who may allocate, and is then recognised', async () => {
@@ -553,4 +499,91 @@ test('a party that is not in the register can be added from the ledger by anyone
   assert.ok(s.partyId);
   const lookups = (await (await api(op, '/ledger')).json()).lookups;
   assert.ok(lookups.parties.some((p) => p.name === 'Brand New Supplier'));
+});
+
+// ---- posting many lines at once: what the table's "Post N ready" sends
+const batchItem = (lineId, extra = {}) => ({ lineId, categoryId: CAT_OPEX, partyId: P_NURSERY, nature: 'Supplies', ...extra });
+const postBatch = (email, items, extra = {}) => api(email, '/ledger/post', { method: 'POST', body: { items, ...extra } });
+
+test('a batch posts several different lines, each with its own values, and the amount is always the line\'s', async () => {
+  reset();
+  addBankCategory();
+  addLines();
+  const op = sign('u1', 'user');
+  const res = await postBatch(op, [
+    batchItem(L_DEBIT, { amountPaise: 1, nature: 'Seedlings' }), // a client-sent amount is ignored
+    batchItem(L_CHRG, { categoryId: CAT_BANK, partyId: null, nature: 'Bank charges' }),
+  ]);
+  assert.equal(res.status, 200);
+  const out = await res.json();
+  assert.equal(out.posted, 2);
+  assert.equal(out.failed.length, 0);
+  const a = db.fin_allocations.find((x) => x.bank_line_id === L_DEBIT);
+  assert.equal(a.amount_paise, 100000);
+  assert.equal(a.nature, 'Seedlings');
+  assert.equal(a.party_id, P_NURSERY);
+  const b = db.fin_allocations.find((x) => x.bank_line_id === L_CHRG);
+  assert.equal(b.category_id, CAT_BANK);
+  assert.equal(b.amount_paise, 29500);
+  assert.ok(db.fin_allocations.every((x) => x.posted_at));
+  assert.equal(db.audit.filter((x) => x.action === 'finance.allocations_posted').length, 2, 'one audit row per line, written before its save');
+});
+
+test('a line that cannot be posted is reported with its reason and does not stop the others', async () => {
+  reset();
+  addBankCategory();
+  addLines();
+  const op = sign('u1', 'user');
+  await postBatch(op, [batchItem(L_CHRG, { categoryId: CAT_BANK, partyId: null })]); // already posted
+  db.fin_categories.push({ id: ID(16), name: 'Old head', type: 'opex', active: false });
+  const res = await postBatch(op, [
+    batchItem(L_CHRG), // already posted
+    batchItem(L_SEP), // 15 Sep: a closed month
+    batchItem(L_STRANGER, { categoryId: ID(16) }), // a retired category
+    batchItem(L_REFUND, { partyId: ID(999) }), // a party that is not in the register
+    batchItem(L_DEBIT), // fine
+  ]);
+  const out = await res.json();
+  assert.equal(out.posted, 1);
+  assert.equal(out.failed.length, 4);
+  const why = Object.fromEntries(out.failed.map((f) => [f.lineId, f.error]));
+  assert.match(why[L_CHRG], /already posted/i);
+  assert.match(why[L_SEP], /closed/i);
+  assert.match(why[L_STRANGER], /active category/i);
+  assert.match(why[L_REFUND], /register/i);
+  assert.ok(db.fin_allocations.some((x) => x.bank_line_id === L_DEBIT));
+});
+
+test('a batch needs allocate rights, between one and fifteen distinct lines, and real line ids', async () => {
+  reset();
+  addLines();
+  const viewer = sign('v1', 'read_only');
+  const op = sign('u1', 'user');
+  assert.equal((await postBatch(viewer, [batchItem(L_DEBIT)])).status, 403);
+  assert.equal((await postBatch(op, [])).status, 400);
+  assert.equal((await postBatch(op, [batchItem('not-an-id')])).status, 400);
+  assert.equal((await postBatch(op, [batchItem(L_DEBIT), batchItem(L_DEBIT)])).status, 400);
+  const sixteen = Array.from({ length: 16 }, (_, i) => batchItem(ID(5000 + i)));
+  assert.equal((await postBatch(op, sixteen)).status, 400);
+  assert.equal(db.fin_allocations.length, 0);
+});
+
+test('a batch counts the rows it sent to review', async () => {
+  reset();
+  const op = sign('u1', 'user');
+  const out = await (await postBatch(op, [batchItem(L_CIRCLE, { partyId: P_MANAGER, categoryId: CAT_REIMB, nature: 'Onion' }), batchItem(L_DEBIT)])).json();
+  assert.equal(out.posted, 2);
+  assert.equal(out.flagged, 1, 'the circle payment to the requester');
+});
+
+test('a batch reads the lookups once, not once per line', async () => {
+  reset();
+  db.fin_bank_lines.push(...bulkLines(12, '2026-07', 3000));
+  const op = sign('u1', 'user');
+  db.calls = {};
+  const out = await (await postBatch(op, db.fin_bank_lines.slice(-12).map((l) => batchItem(l.id)))).json();
+  assert.equal(out.posted, 12);
+  assert.equal(db.calls.fin_categories, 1);
+  assert.ok((db.calls.fin_rules ?? 0) <= 1);
+  assert.ok((db.calls.fin_party_accounts ?? 0) <= 1);
 });
