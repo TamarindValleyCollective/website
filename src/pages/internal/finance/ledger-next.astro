@@ -39,11 +39,12 @@ import SignInGate from '../../../components/SignInGate.astro';
             <option value="party:asc">Party</option>
           </select>
         </label>
+        <button type="button" id="more-tools" class="button button--outline button--small more-tools" aria-expanded="false">More</button>
         <button type="button" id="tips-toggle" class="button button--outline button--small" aria-expanded="false" aria-controls="tips">Tips and shortcuts</button>
-        <button type="button" id="accept-all" class="button button--outline" hidden>Fill in the suggestions</button>
+        <button type="button" id="accept-all" class="button button--outline" hidden>Fill in the confident suggestions</button>
       </div>
       <div id="tips" class="tips" hidden>
-        <p><strong>Keyboard:</strong> <code>Ctrl+Enter</code> on a line accepts its suggestions and moves to the next · <code>Alt+Up</code> / <code>Alt+Down</code> go to the same cell on the line above or below · <code>Tab</code> walks every line · <code>Shift</code>-click a tick box for a range.</p>
+        <p><strong>Keyboard:</strong> <code>Ctrl+Enter</code> on a line accepts its suggestions and moves to the next · <code>Alt+Up</code> / <code>Alt+Down</code> go to the same cell on the line above or below · <code>Tab</code> walks every line · <code>Shift</code>-click a tick box for a range · <code>Ctrl+Z</code> undoes the last bulk change (for two minutes).</p>
         <p>The box above looks in every column. Under a heading you can be exact:</p>
         <ul>
           <li><strong>Words</strong> (narration, category, party, wording): <code>fuel</code> contains · <code>=Fuel</code> exactly · <code>!=Bank charges</code> is not · <code>^UPI</code> starts with · <code>!tax</code> does not contain · <code>=</code> is empty · <code>!=</code> is not empty</li>
@@ -57,6 +58,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       <span id="announce" class="visually-hidden" role="status"></span>
       <span id="selcount" class="visually-hidden" role="status"></span>
       <p class="hint twostep">A tick only fills a field in. Nothing is saved until you tick the lines and press <strong>Post</strong>.</p>
+      <div id="restorenote" class="postnote applyprompt" hidden></div>
       <div id="draftnote" class="postnote applyprompt" role="status" hidden></div>
       <div id="monthstrip" class="postnote applyprompt" role="status" hidden></div>
 
@@ -176,7 +178,76 @@ import SignInGate from '../../../components/SignInGate.astro';
   const setDraft = (id: string, patch: Partial<Draft>) => {
     drafts.set(id, { ...draftOf(id), ...patch });
     rowErrors.delete(id);
+    persistDrafts();
   };
+  // What has been typed but not posted is kept in this browser (category, party and wording of each line, never an amount), so a
+  // refresh, a crash or a phone going to sleep does not lose a sitting. It is offered back on the next visit.
+  const draftsKey = () => `tvc-ledger-drafts:${decodeTokenEmail(getToken() ?? '')}`;
+  let draftsTimer: ReturnType<typeof setTimeout> | undefined;
+  function saveDraftsNow() {
+    clearTimeout(draftsTimer);
+    try {
+      const kept: Record<string, Draft> = {};
+      for (const [id, d] of drafts) if (d.categoryId || d.partyId || d.nature) kept[id] = d;
+      if (Object.keys(kept).length) localStorage.setItem(draftsKey(), JSON.stringify({ at: Date.now(), drafts: kept }));
+      else localStorage.removeItem(draftsKey());
+    } catch {
+      // storage can be blocked (private window): the page still works, it just cannot remember
+    }
+  }
+  function persistDrafts() {
+    clearTimeout(draftsTimer);
+    draftsTimer = setTimeout(saveDraftsNow, 400);
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) saveDraftsNow();
+  });
+  window.addEventListener('pagehide', saveDraftsNow);
+  let restoreChecked = false;
+  function offerRestore() {
+    if (restoreChecked) return;
+    restoreChecked = true;
+    try {
+      const raw = localStorage.getItem(draftsKey());
+      if (!raw) return;
+      const saved = JSON.parse(raw) as { at: number; drafts: Record<string, Draft> };
+      const usable = Object.entries(saved.drafts).filter(([id]) => {
+        const l = byId.get(id);
+        return Boolean(l) && editable(l!);
+      });
+      if (!usable.length) {
+        localStorage.removeItem(draftsKey());
+        return;
+      }
+      const when = new Date(saved.at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+      const box = $('restorenote');
+      box.replaceChildren(
+        h('span', { text: `${usable.length} ${usable.length === 1 ? 'line was' : 'lines were'} filled in on ${when} and never posted.` }),
+        button('Restore them', () => {
+          const lk = data!.lookups;
+          for (const [id, d] of usable) {
+            drafts.set(id, { categoryId: lk.categories.some((c) => c.id === d.categoryId) ? d.categoryId : '', partyId: lk.parties.some((x) => x.id === d.partyId) ? d.partyId : '', nature: d.nature ?? '' });
+          }
+          box.hidden = true;
+          for (const el of mounted.values()) el.remove();
+          mounted.clear();
+          applyView();
+          showToast(`Restored ${usable.length} ${usable.length === 1 ? 'line' : 'lines'}. Nothing is posted yet.`);
+        }, 'button button--small'),
+        button('Discard', () => {
+          try {
+            localStorage.removeItem(draftsKey());
+          } catch {
+            // nothing to remove
+          }
+          box.hidden = true;
+        }, 'button button--outline button--small'),
+      );
+      box.hidden = false;
+    } catch {
+      // an unreadable saved draft is ignored
+    }
+  }
   const editable = (l: Line) => Boolean(data?.canAllocate) && l.state === 'unallocated' && !l.review;
   const nameOf = (list: { id: string; name: string }[], id: string | null) => list.find((x) => x.id === id)?.name ?? '';
   const ghostOf = (l: Line, f: Field): string => {
@@ -185,6 +256,8 @@ import SignInGate from '../../../components/SignInGate.astro';
     return f === 'categoryId' ? s.categoryId ?? '' : f === 'partyId' ? s.partyId ?? '' : s.nature ?? '';
   };
   const strangerOf = (l: Line) => (!draftOf(l.id).partyId && !l.suggestion?.partyId ? l.suggestion?.newPartyName ?? '' : '');
+  // Confident or fairly sure: safe to fill in for many lines at once. A weak suggestion is a guess and is left for a person.
+  const isStrong = (l: Line) => ['high', 'medium'].includes(l.suggestion?.confidence ?? '');
   const hasGhost = (l: Line) => Boolean(ghostOf(l, 'categoryId') || ghostOf(l, 'partyId') || ghostOf(l, 'nature'));
   const partyNeeded = (categoryId: string) => {
     const c = data?.lookups.categories.find((x) => x.id === categoryId);
@@ -304,6 +377,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       intro.textContent = 'Every line the bank has told us about, and what it was for.';
       content.hidden = false;
       applyView();
+      offerRestore();
       void loadMonths();
     } catch (err) {
       if (err instanceof StaffAuthError) return;
@@ -701,7 +775,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     renderProgress(crumbs);
     setCount();
     refreshSelection();
-    $('accept-all').hidden = !(data.canAllocate && filter === 'unallocated' && lines.some((l) => editable(l) && hasGhost(l)));
+    renderFillButton();
     $('empty').hidden = lines.length > 0;
     if (!lines.length) $('empty').textContent = crumbs.length || query ? 'Nothing matches those conditions.' : filter === 'unallocated' ? 'Everything is allocated.' : 'Nothing here right now.';
   }
@@ -784,6 +858,12 @@ import SignInGate from '../../../components/SignInGate.astro';
     const [id, dir] = (e.target as HTMLSelectElement).value.split(':');
     table.setSorting([{ id, desc: dir === 'desc' }]);
   });
+  $('more-tools').addEventListener('click', () => {
+    const open = !document.querySelector('.lnext')!.classList.contains('show-tools');
+    document.querySelector('.lnext')!.classList.toggle('show-tools', open);
+    $('more-tools').setAttribute('aria-expanded', String(open));
+    $('more-tools').textContent = open ? 'Less' : 'More';
+  });
   $('tips-toggle').addEventListener('click', () => {
     const open = $('tips').hidden;
     $('tips').hidden = !open;
@@ -809,12 +889,15 @@ import SignInGate from '../../../components/SignInGate.astro';
     return d.getFullYear() === new Date().getFullYear() ? text : `${text} ${String(d.getFullYear()).slice(2)}`;
   };
 
+  // The bank's reference numbers (nine or more digits) say nothing about who or what; without them the payee and remark fit the cell.
+  // The full text is in the hover and in the line's sheet.
+  const shortNarration = (text: string) => text.replace(/\d{9,}/g, '').replace(/\/{2,}/g, '/').replace(/^\/|\/$/g, '').trim() || text;
   function makeRow(l: Line): HTMLElement {
     const lk = data!.lookups;
     const who = l.narration.length > 40 ? `${l.narration.slice(0, 40)}…` : l.narration;
     const check = h('input', { attrs: { type: 'checkbox', 'aria-label': `Select ${who}` } }) as HTMLInputElement;
     check.addEventListener('click', (e) => pick(l.id, (e as MouseEvent).shiftKey));
-    const narr = h('button', { class: 'narr', text: l.narration, attrs: { type: 'button', title: l.account ? `${l.narration}\n${l.account}` : l.narration } }) as HTMLButtonElement;
+    const narr = h('button', { class: 'narr', text: shortNarration(l.narration), attrs: { type: 'button', title: l.account ? `${l.narration}\n${l.account}` : l.narration } }) as HTMLButtonElement;
     narr.addEventListener('click', () => void openLine(l.id));
     const details = h('span', { class: 'detail' });
 
@@ -907,7 +990,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       // Says what is suggested and how sure the app is; the suggested values are the italic ones in the cells.
       const fields = [ghostOf(l, 'categoryId') ? 'category' : '', ghostOf(l, 'partyId') || strangerOf(l) ? (l.direction === 'debit' ? 'who was paid' : 'who paid') : '', ghostOf(l, 'nature') ? 'wording' : ''].filter(Boolean);
       const sure = CONFIDENCE_WORDS[l.suggestion?.confidence ?? ''] ?? 'a guess';
-      const p = pill('Suggested', 'warn');
+      const p = pill(isStrong(l) ? 'Suggested' : 'A guess', 'warn');
       p.title = `Suggested ${fields.join(', ')} (${sure}), shown in italics. Tick a value to accept it; nothing is saved until you tick the line and press Post.`;
       return p;
     }
@@ -970,7 +1053,14 @@ import SignInGate from '../../../components/SignInGate.astro';
     if (el) fill(el, l);
     renderBar();
     renderDraftNote();
+    renderFillButton();
   };
+  function renderFillButton() {
+    const btn = $('accept-all');
+    const strong = lines.filter((l) => editable(l) && hasGhost(l) && isStrong(l)).length;
+    btn.hidden = !(data?.canAllocate && filter === 'unallocated' && strong > 0);
+    btn.textContent = `Fill in ${strong} confident ${strong === 1 ? 'suggestion' : 'suggestions'}`;
+  }
   // Lines that are filled in but not posted, with the one step that is left. Rebuilt only when what it says changes.
   let draftNoteKey = '';
   function renderDraftNote() {
@@ -1002,19 +1092,33 @@ import SignInGate from '../../../components/SignInGate.astro';
     offerToOthers(l, field, value);
   }
   // A bulk change can be undone: the drafts of the lines it touches are kept first, and the toast offers to put them back.
+  // Ctrl+Z (Cmd+Z) undoes the last bulk change for two minutes, so it does not depend on reaching a toast that disappears.
+  let lastUndo: { at: number; run: () => void } | null = null;
   function withUndo(message: string, ids: string[], change: () => void) {
     const before = new Map(ids.map((id) => [id, drafts.has(id) ? { ...drafts.get(id)! } : null]));
     change();
-    showToast(message, () => {
+    const undo = () => {
+      if (lastUndo?.run === undo) lastUndo = null;
       for (const [id, d] of before) {
         if (d) drafts.set(id, d);
         else drafts.delete(id);
         const l = byId.get(id);
         if (l) syncRow(l);
       }
+      persistDrafts();
       renderDraftNote();
-    });
+    };
+    lastUndo = { at: Date.now(), run: undo };
+    showToast(message, undo);
   }
+  document.addEventListener('keydown', (e) => {
+    if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.key.toLowerCase() !== 'z') return;
+    if ((e.target as HTMLElement).matches?.('input[type=text], input[type=search], textarea')) return; // those keep their own undo
+    if (!lastUndo || Date.now() - lastUndo.at > 120000) return;
+    e.preventDefault();
+    lastUndo.run();
+    showToast('Undone.');
+  });
   // Changing a cell on a line that is ticked, with others ticked too, asks whether to set the same on all of them (never silently).
   function offerToOthers(l: Line, field: Field, value: string) {
     const box = $('applyprompt');
@@ -1255,8 +1359,9 @@ import SignInGate from '../../../components/SignInGate.astro';
     bar.hidden = false;
   }
   $('accept-all').addEventListener('click', () => {
-    const todo = lines.filter((l) => editable(l) && hasGhost(l));
-    withUndo(`Filled in ${todo.length} ${todo.length === 1 ? 'line' : 'lines'}. Nothing is posted yet.`, todo.map((l) => l.id), () => { for (const l of todo) acceptRow(l); });
+    const todo = lines.filter((l) => editable(l) && hasGhost(l) && isStrong(l));
+    const weak = lines.filter((l) => editable(l) && hasGhost(l) && !isStrong(l)).length;
+    withUndo(`Filled in ${todo.length} ${todo.length === 1 ? 'line' : 'lines'}.${weak ? ` ${weak} weaker ${weak === 1 ? 'guess is' : 'guesses are'} left for you to check.` : ''} Nothing is posted yet.`, todo.map((l) => l.id), () => { for (const l of todo) acceptRow(l); });
   });
 
   // ---- posting: the second step, confirmed first
@@ -1293,6 +1398,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       failed.push(...(out.failed as { lineId: string; error: string }[]));
     }
     const failedIds = new Set(failed.map((f) => f.lineId));
+    const resumeAt = Math.max(0, Math.min(...ready.filter((l) => !failedIds.has(l.id)).map((l) => lines.indexOf(l)).filter((i) => i >= 0), lines.length));
     const nextSelection = { ...tstate.rowSelection };
     for (const l of ready) {
       if (failedIds.has(l.id)) continue;
@@ -1306,6 +1412,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       delete nextSelection[l.id];
       drafts.delete(l.id);
     }
+    saveDraftsNow();
     tstate = { ...tstate, rowSelection: nextSelection };
     rowErrors.clear();
     for (const f of failed) rowErrors.set(f.lineId, f.error);
@@ -1320,6 +1427,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     for (const el of mounted.values()) el.remove();
     mounted.clear();
     applyView();
+    if (lines.length) goToLine(Math.min(resumeAt, lines.length - 1), 'start');
     void load(true); // confirms against the server (it knows which lines went to review) without dimming the page
   }
 
@@ -1967,7 +2075,19 @@ import SignInGate from '../../../components/SignInGate.astro';
     }
   }
 
+  .lnext .more-tools {
+    display: none;
+  }
+
   @media (max-width: 900px) {
+    .lnext .more-tools {
+      display: inline-flex;
+    }
+
+    .lnext:not(.show-tools) :is(#progress, .twostep, #tips-toggle, #tips, .sortpick) {
+      display: none;
+    }
+
     .abar {
       bottom: calc(var(--tabbar-h, 64px) + env(safe-area-inset-bottom));
     }

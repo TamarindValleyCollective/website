@@ -381,6 +381,12 @@ Modelled on how ServiceNow lists work, because the sheet's convenience was selec
   "Showing X of N" result are announced from fixed live regions, not the rebuilt bar or the changing progress line; a post updates the lines at once
   and the full list comes down quietly afterwards; the phone bar follows the shell's tab bar and phone targets are 44px; the Rules page has
   finger-sized buttons and a 24px checkbox. Not changed: the grid still scrolls to the top when a search or sort changes (the list is a new list).
+  **Third round (30/40, six P1s fixed):** what is typed but not posted is kept in this browser (category, party and wording per line, never an
+  amount; flushed when the page is hidden) and offered back on the next visit with Restore or Discard; the list shows the narration without the
+  bank's long reference numbers (full text on hover and in the sheet); on a phone the progress line, hint, tips and sort sit behind "More" (the first
+  line starts about 170px higher); "Fill in the confident suggestions" fills only high and medium confidence, a weak one shows as "A guess" and is left
+  for a person; after a post keyboard focus goes to the line that took the posted one's place; Ctrl+Z (Cmd+Z) undoes the last bulk change for two
+  minutes, so undo no longer depends on a toast.
   The prototype also asks "Also set category X on the other N selected lines?" when a ticked line's cell is changed, and Alt+Up / Alt+Down
   move to the same cell on the line above or below.
   **The unit and year of maintenance can now be set.** `fin_allocations.household_id` and `maintenance_year` (migration 0084) were read
