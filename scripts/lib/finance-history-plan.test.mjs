@@ -143,7 +143,7 @@ test('maintenance from someone who is not a known member is still loaded, with t
   assert.equal(out.plans[0].rows[0].household_id, null);
   assert.equal(out.plans[0].rows[0].maintenance_year, '2025-26');
   assert.equal(out.counts.maintenanceWithoutHousehold, 1);
-  assert.deepEqual(out.householdWanted, [{ sheetRow: 2, maintenanceYear: '2025-26' }], 'listed by sheet row so a person can attribute it');
+  assert.deepEqual(out.householdWanted, [{ sheetRow: 2, name: 'Stranger Name', date: '2026-06-10', direction: 'credit', amountPaise: 10000, remarks: '', maintenanceYear: '2025-26' }], 'listed with who and how much, so a person can attribute it');
 });
 
 test('a Farm Project row names the placeholder project for its financial year', () => {

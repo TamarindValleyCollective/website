@@ -251,6 +251,9 @@ export function planAllocations(matches, { categories, parties, people = [] }) {
   const householdWanted = [];
   const counts = { allocations: 0, byCategory: {}, maintenanceArrears: 0, maintenanceWithoutHousehold: 0, partyMatched: 0, partyNotMatched: 0, defaulted: 0, projectRows: 0 };
 
+  // Enough about a row for a person to find it in the sheet and act on it.
+  const describe = (row) => ({ sheetRow: row.sheetRow, name: text(row.direction === 'debit' ? row.toName : row.fromName), date: row.date, direction: row.direction, amountPaise: row.amountPaise, remarks: text(row.remarks) });
+
   // One row's allocation, or the reason it cannot be made.
   function build(row, paise, how) {
     const m = mapLabels(row.details, row.type);
@@ -275,7 +278,7 @@ export function planAllocations(matches, { categories, parties, people = [] }) {
       household_id: m.maintenanceYear ? householdFor(name) : null,
     };
     if (m.project) alloc.projectFy = fyStart(row.financialYear) ?? fyOfDate(row.date);
-    return { alloc, m, party, sheetRow: row.sheetRow };
+    return { alloc, m, party, meta: describe(row) };
   }
   const count = (b) => {
     counts.allocations++;
@@ -287,7 +290,7 @@ export function planAllocations(matches, { categories, parties, people = [] }) {
     if (b.m.maintenanceYear) {
       if (!b.alloc.household_id) {
         counts.maintenanceWithoutHousehold++;
-        householdWanted.push({ sheetRow: b.sheetRow, maintenanceYear: b.m.maintenanceYear });
+        householdWanted.push({ ...b.meta, maintenanceYear: b.m.maintenanceYear });
       }
       if (fyStart(b.m.maintenanceYear) < fyOfDate(b.alloc.period)) counts.maintenanceArrears++;
     }
@@ -295,7 +298,7 @@ export function planAllocations(matches, { categories, parties, people = [] }) {
 
   for (const { row, line, how } of matches.pairs) {
     const b = build(row, line.amount_paise, how);
-    if (b.skip) skipped.push({ sheetRow: row.sheetRow, label: row.details, ...b.skip });
+    if (b.skip) skipped.push({ ...describe(row), label: row.details, ...b.skip });
     else {
       plans.push({ lineId: line.id, rows: [b.alloc] });
       count(b);
@@ -306,7 +309,7 @@ export function planAllocations(matches, { categories, parties, people = [] }) {
     const bad = built.find((b) => b.skip);
     if (bad) {
       const why = { blank: 'that has no label', unmapped: 'whose label is not known', 'no category': 'whose category is missing' }[bad.skip.kind];
-      skipped.push({ sheetRow: rows[0].sheetRow, label: rows[0].details, kind: 'group', reason: `Part of a group with a row ${why}.`, rows: rows.length });
+      skipped.push({ ...describe(rows[0]), label: rows[0].details, kind: 'group', reason: `Part of a group with a row ${why}.`, rows: rows.length });
       continue;
     }
     plans.push({ lineId: line.id, rows: built.map((b) => b.alloc) });

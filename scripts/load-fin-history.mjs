@@ -9,8 +9,8 @@
 //
 // The sheet id is passed in (or FIN_HISTORY_SHEET_ID), never kept in this public repo, and the sheet must be shared with the Drive
 // service account (as for scripts/import-fin-parties.mjs). `netlify dev:exec` injects SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY and the
-// service-account key. --out writes a review file of sheet row numbers, dates, directions, amounts and labels for the rows and lines
-// that did not match (no narrations or names), for the directors to go through; keep it out of the repository.
+// service-account key. --out writes a worklist for the directors (the rows and lines that need a person, with the name as written in the sheet,
+// the date and the amount); it is for them only: keep it out of the repository.
 import { writeFileSync } from 'node:fs';
 import { getSheetValues } from './lib/google-drive.mjs';
 import { restHeaders } from './lib/supabase.mjs';
@@ -128,16 +128,19 @@ if (apply) {
 
 if (out) {
   const q = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-  const money = (p) => (p / 100).toFixed(2);
+  const money = (v) => (v / 100).toFixed(2);
+  // One section per kind of thing a person has to do, each sorted by date, so the file reads as a worklist.
+  const section = (title, items) => items.map((x) => [title, ...x]);
   const lineRows = [
-    ['kind', 'sheet row or bank line id', 'date', 'direction', 'amount', 'Details', 'Type', 'why it is here'],
-    ...problems.map((p) => ['tracker row', p.sheetRow, '', '', '', '', '', p.reason]),
-    ...m.unmatchedRows.map((r) => ['tracker row', r.sheetRow, r.date, r.direction, money(r.amountPaise), r.details, r.type, 'no bank line matched']),
-    ...m.unmatchedLines.map((l) => ['bank line', l.id, l.tran_date, l.direction, money(l.amount_paise), '', '', 'no tracker row matched']),
-    ...plan.householdWanted.map((w) => ['tracker row', w.sheetRow, '', '', '', `Maintenance (${w.maintenanceYear})`, '', 'loaded, but no household found for the payer: attribute it by hand']),
-    ...plan.skipped.map((x) => ['tracker row', x.sheetRow, '', '', '', x.label, '', `matched, but left unallocated: ${x.reason}`]),
-    ...m.pairs.filter((p) => p.how !== 'exact').map((p) => ['tracker row', p.row.sheetRow, p.row.date, p.row.direction, money(p.row.amountPaise), p.row.details, p.row.type, `matched approximately (${p.how}) to a line dated ${p.line.tran_date}`]),
+    ['what to do', 'sheet row / bank line id', 'date', 'direction', 'amount', 'name in the sheet', 'Details', 'Remarks', 'why it is here'],
+    ...section('1 Attribute a household', plan.householdWanted.map((w) => [w.sheetRow, w.date, w.direction, money(w.amountPaise), w.name, `Maintenance (${w.maintenanceYear})`, w.remarks, 'loaded with its year but no household: say which household paid'])),
+    ...section('2 Give it a label', plan.skipped.filter((x) => x.kind === 'blank').map((x) => [x.sheetRow, x.date, x.direction, money(x.amountPaise), x.name, x.label, x.remarks, 'matched to a bank line but has no Details: left unallocated'])),
+    ...section('3 Label not understood', plan.skipped.filter((x) => x.kind !== 'blank').map((x) => [x.sheetRow, x.date, x.direction, money(x.amountPaise), x.name, x.label, x.remarks, x.reason])),
+    ...section('4 Check an approximate match', m.pairs.filter((x) => x.how !== 'exact').map((x) => [x.row.sheetRow, x.row.date, x.row.direction, money(x.row.amountPaise), x.row.direction === 'debit' ? x.row.toName : x.row.fromName, x.row.details, x.row.remarks, `will be loaded but sent to review: matched by ${x.how} to a bank line dated ${x.line.tran_date}`])),
+    ...section('5 Tracker row with no bank line', m.unmatchedRows.map((r) => [r.sheetRow, r.date, r.direction, money(r.amountPaise), r.direction === 'debit' ? r.toName : r.fromName, r.details, r.remarks, 'no bank line matched this row'])),
+    ...section('6 Bank line with no tracker row', m.unmatchedLines.map((l) => [l.id, l.tran_date, l.direction, money(l.amount_paise), '', '', '', 'no tracker row matched this bank line (often newer than the tracker)'])),
+    ...section('7 Row that could not be read', problems.map((x) => [x.sheetRow, '', '', '', '', '', '', x.reason])),
   ];
   writeFileSync(out, lineRows.map((r) => r.map(q).join(',')).join('\n') + '\n');
-  console.log(`\nReview file written: ${out} (${lineRows.length - 1} lines). It holds amounts and dates: keep it out of the repository.`);
+  console.log(`\nReview file written: ${out} (${lineRows.length - 1} lines). It holds names, dates and amounts: keep it out of the repository.`);
 }
