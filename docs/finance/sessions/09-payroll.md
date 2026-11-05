@@ -31,8 +31,21 @@ bulk-payment file, and split the single bank debit automatically.
   one person's allocation.
 - **Build order for 09a:** (1) import the existing monthly tabs as history runs, which also gives the salary allocations their
   party; (2) the run screens and the file export; (3) settlement matching and returns.
-- **Still needed:** one real file the bank's portal accepts, or its template (the sheet has no header row; what the payment-mode
-  code and the reference code mean must come from the bank's layout).
+- **The upload file's layout (read from a real file, 2026-11-05; the file itself stays outside the repo).** No header row; data
+  starts in row 1, one row per person, columns A to L (M to O blank). A: payment mode, `N`. B: amount in **whole rupees** (a number).
+  C: payment date as **text** `dd-mm-yyyy` (the 1st of the following month). D: beneficiary name. E: beneficiary account number,
+  stored as a **number**. F: beneficiary e-mail. G: narration `<Mon YYYY> Salary`. H: the company's debit account number, the same
+  on every row (**not stored by the ledger, which keeps only last four digits: it needs a server-side setting**). I: reference
+  `<YYYY>-<Mon>-Employee-<nnn>` (a sequence per row). J: beneficiary IFSC. K: a constant, `10`. L: `Salary for <Mon YYYY>`. Columns P
+  to S of the working sheet (a reference account and IFSC, and `-1` flags where they differ from E and J) are the preparer's own
+  account-change check; they are not part of the upload and were empty in the file read, so the check flagged every row.
+  Observed slips the generator removes: the tab name, the file name and the narration disagreed about the month (a file named for
+  one month held the next month's run), because the month is typed in three places today.
+- **Design consequences:** the net amount is entered in whole rupees (this settles the rounding of the payout, not of the
+  per-day rate); the generator writes C as text and E as a number (an account starting with 0 would lose it, so such an account
+  is written as text and flagged); G, I and L come from the month, never typed.
+- **Still to confirm with the bank's portal:** whether it reads only columns A to L; what `10` means and whether it ever changes;
+  whether `N` in column A is overridden by the transfer method chosen at upload (NEFT / RTGS / instant).
 
 ## Read first
 `DESIGN.md` (Payroll, fin_employees and related tables, Access); the sessions 04 and 05 notes; the payroll
