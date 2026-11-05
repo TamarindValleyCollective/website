@@ -23,8 +23,8 @@ import SignInGate from '../../../components/SignInGate.astro';
     <div id="content" hidden>
       <div class="lbar">
         <label class="field">
-          <span class="visually-hidden">Search the narration</span>
-          <input id="q" type="search" placeholder="Search the bank's narration" autocomplete="off" />
+          <span class="visually-hidden">Search every column</span>
+          <input id="q" type="search" placeholder="Search all columns" autocomplete="off" />
         </label>
         <div class="segmented" id="chips" role="group" aria-label="Show"></div>
         <label class="sortpick">
@@ -39,12 +39,22 @@ import SignInGate from '../../../components/SignInGate.astro';
             <option value="party:asc">Party</option>
           </select>
         </label>
+        <button type="button" id="tips-toggle" class="button button--outline button--small" aria-expanded="false" aria-controls="tips">Search tips</button>
         <button type="button" id="accept-all" class="button button--outline" hidden>Fill in the suggestions</button>
+      </div>
+      <div id="tips" class="tips" hidden>
+        <p>The box above looks in every column. Under a heading you can be exact:</p>
+        <ul>
+          <li><strong>Words</strong> (narration, category, party, wording): <code>fuel</code> contains · <code>=Fuel</code> exactly · <code>!=Bank charges</code> is not · <code>^UPI</code> starts with · <code>!tax</code> does not contain · <code>=</code> is empty · <code>!=</code> is not empty</li>
+          <li><strong>Amount</strong> (rupees): <code>2500</code> · <code>&gt;1000</code> · <code>&lt;=500</code> · <code>1000..3000</code> · <code>!=295</code></li>
+          <li><strong>Date</strong>: <code>2026-10</code> · <code>oct</code> · <code>&gt;2026-10-15</code> · <code>2026-10-01..2026-10-31</code></li>
+        </ul>
       </div>
       <div id="postnote" class="postnote" role="alert" hidden></div>
       <div id="applyprompt" class="postnote applyprompt" role="status" hidden></div>
       <p id="progress" class="progress" aria-live="polite"></p>
 
+      <a class="skiplink" href="#months-title">Skip the table</a>
       <div class="grid" id="grid" role="table" aria-label="Bank lines">
         <div class="ghead" id="ghead" role="row"></div>
         <div class="gfilter" id="gfilter" role="row"></div>
@@ -53,7 +63,7 @@ import SignInGate from '../../../components/SignInGate.astro';
         </div>
       </div>
       <div id="empty" class="hint" aria-live="polite" hidden></div>
-      <h2 class="list-title">Months</h2>
+      <h2 class="list-title" id="months-title" tabindex="-1">Months</h2>
       <ul class="list" id="months"></ul>
       <p class="hint">Click a heading to sort, type under one to search that column; click a narration to split the line, refund it, or see its history. Tab moves through the cells; Alt+Up and Alt+Down go to the same cell on the line above or below; Ctrl+Enter on a line accepts its suggestions and moves to the next.</p>
     </div>
@@ -77,7 +87,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   type Suggestion = { categoryId: string | null; partyId: string | null; nature: string; confidence: string; newPartyName: string | null };
   type Line = {
     id: string; date: string; narration: string; direction: 'debit' | 'credit'; amountPaise: number; account: string; remark: string | null; counterparty: string | null;
-    state: 'unallocated' | 'partly_allocated' | 'allocated'; review: boolean; missingParty: boolean; suggestion: Suggestion | null;
+    allocatedPaise: number; state: 'unallocated' | 'partly_allocated' | 'allocated'; review: boolean; missingParty: boolean; suggestion: Suggestion | null;
     allocation: { categoryId: string; partyId: string | null; nature: string; count: number; householdLabel: string | null; maintenanceYear: string | null } | null;
     effective: { category: string; party: string; nature: string }; // what it was posted to, or is suggested: what the column searches read
   };
@@ -233,7 +243,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   const phone = window.matchMedia('(max-width: 900px)');
   let painting = false;
   let repaint = false; // a measurement changed a row's height while painting: place the rows again
-  let pendingFocus: { index: number; field: Field } | null = null;
+  let pendingFocus: { index: number; field: Field | 'start' | 'end' } | null = null;
   const mounted = new Map<string, HTMLElement>();
   const virtualizer = new Virtualizer<HTMLElement, HTMLElement>({
     count: 0,
@@ -622,10 +632,11 @@ import SignInGate from '../../../components/SignInGate.astro';
         matchText(conds.category, l.effective.category) &&
         matchText(conds.party, l.effective.party) &&
         matchText(conds.nature, l.effective.nature) &&
-        (!query || l.narration.toLowerCase().includes(query)),
+        (!query || [l.narration, l.counterparty, l.remark, l.effective.category, l.effective.party, l.effective.nature, l.allocation?.householdLabel, l.allocation?.maintenanceYear].join(' ').toLowerCase().includes(query)),
     );
-    counts = { unallocated: 0, review: 0, noparty: 0, all: base.length };
-    for (const l of base) {
+    // The chips count every line, whatever is typed in a search, so "71 left" stays 71; "Showing X of N" says what the search leaves.
+    counts = { unallocated: 0, review: 0, noparty: 0, all: all.length };
+    for (const l of all) {
       if (l.state !== 'allocated') counts.unallocated++;
       if (l.review) counts.review++;
       if (l.missingParty) counts.noparty++;
@@ -683,7 +694,7 @@ import SignInGate from '../../../components/SignInGate.astro';
         const label = String(header.column.columnDef.header ?? '');
         const cellEl = h('span', { class: `gcell gcell--${id}`, attrs: { role: 'columnheader', ...(SORTABLE.has(id) ? { 'aria-sort': sorted === 'asc' ? 'ascending' : sorted === 'desc' ? 'descending' : 'none' } : {}) } });
         if (SORTABLE.has(id)) {
-          const b = h('button', { class: 'sorthead', text: `${label}${sorted === 'asc' ? ' ▲' : sorted === 'desc' ? ' ▼' : ''}`, attrs: { type: 'button' } });
+          const b = h('button', { class: 'sorthead', text: `${label}${sorted === 'asc' ? ' ▲' : sorted === 'desc' ? ' ▼' : ' ↕'}`, attrs: { type: 'button' } });
           b.addEventListener('click', () => header.column.toggleSorting());
           cellEl.append(b);
         } else cellEl.textContent = label;
@@ -698,7 +709,7 @@ import SignInGate from '../../../components/SignInGate.astro';
         const id = header.column.id;
         const cellEl = h('span', { class: `gcell gcell--${id}`, attrs: { role: 'cell' } });
         if (SORTABLE.has(id)) {
-          const box = h('input', { class: 'colfilter', attrs: { 'data-col': id, type: 'search', placeholder: 'Search', 'aria-label': `Search the ${String(header.column.columnDef.header)} column`, autocomplete: 'off' } }) as HTMLInputElement;
+          const box = h('input', { class: 'colfilter', attrs: { 'data-col': id, type: 'search', title: id === 'amount' ? 'In rupees: 2500, >1000, <=500, 1000..3000, !=295' : id === 'date' ? 'Try: 2026-10, oct, >2026-10-15, 2026-10-01..2026-10-31' : 'Words match anywhere. = exact, != not, ^ starts with, ! does not contain. See Search tips.', placeholder: 'Search', 'aria-label': `Search the ${String(header.column.columnDef.header)} column`, autocomplete: 'off' } }) as HTMLInputElement;
           let timer: ReturnType<typeof setTimeout>;
           box.addEventListener('input', () => {
             clearTimeout(timer);
@@ -718,6 +729,11 @@ import SignInGate from '../../../components/SignInGate.astro';
   $<HTMLSelectElement>('sortpick').addEventListener('change', (e) => {
     const [id, dir] = (e.target as HTMLSelectElement).value.split(':');
     table.setSorting([{ id, desc: dir === 'desc' }]);
+  });
+  $('tips-toggle').addEventListener('click', () => {
+    const open = $('tips').hidden;
+    $('tips').hidden = !open;
+    $('tips-toggle').setAttribute('aria-expanded', String(open));
   });
   let qTimer: ReturnType<typeof setTimeout>;
   $<HTMLInputElement>('q').addEventListener('input', (e) => {
@@ -806,6 +822,16 @@ import SignInGate from '../../../components/SignInGate.astro';
         const field: Field = e.target === nature ? 'nature' : e.target === party ? 'partyId' : 'categoryId';
         const step = e.key === 'ArrowDown' ? 1 : -1;
         focusRow(index + step, field, step);
+      } else if (e.key === 'Tab') {
+        // Only some lines exist in the page, so Tab from the last control of a line goes to the next line (and Shift+Tab back to the one above).
+        const stops = [...(rowEl as HTMLElement).querySelectorAll<HTMLElement>('input, select, button')].filter((x) => !(x as HTMLInputElement).disabled && !x.hidden && x.offsetParent !== null);
+        if (!e.shiftKey && e.target === stops[stops.length - 1] && index < lines.length - 1) {
+          e.preventDefault();
+          goToLine(index + 1, 'start');
+        } else if (e.shiftKey && e.target === stops[0] && index > 0) {
+          e.preventDefault();
+          goToLine(index - 1, 'end');
+        }
       } else if (e.key === 'Enter' && e.target === nature) {
         e.preventDefault();
         focusRow(index + 1, 'nature');
@@ -843,6 +869,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     r.details.replaceChildren(
       ...[
         error ? h('span', { class: 'detail detail--warn', text: error }) : null,
+        l.state === 'partly_allocated' ? h('span', { class: 'detail detail--warn detail--wrap', text: `${rupees(l.amountPaise - l.allocatedPaise)} still to allocate: open the line to finish` }) : null,
         upiSays ? h('span', { class: 'detail detail--upi', text: `Paytm: ${upiSays}`, attrs: { title: 'From the Paytm UPI report' } }) : /\bUPI\b/i.test(l.narration) ? h('span', { class: 'detail detail--dim', text: 'No Paytm record for this payment' }) : null,
         l.account ? h('span', { class: 'detail', text: l.account }) : null,
       ].filter(Boolean) as Node[],
@@ -982,6 +1009,11 @@ import SignInGate from '../../../components/SignInGate.astro';
     setDraft(l.id, patch);
     syncRow(l);
   }
+  function goToLine(index: number, field: 'start' | 'end') {
+    pendingFocus = { index, field };
+    virtualizer.scrollToIndex(index, { align: 'auto' });
+    paint();
+  }
   function focusRow(index: number, field: Field, step = 1) {
     let i = index;
     while (lines[i] && !editable(lines[i])) i += step;
@@ -1029,7 +1061,10 @@ import SignInGate from '../../../components/SignInGate.astro';
         const el = l && mounted.get(l.id);
         if (el) {
           const r = refs.get(el)!;
-          (pendingFocus.field === 'nature' ? r.nature : pendingFocus.field === 'partyId' ? r.party : r.cat).focus();
+          if (pendingFocus.field === 'start' || pendingFocus.field === 'end') {
+            const stops = [...el.querySelectorAll<HTMLElement>('input, select, button')].filter((x) => !(x as HTMLInputElement).disabled && !x.hidden && x.offsetParent !== null);
+            (pendingFocus.field === 'start' ? stops[0] : stops[stops.length - 1])?.focus();
+          } else (pendingFocus.field === 'nature' ? r.nature : pendingFocus.field === 'partyId' ? r.party : r.cat).focus();
           pendingFocus = null;
         }
       }
@@ -1232,6 +1267,51 @@ import SignInGate from '../../../components/SignInGate.astro';
       animation: none;
       width: 100%;
     }
+  }
+
+  .lnext .tips {
+    margin: 0 0 12px;
+    padding: 10px 14px;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    background: var(--tvc-surface);
+    font-size: var(--text-sm);
+  }
+
+  .lnext .tips p {
+    margin: 0 0 6px;
+  }
+
+  .lnext .tips ul {
+    margin: 0;
+    padding-left: 1.2em;
+  }
+
+  .lnext .tips code {
+    font-size: inherit;
+    padding: 1px 4px;
+    border-radius: 4px;
+    background: var(--tvc-line);
+  }
+
+  .lnext .tips[hidden] {
+    display: none;
+  }
+
+  .lnext .skiplink {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+  }
+
+  .lnext .skiplink:focus {
+    position: static;
+    display: inline-block;
+    margin: 0 0 8px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    background: var(--tvc-surface);
+    border: 1px solid var(--tvc-line-strong);
   }
 
   .lnext .list-title {
@@ -1485,8 +1565,8 @@ import SignInGate from '../../../components/SignInGate.astro';
   }
 
   .lnext .lrow input[type='checkbox'] {
-    width: 20px;
-    height: 20px;
+    width: 24px;
+    height: 24px;
   }
 
   .lnext .gcell {
@@ -1506,9 +1586,12 @@ import SignInGate from '../../../components/SignInGate.astro';
     all: unset;
     cursor: pointer;
     font-weight: 600;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
     min-height: 24px;
     color: var(--tvc-ink);
   }
@@ -1532,7 +1615,8 @@ import SignInGate from '../../../components/SignInGate.astro';
     color: var(--tvc-ink);
   }
 
-  .lnext .detail--unit {
+  .lnext .detail--unit,
+  .lnext .detail--wrap {
     white-space: normal;
   }
 
