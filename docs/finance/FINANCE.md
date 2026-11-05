@@ -369,6 +369,11 @@ Modelled on how ServiceNow lists work, because the sheet's convenience was selec
   (or after a write) pays the full 1-2 s. Any write through `/api/finance-admin` drops the cache, and the pages add `fresh=1` to the first
   list read after a write, because another warm instance may not have seen it. Anything that writes behind the function's back (the
   history load, a script) shows up within 10 s.
+  **The prototype after the second review (26/40, five P1s fixed):** the status pill sits under the amount (no Status column), so Category,
+  Party and Wording are wide enough to read; below 1,240px the page is a list of cards (the table needs about 1,000px beside the shell);
+  a line under the progress says "a tick only fills a field in; nothing is saved until you tick the lines and press Post", and a note
+  says how many lines are filled in but not posted, with a button to tick them; the previous calendar month's status (what is left, or
+  Close month when it is done) sits above the table; text boxes and selects have a visible focus ring; sorting and the chips keep focus.
   The prototype also asks "Also set category X on the other N selected lines?" when a ticked line's cell is changed, and Alt+Up / Alt+Down
   move to the same cell on the line above or below.
   **The unit and year of maintenance can now be set.** `fin_allocations.household_id` and `maintenance_year` (migration 0084) were read

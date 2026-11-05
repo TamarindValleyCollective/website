@@ -53,6 +53,9 @@ import SignInGate from '../../../components/SignInGate.astro';
       <div id="postnote" class="postnote" role="alert" hidden></div>
       <div id="applyprompt" class="postnote applyprompt" role="status" hidden></div>
       <p id="progress" class="progress" aria-live="polite"></p>
+      <p class="hint twostep">A tick only fills a field in. Nothing is saved until you tick the lines and press <strong>Post</strong>.</p>
+      <div id="draftnote" class="postnote applyprompt" role="status" hidden></div>
+      <div id="monthstrip" class="postnote applyprompt" role="status" hidden></div>
 
       <a class="skiplink" href="#months-title">Skip the table</a>
       <div class="grid" id="grid" role="table" aria-label="Bank lines">
@@ -201,7 +204,6 @@ import SignInGate from '../../../components/SignInGate.astro';
       { id: 'category', header: 'Category', accessorFn: (l: Line) => l.allocation?.categoryId ?? '' },
       { id: 'party', header: 'Party', accessorFn: (l: Line) => l.allocation?.partyId ?? '' },
       { id: 'nature', header: 'What it was for', accessorFn: (l: Line) => l.allocation?.nature ?? '' },
-      { id: 'status', header: 'Status', enableSorting: false },
     ],
     getRowId: (l: Line) => l.id,
     getCoreRowModel: getCoreRowModel(),
@@ -240,7 +242,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   const selectedLines = () => lines.filter((l) => tstate.rowSelection[l.id] && editable(l));
 
   // ---- TanStack Virtual: only the rows near the screen are in the page.
-  const phone = window.matchMedia('(max-width: 900px)');
+  const phone = window.matchMedia('(max-width: 1240px)'); // below this the page is a list of cards (the table needs about 1,000px beside the shell)
   let painting = false;
   let repaint = false; // a measurement changed a row's height while painting: place the rows again
   let pendingFocus: { index: number; field: Field | 'start' | 'end' } | null = null;
@@ -587,23 +589,47 @@ import SignInGate from '../../../components/SignInGate.astro';
 
   // ---- months: what is left in each, and closing one once everything in it is posted and checked
   type Month = { month: string; status: 'open' | 'closed'; unallocated: number; review: number };
-  let readyMonths: string[] = [];
+  async function closeMonth(month: string) {
+    const res = await call(`/api/finance-admin/periods/${month}/close`, 'POST');
+    showToast(res.status === 200 ? `${niceMonth(month)} closed.` : res.data?.error ?? 'Could not close it.');
+    void loadMonths();
+  }
+  // The month to finish is the previous calendar month (if it is still open, else the newest open one): what is left in it, or a
+  // Close month button when it is done. Older months left open for good reasons are in the Months list, not nagging here.
+  function renderMonthStrip(months: Month[], canClose: boolean) {
+    const box = $('monthstrip');
+    const open = months.filter((m) => m.status === 'open');
+    const now = new Date();
+    const previous = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const previousKey = `${previous.getFullYear()}-${String(previous.getMonth() + 1).padStart(2, '0')}`;
+    const m = open.find((x) => x.month.slice(0, 7) === previousKey) ?? open[0];
+    if (!m) {
+      box.hidden = true;
+      return;
+    }
+    const ready = m.unallocated === 0 && m.review === 0;
+    const left = [m.unallocated ? `${m.unallocated} to allocate` : '', m.review ? `${m.review} to review` : ''].filter(Boolean).join(' · ');
+    box.replaceChildren(
+      ...[
+        h('span', { text: ready ? `${niceMonth(m.month)} is ready to close.` : `${niceMonth(m.month)}: ${left}.` }),
+        ready && canClose ? button('Close month', () => void closeMonth(m.month), 'button button--small') : null,
+        button('All months', () => $('months-title').focus(), 'button button--outline button--small'),
+      ].filter(Boolean),
+    );
+    box.hidden = false;
+  }
   async function loadMonths() {
     const { status, data: out } = await call('/api/finance-admin/periods');
     if (status !== 200) return;
     const canClose = Boolean(out.canClose);
     const months = out.months as Month[];
-    readyMonths = months.filter((m) => m.status === 'open' && m.unallocated === 0 && m.review === 0).map((m) => niceMonth(m.month));
+    renderMonthStrip(months, canClose);
     renderProgress();
     $('months').replaceChildren(
       ...months.map((m) => {
         const ready = m.unallocated === 0 && m.review === 0;
         const detail = m.status === 'closed' ? 'Closed' : ready ? 'Everything is posted and checked.' : [m.unallocated ? `${m.unallocated} to allocate` : '', m.review ? `${m.review} to review` : ''].filter(Boolean).join(' · ');
-        const close = canClose && m.status === 'open' && ready ? button('Close month', async () => {
-          const res = await call(`/api/finance-admin/periods/${m.month}/close`, 'POST');
-          showToast(res.status === 200 ? `${niceMonth(m.month)} closed.` : res.data?.error ?? 'Could not close it.');
-          void loadMonths();
-        }) : null;
+        const close = canClose && m.status === 'open' && ready ? button('Close month', () => void closeMonth(m.month)) : null;
         return h('li', {}, h('div', { class: 'row' }, h('span', { class: 'grow' }, h('span', { class: 'title', text: niceMonth(m.month) }), h('span', { class: 'detail', text: detail })), m.status === 'closed' ? pill('Closed', 'ok') : null, close));
       }),
     );
@@ -666,10 +692,19 @@ import SignInGate from '../../../components/SignInGate.astro';
 
   // ---- toolbar, progress and headings
   const CHIPS: [Filter, string][] = [['unallocated', 'To allocate'], ['review', 'To review'], ['noparty', 'No party'], ['all', 'All']];
+  function keepFocus(container: HTMLElement, render: () => void) {
+    const active = document.activeElement as HTMLElement | null;
+    const key = active && container.contains(active) ? active.dataset.key : undefined;
+    render();
+    if (key) container.querySelector<HTMLElement>(`[data-key="${key}"]`)?.focus();
+  }
   function renderChips() {
+    keepFocus($('chips'), () => renderChipButtons());
+  }
+  function renderChipButtons() {
     $('chips').replaceChildren(
       ...CHIPS.map(([f, label]) => {
-        const b = h('button', { attrs: { type: 'button', 'aria-pressed': String(f === filter) } }, h('span', { text: `${label} ${counts[f]}` }));
+        const b = h('button', { attrs: { type: 'button', 'data-key': f, 'aria-pressed': String(f === filter) } }, h('span', { text: `${label} ${counts[f]}` }));
         b.addEventListener('click', () => {
           filter = f;
           applyView(true);
@@ -682,10 +717,13 @@ import SignInGate from '../../../components/SignInGate.astro';
     if (!data) return;
     const c = counts;
     const errs = Object.entries(filterErrors).map(([col, why]) => `Can't read the ${COLUMN_LABELS[col]} search: ${why}`);
-    $('progress').textContent = [`Showing ${lines.length} of ${all.length}`, `${c.unallocated} left to allocate`, `${c.review} to review`, c.noparty ? `${c.noparty} posted without a party` : '', postedThisSitting ? `${postedThisSitting} posted this sitting` : '', readyMonths.length ? `${readyMonths.join(', ')} ready to close (see Months below)` : '', crumbs.length ? `Searching: ${crumbs.join(', ')}` : '', ...errs].filter(Boolean).join(' · ');
+    $('progress').textContent = [`Showing ${lines.length} of ${all.length}`, `${c.unallocated} left to allocate`, `${c.review} to review`, c.noparty ? `${c.noparty} posted without a party` : '', postedThisSitting ? `${postedThisSitting} posted this sitting` : '', crumbs.length ? `Searching: ${crumbs.join(', ')}` : '', ...errs].filter(Boolean).join(' · ');
   }
   const SORTABLE = new Set(['date', 'narration', 'amount', 'category', 'party', 'nature']);
   function renderHead() {
+    keepFocus($('ghead'), () => renderHeadCells());
+  }
+  function renderHeadCells() {
     const head = $('ghead');
     head.replaceChildren(
       ...table.getHeaderGroups()[0].headers.map((header) => {
@@ -694,7 +732,7 @@ import SignInGate from '../../../components/SignInGate.astro';
         const label = String(header.column.columnDef.header ?? '');
         const cellEl = h('span', { class: `gcell gcell--${id}`, attrs: { role: 'columnheader', ...(SORTABLE.has(id) ? { 'aria-sort': sorted === 'asc' ? 'ascending' : sorted === 'desc' ? 'descending' : 'none' } : {}) } });
         if (SORTABLE.has(id)) {
-          const b = h('button', { class: 'sorthead', text: `${label}${sorted === 'asc' ? ' ▲' : sorted === 'desc' ? ' ▼' : ' ↕'}`, attrs: { type: 'button' } });
+          const b = h('button', { class: 'sorthead', text: `${label}${sorted === 'asc' ? ' ▲' : sorted === 'desc' ? ' ▼' : ' ↕'}`, attrs: { type: 'button', 'data-key': id } });
           b.addEventListener('click', () => header.column.toggleSorting());
           cellEl.append(b);
         } else cellEl.textContent = label;
@@ -760,7 +798,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     const who = l.narration.length > 40 ? `${l.narration.slice(0, 40)}…` : l.narration;
     const check = h('input', { attrs: { type: 'checkbox', 'aria-label': `Select ${who}` } }) as HTMLInputElement;
     check.addEventListener('click', (e) => pick(l.id, (e as MouseEvent).shiftKey));
-    const narr = h('button', { class: 'narr', text: l.narration, attrs: { type: 'button', title: l.narration } }) as HTMLButtonElement;
+    const narr = h('button', { class: 'narr', text: l.narration, attrs: { type: 'button', title: l.account ? `${l.narration}\n${l.account}` : l.narration } }) as HTMLButtonElement;
     narr.addEventListener('click', () => void openLine(l.id));
     const details = h('span', { class: 'detail' });
 
@@ -805,11 +843,10 @@ import SignInGate from '../../../components/SignInGate.astro';
       cell('select', '', check),
       cell('date', '', document.createTextNode(shortDate(l.date))),
       cell('narration', '', narr, details),
-      cell(`amount amount--${l.direction}`, '', document.createTextNode(`${l.direction === 'debit' ? '−' : '+'}${rupees(l.amountPaise)}`)),
+      cell(`amount amount--${l.direction}`, '', document.createTextNode(`${l.direction === 'debit' ? '−' : '+'}${rupees(l.amountPaise)}`), pillSlot),
       cell('category', 'Category', cat, catTick, catText),
       cell('party', 'Party', party, partyTick, partyText),
       cell('nature', 'What it was for', nature, natureTick, natureText),
-      cell('status', '', pillSlot),
     );
     const onKey = (e: KeyboardEvent) => {
       const index = lines.findIndex((x) => x.id === l.id);
@@ -871,7 +908,6 @@ import SignInGate from '../../../components/SignInGate.astro';
         error ? h('span', { class: 'detail detail--warn', text: error }) : null,
         l.state === 'partly_allocated' ? h('span', { class: 'detail detail--warn detail--wrap', text: `${rupees(l.amountPaise - l.allocatedPaise)} still to allocate: open the line to finish` }) : null,
         upiSays ? h('span', { class: 'detail detail--upi', text: `Paytm: ${upiSays}`, attrs: { title: 'From the Paytm UPI report' } }) : /\bUPI\b/i.test(l.narration) ? h('span', { class: 'detail detail--dim', text: 'No Paytm record for this payment' }) : null,
-        l.account ? h('span', { class: 'detail', text: l.account }) : null,
       ].filter(Boolean) as Node[],
     );
     for (const x of [r.cat, r.party, r.nature]) x.hidden = !can;
@@ -910,7 +946,33 @@ import SignInGate from '../../../components/SignInGate.astro';
     const el = mounted.get(l.id);
     if (el) fill(el, l);
     renderBar();
+    renderDraftNote();
   };
+  // Lines that are filled in but not posted, with the one step that is left. Rebuilt only when what it says changes.
+  let draftNoteKey = '';
+  function renderDraftNote() {
+    const box = $('draftnote');
+    const ready = lines.filter((l) => editable(l) && isReady(l));
+    const unticked = ready.filter((l) => !tstate.rowSelection[l.id]);
+    const key = `${ready.length}:${unticked.length}`;
+    if (key === draftNoteKey) return;
+    draftNoteKey = key;
+    if (!ready.length) {
+      box.hidden = true;
+      return;
+    }
+    box.replaceChildren(
+      h('span', { text: `${ready.length} ${ready.length === 1 ? 'line is' : 'lines are'} filled in but not posted yet.` }),
+      unticked.length
+        ? button(`Select ${unticked.length === ready.length ? 'them' : `the other ${unticked.length}`} to post`, () => {
+            const next = { ...tstate.rowSelection };
+            for (const l of ready) next[l.id] = true;
+            table.setRowSelection(next);
+          }, 'button button--small')
+        : h('span', { class: 'hint', text: 'They are ticked: press Post in the bar at the bottom.' }),
+    );
+    box.hidden = false;
+  }
   function edit(l: Line, field: Field, value: string) {
     setDraft(l.id, { [field]: value } as Partial<Draft>);
     syncRow(l);
@@ -1093,6 +1155,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     table.setRowSelection(next);
   }
   function refreshSelection() {
+    renderDraftNote();
     for (const [id, el] of mounted) {
       const l = lines.find((x) => x.id === id);
       if (l) fill(el, l);
@@ -1267,6 +1330,14 @@ import SignInGate from '../../../components/SignInGate.astro';
       animation: none;
       width: 100%;
     }
+  }
+
+  .lnext input:focus-visible,
+  .lnext select:focus-visible,
+  .abar input:focus-visible,
+  .abar select:focus-visible {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 2px;
   }
 
   .lnext .tips {
@@ -1475,7 +1546,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   .lnext .gfilter,
   .lnext .lrow {
     display: grid;
-    grid-template-columns: 34px 66px minmax(170px, 1.3fr) 128px minmax(130px, 1fr) minmax(130px, 1fr) minmax(150px, 1.1fr) 112px;
+    grid-template-columns: 34px 62px minmax(150px, 1.1fr) 124px minmax(150px, 1fr) minmax(150px, 1fr) minmax(170px, 1.1fr);
     align-items: center;
     gap: 8px;
     padding: 6px 12px;
@@ -1484,7 +1555,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   .lnext .ghead,
   .lnext .gfilter,
   .lnext .gscroll {
-    min-width: 1024px;
+    min-width: 920px;
   }
 
   .lnext .ghead {
@@ -1634,7 +1705,10 @@ import SignInGate from '../../../components/SignInGate.astro';
   }
 
   .lnext .gcell--amount {
-    justify-content: flex-end;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 4px;
     font-weight: 600;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
@@ -1735,7 +1809,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   }
 
   /* A phone: each line is a card (date and amount, the narration, then the three cells with their labels, then its status). */
-  @media (max-width: 900px) {
+  @media (max-width: 1240px) {
     .lnext .ghead,
     .lnext .gfilter {
       display: none;
@@ -1757,8 +1831,7 @@ import SignInGate from '../../../components/SignInGate.astro';
         'chk narr narr'
         'chk cat cat'
         'chk party party'
-        'chk nature nature'
-        'chk status status';
+        'chk nature nature';
       row-gap: 6px;
       padding: 12px;
     }
@@ -1792,10 +1865,6 @@ import SignInGate from '../../../components/SignInGate.astro';
       grid-area: nature;
     }
 
-    .lnext .gcell--status {
-      grid-area: status;
-    }
-
     .lnext .gcell[data-label]:not([data-label='']) {
       flex-wrap: wrap;
     }
@@ -1811,14 +1880,17 @@ import SignInGate from '../../../components/SignInGate.astro';
       overflow-x: hidden;
     }
 
-    .abar {
-      bottom: 76px;
-    }
 
     .lnext .tick,
     .lnext .lrow input[type='checkbox'] {
       min-width: 36px;
       min-height: 36px;
+    }
+  }
+
+  @media (max-width: 900px) {
+    .abar {
+      bottom: 76px;
     }
   }
 </style>
