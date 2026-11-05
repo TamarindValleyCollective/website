@@ -387,7 +387,11 @@ pure rules in `scripts/lib/finance-history.mjs` (tested on invented rows). Count
   `fin_save_allocations` (posted, source `import`, no actor), skips any line that already has allocations (so a re-run changes nothing), carries on past a
   failure, and writes one counts-only audit row (`finance.history_loaded`). **`--canary` first:** it loads only the first line of each kind (a plain line, a
   salary-style group, a maintenance payment with a household, a Farm Project line, an approximate match), so the first real write exercises every path and can
-  be checked in the ledger before the rest; the full run then skips those lines. **Not yet run.** Posted allocations cannot be deleted, so a wrong load can only be
+  be checked in the ledger before the rest; the full run then skips those lines. **Canary run 2026-11-05: 5 bank lines, 14 allocations, no failures.** Checked afterwards in
+  TVC ERP: all posted, source `import`, no actor; every line adds up to its bank line; a salary batch became 10 allocations on one line; a maintenance payment for 2023-24
+  carried its year and a household; the Farm Project line created the placeholder project for FY 2024 (status proposed); one approximate match was sent to review;
+  every period is the first of a month and within one month of the bank date; one counts-only audit row was written (its detail shows the whole plan's counts, not
+  just the canary's). **The full load has not run.** Posted allocations cannot be deleted, so a wrong load can only be
   corrected by reversals: that is why the canary comes first, and why a purpose-built, audited "unload imports" function (import-sourced allocations only) was
   proposed to Sharath.
 - **Pre-load audit (5 Nov 2026, counts only):** every planned line adds up to its bank line; the tracker's total equals loaded + unlabeled + no-bank-line

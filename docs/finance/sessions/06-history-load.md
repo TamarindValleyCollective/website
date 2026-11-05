@@ -47,7 +47,9 @@ Dry run on the real tracker: 95.3% of rows matched, 783 bank lines would get 1,0
 Decisions (Sharath, 2026-11-05): the default label mapping, with Farm Project in the Project bucket (placeholder project per year, details to be added
 later), member maintenance keeping its year and finding the payer's household, CBDT tax as Income tax. Details in [FINANCE.md](../FINANCE.md), "History load".
 
-Still to do: review the dry run; run `--apply`; the month-by-category reconciliation report; load FY 2023-24 if wanted; then the
+Canary run 2026-11-05 (5 lines, 14 allocations) verified in the database; the full load is waiting for Sharath's go.
+
+Still to do: the full load; run `--apply`; the month-by-category reconciliation report; load FY 2023-24 if wanted; then the
 placeholder-project TODO and the 41 maintenance payments (14 names) that need a household from a person (`--households`).
 
 Deviation from the brief: it says the script creates bank lines and allocations; the bank lines were imported from the statements in session 03, so
