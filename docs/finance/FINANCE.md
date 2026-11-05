@@ -14,8 +14,9 @@ model are in [DESIGN.md](DESIGN.md); how to build it is in [README.md](README.md
 | 01 follow-up | `0078_finance_categories_and_projects.sql` **applied to TVC ERP on 2026-11-02**. |
 | 03 Statement import | Built on branch `finance-03-statement-import` (draft PR). Migration `0080` **applied to TVC ERP on 2026-11-02**. |
 | 04 Parties & payees | Built on branch `finance-04-parties` (draft PR). Migration `0079` **applied to TVC ERP on 2026-11-02** (recorded as `finance_parties`); checked afterwards: both tables empty, RLS on, no anon/authenticated grants, guard trigger present. |
-| 05 Ledger & review | **Built, draft PR #529** (branch `worktree-finance-05-ledger`): posting rules, rules engine, ledger and rules screens, period close. Migration `0083` **applied to TVC ERP on 2026-11-05** (recorded as `finance_ledger`). Running locally against the real database; nothing allocated yet. |
-| 06 History load | **In progress** on branch `worktree-finance-06-history`: the tracker is read and matched to the bank lines (dry run only); nothing is written. |
+| 05 Ledger & review | **Merged (PR #529).** Posting rules, rules engine, ledger and rules screens, period close. Migration `0083` **applied to TVC ERP on 2026-11-05** (recorded as `finance_ledger`). |
+| 06 History load | **Loaded on 2026-11-05** (PR #530, migration `0084` applied): 1,031 allocations on 783 bank lines. Still open: the 2023-24 tracker tab, party on the history rows with none (the "No party" chip lists them), project details for the Farm Project placeholders (issue #531). |
+| 05/06 follow-up: ledger prototype | **Draft PR #532.** Faster list, Paytm line, unit and year, "No party", and a rebuilt ledger at `/internal/finance/ledger-next/` (TanStack Table and Virtual, not linked in the navigation) with every audit fix; critique 22 → 26 → 30 / 40. Not yet tried on the real ledger. To promote it, make it the page at `/internal/finance/ledger/` and retire the old page. No migration. |
 | 02, 07-13 | Not started |
 
 ## Access
