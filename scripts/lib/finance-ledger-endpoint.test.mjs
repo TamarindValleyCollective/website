@@ -608,6 +608,31 @@ test('the list is served from a short cache, and fresh=1 or any write drops it',
   assert.equal(afterWrite.total, first.total, 'a write drops the cache');
 });
 
+// ---- the unit and year of maintenance
+const saveRows = (op, lineId, rows, post = true) => api(op, `/ledger/${lineId}/allocations`, { method: 'POST', body: { rows, post } });
+test('maintenance is saved against a unit and a year, and without a unit it is flagged', async () => {
+  reset();
+  const op = sign('u1', 'user');
+  const base = { amountPaise: 100000, categoryId: CAT_MAINT, partyId: P_NURSERY, nature: 'Maintenance for the unit' };
+  assert.equal((await saveRows(op, L_DEBIT, [{ ...base, householdId: ID(90), maintenanceYear: '2025-26' }])).status, 200);
+  const saved = db.fin_allocations.find((x) => x.bank_line_id === L_DEBIT);
+  assert.equal(saved.review_state, 'ok');
+  assert.equal(saved.household_id, ID(90));
+  assert.equal(saved.maintenance_year, '2025-26');
+  assert.equal((await saveRows(op, L_CIRCLE, [{ ...base, amountPaise: 40000 }])).status, 200);
+  const bare = db.fin_allocations.find((x) => x.bank_line_id === L_CIRCLE);
+  assert.equal(bare.review_state, 'needs_review', 'maintenance with no unit goes to review');
+  assert.match(bare.review_reason, /no_unit/);
+});
+
+test('a unit that does not exist, or a year that is not like 2025-26, is refused', async () => {
+  reset();
+  const op = sign('u1', 'user');
+  const base = { amountPaise: 100000, categoryId: CAT_MAINT, partyId: P_NURSERY, nature: 'Maintenance' };
+  assert.equal((await saveRows(op, L_DEBIT, [{ ...base, householdId: ID(99) }])).status, 400);
+  assert.equal((await saveRows(op, L_DEBIT, [{ ...base, householdId: ID(90), maintenanceYear: '2025' }])).status, 400);
+});
+
 // ---- every line at once, for pages that sort and search in the browser
 test('/ledger/all returns every line with what it was posted to or is suggested, and no paging', async () => {
   reset();

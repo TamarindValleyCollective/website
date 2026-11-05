@@ -369,6 +369,12 @@ Modelled on how ServiceNow lists work, because the sheet's convenience was selec
   (or after a write) pays the full 1-2 s. Any write through `/api/finance-admin` drops the cache, and the pages add `fresh=1` to the first
   list read after a write, because another warm instance may not have seen it. Anything that writes behind the function's back (the
   history load, a script) shows up within 10 s.
+  **The unit and year of maintenance can now be set.** `fin_allocations.household_id` and `maintenance_year` (migration 0084) were read
+  by the page but nothing could write them. The line sheet (both pages) shows **Unit** and **Maintenance year** when the category is
+  maintenance (year defaults to the financial year of the payment); the save endpoint validates them (the unit must exist, the year looks
+  like `2025-26`), a refund copies them from what it undoes, and maintenance saved with no unit goes to review (`no_unit`). The line's
+  detail and the lookups carry the units (`households`). The prototype page has the same line sheet (split into rows, refund picker,
+  review decisions, add a party).
   **That cache is not reliable under `netlify dev`**, which does not keep a Function's memory between requests: every list call was still
   about 3 s there. So the prototype page (`/internal/finance/ledger-next/`) does not ask the server to search at all: `GET
   /api/finance-admin/ledger/all` returns every line once (about 2 s cold, 0.8 MB), with what each was posted to or is suggested

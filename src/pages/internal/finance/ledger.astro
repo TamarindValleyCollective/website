@@ -88,7 +88,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   type Category = { id: string; name: string; type: string; active: boolean };
   type Party = { id: string; name: string; kind: string };
   type Project = { id: string; name: string; kind: string; financial_year: number; status: string };
-  type Lookups = { categories: Category[]; parties: Party[]; projects: Project[]; requesterPartyId: string | null; closedMonths: string[] };
+  type Lookups = { categories: Category[]; parties: Party[]; projects: Project[]; requesterPartyId: string | null; closedMonths: string[]; households: { id: string; label: string }[] };
   type Filter = 'unallocated' | 'review' | 'noparty' | 'all';
   type ListData = { canAllocate: boolean; canClose: boolean; counts: Record<Filter, number>; total: number; offset: number; lines: Line[]; lookups: Lookups; reasons: Record<string, string>; sort: { key: string; dir: 'asc' | 'desc' }; breadcrumb: { column: string; text: string }[]; filterErrors: Record<string, string> };
 
@@ -771,7 +771,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   $('more').addEventListener('click', () => void load(true));
 
   // ---- one line: what it says, and the allocation editor
-  type Alloc = { id: string; partyId: string | null; categoryId: string; projectId: string | null; amountPaise: number; period: string; nature: string; remarks: string | null; source: string; reviewState: string; reviewReason: string | null; reversesAllocationId: string | null; reversalReason: string | null; posted: boolean };
+  type Alloc = { id: string; partyId: string | null; categoryId: string; projectId: string | null; amountPaise: number; period: string; nature: string; remarks: string | null; source: string; reviewState: string; reviewReason: string | null; householdId: string | null; maintenanceYear: string | null; reversesAllocationId: string | null; reversalReason: string | null; posted: boolean };
   type Reversible = { id: string; date: string; partyId: string | null; categoryId: string; nature: string; remainingPaise: number };
   type Detail = {
     canAllocate: boolean;
@@ -853,7 +853,7 @@ import SignInGate from '../../../components/SignInGate.astro';
               'span',
               { class: 'grow' },
               h('span', { class: 'title', text: a.reversesAllocationId ? `Refund: ${a.nature}` : a.nature }),
-              h('span', { class: 'detail', text: [nameOf(lk.categories, a.categoryId), nameOf(lk.parties, a.partyId), niceMonth(a.period)].filter(Boolean).join(' · ') }),
+              h('span', { class: 'detail', text: [nameOf(lk.categories, a.categoryId), nameOf(lk.parties, a.partyId), a.householdId ? `Unit ${lk.households.find((x) => x.id === a.householdId)?.label ?? ''}` : '', a.maintenanceYear ?? '', niceMonth(a.period)].filter(Boolean).join(' · ') }),
               reasons.length ? h('span', { class: 'detail detail--warn', text: reasons.join('. ') }) : null,
             ),
             h('span', { class: 'amount', text: rupees(a.amountPaise) }),
@@ -878,7 +878,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   function editor(dlg: HTMLDialogElement, d: Detail): HTMLElement {
     const lk = d.lookups;
     const line = d.line;
-    type RowUi = { el: HTMLElement; amount: HTMLInputElement; category: HTMLSelectElement; party: HTMLSelectElement; nature: HTMLInputElement; period: HTMLInputElement; project: HTMLSelectElement | null; reverses: HTMLSelectElement | null; reason: HTMLInputElement; ruleId: string | null; source: string };
+    type RowUi = { el: HTMLElement; household: HTMLSelectElement; year: HTMLInputElement; unitBox: HTMLElement; amount: HTMLInputElement; category: HTMLSelectElement; party: HTMLSelectElement; nature: HTMLInputElement; period: HTMLInputElement; project: HTMLSelectElement | null; reverses: HTMLSelectElement | null; reason: HTMLInputElement; ruleId: string | null; source: string };
     const rowsUi: RowUi[] = [];
     const rowsBox = h('div', { class: 'alloc-rows' });
     const remainingEl = h('p', { class: 'remaining', attrs: { 'aria-live': 'polite' } });
@@ -965,9 +965,21 @@ import SignInGate from '../../../components/SignInGate.astro';
       const reason = input('reason', { placeholder: 'Why is it being refunded?' }) as HTMLInputElement;
       const reasonBox = labelled('Reason', reason);
       reasonBox.hidden = true;
-      const normal = h('div', { class: 'stack-form' }, labelled('Category', category), labelled('Party', party), newBox, labelled('What it was for', nature), project ? labelled('Project', project) : null);
+      // Maintenance is paid by anybody and allocated to a unit: the unit and the year it pays for are asked for when the category is maintenance.
+      const isMaintenance = () => lk.categories.find((c) => c.id === category.value)?.type === 'member_contribution';
+      const household = h('select', { attrs: { name: 'household' } }, h('option', { text: 'Choose the unit…', attrs: { value: '' } }), ...lk.households.map((x) => h('option', { text: x.label, attrs: { value: x.id } }))) as HTMLSelectElement;
+      const fyOf = (iso: string) => {
+        const start = Number(iso.slice(5, 7)) >= 4 ? Number(iso.slice(0, 4)) : Number(iso.slice(0, 4)) - 1;
+        return `${start}-${String((start + 1) % 100).padStart(2, '0')}`;
+      };
+      const year = input('maintenanceYear', { placeholder: '2025-26', 'aria-label': 'Maintenance year' }) as HTMLInputElement;
+      year.value = fyOf(line.date);
+      const unitBox = h('div', { class: 'stack-form alloc-top' }, labelled('Unit', household), labelled('Maintenance year', year));
+      unitBox.hidden = !isMaintenance();
+      category.addEventListener('change', () => (unitBox.hidden = !isMaintenance()));
+      const normal = h('div', { class: 'stack-form' }, labelled('Category', category), labelled('Party', party), newBox, unitBox, labelled('What it was for', nature), project ? labelled('Project', project) : null);
       const el = h('fieldset', { class: 'alloc-edit' });
-      const ui: RowUi = { el, amount, category, party, nature, period, project, reverses, reason, ruleId: init.ruleId ?? null, source: init.source ?? 'manual' };
+      const ui: RowUi = { el, household, year, unitBox, amount, category, party, nature, period, project, reverses, reason, ruleId: init.ruleId ?? null, source: init.source ?? 'manual' };
       reverses?.addEventListener('change', () => {
         const refund = Boolean(reverses.value);
         normal.hidden = refund;
@@ -1009,7 +1021,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       const payload = rowsUi.map((r) => ({
         amountPaise: parseRupees(r.amount.value) ?? 0,
         period: r.period.value ? `${r.period.value}-01` : undefined,
-        ...(r.reverses?.value ? { reversesAllocationId: r.reverses.value, reversalReason: r.reason.value, nature: r.nature.value } : { categoryId: r.category.value, partyId: r.party.value || null, projectId: r.project?.value || null, nature: r.nature.value, ruleId: r.ruleId, source: r.source }),
+        ...(r.reverses?.value ? { reversesAllocationId: r.reverses.value, reversalReason: r.reason.value, nature: r.nature.value } : { categoryId: r.category.value, partyId: r.party.value || null, projectId: r.project?.value || null, nature: r.nature.value, ruleId: r.ruleId, source: r.source, ...(r.unitBox.hidden ? {} : { householdId: r.household.value || null, maintenanceYear: r.year.value.trim() || null }) }),
       }));
       const { status, data: out } = await call(`/api/finance-admin/ledger/${line.id}/allocations`, 'POST', { rows: payload, post, overrideReason: closedReason.value });
       if (status === 200) {

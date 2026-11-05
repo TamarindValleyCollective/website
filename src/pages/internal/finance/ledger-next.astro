@@ -4,8 +4,8 @@
 // What it tries out: edits that change one cell instead of rebuilding the row, a stable progress line, a status that says what a line
 // still needs, row-specific control names, a themed action bar that says why Post is disabled, Ctrl+Enter to accept a row's
 // suggestions and move to the next, and a card layout on a phone. It also adds a party from the cell, shows the months with Close
-// month, and keeps a post failure on screen until dismissed. Not here yet: splitting and refunds (the narration opens the real
-// ledger), the "apply to the other N" prompt.
+// month, and keeps a post failure on screen until dismissed. It has the line sheet too (split into rows, refunds,
+// review decisions, add a party). Not here yet: the "apply to the other N" prompt.
 import StaffLayout from '../../../layouts/StaffLayout.astro';
 import SignInGate from '../../../components/SignInGate.astro';
 ---
@@ -53,10 +53,11 @@ import SignInGate from '../../../components/SignInGate.astro';
       <div id="empty" class="hint" aria-live="polite" hidden></div>
       <h2 class="list-title">Months</h2>
       <ul class="list" id="months"></ul>
-      <p class="hint">Click a heading to sort, type under one to search that column. Tab moves through the cells; Ctrl+Enter on a line accepts its suggestions and moves to the next.</p>
+      <p class="hint">Click a heading to sort, type under one to search that column; click a narration to split the line, refund it, or see its history. Tab moves through the cells; Ctrl+Enter on a line accepts its suggestions and moves to the next.</p>
     </div>
     <div id="actionbar" class="abar" role="region" aria-label="Selected lines" hidden></div>
     <dialog id="party-sheet" class="sheet" aria-labelledby="party-title"></dialog>
+    <dialog id="line-sheet" class="sheet" aria-labelledby="line-title"></dialog>
   </section>
 </StaffLayout>
 
@@ -65,7 +66,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   import { Virtualizer, elementScroll, observeElementOffset, observeElementRect } from '@tanstack/virtual-core';
   import { StaffAuthError, askSheet, clearStepUp, clearToken, closeOnBackdrop, decodeTokenEmail, getToken, setToken, showToast, staffFetch } from '../../../../scripts/lib/staff-client.mjs';
   import { clearState, showFailure, showLoading } from '../../../../scripts/lib/staff-states.mjs';
-  import { button, categorySelect, h, input, labelled, niceMonth, partySelect, pill, present, rupees } from '../../../../scripts/lib/finance-ui.mjs';
+  import { button, categorySelect, h, input, labelled, niceDate, niceMonth, parseRupees, partySelect, pill, present, rupees } from '../../../../scripts/lib/finance-ui.mjs';
   import { compareRows, describeCondition, matchAmount, matchDate, matchText, parseAmount, parseDate, parseText } from '../../../../scripts/lib/finance-columns.mjs';
 
   declare const google: any;
@@ -80,7 +81,8 @@ import SignInGate from '../../../components/SignInGate.astro';
   };
   type Category = { id: string; name: string; type: string; active: boolean };
   type Party = { id: string; name: string; kind: string };
-  type Lookups = { categories: Category[]; parties: Party[] };
+  type Project = { id: string; name: string; kind: string; financial_year: number; status: string };
+  type Lookups = { categories: Category[]; parties: Party[]; projects: Project[]; requesterPartyId: string | null; closedMonths: string[]; households: { id: string; label: string }[] };
   type Filter = 'unallocated' | 'review' | 'noparty' | 'all';
   type ListData = { canAllocate: boolean; lines: Line[]; lookups: Lookups };
   type Field = 'categoryId' | 'partyId' | 'nature';
@@ -156,7 +158,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     rowErrors.delete(id);
   };
   const editable = (l: Line) => Boolean(data?.canAllocate) && l.state === 'unallocated' && !l.review;
-  const nameOf = (list: { id: string; name: string }[], id: string) => list.find((x) => x.id === id)?.name ?? '';
+  const nameOf = (list: { id: string; name: string }[], id: string | null) => list.find((x) => x.id === id)?.name ?? '';
   const ghostOf = (l: Line, f: Field): string => {
     const s = l.suggestion;
     if (!s || draftOf(l.id)[f]) return '';
@@ -291,6 +293,285 @@ import SignInGate from '../../../components/SignInGate.astro';
       setBusy(false);
     }
   }
+
+  const CONFIDENCE_WORDS: Record<string, string> = { high: 'confident', medium: 'fairly sure', low: 'a guess' };
+  // ---- one line: what it says, and the allocation editor
+  type Alloc = { id: string; partyId: string | null; categoryId: string; projectId: string | null; amountPaise: number; period: string; nature: string; remarks: string | null; source: string; reviewState: string; reviewReason: string | null; householdId: string | null; maintenanceYear: string | null; reversesAllocationId: string | null; reversalReason: string | null; posted: boolean };
+  type Reversible = { id: string; date: string; partyId: string | null; categoryId: string; nature: string; remainingPaise: number };
+  type Detail = {
+    canAllocate: boolean;
+    line: { id: string; date: string; narration: string; direction: 'debit' | 'credit'; amountPaise: number };
+    upi: { counterparty: string | null; remark: string | null; isCircle: boolean } | null;
+    state: string;
+    allocations: Alloc[];
+    proposal: { categoryId: string | null; partyId: string | null; nature: string; amountPaise: number; period: string; source: string; ruleId: string | null } | null;
+    suggestion: (Suggestion & { reasons: string[]; newParty: { name: string; kind: string } | null }) | null;
+    reasons: string[];
+    reversible: Reversible[];
+    lookups: Lookups;
+    reasonLabels: Record<string, string>;
+  };
+
+  const monthOf = (iso: string) => iso.slice(0, 7);
+
+  async function openLine(id: string) {
+    const dlg = $<HTMLDialogElement>('line-sheet');
+    const { status, data: d } = await call(`/api/finance-admin/ledger/${id}`);
+    if (status !== 200) {
+      showToast(d?.error ?? 'Could not open that line.');
+      return;
+    }
+    const detail = d as Detail;
+    const { line, upi } = detail;
+    const head = [
+      h('h2', { text: `${line.direction === 'debit' ? 'Paid' : 'Received'} ${rupees(line.amountPaise)}`, attrs: { id: 'line-title' } }),
+      h('p', { class: 'sheet-text', text: `${niceDate(line.date)} · ${line.narration}` }),
+      upi?.remark || upi?.counterparty ? h('p', { class: 'hint', text: [upi.counterparty ? `Paytm says: ${upi.counterparty}` : '', upi.remark ? `remark "${upi.remark}"` : '', upi.isCircle ? 'a circle payment' : ''].filter(Boolean).join(', ') }) : null,
+    ];
+    const posted = detail.allocations.some((a) => a.posted);
+    dlg.addEventListener('close', () => dlg.replaceChildren(), { once: true });
+    if (posted || !detail.canAllocate) present(dlg, closeOnBackdrop, ...head, postedView(dlg, detail), h('div', { class: 'sheet-actions' }, button('Close', () => dlg.close())));
+    else present(dlg, closeOnBackdrop, ...head, editor(dlg, detail));
+  }
+
+  // A posted line: what explains it, with review decisions for anything flagged.
+  function postedView(dlg: HTMLDialogElement, d: Detail): HTMLElement {
+    const lk = d.lookups;
+    if (!d.allocations.length) return h('p', { class: 'note', text: 'Nothing explains this line yet.' });
+    return h(
+      'ul',
+      { class: 'list' },
+      ...d.allocations.map((a) => {
+        const reasons = (a.reviewReason ?? '').split(',').filter(Boolean).map((r) => d.reasonLabels[r] ?? r);
+        const actions: HTMLElement[] = [];
+        if (d.canAllocate && a.reviewState !== 'ok') {
+          actions.push(
+            button('Mark as checked', async () => {
+              const { status, data: out } = await call(`/api/finance-admin/allocations/${a.id}/review`, 'POST', { action: 'resolve' });
+              if (status === 200) {
+                dlg.close();
+                showToast('Marked as checked.');
+                void load();
+              } else showToast(out?.error ?? 'Could not do that.');
+            }),
+          );
+        } else if (d.canAllocate && a.posted) {
+          actions.push(
+            button('Flag for review', async () => {
+              const { status, data: out } = await call(`/api/finance-admin/allocations/${a.id}/review`, 'POST', { action: 'flag' });
+              if (status === 200) {
+                dlg.close();
+                showToast('Flagged for review.');
+                void load();
+              } else showToast(out?.error ?? 'Could not do that.');
+            }, 'button button--outline button--small'),
+          );
+        }
+        return h(
+          'li',
+          {},
+          h(
+            'div',
+            { class: 'row alloc-row' },
+            h(
+              'span',
+              { class: 'grow' },
+              h('span', { class: 'title', text: a.reversesAllocationId ? `Refund: ${a.nature}` : a.nature }),
+              h('span', { class: 'detail', text: [nameOf(lk.categories, a.categoryId), nameOf(lk.parties, a.partyId), a.householdId ? `Unit ${lk.households.find((x) => x.id === a.householdId)?.label ?? ''}` : '', a.maintenanceYear ?? '', niceMonth(a.period)].filter(Boolean).join(' · ') }),
+              reasons.length ? h('span', { class: 'detail detail--warn', text: reasons.join('. ') }) : null,
+            ),
+            h('span', { class: 'amount', text: rupees(a.amountPaise) }),
+            ...actions,
+          ),
+        );
+      }),
+    );
+  }
+
+
+  // Why the form is filled in the way it is, in plain words. Nothing here is posted until a person presses Post.
+  function suggestionNote(d: Detail): HTMLElement | null {
+    const sg = d.suggestion;
+    if (!sg || !sg.reasons.length) return null;
+    return h('div', { class: 'suggest-note' }, h('p', { class: 'field-label', text: `Why this suggestion (${CONFIDENCE_WORDS[sg.confidence] ?? 'a guess'})` }), h('ul', { class: 'why' }, ...sg.reasons.map((r) => h('li', { text: r }))));
+  }
+
+  // ---- the editor: rows that add up to the line
+  function editor(dlg: HTMLDialogElement, d: Detail): HTMLElement {
+    const lk = d.lookups;
+    const line = d.line;
+    type RowUi = { el: HTMLElement; household: HTMLSelectElement; year: HTMLInputElement; unitBox: HTMLElement; amount: HTMLInputElement; category: HTMLSelectElement; party: HTMLSelectElement; nature: HTMLInputElement; period: HTMLInputElement; project: HTMLSelectElement | null; reverses: HTMLSelectElement | null; reason: HTMLInputElement; ruleId: string | null; source: string };
+    const rowsUi: RowUi[] = [];
+    const rowsBox = h('div', { class: 'alloc-rows' });
+    const remainingEl = h('p', { class: 'remaining', attrs: { 'aria-live': 'polite' } });
+    const msg = h('p', { class: 'error', attrs: { hidden: '' } });
+    const closedReason = input('closedReason', { placeholder: 'Why is a closed month being changed?' }) as HTMLInputElement;
+    const closedBox = h('div', { class: 'stack-form', attrs: { hidden: '' } }, labelled('Reason for changing a closed month', closedReason));
+
+    // Every party picker in this sheet, so a party added in one row is available in all of them.
+    const partySelects: HTMLSelectElement[] = [];
+    function addPartyEverywhere(p: Party) {
+      lk.parties.push(p);
+      for (const sel of partySelects) {
+        const opt = h('option', { text: p.name, attrs: { value: p.id } });
+        sel.insertBefore(opt, sel.querySelector(`option[value="${NEW_PARTY}"]`));
+      }
+    }
+    // Add a party that is not in the register yet, right here. Bank details are added later on the Parties page and verified there.
+    function openNewParty(box: HTMLElement, name: string, kind: string, onAdded: (id: string) => void) {
+      const nameInput = input('newPartyName', { placeholder: 'Name as it should appear in the register' }) as HTMLInputElement;
+      nameInput.value = name;
+      const kindSel = h('select', { attrs: { name: 'newPartyKind' } }, ...Object.entries(PARTY_KINDS).map(([k, label]) => h('option', { text: label, attrs: { value: k } }))) as HTMLSelectElement;
+      kindSel.value = kind;
+      const note = h('p', { class: 'error', attrs: { hidden: '' } });
+      const add = button('Add to register', async () => {
+        const typed = nameInput.value.trim().replace(/\s+/g, ' ');
+        const twin = lk.parties.find((x) => x.name.toLowerCase() === typed.toLowerCase());
+        if (twin) {
+          note.hidden = false;
+          note.textContent = `${twin.name} is already in the register. Choose them from the list.`;
+          return;
+        }
+        const { status, data: out } = await call('/api/finance-admin/parties', 'POST', { name: typed, kind: kindSel.value });
+        if (status !== 201) {
+          note.hidden = false;
+          note.textContent = out?.error ?? 'Could not add that.';
+          return;
+        }
+        addPartyEverywhere({ id: out.party.id, name: out.party.name, kind: out.party.kind });
+        box.hidden = true;
+        onAdded(out.party.id);
+        showToast(`${out.party.name} added to the register. Add their bank details on the Parties page.`);
+      }, 'button button--primary button--small');
+      box.replaceChildren(labelled('Name', nameInput), labelled('What kind of party', kindSel), note, h('div', { class: 'sheet-actions' }, add, button('Cancel', () => (box.hidden = true), 'button button--outline button--small')));
+      box.hidden = false;
+      nameInput.focus();
+    }
+
+    const sumPaise = () => rowsUi.reduce((n, r) => n + (parseRupees(r.amount.value) ?? 0), 0);
+    function refresh() {
+      const left = line.amountPaise - sumPaise();
+      remainingEl.textContent = left === 0 ? 'Adds up to the line. Ready to post.' : left > 0 ? `${rupees(left)} still to allocate.` : `${rupees(-left)} more than the line.`;
+      remainingEl.className = `remaining${left === 0 ? ' remaining--ok' : left < 0 ? ' remaining--over' : ''}`;
+      const closedUsed = rowsUi.some((r) => lk.closedMonths.some((m) => m.slice(0, 7) === r.period.value));
+      closedBox.hidden = !closedUsed;
+    }
+
+    function addRow(init: Partial<{ amountPaise: number; categoryId: string; partyId: string; nature: string; period: string; ruleId: string | null; source: string }> = {}) {
+      const amount = input('amount', { inputmode: 'decimal', placeholder: '0.00', 'aria-label': 'Amount' }) as HTMLInputElement;
+      amount.value = init.amountPaise ? (init.amountPaise / 100).toFixed(2) : '';
+      const category = categorySelect(lk.categories, { selected: init.categoryId ?? '' });
+      const party = partySelect(lk.parties, { selected: init.partyId ?? '' });
+      party.append(h('option', { text: 'Add a new party…', attrs: { value: NEW_PARTY } }));
+      const newBox = h('div', { class: 'stack-form new-party', attrs: { hidden: '' } });
+      party.addEventListener('change', () => {
+        if (party.value !== NEW_PARTY) {
+          newBox.hidden = true;
+          return;
+        }
+        party.value = '';
+        openNewParty(newBox, d.suggestion?.newParty?.name ?? '', d.suggestion?.newParty?.kind ?? (line.direction === 'credit' ? 'customer' : 'vendor'), (id) => {
+          party.value = id;
+          refresh();
+        });
+      });
+      partySelects.push(party);
+      const nature = input('nature', { placeholder: 'What it was for, in plain words' }) as HTMLInputElement;
+      nature.value = init.nature ?? '';
+      const period = input('period', { type: 'month', 'aria-label': 'Month it belongs to' }) as HTMLInputElement;
+      period.value = monthOf(init.period ?? line.date);
+      const project = lk.projects.length ? (h('select', { attrs: { name: 'project' } }, h('option', { text: 'Not part of a project', attrs: { value: '' } }), ...lk.projects.map((p) => h('option', { text: `${p.name} (${p.financial_year})`, attrs: { value: p.id } }))) as HTMLSelectElement) : null;
+      const reverses = d.reversible.length
+        ? (h('select', { attrs: { name: 'reverses' } }, h('option', { text: 'This is not a refund', attrs: { value: '' } }), ...d.reversible.map((r) => h('option', { text: `${niceDate(r.date)} · ${r.nature} · ${rupees(r.remainingPaise)} left`, attrs: { value: r.id } }))) as HTMLSelectElement)
+        : null;
+      const reason = input('reason', { placeholder: 'Why is it being refunded?' }) as HTMLInputElement;
+      const reasonBox = labelled('Reason', reason);
+      reasonBox.hidden = true;
+      // Maintenance is paid by anybody and allocated to a unit: the unit and the year it pays for are asked for when the category is maintenance.
+      const isMaintenance = () => lk.categories.find((c) => c.id === category.value)?.type === 'member_contribution';
+      const household = h('select', { attrs: { name: 'household' } }, h('option', { text: 'Choose the unit…', attrs: { value: '' } }), ...lk.households.map((x) => h('option', { text: x.label, attrs: { value: x.id } }))) as HTMLSelectElement;
+      const fyOf = (iso: string) => {
+        const start = Number(iso.slice(5, 7)) >= 4 ? Number(iso.slice(0, 4)) : Number(iso.slice(0, 4)) - 1;
+        return `${start}-${String((start + 1) % 100).padStart(2, '0')}`;
+      };
+      const year = input('maintenanceYear', { placeholder: '2025-26', 'aria-label': 'Maintenance year' }) as HTMLInputElement;
+      year.value = fyOf(line.date);
+      const unitBox = h('div', { class: 'stack-form alloc-top' }, labelled('Unit', household), labelled('Maintenance year', year));
+      unitBox.hidden = !isMaintenance();
+      category.addEventListener('change', () => (unitBox.hidden = !isMaintenance()));
+      const normal = h('div', { class: 'stack-form' }, labelled('Category', category), labelled('Party', party), newBox, unitBox, labelled('What it was for', nature), project ? labelled('Project', project) : null);
+      const el = h('fieldset', { class: 'alloc-edit' });
+      const ui: RowUi = { el, household, year, unitBox, amount, category, party, nature, period, project, reverses, reason, ruleId: init.ruleId ?? null, source: init.source ?? 'manual' };
+      reverses?.addEventListener('change', () => {
+        const refund = Boolean(reverses.value);
+        normal.hidden = refund;
+        reasonBox.hidden = !refund;
+        if (refund) {
+          const target = d.reversible.find((r) => r.id === reverses.value);
+          if (target && !parseRupees(amount.value)) amount.value = (Math.min(target.remainingPaise, line.amountPaise) / 100).toFixed(2);
+          refresh();
+        }
+      });
+      for (const f of [amount, period]) f.addEventListener('input', refresh);
+      el.append(
+        ...[
+        h('div', { class: 'stack-form alloc-top' }, labelled('Amount (₹)', amount), labelled('Month', period), rowsUi.length ? button('Remove', () => { rowsUi.splice(rowsUi.indexOf(ui), 1); el.remove(); refresh(); }, 'button button--outline button--small') : h('span')),
+        reverses ? h('div', { class: 'stack-form' }, labelled('Refund of', reverses)) : null,
+        h('div', { class: 'stack-form' }, reasonBox),
+        normal,
+        ].filter((n): n is HTMLElement => n !== null),
+      );
+      rowsUi.push(ui);
+      rowsBox.append(el);
+      refresh();
+      return ui;
+    }
+
+    // Start from the rule's suggestion when there is one, otherwise a blank row for the whole line.
+    const p = d.proposal;
+    addRow({ amountPaise: line.amountPaise, categoryId: p?.categoryId ?? '', partyId: p?.partyId ?? '', nature: p?.nature ?? '', ruleId: p?.ruleId ?? null, source: p?.source === 'rule' ? 'rule' : p?.source === 'upi_remark' ? 'upi_remark' : 'manual' });
+    // A name in the narration that is not in the register: open the add-party form for the first row, ready to confirm.
+    if (d.suggestion?.newParty && !p?.partyId) {
+      const first = rowsUi[0].party;
+      first.value = NEW_PARTY;
+      first.dispatchEvent(new Event('change'));
+    }
+    const why = d.reasons.map((r) => d.reasonLabels[r]).filter(Boolean);
+
+    async function submit(post: boolean) {
+      msg.hidden = true;
+      const payload = rowsUi.map((r) => ({
+        amountPaise: parseRupees(r.amount.value) ?? 0,
+        period: r.period.value ? `${r.period.value}-01` : undefined,
+        ...(r.reverses?.value ? { reversesAllocationId: r.reverses.value, reversalReason: r.reason.value, nature: r.nature.value } : { categoryId: r.category.value, partyId: r.party.value || null, projectId: r.project?.value || null, nature: r.nature.value, ruleId: r.ruleId, source: r.source, ...(r.unitBox.hidden ? {} : { householdId: r.household.value || null, maintenanceYear: r.year.value.trim() || null }) }),
+      }));
+      const { status, data: out } = await call(`/api/finance-admin/ledger/${line.id}/allocations`, 'POST', { rows: payload, post, overrideReason: closedReason.value });
+      if (status === 200) {
+        dlg.close();
+        showToast(post ? 'Posted.' : 'Draft saved.');
+        void load();
+      } else {
+        msg.hidden = false;
+        msg.textContent = out?.error ?? 'Could not save that.';
+      }
+    }
+
+    const wrap = h(
+      'div',
+      { class: 'editor' },
+      suggestionNote(d),
+      why.length ? h('p', { class: 'note', text: `${why.join('. ')}.` }) : null,
+      rowsBox,
+      h('div', { class: 'editor-tools' }, button('Add another row', () => { const left = line.amountPaise - sumPaise(); addRow({ amountPaise: left > 0 ? left : undefined }); })),
+      remainingEl,
+      closedBox,
+      msg,
+      h('div', { class: 'sheet-actions' }, button('Cancel', () => dlg.close()), button('Save draft', () => void submit(false)), button('Post', () => void submit(true), 'button button--primary')),
+    );
+    refresh();
+    return wrap;
+  }
+
 
   // ---- months: what is left in each, and closing one once everything in it is posted and checked
   type Month = { month: string; status: 'open' | 'closed'; unallocated: number; review: number };
@@ -461,7 +742,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     const check = h('input', { attrs: { type: 'checkbox', 'aria-label': `Select ${who}` } }) as HTMLInputElement;
     check.addEventListener('click', (e) => pick(l.id, (e as MouseEvent).shiftKey));
     const narr = h('button', { class: 'narr', text: l.narration, attrs: { type: 'button', title: l.narration } }) as HTMLButtonElement;
-    narr.addEventListener('click', () => window.open(`/internal/finance/ledger/?q=${encodeURIComponent(l.narration.slice(0, 40))}&filter=all`, '_blank'));
+    narr.addEventListener('click', () => void openLine(l.id));
     const details = h('span', { class: 'detail' });
 
     const cat = categorySelect(lk.categories, { selected: '', blank: 'Choose…' }) as HTMLSelectElement;
@@ -924,6 +1205,98 @@ import SignInGate from '../../../components/SignInGate.astro';
     font-size: var(--text-sm);
     font-weight: 600;
     color: var(--tvc-ink-soft);
+  }
+
+  .lnext.section dialog.sheet {
+    width: min(620px, calc(100vw - 32px));
+    max-height: calc(100dvh - 48px);
+    overflow-y: auto;
+  }
+
+  .lnext.section dialog.sheet .sheet-actions {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .lnext .sheet .hint,
+  .lnext .sheet .note {
+    margin: 10px 0;
+    font-size: var(--text-sm);
+  }
+
+
+  .lnext .suggest-note {
+    margin: 10px 0;
+  }
+
+  .lnext .suggest-note .field-label {
+    margin: 0 0 4px;
+    font-size: var(--text-sm);
+    font-weight: 600;
+  }
+
+  .lnext .why {
+    margin: 0;
+    padding-left: 1.2em;
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  .lnext .new-party {
+    padding: 10px 12px;
+    border: 1px dashed var(--tvc-line-strong);
+    border-radius: var(--radius-sm);
+  }
+
+  .lnext .alloc-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .lnext .alloc-edit {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 0;
+    padding: 12px 14px;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius-sm);
+  }
+
+  .lnext .alloc-edit .alloc-top.stack-form {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 10px;
+  }
+
+  .lnext .alloc-edit .alloc-top.stack-form > label {
+    flex: 1 1 9rem;
+  }
+
+  .lnext .editor-tools {
+    margin: 12px 0 0;
+  }
+
+  .lnext .remaining {
+    margin: 12px 0 0;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .lnext .remaining--ok {
+    color: var(--tvc-green);
+  }
+
+  .lnext .remaining--over {
+    color: var(--tvc-error-text);
+  }
+
+  @media (max-width: 560px) {
+    .lnext.section dialog.sheet .sheet-actions .button {
+      flex: 1 1 auto;
+    }
   }
 
   .lnext .sortpick {

@@ -117,6 +117,7 @@ export const REVIEW_REASONS = {
   rule_requires_review: 'A rule that is always reviewed',
   import_approximate: 'Matched to the bank line approximately when the history was loaded: check the date and amount',
   no_party: 'No party: say who paid or was paid',
+  no_unit: 'Maintenance with no unit: say which unit it is for',
 };
 
 /**
@@ -144,6 +145,7 @@ export function reviewReasons(ctx) {
   if (ctx.categoryType === 'reimbursement' && !ctx.hasVoucher) reasons.push('reimbursement_without_bill');
   if (proposal.needsReview) reasons.push('rule_requires_review');
   if (!proposal.partyId && ctx.partyNeeded === true) reasons.push('no_party');
+  if (!proposal.householdId && ctx.unitNeeded === true) reasons.push('no_unit');
   return reasons;
 }
 

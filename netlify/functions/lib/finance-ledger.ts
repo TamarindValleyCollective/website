@@ -84,14 +84,16 @@ const audit = (actorId: string, entity: string, action: string, target: string |
 // Everything a screen needs to fill its pickers. Names only; no bank details.
 const lookups = () => cached('lookups', loadLookups);
 async function loadLookups() {
-  const [categories, parties, projects, entities, closed] = await Promise.all([
+  const [categories, parties, projects, entities, closed, households] = await Promise.all([
     rows('/fin_categories?select=id,name,type,active&order=type.asc,name.asc'),
     rowsAll('/fin_parties?select=id,name,kind&active=eq.true&merged_into=is.null&order=name.asc,id.asc'),
     rows('/fin_projects?select=id,name,kind,financial_year,status&order=financial_year.desc,name.asc'),
     rows('/fin_entities?select=id,requester_party_id&order=created_at.asc&limit=1'),
     rows('/fin_periods?select=month&status=eq.closed'),
+    rowsAll('/member_households?select=id,farm_unit,house_no&order=farm_unit.asc,id.asc'),
   ]);
   return {
+    households: households.map((x) => ({ id: x.id as string, label: [x.farm_unit, x.house_no].filter(Boolean).join(' · ') })),
     categories,
     parties,
     projects,
@@ -396,7 +398,7 @@ export async function ledgerLine(req: Request, lineId: string): Promise<Response
     const [line] = await rows(`/fin_bank_lines?id=eq.${lineId}&select=id,bank_account_id,tran_date,narration,direction,amount_paise`);
     if (!line) return fail('That line does not exist.', 404);
     const [upi] = await rows(`/fin_upi_lines?bank_line_id=eq.${lineId}&select=counterparty,remarks,is_circle,upi_ref`);
-    const allocations = await rows(`/fin_allocations?bank_line_id=eq.${lineId}&select=id,party_id,category_id,project_id,amount_paise,period,nature,remarks,source,rule_id,review_state,review_reason,reverses_allocation_id,reversal_reason,posted_at&order=created_at.asc`);
+    const allocations = await rows(`/fin_allocations?bank_line_id=eq.${lineId}&select=id,party_id,category_id,project_id,amount_paise,period,nature,remarks,source,rule_id,review_state,review_reason,reverses_allocation_id,reversal_reason,household_id,maintenance_year,posted_at&order=created_at.asc`);
     const ctx = await lookups();
     const { lines: everyLine, byLine } = await loadLedger(null, null);
     const sc = await suggestionContext(everyLine, byLine, ctx);
@@ -432,6 +434,8 @@ export async function ledgerLine(req: Request, lineId: string): Promise<Response
         source: a.source,
         reviewState: a.review_state,
         reviewReason: a.review_reason,
+        householdId: a.household_id ?? null,
+        maintenanceYear: a.maintenance_year ?? null,
         reversesAllocationId: a.reverses_allocation_id,
         reversalReason: a.reversal_reason,
         posted: Boolean(a.posted_at),
@@ -470,6 +474,7 @@ async function saveLine(staff: { id: string }, capabilities: string[], lineId: s
   const categoryById = new Map(ctx.categories.map((c) => [c.id as string, c]));
   const partyIds = new Set(ctx.parties.map((p) => p.id as string));
   const projectIds = new Set(ctx.projects.map((p) => p.id as string));
+  const householdIds = new Set(ctx.households.map((x) => x.id as string));
   const upi = shared ? shared.upiOf.get(lineId) : (await rows(`/fin_upi_lines?bank_line_id=eq.${lineId}&select=counterparty,remarks,is_circle`))[0];
   const rc = shared?.rc ?? (await reviewContext(ctx));
   const requesterIds = ctx.requesterPartyId ? [ctx.requesterPartyId] : [];
@@ -480,7 +485,7 @@ async function saveLine(staff: { id: string }, capabilities: string[], lineId: s
   for (const [i, r] of inputRows.entries()) {
     if (r.reversesAllocationId) {
       if (!LEDGER_ID.test(String(r.reversesAllocationId))) return { ok: false, status: 400, error: `Row ${i + 1}: choose what to reverse.` };
-      const [orig] = await rows(`/fin_allocations?id=eq.${r.reversesAllocationId}&select=id,party_id,category_id,project_id,amount_paise,nature,reverses_allocation_id,posted_at,bank_line_id`);
+      const [orig] = await rows(`/fin_allocations?id=eq.${r.reversesAllocationId}&select=id,party_id,category_id,project_id,amount_paise,nature,reverses_allocation_id,posted_at,bank_line_id,household_id,maintenance_year`);
       if (!orig || !orig.posted_at) return { ok: false, status: 400, error: `Row ${i + 1}: that allocation cannot be reversed.` };
       const [origLine] = await rows(`/fin_bank_lines?id=eq.${orig.bank_line_id}&select=direction`);
       const prior = await rows(`/fin_allocations?reverses_allocation_id=eq.${orig.id}&select=amount_paise`);
@@ -488,7 +493,7 @@ async function saveLine(staff: { id: string }, capabilities: string[], lineId: s
       const check = planReversal({ ...orig, direction: origLine?.direction }, [...prior, { amount_paise: siblings }], line, { amountPaise: r.amountPaise, reason: r.reversalReason });
       if (!check.ok) return { ok: false, status: 400, error: `Row ${i + 1}: ${check.errors[0]}` };
       reversalChecks.push(orig.id);
-      prepared.push({ ...r, categoryId: orig.category_id, partyId: orig.party_id, projectId: orig.project_id, nature: String(r.nature ?? '').trim() || `Reversal: ${orig.nature}`, source: 'manual' });
+      prepared.push({ ...r, categoryId: orig.category_id, partyId: orig.party_id, projectId: orig.project_id, householdId: orig.household_id, maintenanceYear: orig.maintenance_year, nature: String(r.nature ?? '').trim() || `Reversal: ${orig.nature}`, source: 'manual' });
     } else prepared.push({ ...r, source: ['manual', 'rule', 'upi_remark'].includes(r.source) ? r.source : 'manual' });
   }
 
@@ -499,6 +504,8 @@ async function saveLine(staff: { id: string }, capabilities: string[], lineId: s
     if (!category || (!category.active && !r.reversesAllocationId)) return { ok: false, status: 400, error: `Row ${i + 1}: choose an active category.` };
     if (r.partyId && !partyIds.has(r.partyId) && !r.reversesAllocationId) return { ok: false, status: 400, error: `Row ${i + 1}: that party is not in the register.` };
     if (r.projectId && !projectIds.has(r.projectId)) return { ok: false, status: 400, error: `Row ${i + 1}: that project does not exist.` };
+    if (r.householdId && !r.reversesAllocationId && !householdIds.has(r.householdId)) return { ok: false, status: 400, error: `Row ${i + 1}: that unit does not exist.` };
+    if (r.maintenanceYear && !/^\d{4}-\d{2}$/.test(String(r.maintenanceYear))) return { ok: false, status: 400, error: `Row ${i + 1}: the maintenance year looks like 2025-26.` };
   }
 
   // A closed month needs close-period and a reason.
@@ -520,12 +527,13 @@ async function saveLine(staff: { id: string }, capabilities: string[], lineId: s
       reasons = reviewReasons({
         line,
         upi: upi ?? null,
-        proposal: { partyId: r.partyId ?? null, categoryId: r.categoryId, source: r.source, needsReview: Boolean(rule?.needs_review) },
+        proposal: { partyId: r.partyId ?? null, categoryId: r.categoryId, source: r.source, needsReview: Boolean(rule?.needs_review), householdId: r.householdId ?? null },
         requesterPartyIds: requesterIds,
         partyAccountState: rc.stateOfParty(r.partyId ?? null),
         categoryType: categoryById.get(r.categoryId)?.type,
         hasVoucher: false,
         partyNeeded: partyNeeded(categoryById.get(r.categoryId)),
+        unitNeeded: categoryById.get(r.categoryId)?.type === 'member_contribution',
       });
     }
     for (const x of reasons) reasonCounts[x] = (reasonCounts[x] ?? 0) + 1;
@@ -543,6 +551,8 @@ async function saveLine(staff: { id: string }, capabilities: string[], lineId: s
       review_reason: reasons.length ? reasons.join(',') : null,
       reverses_allocation_id: r.reversesAllocationId ?? null,
       reversal_reason: r.reversesAllocationId ? r.reason ?? r.reversalReason : null,
+      household_id: r.householdId || null,
+      maintenance_year: r.maintenanceYear ? String(r.maintenanceYear) : null,
     };
   });
 
