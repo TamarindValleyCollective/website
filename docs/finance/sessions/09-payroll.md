@@ -6,6 +6,50 @@
 Compute salaries from attendance, get them confirmed and approved by two people, generate the bank's
 bulk-payment file, and split the single bank debit automatically.
 
+## Decisions (2026-11-05, with the owner)
+- **Built in this finance module**, not in the separate ERP: it reuses parties, verified payee accounts and the ledger. The
+  ERP's employee policy and financial-operations documents remain the requirements source.
+- **Split in two.** **09a** records and pays the run: the farm manager enters each person's *net* amount for the month in the
+  app, a director reviews, the farm manager confirms, the file is generated, and the bank debit is matched. **09b** adds
+  attendance and the pay arithmetic. 09b waits for the policy gaps the employee policy lists (rounding, work on a weekly
+  off, what counts as full attendance, advances); until then the farm manager keeps working the pay out in his own sheet
+  and 09a records the result, with optional fields for agreed pay, days worked and advance deducted so nothing needs
+  re-entering later.
+- **People (roles, no names here):** the farm manager enters and confirms; the preparer (a director) reviews and generates the
+  file; a second director approves in the bank's portal and is also an approver in the app (`approve-payroll`, never the
+  preparer). Salary pages are for these three only.
+- **Today's process this replaces:** the farm manager fills a shared sheet (one tab per month, one row per person), the preparer
+  copies it into a local Excel file for the bank's bulk portal, sends a screenshot of the uploaded batch to the farm manager for
+  confirmation, then asks the second director to approve in the bank's maker-checker.
+- **Why the confirmation step exists:** a bank merger changed a payee's account while the old number stayed in the file; the money
+  left and was never credited. So the file may use only *verified* payee accounts, the confirmation lists exactly what will be
+  in the file (accounts as last four digits), and "account changed since the last run" is shown loudly.
+- **Facts to design for:** the bank settles the batch as ONE debit (the ledger already holds it as one allocation per person on
+  that line, entered by hand from the tracker); the statement narration does not say "salary", so match on the total and the
+  date window, never the text; a payment date that differs from the processing date makes the portal reject the whole batch, so
+  validate it; two people can share one bank account (two parties on one payee account); a returned payment is a refund of that
+  one person's allocation.
+- **Build order for 09a:** (1) import the existing monthly tabs as history runs, which also gives the salary allocations their
+  party; (2) the run screens and the file export; (3) settlement matching and returns.
+- **The upload file's layout (read from a real file, 2026-11-05; the file itself stays outside the repo).** No header row; data
+  starts in row 1, one row per person, columns A to L (M to O blank). A: payment mode, `N`. B: amount in **whole rupees** (a number).
+  C: payment date as **text** `dd-mm-yyyy` (the 1st of the following month). D: beneficiary name. E: beneficiary account number,
+  stored as a **number**. F: beneficiary e-mail. G: narration `<Mon YYYY> Salary`. H: the company's debit account number, the same
+  on every row (**not stored by the ledger, which keeps only last four digits: it needs a server-side setting**). I: reference
+  `<YYYY>-<Mon>-Employee-<nnn>` (a sequence per row). J: beneficiary IFSC. K: a constant, `10`. L: `Salary for <Mon YYYY>`. Columns P
+  to S of the working sheet (a reference account and IFSC, and `-1` flags where they differ from E and J) are the preparer's own
+  account-change check; they are not part of the upload and were empty in the file read, so the check flagged every row.
+  Observed slips the generator removes: the tab name, the file name and the narration disagreed about the month (a file named for
+  one month held the next month's run), because the month is typed in three places today.
+- **Design consequences:** the net amount is entered in whole rupees (this settles the rounding of the payout, not of the
+  per-day rate); the generator writes C as text and E as a number (an account starting with 0 would lose it, so such an account
+  is written as text and flagged); G, I and L come from the month, never typed.
+- **Confirmed by the owner (2026-11-05):** the portal accepts the file as laid out, and the generator writes columns A to L only (the
+  helper columns are not part of it). `K` is always `10`: keep it as a setting, with no meaning needed. `A` is the payment mode:
+  `N` (NEFT) by default and always so far; the other value the portal offers is `I`. So the run carries a payment mode that
+  defaults to `N`, and the generator accepts `N` or `I` only. Not confirmed: whether the transfer method chosen at upload
+  overrides column A; the export must not assume either way (the preparer still checks it in the portal as today).
+
 ## Read first
 `DESIGN.md` (Payroll, fin_employees and related tables, Access); the sessions 04 and 05 notes; the payroll
 workbook layout as described in `FINANCE.md`.

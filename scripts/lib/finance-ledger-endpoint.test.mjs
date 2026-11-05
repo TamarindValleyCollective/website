@@ -35,6 +35,7 @@ const CAT_OPEX = ID(11);
 const CAT_OPEX_2 = ID(12);
 const CAT_CAPEX = ID(13);
 const CAT_REIMB = ID(14);
+const CAT_MAINT = ID(60);
 const P_NURSERY = ID(21);
 const P_MANAGER = ID(22);
 const L_DEBIT = ID(31); // 1,000.00 debit, 31 Oct 2026
@@ -112,7 +113,7 @@ globalThis.fetch = async (url, init = {}) => {
     db.rpc.push({ name: 'merge', body });
     return json(7);
   }
-  if (table.startsWith('fin_')) {
+  if (table.startsWith('fin_') || table === 'member_households') {
     const rows = db[table] ?? [];
     if (method === 'GET') {
       db.calls[table] = (db.calls[table] ?? 0) + 1;
@@ -145,10 +146,12 @@ const reset = () => {
       { id: CAT_OPEX_2, name: 'Tools and small equipment', type: 'opex', active: true },
       { id: CAT_CAPEX, name: 'Equipment and machinery', type: 'capex', active: true },
       { id: CAT_REIMB, name: 'Reimbursements', type: 'reimbursement', active: true },
+      { id: CAT_MAINT, name: 'Member maintenance', type: 'member_contribution', active: true },
     ],
     fin_parties: [{ id: P_NURSERY, name: 'Green Nursery', kind: 'vendor', active: true, merged_into: null }, { id: P_MANAGER, name: 'Test Manager', kind: 'employee', active: true, merged_into: null }],
     fin_party_accounts: [{ party_id: P_NURSERY, status: 'verified', retired_on: null }, { party_id: P_MANAGER, status: 'unverified', retired_on: null }],
     fin_projects: [],
+    member_households: [{ id: ID(90), farm_unit: 'F-01', house_no: 'H-10' }],
     fin_rules: [],
     fin_periods: [{ month: '2026-09-01', status: 'closed' }],
     fin_bank_accounts: [{ id: ID(2), label: 'Test current' }],
@@ -169,8 +172,9 @@ const sign = (id, role) => {
   db.roles.push({ staff_id: id, module: 'finance', role, scope: null, expires_at: null });
   return email;
 };
-const api = (email, path, { method = 'GET', body } = {}) =>
-  handler(new Request(`https://x.test/api/finance-admin${path}`, { method, headers: { authorization: `Bearer ${email}`, ...(body ? { 'content-type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined }));
+// Reads ask for fresh data (`fresh=1`), as the pages do after a post; the cache itself is tested on its own below.
+const api = (email, path, { method = 'GET', body, cache = false } = {}) =>
+  handler(new Request(`https://x.test/api/finance-admin${path}${method === 'GET' && !cache ? `${path.includes('?') ? '&' : '?'}fresh=1` : ''}`, { method, headers: { authorization: `Bearer ${email}`, ...(body ? { 'content-type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined }));
 const quiet = async (fn) => {
   const orig = console.error;
   console.error = () => {};
@@ -585,7 +589,88 @@ test('a batch reads the lookups once, not once per line', async () => {
   assert.equal(out.posted, 12);
   assert.equal(db.calls.fin_categories, 1);
   assert.ok((db.calls.fin_rules ?? 0) <= 1);
-  assert.ok((db.calls.fin_party_accounts ?? 0) <= 1);
+  assert.ok((db.calls.fin_party_accounts ?? 0) <= 3, 'one read of the table, which asks for up to three pages together');
+});
+
+// ---- the short-lived cache behind the list
+test('the list is served from a short cache, and fresh=1 or any write drops it', async () => {
+  reset();
+  const op = sign('u1', 'user');
+  const first = await (await api(op, '/ledger?filter=all', { cache: true })).json();
+  db.fin_bank_lines.push({ id: ID(95), entity_id: E, bank_account_id: ID(2), tran_date: '2026-11-03', narration: 'NEFT/Late arrival', direction: 'debit', amount_paise: 1000 });
+  const cached = await (await api(op, '/ledger?filter=all', { cache: true })).json();
+  assert.equal(cached.total, first.total, 'a second read in the window does not go back to the database');
+  const fresh = await (await api(op, '/ledger?filter=all')).json();
+  assert.equal(fresh.total, first.total + 1, 'fresh=1 reads again');
+  db.fin_bank_lines.pop();
+  await api(op, '/ledger/post', { method: 'POST', body: { items: [] } });
+  const afterWrite = await (await api(op, '/ledger?filter=all', { cache: true })).json();
+  assert.equal(afterWrite.total, first.total, 'a write drops the cache');
+});
+
+// ---- the unit and year of maintenance
+const saveRows = (op, lineId, rows, post = true) => api(op, `/ledger/${lineId}/allocations`, { method: 'POST', body: { rows, post } });
+test('maintenance is saved against a unit and a year, and without a unit it is flagged', async () => {
+  reset();
+  const op = sign('u1', 'user');
+  const base = { amountPaise: 100000, categoryId: CAT_MAINT, partyId: P_NURSERY, nature: 'Maintenance for the unit' };
+  assert.equal((await saveRows(op, L_DEBIT, [{ ...base, householdId: ID(90), maintenanceYear: '2025-26' }])).status, 200);
+  const saved = db.fin_allocations.find((x) => x.bank_line_id === L_DEBIT);
+  assert.equal(saved.review_state, 'ok');
+  assert.equal(saved.household_id, ID(90));
+  assert.equal(saved.maintenance_year, '2025-26');
+  assert.equal((await saveRows(op, L_CIRCLE, [{ ...base, amountPaise: 40000 }])).status, 200);
+  const bare = db.fin_allocations.find((x) => x.bank_line_id === L_CIRCLE);
+  assert.equal(bare.review_state, 'needs_review', 'maintenance with no unit goes to review');
+  assert.match(bare.review_reason, /no_unit/);
+});
+
+test('a unit that does not exist, or a year that is not like 2025-26, is refused', async () => {
+  reset();
+  const op = sign('u1', 'user');
+  const base = { amountPaise: 100000, categoryId: CAT_MAINT, partyId: P_NURSERY, nature: 'Maintenance' };
+  assert.equal((await saveRows(op, L_DEBIT, [{ ...base, householdId: ID(99) }])).status, 400);
+  assert.equal((await saveRows(op, L_DEBIT, [{ ...base, householdId: ID(90), maintenanceYear: '2025' }])).status, 400);
+});
+
+// ---- every line at once, for pages that sort and search in the browser
+test('/ledger/all returns every line with what it was posted to or is suggested, and no paging', async () => {
+  reset();
+  db.fin_bank_lines.push(...bulkLines(1200, '2026-07', 100));
+  const op = sign('u1', 'user');
+  const out = await (await api(op, '/ledger/all')).json();
+  assert.equal(out.lines.length, db.fin_bank_lines.length, 'more than the 1,000 rows the database returns per request');
+  const line = out.lines.find((l) => l.id === L_DEBIT);
+  assert.equal(line.effective.party, 'Green Nursery', 'a suggestion fills what the column searches read');
+  assert.equal(line.state, 'unallocated');
+  assert.ok(out.lookups.categories.length > 0);
+});
+
+// ---- missing parties, households and the Paytm line (what a posted line shows)
+test('a posted line with no party is found under "No party", unless its category needs none; maintenance shows its unit and year', async () => {
+  reset();
+  addBankCategory();
+  const op = sign('u1', 'user');
+  const at = '2026-10-01T00:00:00Z';
+  db.fin_allocations.push(
+    { id: ID(201), bank_line_id: L_DEBIT, party_id: null, category_id: CAT_MAINT, amount_paise: 100000, nature: 'Maintenance', posted_at: at, review_state: 'ok', household_id: ID(90), maintenance_year: '2025-26' },
+    { id: ID(202), bank_line_id: L_CIRCLE, party_id: null, category_id: CAT_BANK, amount_paise: 40000, nature: 'Charges', posted_at: at, review_state: 'ok' },
+  );
+  const out = await (await api(op, '/ledger?filter=noparty')).json();
+  assert.equal(out.counts.noparty, 1, 'bank charges need no party');
+  assert.deepEqual(out.lines.map((l) => l.id), [L_DEBIT]);
+  assert.equal(out.lines[0].missingParty, true);
+  assert.equal(out.lines[0].allocation.householdLabel, 'F-01 · H-10');
+  assert.equal(out.lines[0].allocation.maintenanceYear, '2025-26');
+});
+
+test('saving an allocation with no party flags it for review, except where none is needed', async () => {
+  reset();
+  addBankCategory();
+  const op = sign('u1', 'user');
+  const out = await (await postBatch(op, [batchItem(L_DEBIT, { partyId: null, categoryId: CAT_OPEX, nature: 'Plants' }), batchItem(L_REFUND, { partyId: null, categoryId: CAT_BANK, nature: 'Charges' })])).json();
+  assert.equal(out.posted, 2);
+  assert.equal(out.flagged, 1, 'only the one that should name a party');
 });
 
 // ---- column search and sort (docs/finance/FINANCE.md, "The table")

@@ -31,7 +31,11 @@ import SignInGate from '../../../components/SignInGate.astro';
         <h2 class="list-title">Categories</h2>
         <button type="button" id="add-category" class="button button--outline" hidden>Add category</button>
       </div>
-      <ul class="list" id="categories"></ul>
+      <label class="field cat-search">
+        <span class="visually-hidden">Search categories</span>
+        <input id="cat-q" type="search" placeholder="Search categories" autocomplete="off" />
+      </label>
+      <div id="categories"></div>
 
       <div class="head-row">
         <h2 class="list-title">Who raises payment requests</h2>
@@ -150,6 +154,12 @@ import SignInGate from '../../../components/SignInGate.astro';
     return `When ${when.join(' and ')}`;
   }
 
+  let catQuery = '';
+  $<HTMLInputElement>('cat-q').addEventListener('input', (e) => {
+    catQuery = (e.target as HTMLInputElement).value;
+    render();
+  });
+
   function render() {
     if (!data) return;
     const { canConfigure, rules, lookups } = data;
@@ -171,6 +181,7 @@ import SignInGate from '../../../components/SignInGate.astro';
                 else showToast(out?.error ?? 'Could not change that.');
               }, 'button button--outline button--small')
             : null;
+          toggle?.setAttribute('aria-label', `${r.active ? 'Turn off' : 'Turn on'} the rule: ${describe(r)}`);
           const main = h(
             canConfigure ? 'button' : 'div',
             { class: 'rule-main', attrs: canConfigure ? { type: 'button' } : {} },
@@ -183,20 +194,26 @@ import SignInGate from '../../../components/SignInGate.astro';
       );
     }
 
+    // Grouped by kind (running costs, member contributions...), with a search, so thirty categories are not one long list.
+    const needle = catQuery.trim().toLowerCase();
+    const shown = lookups.categories.filter((c) => !needle || c.name.toLowerCase().includes(needle) || typeLabel(c.type).toLowerCase().includes(needle));
+    const kinds = [...new Set(shown.map((c) => c.type))];
     $('categories').replaceChildren(
-      ...lookups.categories.map((c) =>
+      ...(shown.length ? [] : [h('p', { class: 'hint', text: 'No category matches that.' })]),
+      ...kinds.flatMap((kind) => [
+        h('h3', { class: 'group-title', text: typeLabel(kind) }),
         h(
-          'li',
-          {},
-          h(
-            'div',
-            { class: `row${c.active ? '' : ' is-off'}` },
-            h('span', { class: 'grow' }, h('span', { class: 'title', text: c.name }), h('span', { class: 'detail', text: typeLabel(c.type) })),
-            c.active ? null : pill('Retired'),
-            canConfigure ? button('Change', () => openCategory(c), 'button button--outline button--small') : null,
-          ),
+          'ul',
+          { class: 'list' },
+          ...shown
+            .filter((c) => c.type === kind)
+            .map((c) => {
+              const change = canConfigure ? (button('Change', () => openCategory(c), 'button button--outline button--small') as HTMLElement) : null;
+              change?.setAttribute('aria-label', `Change ${c.name}`);
+              return h('li', {}, h('div', { class: `row${c.active ? '' : ' is-off'}` }, h('span', { class: 'grow' }, h('span', { class: 'title', text: c.name })), c.active ? null : pill('Retired'), change));
+            }),
         ),
-      ),
+      ]),
     );
 
     const card = $('requester-card');
@@ -250,7 +267,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       labelled('Then suggest the category', category),
       labelled('and the party', party),
       labelled('and the wording (you can use {counterparty} and {remark})', nature),
-      labelled('Priority (1 goes first)', priority),
+      h('details', { attrs: existing && existing.priority !== 100 ? { open: '' } : {} }, h('summary', { text: 'Advanced' }), labelled('Priority (1 goes first; leave it at 100 if unsure)', priority)),
       h('label', {}, review, h('span', { text: 'Always send lines this rule explains to review' })),
       msg,
       h('div', { class: 'sheet-actions' }, button('Cancel', () => dlg.close()), h('button', { class: 'button button--primary', text: existing ? 'Save rule' : 'Add rule', attrs: { type: 'submit' } })),
@@ -367,6 +384,36 @@ import SignInGate from '../../../components/SignInGate.astro';
 
   .rules .head-row:first-child {
     margin-top: 6px;
+  }
+
+  /* Tick boxes in the rule and category sheets were 12px; phones get finger-sized buttons. */
+  main .rules.section .stack-form input[type='checkbox'] {
+    width: 1.6rem;
+    height: 1.6rem;
+  }
+
+  /* More specific than the shell's own small-button rule (main .button--small), which otherwise wins. */
+  @media (max-width: 900px), (pointer: coarse) {
+    main .rules.section .button--small {
+      min-height: 44px;
+    }
+  }
+
+  .rules .group-title {
+    margin: 18px 0 6px 14px;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--tvc-ink-soft);
+  }
+
+  .rules .cat-search {
+    margin: 8px 0 0;
+  }
+
+  .rules details summary {
+    cursor: pointer;
+    font-weight: 600;
+    padding: 4px 0;
   }
 
   .rules .list-title {

@@ -14,8 +14,9 @@ model are in [DESIGN.md](DESIGN.md); how to build it is in [README.md](README.md
 | 01 follow-up | `0078_finance_categories_and_projects.sql` **applied to TVC ERP on 2026-11-02**. |
 | 03 Statement import | Built on branch `finance-03-statement-import` (draft PR). Migration `0080` **applied to TVC ERP on 2026-11-02**. |
 | 04 Parties & payees | Built on branch `finance-04-parties` (draft PR). Migration `0079` **applied to TVC ERP on 2026-11-02** (recorded as `finance_parties`); checked afterwards: both tables empty, RLS on, no anon/authenticated grants, guard trigger present. |
-| 05 Ledger & review | **Built, draft PR #529** (branch `worktree-finance-05-ledger`): posting rules, rules engine, ledger and rules screens, period close. Migration `0083` **applied to TVC ERP on 2026-11-05** (recorded as `finance_ledger`). Running locally against the real database; nothing allocated yet. |
-| 06 History load | **In progress** on branch `worktree-finance-06-history`: the tracker is read and matched to the bank lines (dry run only); nothing is written. |
+| 05 Ledger & review | **Merged (PR #529).** Posting rules, rules engine, ledger and rules screens, period close. Migration `0083` **applied to TVC ERP on 2026-11-05** (recorded as `finance_ledger`). |
+| 06 History load | **Loaded on 2026-11-05** (PR #530, migration `0084` applied): 1,031 allocations on 783 bank lines. Still open: the 2023-24 tracker tab, party on the history rows with none (the "No party" chip lists them), project details for the Farm Project placeholders (issue #531). |
+| 05/06 follow-up: the new ledger | **Draft PR #532.** The ledger page is rebuilt (TanStack Table and Virtual; every line fetched once, searched and sorted in the browser; cards on phones; saved drafts; undo; a line sheet that can set a maintenance unit and year) and replaces the first version at `/internal/finance/ledger/`; faster list, Paytm line, "No party" chip and flags. Critique 22 → 26 → 30 → 27 / 40 over four rounds (reviewers vary by about 3). No migration. Not yet tried on the real ledger. |
 | 02, 07-13 | Not started |
 
 ## Access
@@ -307,6 +308,8 @@ shapes), used by `lib/finance-ledger.ts`. It only proposes; a person posts, and 
 
 ## The table (the Ledger's list view, session 05 follow-up)
 
+> **Update (2026-11-05):** the page no longer asks the server to search or sort: it fetches every line once (`GET /api/finance-admin/ledger/all`) and applies the same rules from `scripts/lib/finance-columns.mjs` in the browser. The server's `GET /ledger` list route and its column handling remain (tested), but nothing uses them now; remove them in a later change once the new page has been used on real data. The notes below under "After the first UX audit" describe the current page.
+
 Modelled on how ServiceNow lists work, because the sheet's convenience was selecting many lines and giving them details at once.
 
 - **Rows and cells.** One row per bank line: date, narration (click it to open the line), amount, **category**, **party**, **what it was
@@ -349,6 +352,63 @@ Modelled on how ServiceNow lists work, because the sheet's convenience was selec
     quietly ignored). The chips' counts are for the lines that remain after the conditions, so they say how many of THESE still need you.
 - **Not done:** column chooser, grouping by month, saved filters, a Status search box (the chips cover it); drafts are not saved on the
   server (the earlier `Save draft` of the sheet still is).
+
+### After the first UX audit (2026-11-05)
+- **Paytm under the narration.** What the UPI report says about a payment (who, and the remark typed) shows as a second line under the
+  narration, so nobody opens the line to see it; a UPI-looking narration with no match says "No Paytm record for this payment". The report
+  only starts on 2026-04-26, so older lines have none. Of the 156 UPI-style bank lines since then, 90 had no match in the first look: not yet explained.
+- **Who paid, and which unit.** The party is the payer or payee (maintenance can be paid by anybody, for example another organisation);
+  the household (shown as `F-01 · H-10`) and the maintenance year show under the category of a posted line, and are what the unit's
+  outstanding is worked from. A posted line whose category should name a party but has none shows a red "No party" and is counted by the
+  **No party** chip. Bank charges, interest and transfers need none (`partyNeeded`, `scripts/lib/finance-rules.mjs`). New saves with no party
+  go to review (`no_party`). Nothing was changed in the posted history: the 591 allocations the history load left without a party are
+  found through the chip, not flagged in bulk.
+- **Speed.** A list load made about 13 database requests of 200-500 ms each, one after another (2-4 s). Pages of a big table are now asked
+  for together, independent reads start together, and the reference data (categories, parties, projects, rules, account states, bank
+  accounts, households) is kept for 10 s per instance and dropped on any write through `/api/finance-admin`
+  (`cached` / `clearLedgerCache`, `netlify/functions/lib/finance-ledger.ts`). Measured against the real database: about 2.0 s cold, 1.0 s warm.
+  Column searches and sorts were still about 1 s each because every one re-read every bank line and allocation. The lines, allocations,
+  Paytm links and the suggestion index are now kept for 10 s too, so a search or sort is 40-90 ms and only the first read after 10 s idle
+  (or after a write) pays the full 1-2 s. Any write through `/api/finance-admin` drops the cache, and the pages add `fresh=1` to the first
+  list read after a write, because another warm instance may not have seen it. Anything that writes behind the function's back (the
+  history load, a script) shows up within 10 s.
+  **The new ledger after the second review (26/40, five P1s fixed):** the status pill sits under the amount (no Status column), so Category,
+  Party and Wording are wide enough to read; below 1,240px the page is a list of cards (the table needs about 1,000px beside the shell);
+  a line under the progress says "a tick only fills a field in; nothing is saved until you tick the lines and press Post", and a note
+  says how many lines are filled in but not posted, with a button to tick them; the previous calendar month's status (what is left, or
+  Close month when it is done) sits above the table; text boxes and selects have a visible focus ring; sorting and the chips keep focus.
+  **Then the P2s:** bulk changes (Fill in the suggestions, Accept suggestions, Apply to selected, the apply-to-others prompt) can be undone from
+  the toast, and say how many lines already hold a different value before replacing it; the "Suggested" pill's hover text says what is suggested
+  and how sure the app is; the Party column reads "Paid to / from" (cards say "Paid to" or "Received from"); in the line sheet Month, Refund of
+  and Project sit behind one "Month or project" expander (refunds open it); the grid has `aria-colcount`, the selection count and the
+  "Showing X of N" result are announced from fixed live regions, not the rebuilt bar or the changing progress line; a post updates the lines at once
+  and the full list comes down quietly afterwards; the phone bar follows the shell's tab bar and phone targets are 44px; the Rules page has
+  finger-sized buttons and a 24px checkbox. Not changed: the grid still scrolls to the top when a search or sort changes (the list is a new list).
+  **Third round (30/40, six P1s fixed):** what is typed but not posted is kept in this browser (category, party and wording per line, never an
+  amount; flushed when the page is hidden) and offered back on the next visit with Restore or Discard; the list shows the narration without the
+  bank's long reference numbers (full text on hover and in the sheet); on a phone the progress line, hint, tips and sort sit behind "More" (the first
+  line starts about 170px higher); "Fill in the confident suggestions" fills only high and medium confidence, a weak one shows as "A guess" and is left
+  for a person; after a post keyboard focus goes to the line that took the posted one's place; Ctrl+Z (Cmd+Z) undoes the last bulk change for two
+  minutes, so undo no longer depends on a toast.
+  **Closing round:** a post that loses its connection sends nothing more, marks nothing posted, says how many were not confirmed and refreshes from the
+  server; Post cannot be pressed twice while it runs; Undo skips lines posted since; on a phone the More button carries the "N left" count; touch screens of
+  any width get 44px targets; the Rules page's small buttons are now really 44px on a phone (the shell's `main .button--small` rule has one more specificity
+  point than a plain `.rules .button--small`, so page rules for it must be `main .<page>.section .button--small`).
+  The page also asks "Also set category X on the other N selected lines?" when a ticked line's cell is changed, and Alt+Up / Alt+Down
+  move to the same cell on the line above or below.
+  **The unit and year of maintenance can now be set.** `fin_allocations.household_id` and `maintenance_year` (migration 0084) were read
+  by the page but nothing could write them. The line sheet (both pages) shows **Unit** and **Maintenance year** when the category is
+  maintenance (year defaults to the financial year of the payment); the save endpoint validates them (the unit must exist, the year looks
+  like `2025-26`), a refund copies them from what it undoes, and maintenance saved with no unit goes to review (`no_unit`). The line's
+  detail and the lookups carry the units (`households`). The ledger page has the same line sheet (split into rows, refund picker,
+  review decisions, add a party).
+  **That cache is not reliable under `netlify dev`**, which does not keep a Function's memory between requests: every list call was still
+  about 3 s there. So the ledger page does not ask the server to search at all: `GET
+  /api/finance-admin/ledger/all` returns every line once (about 2 s cold, 0.8 MB), with what each was posted to or is suggested
+  (`effective`), and the chips, narration search, column conditions and sort run in the browser over them with the same
+  `scripts/lib/finance-columns.mjs` (a search is about 150 ms, most of it the typing delay). Both pages now show "Updating…" and dim the
+  table while a request is in flight, and the progress line names what is being searched and any condition it cannot read.
+
 ## History load (session 06, in progress)
 
 Operator script `scripts/load-fin-history.mjs` (a dry run unless `--apply`; run with `netlify dev:exec -- node scripts/load-fin-history.mjs --sheet <id>`),

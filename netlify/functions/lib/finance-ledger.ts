@@ -10,7 +10,7 @@ import { rest } from './staff-mfa-store';
 import { capabilitiesForRole } from './staff-registry';
 import { logFinanceAction } from './finance-audit';
 import { financialYearOf, lineState, periodOf, periodWriteDecision, planPosting, planReversal } from '../../../scripts/lib/finance-allocation.mjs';
-import { REVIEW_REASONS, reviewReasons, validateRule } from '../../../scripts/lib/finance-rules.mjs';
+import { REVIEW_REASONS, partyNeeded, reviewReasons, validateRule } from '../../../scripts/lib/finance-rules.mjs';
 import { buildHistory, suggest } from '../../../scripts/lib/finance-suggest.mjs';
 import { SORT_KEYS, compareRows, describeCondition, matchAmount, matchDate, matchText, parseAmount, parseDate, parseText } from '../../../scripts/lib/finance-columns.mjs';
 
@@ -28,13 +28,36 @@ const rows = async (path: string): Promise<Json[]> => (await (await rest(path)).
 // (bank lines, allocations) is read a page at a time. `path` must carry its own `order=` ending in a unique column, or the
 // pages can overlap or skip rows. Never rely on `limit=` above 1000 in this file.
 const PAGE_SIZE = 1000;
+// The first three pages are asked for together (each round trip to the database costs 200-500 ms), so up to 3,000 rows take
+// one wait instead of three; anything beyond that is read a page at a time.
+const FIRST_PAGES = 3;
 async function rowsAll(path: string): Promise<Json[]> {
+  const first = await Promise.all(Array.from({ length: FIRST_PAGES }, (_, i) => rows(`${path}&limit=${PAGE_SIZE}&offset=${i * PAGE_SIZE}`)));
   const out: Json[] = [];
-  for (let offset = 0; ; offset += PAGE_SIZE) {
+  for (const page of first) {
+    out.push(...page);
+    if (page.length < PAGE_SIZE) return out;
+  }
+  for (let offset = FIRST_PAGES * PAGE_SIZE; ; offset += PAGE_SIZE) {
     const page = await rows(`${path}&limit=${PAGE_SIZE}&offset=${offset}`);
     out.push(...page);
     if (page.length < PAGE_SIZE) return out;
   }
+}
+
+// Reference data that changes rarely (categories, parties, projects, rules, account states, bank accounts) is kept for a few
+// seconds, so a burst of sorting, searching and paging does not re-read it every time. Any write through finance-admin clears it
+// (clearLedgerCache, called from finance-admin.mts); another warm instance may serve it for up to CACHE_MS after a write.
+const CACHE_MS = 10_000;
+const cache = new Map<string, { at: number; value: Promise<unknown> }>();
+export const clearLedgerCache = () => cache.clear();
+function cached<T>(key: string, load: () => Promise<T>): Promise<T> {
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.at < CACHE_MS) return hit.value as Promise<T>;
+  const value = load();
+  cache.set(key, { at: Date.now(), value });
+  value.catch(() => cache.delete(key));
+  return value;
 }
 const rpc = async (name: string, body: Json) => (await rest(`/rpc/${name}`, { method: 'POST', body: JSON.stringify(body) })).json();
 
@@ -59,15 +82,18 @@ const audit = (actorId: string, entity: string, action: string, target: string |
   logFinanceAction({ actorId, entityId: entity, action, target, detail });
 
 // Everything a screen needs to fill its pickers. Names only; no bank details.
-async function lookups() {
-  const [categories, parties, projects, entities, closed] = await Promise.all([
+const lookups = () => cached('lookups', loadLookups);
+async function loadLookups() {
+  const [categories, parties, projects, entities, closed, households] = await Promise.all([
     rows('/fin_categories?select=id,name,type,active&order=type.asc,name.asc'),
     rowsAll('/fin_parties?select=id,name,kind&active=eq.true&merged_into=is.null&order=name.asc,id.asc'),
     rows('/fin_projects?select=id,name,kind,financial_year,status&order=financial_year.desc,name.asc'),
     rows('/fin_entities?select=id,requester_party_id&order=created_at.asc&limit=1'),
     rows('/fin_periods?select=month&status=eq.closed'),
+    rowsAll('/member_households?select=id,farm_unit,house_no&order=farm_unit.asc,id.asc'),
   ]);
   return {
+    households: households.map((x) => ({ id: x.id as string, label: [x.farm_unit, x.house_no].filter(Boolean).join(' · ') })),
     categories,
     parties,
     projects,
@@ -80,11 +106,13 @@ async function lookups() {
 type LineRow = { id: string; entity_id: string; bank_account_id: string; tran_date: string; narration: string; direction: string; amount_paise: number };
 
 // The whole ledger is a few thousand lines, so state is worked out here instead of in SQL; the page is capped.
-async function loadLedger(from: string | null, to: string | null) {
+// Kept for a few seconds like the reference data, so typing in a column search or changing the sort does not re-read every line each time.
+const loadLedger = (from: string | null, to: string | null) => cached(`ledger:${from}:${to}`, () => readLedger(from, to));
+async function readLedger(from: string | null, to: string | null) {
   const range = `${from ? `&tran_date=gte.${from}` : ''}${to ? `&tran_date=lte.${to}` : ''}`;
   const [lines, allocations] = await Promise.all([
     rowsAll(`/fin_bank_lines?select=id,entity_id,bank_account_id,tran_date,narration,direction,amount_paise&order=tran_date.desc,created_at.desc,id.asc${range}`) as Promise<LineRow[]>,
-    rowsAll('/fin_allocations?select=bank_line_id,amount_paise,review_state,posted_at,party_id,category_id,nature,reverses_allocation_id&order=id.asc'),
+    rowsAll('/fin_allocations?select=bank_line_id,amount_paise,review_state,posted_at,party_id,category_id,nature,reverses_allocation_id,household_id,maintenance_year&order=id.asc'),
   ]);
   const byLine = new Map<string, Json[]>();
   for (const a of allocations) byLine.set(a.bank_line_id, [...(byLine.get(a.bank_line_id) ?? []), a]);
@@ -105,7 +133,7 @@ export async function listLedger(req: Request): Promise<Response> {
   if (!auth.ok) return fail(auth.error, auth.status);
   try {
     const url = new URL(req.url);
-    const filter = ['unallocated', 'review', 'all'].includes(url.searchParams.get('filter') ?? '') ? url.searchParams.get('filter')! : 'unallocated';
+    const filter = ['unallocated', 'review', 'noparty', 'all'].includes(url.searchParams.get('filter') ?? '') ? url.searchParams.get('filter')! : 'unallocated';
     const iso = (k: string) => (/^\d{4}-\d{2}-\d{2}$/.test(url.searchParams.get(k) ?? '') ? url.searchParams.get(k) : null);
     const q = (url.searchParams.get('q') ?? '').toLowerCase().trim().slice(0, 60);
     const offset = Math.max(0, Number(url.searchParams.get('offset')) || 0);
@@ -126,13 +154,22 @@ export async function listLedger(req: Request): Promise<Response> {
       }
     }
 
-    const { lines, byLine } = await loadLedger(iso('from'), iso('to'));
-    const ctx = await lookups();
-    const sc = await suggestionContext(lines, byLine, ctx);
+    // The ledger, the pickers and the bank accounts are independent, so they are read together.
+    const [{ lines, byLine }, ctx, accounts, households] = await Promise.all([
+      loadLedger(iso('from'), iso('to')),
+      lookups(),
+      cached('bank-accounts', () => rows('/fin_bank_accounts?select=id,label')),
+      cached('households', () => rowsAll('/member_households?select=id,farm_unit,house_no&order=id.asc')),
+    ]);
+    const sc = await cached(`sc:${iso('from')}:${iso('to')}`, () => suggestionContext(lines, byLine, ctx));
+    const categoryById = new Map(ctx.categories.map((c) => [c.id as string, c]));
+    const householdLabel = new Map(households.map((x) => [x.id as string, [x.farm_unit, x.house_no].filter(Boolean).join(' · ')]));
     const summarise = (l: LineRow) => {
       const allocs = byLine.get(l.id) ?? [];
       const posted = allocs.some((a) => a.posted_at);
-      return { state: posted ? 'allocated' : lineState(l, allocs), review: allocs.some((a) => a.review_state !== 'ok') };
+      // Posted, and a row that should name a party does not: the payer of maintenance, a salary's employee, a bill's vendor...
+      const missingParty = allocs.some((a) => a.posted_at && !a.reverses_allocation_id && !a.party_id && partyNeeded(categoryById.get(a.category_id)));
+      return { state: posted ? 'allocated' : lineState(l, allocs), review: allocs.some((a) => a.review_state !== 'ok'), missingParty };
     };
 
     // The cheap conditions first (they need only the line itself).
@@ -146,8 +183,8 @@ export async function listLedger(req: Request): Promise<Response> {
     const partyName = new Map(ctx.parties.map((x) => [x.id as string, x.name as string]));
     const needsEffective = Boolean(conds.category || conds.party || conds.nature) || ['category', 'party', 'nature'].includes(sortKey);
     const upiOf = new Map<string, Json>();
-    const fetchUpi = async (ids?: string[]) => {
-      const found = ids ? (ids.length ? await rows(`/fin_upi_lines?select=bank_line_id,counterparty,remarks,is_circle&bank_line_id=in.(${ids.join(',')})`) : []) : await rowsAll('/fin_upi_lines?select=bank_line_id,counterparty,remarks,is_circle&bank_line_id=not.is.null&order=id.asc');
+    const fetchUpi = async () => {
+      const found = await cached('upi-linked', () => rowsAll('/fin_upi_lines?select=bank_line_id,counterparty,remarks,is_circle&bank_line_id=not.is.null&order=id.asc'));
       for (const u of found) upiOf.set(u.bank_line_id as string, u);
     };
     const effective = new Map<string, { category: string; party: string; nature: string }>();
@@ -170,16 +207,17 @@ export async function listLedger(req: Request): Promise<Response> {
       : cheap;
 
     // The chips count what is left after the column conditions, so they say how many of THESE lines still need you.
-    const counts = { unallocated: 0, review: 0, all: base.length };
+    const counts = { unallocated: 0, review: 0, noparty: 0, all: base.length };
     for (const l of base) {
       const st = summarise(l);
       if (st.state !== 'allocated') counts.unallocated++;
       if (st.review) counts.review++;
+      if (st.missingParty) counts.noparty++;
     }
     const keyed = base
       .filter((l) => {
         const st = summarise(l);
-        return filter === 'all' || (filter === 'unallocated' ? st.state !== 'allocated' : st.review);
+        return filter === 'all' || (filter === 'unallocated' ? st.state !== 'allocated' : filter === 'noparty' ? st.missingParty : st.review);
       })
       .map((l) => {
         const e = effective.get(l.id);
@@ -191,8 +229,7 @@ export async function listLedger(req: Request): Promise<Response> {
     const matched = keyed.map((k) => k.l);
 
     const page = matched.slice(offset, offset + PAGE);
-    if (!needsEffective) await fetchUpi(page.map((l) => l.id));
-    const accounts = await rows('/fin_bank_accounts?select=id,label');
+    if (!needsEffective) await fetchUpi();
     const accountLabel = new Map(accounts.map((a) => [a.id as string, a.label as string]));
     const capabilities = capabilitiesForRole('finance', auth.staff.role) as string[];
     return jsonResponse({
@@ -218,13 +255,73 @@ export async function listLedger(req: Request): Promise<Response> {
         ...summarise(l),
         suggestion: summarise(l).state === 'allocated' ? null : compactSuggestion(suggestFor(l, upiOf.get(l.id) ?? null, ctx, sc)),
         // What a posted line was allocated to (the first row, and how many there are), so the table can show it.
-        allocation: postedSummary(byLine.get(l.id) ?? []),
+        allocation: (() => {
+          const a = postedSummary(byLine.get(l.id) ?? []);
+          return a ? { ...a, householdLabel: a.householdId ? householdLabel.get(a.householdId as string) ?? null : null } : null;
+        })(),
       })),
       lookups: ctx,
       reasons: REVIEW_REASONS,
     });
   } catch (err) {
     return serverError(err, 'ledger list');
+  }
+}
+
+// Every line in one response, with what each was posted to or is suggested, for pages that sort and search in the browser (the
+// prototype ledger). One wave of reads, no filtering or paging: the browser does that instantly with scripts/lib/finance-columns.mjs.
+export async function ledgerAll(req: Request): Promise<Response> {
+  const auth = await requireStaff(req, 'finance', 'view');
+  if (!auth.ok) return fail(auth.error, auth.status);
+  try {
+    const [{ lines, byLine }, ctx, accounts, households, upis] = await Promise.all([
+      loadLedger(null, null),
+      lookups(),
+      cached('bank-accounts', () => rows('/fin_bank_accounts?select=id,label')),
+      cached('households', () => rowsAll('/member_households?select=id,farm_unit,house_no&order=id.asc')),
+      cached('upi-linked', () => rowsAll('/fin_upi_lines?select=bank_line_id,counterparty,remarks,is_circle&bank_line_id=not.is.null&order=id.asc')),
+      reviewRef(), // started now so the suggestion context below does not wait for it
+    ]);
+    const sc = await suggestionContext(lines, byLine, ctx);
+    const upiOf = new Map(upis.map((u) => [u.bank_line_id as string, u]));
+    const categoryById = new Map(ctx.categories.map((c) => [c.id as string, c]));
+    const partyName = new Map(ctx.parties.map((x) => [x.id as string, x.name as string]));
+    const householdLabel = new Map(households.map((x) => [x.id as string, [x.farm_unit, x.house_no].filter(Boolean).join(' · ')]));
+    const accountLabel = new Map(accounts.map((a) => [a.id as string, a.label as string]));
+    const capabilities = capabilitiesForRole('finance', auth.staff.role) as string[];
+    const out = lines.map((l) => {
+      const allocs = byLine.get(l.id) ?? [];
+      const posted = allocs.some((a) => a.posted_at);
+      const state = posted ? 'allocated' : lineState(l, allocs);
+      const missingParty = allocs.some((a) => a.posted_at && !a.reverses_allocation_id && !a.party_id && partyNeeded(categoryById.get(a.category_id)));
+      const upi = upiOf.get(l.id) ?? null;
+      const summary = postedSummary(allocs);
+      const sg = posted ? null : suggestFor(l, upi, ctx, sc);
+      const effective = summary
+        ? { category: categoryById.get(summary.categoryId)?.name ?? '', party: summary.partyId ? partyName.get(summary.partyId) ?? '' : '', nature: summary.nature ?? '' }
+        : { category: sg?.categoryId ? categoryById.get(sg.categoryId)?.name ?? '' : '', party: sg?.partyId ? partyName.get(sg.partyId) ?? '' : sg?.newParty?.name ?? '', nature: sg?.nature ?? '' };
+      return {
+        id: l.id,
+        date: l.tran_date,
+        narration: l.narration,
+        direction: l.direction,
+        amountPaise: l.amount_paise,
+        account: accountLabel.get(l.bank_account_id) ?? '',
+        remark: upi?.remarks ?? null,
+        counterparty: upi?.counterparty ?? null,
+        isCircle: Boolean(upi?.is_circle),
+        allocatedPaise: allocs.reduce((n, a) => n + a.amount_paise, 0),
+        state,
+        review: allocs.some((a) => a.review_state !== 'ok'),
+        missingParty,
+        suggestion: sg ? compactSuggestion(sg) : null,
+        allocation: summary ? { ...summary, householdLabel: summary.householdId ? householdLabel.get(summary.householdId as string) ?? null : null } : null,
+        effective,
+      };
+    });
+    return jsonResponse({ canAllocate: capabilities.includes('allocate'), canClose: capabilities.includes('close-period'), lines: out, lookups: ctx });
+  } catch (err) {
+    return serverError(err, 'ledger all');
   }
 }
 
@@ -266,7 +363,7 @@ const suggestFor = (line: Json, upi: Json | null, ctx: Awaited<ReturnType<typeof
 // The short form shown in the list: no reasons (the line's own sheet has those).
 const postedSummary = (allocs: Json[]) => {
   const posted = allocs.filter((a) => a.posted_at && !a.reverses_allocation_id);
-  return posted.length ? { categoryId: posted[0].category_id, partyId: posted[0].party_id, nature: posted[0].nature, count: posted.length } : null;
+  return posted.length ? { categoryId: posted[0].category_id, partyId: posted[0].party_id, nature: posted[0].nature, count: posted.length, householdId: posted[0].household_id ?? null, maintenanceYear: posted[0].maintenance_year ?? null } : null;
 };
 
 const compactSuggestion = (x: Json) =>
@@ -274,11 +371,15 @@ const compactSuggestion = (x: Json) =>
     ? { categoryId: x.categoryId, partyId: x.partyId, nature: x.nature, confidence: x.confidence, newPartyName: x.newParty?.name ?? null }
     : null;
 
+const reviewRef = () =>
+  cached('review-ref', () =>
+    Promise.all([
+      rows('/fin_rules?select=id,priority,matcher,party_id,category_id,nature_template,needs_review,active&active=eq.true'),
+      rowsAll('/fin_party_accounts?select=party_id,status,retired_on&status=neq.superseded&order=id.asc'),
+    ]),
+  );
 async function reviewContext(ctx: Awaited<ReturnType<typeof lookups>>) {
-  const [rules, allAccounts] = await Promise.all([
-    rows('/fin_rules?select=id,priority,matcher,party_id,category_id,nature_template,needs_review,active&active=eq.true'),
-    rowsAll('/fin_party_accounts?select=party_id,status,retired_on&status=neq.superseded&order=id.asc'),
-  ]);
+  const [rules, allAccounts] = await reviewRef();
   const today = new Date().toISOString().slice(0, 10);
   const stateOfParty = (partyId: string | null): 'verified' | 'unverified' | 'none' => {
     if (!partyId) return 'none';
@@ -297,7 +398,7 @@ export async function ledgerLine(req: Request, lineId: string): Promise<Response
     const [line] = await rows(`/fin_bank_lines?id=eq.${lineId}&select=id,bank_account_id,tran_date,narration,direction,amount_paise`);
     if (!line) return fail('That line does not exist.', 404);
     const [upi] = await rows(`/fin_upi_lines?bank_line_id=eq.${lineId}&select=counterparty,remarks,is_circle,upi_ref`);
-    const allocations = await rows(`/fin_allocations?bank_line_id=eq.${lineId}&select=id,party_id,category_id,project_id,amount_paise,period,nature,remarks,source,rule_id,review_state,review_reason,reverses_allocation_id,reversal_reason,posted_at&order=created_at.asc`);
+    const allocations = await rows(`/fin_allocations?bank_line_id=eq.${lineId}&select=id,party_id,category_id,project_id,amount_paise,period,nature,remarks,source,rule_id,review_state,review_reason,reverses_allocation_id,reversal_reason,household_id,maintenance_year,posted_at&order=created_at.asc`);
     const ctx = await lookups();
     const { lines: everyLine, byLine } = await loadLedger(null, null);
     const sc = await suggestionContext(everyLine, byLine, ctx);
@@ -312,7 +413,7 @@ export async function ledgerLine(req: Request, lineId: string): Promise<Response
       }
       if (suggestion.categoryId) {
         const category = ctx.categories.find((c) => c.id === suggestion!.categoryId);
-        reasons = reviewReasons({ line, upi, proposal: { partyId: suggestion.partyId, categoryId: suggestion.categoryId, source: suggestion.source, needsReview: suggestion.needsReview }, requesterPartyIds: sc.requesterIds, partyAccountState: sc.rc.stateOfParty(suggestion.partyId), categoryType: category?.type, hasVoucher: false });
+        reasons = reviewReasons({ line, upi, proposal: { partyId: suggestion.partyId, categoryId: suggestion.categoryId, source: suggestion.source, needsReview: suggestion.needsReview }, requesterPartyIds: sc.requesterIds, partyAccountState: sc.rc.stateOfParty(suggestion.partyId), categoryType: category?.type, hasVoucher: false, partyNeeded: partyNeeded(category) });
       } else reasons = ['unexplained'];
     }
     const capabilities = capabilitiesForRole('finance', auth.staff.role) as string[];
@@ -333,6 +434,8 @@ export async function ledgerLine(req: Request, lineId: string): Promise<Response
         source: a.source,
         reviewState: a.review_state,
         reviewReason: a.review_reason,
+        householdId: a.household_id ?? null,
+        maintenanceYear: a.maintenance_year ?? null,
         reversesAllocationId: a.reverses_allocation_id,
         reversalReason: a.reversal_reason,
         posted: Boolean(a.posted_at),
@@ -371,6 +474,7 @@ async function saveLine(staff: { id: string }, capabilities: string[], lineId: s
   const categoryById = new Map(ctx.categories.map((c) => [c.id as string, c]));
   const partyIds = new Set(ctx.parties.map((p) => p.id as string));
   const projectIds = new Set(ctx.projects.map((p) => p.id as string));
+  const householdIds = new Set(ctx.households.map((x) => x.id as string));
   const upi = shared ? shared.upiOf.get(lineId) : (await rows(`/fin_upi_lines?bank_line_id=eq.${lineId}&select=counterparty,remarks,is_circle`))[0];
   const rc = shared?.rc ?? (await reviewContext(ctx));
   const requesterIds = ctx.requesterPartyId ? [ctx.requesterPartyId] : [];
@@ -381,7 +485,7 @@ async function saveLine(staff: { id: string }, capabilities: string[], lineId: s
   for (const [i, r] of inputRows.entries()) {
     if (r.reversesAllocationId) {
       if (!LEDGER_ID.test(String(r.reversesAllocationId))) return { ok: false, status: 400, error: `Row ${i + 1}: choose what to reverse.` };
-      const [orig] = await rows(`/fin_allocations?id=eq.${r.reversesAllocationId}&select=id,party_id,category_id,project_id,amount_paise,nature,reverses_allocation_id,posted_at,bank_line_id`);
+      const [orig] = await rows(`/fin_allocations?id=eq.${r.reversesAllocationId}&select=id,party_id,category_id,project_id,amount_paise,nature,reverses_allocation_id,posted_at,bank_line_id,household_id,maintenance_year`);
       if (!orig || !orig.posted_at) return { ok: false, status: 400, error: `Row ${i + 1}: that allocation cannot be reversed.` };
       const [origLine] = await rows(`/fin_bank_lines?id=eq.${orig.bank_line_id}&select=direction`);
       const prior = await rows(`/fin_allocations?reverses_allocation_id=eq.${orig.id}&select=amount_paise`);
@@ -389,7 +493,7 @@ async function saveLine(staff: { id: string }, capabilities: string[], lineId: s
       const check = planReversal({ ...orig, direction: origLine?.direction }, [...prior, { amount_paise: siblings }], line, { amountPaise: r.amountPaise, reason: r.reversalReason });
       if (!check.ok) return { ok: false, status: 400, error: `Row ${i + 1}: ${check.errors[0]}` };
       reversalChecks.push(orig.id);
-      prepared.push({ ...r, categoryId: orig.category_id, partyId: orig.party_id, projectId: orig.project_id, nature: String(r.nature ?? '').trim() || `Reversal: ${orig.nature}`, source: 'manual' });
+      prepared.push({ ...r, categoryId: orig.category_id, partyId: orig.party_id, projectId: orig.project_id, householdId: orig.household_id, maintenanceYear: orig.maintenance_year, nature: String(r.nature ?? '').trim() || `Reversal: ${orig.nature}`, source: 'manual' });
     } else prepared.push({ ...r, source: ['manual', 'rule', 'upi_remark'].includes(r.source) ? r.source : 'manual' });
   }
 
@@ -400,6 +504,8 @@ async function saveLine(staff: { id: string }, capabilities: string[], lineId: s
     if (!category || (!category.active && !r.reversesAllocationId)) return { ok: false, status: 400, error: `Row ${i + 1}: choose an active category.` };
     if (r.partyId && !partyIds.has(r.partyId) && !r.reversesAllocationId) return { ok: false, status: 400, error: `Row ${i + 1}: that party is not in the register.` };
     if (r.projectId && !projectIds.has(r.projectId)) return { ok: false, status: 400, error: `Row ${i + 1}: that project does not exist.` };
+    if (r.householdId && !r.reversesAllocationId && !householdIds.has(r.householdId)) return { ok: false, status: 400, error: `Row ${i + 1}: that unit does not exist.` };
+    if (r.maintenanceYear && !/^\d{4}-\d{2}$/.test(String(r.maintenanceYear))) return { ok: false, status: 400, error: `Row ${i + 1}: the maintenance year looks like 2025-26.` };
   }
 
   // A closed month needs close-period and a reason.
@@ -421,11 +527,13 @@ async function saveLine(staff: { id: string }, capabilities: string[], lineId: s
       reasons = reviewReasons({
         line,
         upi: upi ?? null,
-        proposal: { partyId: r.partyId ?? null, categoryId: r.categoryId, source: r.source, needsReview: Boolean(rule?.needs_review) },
+        proposal: { partyId: r.partyId ?? null, categoryId: r.categoryId, source: r.source, needsReview: Boolean(rule?.needs_review), householdId: r.householdId ?? null },
         requesterPartyIds: requesterIds,
         partyAccountState: rc.stateOfParty(r.partyId ?? null),
         categoryType: categoryById.get(r.categoryId)?.type,
         hasVoucher: false,
+        partyNeeded: partyNeeded(categoryById.get(r.categoryId)),
+        unitNeeded: categoryById.get(r.categoryId)?.type === 'member_contribution',
       });
     }
     for (const x of reasons) reasonCounts[x] = (reasonCounts[x] ?? 0) + 1;
@@ -443,6 +551,8 @@ async function saveLine(staff: { id: string }, capabilities: string[], lineId: s
       review_reason: reasons.length ? reasons.join(',') : null,
       reverses_allocation_id: r.reversesAllocationId ?? null,
       reversal_reason: r.reversesAllocationId ? r.reason ?? r.reversalReason : null,
+      household_id: r.householdId || null,
+      maintenance_year: r.maintenanceYear ? String(r.maintenanceYear) : null,
     };
   });
 
