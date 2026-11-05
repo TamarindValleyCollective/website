@@ -106,7 +106,10 @@ import SignInGate from '../../../components/SignInGate.astro';
     if (typeof google !== 'undefined') google.accounts.id.disableAutoSelect();
     showGate();
   });
+  // After any write the next list read asks the server for fresh data (it keeps a few seconds of reads otherwise).
+  let wantFresh = false;
   async function call(path: string, method = 'GET', body?: unknown) {
+    if (method !== 'GET') wantFresh = true;
     try {
       return await staffFetch(path, { method, body });
     } catch (err) {
@@ -244,6 +247,10 @@ import SignInGate from '../../../components/SignInGate.astro';
       const seq = ++loadSeq;
       const sort = sortOf();
       const params = new URLSearchParams({ filter, offset: String(more ? lines.length : 0), sort: sort.key, dir: sort.dir });
+      if (wantFresh) {
+        params.set('fresh', '1');
+        wantFresh = false;
+      }
       if (query) params.set('q', query);
       for (const [col, text] of Object.entries(colFilters)) if (text.trim()) params.set(`f_${col}`, text.trim());
       const { status, data: out } = await call(`/api/finance-admin/ledger?${params}`);

@@ -169,7 +169,8 @@ async function handleAddBankAccount(req: Request): Promise<Response> {
 // Any write drops the ledger's short-lived reference cache (before, so the work sees fresh data; after, so the next read does).
 export default async (req: Request): Promise<Response> => {
   const writes = req.method !== 'GET' && req.method !== 'HEAD';
-  if (writes) clearLedgerCache();
+  // A read can ask for fresh data (`fresh=1`): the pages do after a post, which another warm instance may not have seen yet.
+  if (writes || new URL(req.url).searchParams.get('fresh') === '1') clearLedgerCache();
   try {
     return await dispatch(req);
   } finally {

@@ -104,7 +104,9 @@ async function loadLookups() {
 type LineRow = { id: string; entity_id: string; bank_account_id: string; tran_date: string; narration: string; direction: string; amount_paise: number };
 
 // The whole ledger is a few thousand lines, so state is worked out here instead of in SQL; the page is capped.
-async function loadLedger(from: string | null, to: string | null) {
+// Kept for a few seconds like the reference data, so typing in a column search or changing the sort does not re-read every line each time.
+const loadLedger = (from: string | null, to: string | null) => cached(`ledger:${from}:${to}`, () => readLedger(from, to));
+async function readLedger(from: string | null, to: string | null) {
   const range = `${from ? `&tran_date=gte.${from}` : ''}${to ? `&tran_date=lte.${to}` : ''}`;
   const [lines, allocations] = await Promise.all([
     rowsAll(`/fin_bank_lines?select=id,entity_id,bank_account_id,tran_date,narration,direction,amount_paise&order=tran_date.desc,created_at.desc,id.asc${range}`) as Promise<LineRow[]>,
@@ -157,7 +159,7 @@ export async function listLedger(req: Request): Promise<Response> {
       cached('bank-accounts', () => rows('/fin_bank_accounts?select=id,label')),
       cached('households', () => rowsAll('/member_households?select=id,farm_unit,house_no&order=id.asc')),
     ]);
-    const sc = await suggestionContext(lines, byLine, ctx);
+    const sc = await cached(`sc:${iso('from')}:${iso('to')}`, () => suggestionContext(lines, byLine, ctx));
     const categoryById = new Map(ctx.categories.map((c) => [c.id as string, c]));
     const householdLabel = new Map(households.map((x) => [x.id as string, [x.farm_unit, x.house_no].filter(Boolean).join(' · ')]));
     const summarise = (l: LineRow) => {
@@ -179,8 +181,8 @@ export async function listLedger(req: Request): Promise<Response> {
     const partyName = new Map(ctx.parties.map((x) => [x.id as string, x.name as string]));
     const needsEffective = Boolean(conds.category || conds.party || conds.nature) || ['category', 'party', 'nature'].includes(sortKey);
     const upiOf = new Map<string, Json>();
-    const fetchUpi = async (ids?: string[]) => {
-      const found = ids ? (ids.length ? await rows(`/fin_upi_lines?select=bank_line_id,counterparty,remarks,is_circle&bank_line_id=in.(${ids.join(',')})`) : []) : await rowsAll('/fin_upi_lines?select=bank_line_id,counterparty,remarks,is_circle&bank_line_id=not.is.null&order=id.asc');
+    const fetchUpi = async () => {
+      const found = await cached('upi-linked', () => rowsAll('/fin_upi_lines?select=bank_line_id,counterparty,remarks,is_circle&bank_line_id=not.is.null&order=id.asc'));
       for (const u of found) upiOf.set(u.bank_line_id as string, u);
     };
     const effective = new Map<string, { category: string; party: string; nature: string }>();
@@ -225,7 +227,7 @@ export async function listLedger(req: Request): Promise<Response> {
     const matched = keyed.map((k) => k.l);
 
     const page = matched.slice(offset, offset + PAGE);
-    if (!needsEffective) await fetchUpi(page.map((l) => l.id));
+    if (!needsEffective) await fetchUpi();
     const accountLabel = new Map(accounts.map((a) => [a.id as string, a.label as string]));
     const capabilities = capabilitiesForRole('finance', auth.staff.role) as string[];
     return jsonResponse({

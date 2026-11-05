@@ -364,7 +364,11 @@ Modelled on how ServiceNow lists work, because the sheet's convenience was selec
   for together, independent reads start together, and the reference data (categories, parties, projects, rules, account states, bank
   accounts, households) is kept for 10 s per instance and dropped on any write through `/api/finance-admin`
   (`cached` / `clearLedgerCache`, `netlify/functions/lib/finance-ledger.ts`). Measured against the real database: about 2.0 s cold, 1.0 s warm.
-  The rest is the two sign-in lookups and one wave of reads; the next step would be moving the filtering into the database.
+  Column searches and sorts were still about 1 s each because every one re-read every bank line and allocation. The lines, allocations,
+  Paytm links and the suggestion index are now kept for 10 s too, so a search or sort is 40-90 ms and only the first read after 10 s idle
+  (or after a write) pays the full 1-2 s. Any write through `/api/finance-admin` drops the cache, and the pages add `fresh=1` to the first
+  list read after a write, because another warm instance may not have seen it. Anything that writes behind the function's back (the
+  history load, a script) shows up within 10 s.
 
 ## History load (session 06, in progress)
 

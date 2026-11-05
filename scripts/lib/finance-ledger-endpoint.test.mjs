@@ -172,8 +172,9 @@ const sign = (id, role) => {
   db.roles.push({ staff_id: id, module: 'finance', role, scope: null, expires_at: null });
   return email;
 };
-const api = (email, path, { method = 'GET', body } = {}) =>
-  handler(new Request(`https://x.test/api/finance-admin${path}`, { method, headers: { authorization: `Bearer ${email}`, ...(body ? { 'content-type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined }));
+// Reads ask for fresh data (`fresh=1`), as the pages do after a post; the cache itself is tested on its own below.
+const api = (email, path, { method = 'GET', body, cache = false } = {}) =>
+  handler(new Request(`https://x.test/api/finance-admin${path}${method === 'GET' && !cache ? `${path.includes('?') ? '&' : '?'}fresh=1` : ''}`, { method, headers: { authorization: `Bearer ${email}`, ...(body ? { 'content-type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined }));
 const quiet = async (fn) => {
   const orig = console.error;
   console.error = () => {};
@@ -589,6 +590,22 @@ test('a batch reads the lookups once, not once per line', async () => {
   assert.equal(db.calls.fin_categories, 1);
   assert.ok((db.calls.fin_rules ?? 0) <= 1);
   assert.ok((db.calls.fin_party_accounts ?? 0) <= 3, 'one read of the table, which asks for up to three pages together');
+});
+
+// ---- the short-lived cache behind the list
+test('the list is served from a short cache, and fresh=1 or any write drops it', async () => {
+  reset();
+  const op = sign('u1', 'user');
+  const first = await (await api(op, '/ledger?filter=all', { cache: true })).json();
+  db.fin_bank_lines.push({ id: ID(95), entity_id: E, bank_account_id: ID(2), tran_date: '2026-11-03', narration: 'NEFT/Late arrival', direction: 'debit', amount_paise: 1000 });
+  const cached = await (await api(op, '/ledger?filter=all', { cache: true })).json();
+  assert.equal(cached.total, first.total, 'a second read in the window does not go back to the database');
+  const fresh = await (await api(op, '/ledger?filter=all')).json();
+  assert.equal(fresh.total, first.total + 1, 'fresh=1 reads again');
+  db.fin_bank_lines.pop();
+  await api(op, '/ledger/post', { method: 'POST', body: { items: [] } });
+  const afterWrite = await (await api(op, '/ledger?filter=all', { cache: true })).json();
+  assert.equal(afterWrite.total, first.total, 'a write drops the cache');
 });
 
 // ---- missing parties, households and the Paytm line (what a posted line shows)
