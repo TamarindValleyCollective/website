@@ -45,7 +45,7 @@ const FROM = 'Tamarind Valley Collective <noreply@tvc.farm>';
 // whoever needs to act on it without the guest having to forward anything.
 // Not per-event configurable yet — every event using this flow so far routes
 // through the same two parties; revisit if that stops being true.
-const RECEIPT_CC = ['core-team@tvc.farm', 'stay@linger.in'];
+const RECEIPT_CC = ['contact@tvc.farm', 'stay@linger.in'];
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });

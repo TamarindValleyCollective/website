@@ -38,7 +38,7 @@ import { roleHasCapability, type Capability } from './lib/staff-registry';
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
 const FROM = 'Tamarind Valley Collective <noreply@tvc.farm>';
-const NOTIFY_CC = ['core-team@tvc.farm', 'stay@linger.in'];
+const NOTIFY_CC = ['contact@tvc.farm', 'stay@linger.in'];
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -306,7 +306,7 @@ async function sendRefundEmail(params: {
         )}
         <p>It's being processed by Razorpay now and should reach your original payment method within a few business days.</p>
         ${params.eventCancelled ? `<p>We hope to host you at another TVC event soon — keep an eye on ${emailLink('https://tvc.farm/events', 'tvc.farm/events')}.</p>` : ''}
-        <p style="margin-bottom:0;">Questions? Reply to this email or reach us at ${emailLink('mailto:core-team@tvc.farm', 'core-team@tvc.farm')}.</p>`);
+        <p style="margin-bottom:0;">Questions? Reply to this email or reach us at ${emailLink('mailto:contact@tvc.farm', 'contact@tvc.farm')}.</p>`);
   const res = await fetch(RESEND_API_URL, {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
@@ -333,7 +333,7 @@ async function sendDeclineEmail(params: { payerEmail: string; eventTitle: string
   }
   const html = renderBrandedEmail(`        <p style="margin-top:0;">Thank you for letting us know. We've reviewed your cancellation request for <strong>${escapeHtml(params.eventTitle)}</strong>, and unfortunately we're not able to cancel and refund this booking under our ${emailLink('https://tvc.farm/refund-policy', 'cancellation &amp; refund policy')}.</p>
         ${params.reason ? `<p style="white-space:pre-line;">${escapeHtml(params.reason)}</p>` : ''}
-        <p>Your booking remains confirmed. If your plans have changed or you think we've got this wrong, reply to this email or reach us at ${emailLink('mailto:core-team@tvc.farm', 'core-team@tvc.farm')} and we'll be glad to talk it through.</p>
+        <p>Your booking remains confirmed. If your plans have changed or you think we've got this wrong, reply to this email or reach us at ${emailLink('mailto:contact@tvc.farm', 'contact@tvc.farm')} and we'll be glad to talk it through.</p>
         <p style="font-size:13px; color:${EMAIL_COLORS.muted}; margin-bottom:0;">Payment ID ${escapeHtml(params.paymentId)}</p>`);
   const res = await fetch(RESEND_API_URL, {
     method: 'POST',

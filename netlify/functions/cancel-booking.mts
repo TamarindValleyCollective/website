@@ -22,7 +22,7 @@ import { routeEmail } from './lib/email-routing';
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
 const FROM = 'Tamarind Valley Collective <noreply@tvc.farm>';
-const NOTIFY_CC = ['core-team@tvc.farm', 'stay@linger.in'];
+const NOTIFY_CC = ['contact@tvc.farm', 'stay@linger.in'];
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });

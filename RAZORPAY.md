@@ -57,7 +57,7 @@ Trails & Tales, 28–29 Nov 2026 (`ftt-day-2026-11-28` at ₹2,500, `ftt-overnig
 ₹4,500). A group wanting a mix sends one request per option.
 
 **Dry runs on the live site.** A request whose name starts with the word "TEST" (e.g. "TEST
-Sharath") emails core-team only, not stay@linger.in (`isDryRunRequest()` in
+Sharath") emails contact@tvc.farm only, not stay@linger.in (`isDryRunRequest()` in
 `netlify/functions/lib/booking-notify.ts`); the WhatsApp alert still goes to
 `WHATSAPP_BOOKING_APPROVER_NUMBERS`. Use your own phone and email, approve it, and don't pay: the
 payment link expires after 48 hours.
@@ -68,7 +68,7 @@ booked Foraging Day believing the farm was in Bengaluru and had to be refunded. 
 the team confirms) posts to `netlify/functions/event-booking.mts`, which only checks the base link
 is still open and saves a `pending` row in `event_booking_requests` (migration `0038`, **apply it to
 TVC ERP before merging**). It WhatsApps (`tvc_booking_approval_request` to
-`WHATSAPP_BOOKING_APPROVER_NUMBERS`, comma-separated) and emails Linger (+ core-team) a tokenised
+`WHATSAPP_BOOKING_APPROVER_NUMBERS`, comma-separated) and emails Linger (+ contact@tvc.farm) a tokenised
 link to `/approve-booking`, and emails the guest "someone will confirm with you first". Linger speak to the
 guest, then tap Approve on that page (the page only reads on load; the buttons POST, so link
 previews can't approve anything). `netlify/functions/event-booking-approval.mts` claims the
@@ -83,7 +83,7 @@ auto-approve for trusted guests.
 **What happens once a link is paid:** the per-booking Payment Link is created as described above. Once paid, Razorpay calls the
 `payment_link.paid` webhook (`netlify/functions/razorpay-webhook.mts`), which verifies the
 signature, records the payment in the `event_payments` table (Supabase project "TVC ERP",
-`mljavkvkxdejvpzadnrp`), and emails a branded receipt (CC'd to `core-team@tvc.farm` and
+`mljavkvkxdejvpzadnrp`), and emails a branded receipt (CC'd to `contact@tvc.farm` and
 `stay@linger.in`). A cancellation link in that receipt leads to `/cancel-booking`
 (`netlify/functions/cancel-booking.mts`) — records a **request only**, not an automatic refund
 (TVC's `/refund-policy` has day-before-event tiers a human applies by hand), sends TVC + Linger a separate "Action needed" alert (so a request isn't missed even if the guest has no email), and notifies TVC +
@@ -125,10 +125,10 @@ stats and "cancelled" status actually key off — is set only once Razorpay's ow
   For an admin-triggered refund this is normally a no-op (`event-payments-admin.mts` already
   recorded initiation synchronously right after its own Razorpay API call succeeded); for a refund
   started directly in the Razorpay dashboard, this is the *only* place it gets recorded at all.
-- `refund.processed` — sets `refunded_at` (`confirmRefundProcessed()`), as does `event-payments-admin.mts` itself when Razorpay's own create-refund response already says `processed` (test-mode refunds are instant, and the test-mode webhook isn't subscribed to refund events, so waiting for the webhook left them stuck on "Refund initiated"; found 2026-10-10). The update is idempotent, so whichever path confirms first flips the row and sends the email. The call that confirms it also emails the payer "Refund processed — <event>" (cc `core-team@tvc.farm`/`stay@linger.in`), once; this is the only email a refund started directly in the Razorpay dashboard produces.
+- `refund.processed` — sets `refunded_at` (`confirmRefundProcessed()`), as does `event-payments-admin.mts` itself when Razorpay's own create-refund response already says `processed` (test-mode refunds are instant, and the test-mode webhook isn't subscribed to refund events, so waiting for the webhook left them stuck on "Refund initiated"; found 2026-10-10). The update is idempotent, so whichever path confirms first flips the row and sends the email. The call that confirms it also emails the payer "Refund processed — <event>" (cc `contact@tvc.farm`/`stay@linger.in`), once; this is the only email a refund started directly in the Razorpay dashboard produces.
 - `refund.failed` — flips `refund_status` to `'failed'` (`markRefundFailed()`) so the row reads as
   refund-attempt-failed rather than either "still paid" (wrong — money may be mid-transit) or
-  silently stuck showing "refund initiated" forever. It also emails a failure alert (once — only on the call that recorded it) to `core-team@tvc.farm`, cc `stay@linger.in`. `/internal/event-payments` lets an admin
+  silently stuck showing "refund initiated" forever. It also emails a failure alert (once — only on the call that recorded it) to `contact@tvc.farm`, cc `stay@linger.in`. `/internal/event-payments` lets an admin
   retry from there.
 
 All three guard on `razorpay_refund_id` (and `refunded_at is.null` where relevant) so whichever
@@ -161,7 +161,7 @@ one. The page pre-fills a suggested amount from `/refund-policy`'s day-before-ev
 anything is sent — no one-click refund. A successful API call only ever records **initiation**
 (`razorpay_refund_id`, `refund_amount`, `refund_status`, `refund_initiated_at`, `refunded_by` (the admin's id from 2026-10, an email before that) —
 migration `0020_event_payments_refunds.sql`/`0022_event_payments_refund_initiated.sql`) and emails
-the payer that a refund has started (cc `core-team@tvc.farm`/`stay@linger.in`) — the email carries a details table: event, people, amount paid, refund amount, amount retained (partial refunds only), date, payment ID and refund ID (the admin-entered reason is left out of single-booking refund emails). The bulk "Cancel event" action sends a different variant — subject "<event> has been cancelled — your refund is on its way", an apology intro, the form's **Reason** text shown to guests verbatim (HTML-escaped; the form label says so), and a pointer to `/events`; `refunded_at`
+the payer that a refund has started (cc `contact@tvc.farm`/`stay@linger.in`) — the email carries a details table: event, people, amount paid, refund amount, amount retained (partial refunds only), date, payment ID and refund ID (the admin-entered reason is left out of single-booking refund emails). The bulk "Cancel event" action sends a different variant — subject "<event> has been cancelled — your refund is on its way", an apology intro, the form's **Reason** text shown to guests verbatim (HTML-escaped; the form label says so), and a pointer to `/events`; `refunded_at`
 itself is set later, only once Razorpay's `refund.processed` webhook confirms completion — see
 "Razorpay is the source of truth" above. A row shows a **Refund initiated** badge in between, and
 **Refund failed** with a retry option if Razorpay reports `refund.failed`. This is the same
@@ -193,7 +193,7 @@ and its receipt copied Linger; fixed.
 **Declining a cancellation request.** A pending request (`Cancellation requested`) also has a
 **Decline request** action (`POST /api/event-payments-admin/decline`, same `refund` capability,
 migration `0029_event_payments_cancellation_declined.sql`): it audit-logs `event-payments.cancellation_declined`,
-records who/when/why, flips the row to `Request declined`, and emails the guest (cc `core-team@tvc.farm`/
+records who/when/why, flips the row to `Request declined`, and emails the guest (cc `contact@tvc.farm`/
 `stay@linger.in`) that the booking stays confirmed, with the form's reason shown verbatim (the form says so). A declined
 booking is still live: it can later be refunded normally, and a whole-event "Cancel event" still sweeps it in.
 

@@ -17,7 +17,7 @@ import PageHero from '../components/PageHero.astro';
     </div>
 
     <div id="cb-not-found" hidden>
-      <p>We couldn't find a booking for this link. If you think that's wrong, email <a href="mailto:core-team@tvc.farm">core-team@tvc.farm</a> with your payment confirmation.</p>
+      <p>We couldn't find a booking for this link. If you think that's wrong, email <a href="mailto:contact@tvc.farm">contact@tvc.farm</a> with your payment confirmation.</p>
     </div>
 
     <div id="cb-already" class="card" hidden>
@@ -102,7 +102,7 @@ import PageHero from '../components/PageHero.astro';
       if (!res.ok) throw new Error('request failed');
       show(done);
     } catch {
-      errorEl.textContent = 'Something went wrong — try again, or email core-team@tvc.farm directly.';
+      errorEl.textContent = 'Something went wrong — try again, or email contact@tvc.farm directly.';
       errorEl.hidden = false;
       finish();
     }
