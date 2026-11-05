@@ -44,8 +44,11 @@ bulk-payment file, and split the single bank debit automatically.
 - **Design consequences:** the net amount is entered in whole rupees (this settles the rounding of the payout, not of the
   per-day rate); the generator writes C as text and E as a number (an account starting with 0 would lose it, so such an account
   is written as text and flagged); G, I and L come from the month, never typed.
-- **Still to confirm with the bank's portal:** whether it reads only columns A to L; what `10` means and whether it ever changes;
-  whether `N` in column A is overridden by the transfer method chosen at upload (NEFT / RTGS / instant).
+- **Confirmed by the owner (2026-11-05):** the portal accepts the file as laid out, and the generator writes columns A to L only (the
+  helper columns are not part of it). `K` is always `10`: keep it as a setting, with no meaning needed. `A` is the payment mode:
+  `N` (NEFT) by default and always so far; the other value the portal offers is `I`. So the run carries a payment mode that
+  defaults to `N`, and the generator accepts `N` or `I` only. Not confirmed: whether the transfer method chosen at upload
+  overrides column A; the export must not assume either way (the preparer still checks it in the portal as today).
 
 ## Read first
 `DESIGN.md` (Payroll, fin_employees and related tables, Access); the sessions 04 and 05 notes; the payroll
