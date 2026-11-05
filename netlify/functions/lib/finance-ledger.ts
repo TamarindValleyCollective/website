@@ -22,6 +22,19 @@ const BULK_MAX = 50;
 const jsonResponse = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
 const fail = (error: string, status = 400, extra: Json = {}) => jsonResponse({ error, ...extra }, status);
 const rows = async (path: string): Promise<Json[]> => (await (await rest(path)).json()) as Json[];
+
+// Supabase's API returns at most 1,000 rows per request, whatever `limit` is asked for, so anything that may hold more
+// (bank lines, allocations) is read a page at a time. `path` must carry its own `order=` ending in a unique column, or the
+// pages can overlap or skip rows. Never rely on `limit=` above 1000 in this file.
+const PAGE_SIZE = 1000;
+async function rowsAll(path: string): Promise<Json[]> {
+  const out: Json[] = [];
+  for (let offset = 0; ; offset += PAGE_SIZE) {
+    const page = await rows(`${path}&limit=${PAGE_SIZE}&offset=${offset}`);
+    out.push(...page);
+    if (page.length < PAGE_SIZE) return out;
+  }
+}
 const rpc = async (name: string, body: Json) => (await rest(`/rpc/${name}`, { method: 'POST', body: JSON.stringify(body) })).json();
 
 async function readBody(req: Request): Promise<Json | null> {
@@ -48,7 +61,7 @@ const audit = (actorId: string, entity: string, action: string, target: string |
 async function lookups() {
   const [categories, parties, projects, entities, closed] = await Promise.all([
     rows('/fin_categories?select=id,name,type,active&order=type.asc,name.asc'),
-    rows('/fin_parties?select=id,name,kind&active=eq.true&merged_into=is.null&order=name.asc'),
+    rowsAll('/fin_parties?select=id,name,kind&active=eq.true&merged_into=is.null&order=name.asc,id.asc'),
     rows('/fin_projects?select=id,name,kind,financial_year,status&order=financial_year.desc,name.asc'),
     rows('/fin_entities?select=id,requester_party_id&order=created_at.asc&limit=1'),
     rows('/fin_periods?select=month&status=eq.closed'),
@@ -69,8 +82,8 @@ type LineRow = { id: string; bank_account_id: string; tran_date: string; narrati
 async function loadLedger(from: string | null, to: string | null) {
   const range = `${from ? `&tran_date=gte.${from}` : ''}${to ? `&tran_date=lte.${to}` : ''}`;
   const [lines, allocations] = await Promise.all([
-    rows(`/fin_bank_lines?select=id,bank_account_id,tran_date,narration,direction,amount_paise&order=tran_date.desc,created_at.desc&limit=10000${range}`) as Promise<LineRow[]>,
-    rows('/fin_allocations?select=bank_line_id,amount_paise,review_state,posted_at&limit=50000'),
+    rowsAll(`/fin_bank_lines?select=id,bank_account_id,tran_date,narration,direction,amount_paise&order=tran_date.desc,created_at.desc,id.asc${range}`) as Promise<LineRow[]>,
+    rowsAll('/fin_allocations?select=bank_line_id,amount_paise,review_state,posted_at&order=id.asc'),
   ]);
   const byLine = new Map<string, Json[]>();
   for (const a of allocations) byLine.set(a.bank_line_id, [...(byLine.get(a.bank_line_id) ?? []), a]);
@@ -143,10 +156,10 @@ export async function listLedger(req: Request): Promise<Response> {
 // Posted allocations on lines going the other way, with how much of each is still unreversed: what a refund can undo.
 async function reversibleFor(line: Json): Promise<Json[]> {
   const opposite = line.direction === 'debit' ? 'credit' : 'debit';
-  const lineIds = (await rows(`/fin_bank_lines?select=id,tran_date&direction=eq.${opposite}&order=tran_date.desc&limit=3000`)) as Json[];
+  const lineIds = await rowsAll(`/fin_bank_lines?select=id,tran_date&direction=eq.${opposite}&order=tran_date.desc,id.asc`);
   if (!lineIds.length) return [];
   const dateOf = new Map(lineIds.map((l) => [l.id as string, l.tran_date as string]));
-  const allocs = await rows('/fin_allocations?select=id,bank_line_id,party_id,category_id,amount_paise,nature,period,reverses_allocation_id&posted_at=not.is.null&limit=20000');
+  const allocs = await rowsAll('/fin_allocations?select=id,bank_line_id,party_id,category_id,amount_paise,nature,period,reverses_allocation_id&posted_at=not.is.null&order=id.asc');
   const reversed = new Map<string, number>();
   for (const a of allocs) if (a.reverses_allocation_id) reversed.set(a.reverses_allocation_id, (reversed.get(a.reverses_allocation_id) ?? 0) + a.amount_paise);
   return allocs
@@ -160,7 +173,7 @@ async function reversibleFor(line: Json): Promise<Json[]> {
 async function reviewContext(ctx: Awaited<ReturnType<typeof lookups>>) {
   const [rules, allAccounts] = await Promise.all([
     rows('/fin_rules?select=id,priority,matcher,party_id,category_id,nature_template,needs_review,active&active=eq.true'),
-    rows('/fin_party_accounts?select=party_id,status,retired_on&status=neq.superseded'),
+    rowsAll('/fin_party_accounts?select=party_id,status,retired_on&status=neq.superseded&order=id.asc'),
   ]);
   const today = new Date().toISOString().slice(0, 10);
   const stateOfParty = (partyId: string | null): 'verified' | 'unverified' | 'none' => {
@@ -572,7 +585,7 @@ export async function listPeriods(req: Request): Promise<Response> {
   try {
     const { lines, byLine } = await loadLedger(null, null);
     const periods = await rows('/fin_periods?select=month,status,closed_at');
-    const allocations = await rows('/fin_allocations?select=period,review_state&review_state=neq.ok&limit=50000');
+    const allocations = await rowsAll('/fin_allocations?select=period,review_state&review_state=neq.ok&order=id.asc');
     const status = new Map(periods.map((p) => [String(p.month).slice(0, 10), p]));
     const months = new Map<string, { unallocated: number; review: number }>();
     const slot = (m: string) => months.get(m) ?? (months.set(m, { unallocated: 0, review: 0 }), months.get(m)!);
@@ -602,11 +615,11 @@ export async function closePeriod(req: Request, month: string): Promise<Response
   try {
     const entity = await entityId();
     const next = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 1)).toISOString().slice(0, 10);
-    const [lines, review] = await Promise.all([
-      rows(`/fin_bank_lines?select=id&tran_date=gte.${month}&tran_date=lt.${next}&limit=5000`),
-      rows(`/fin_allocations?select=id&period=eq.${month}&review_state=neq.ok&limit=5000`),
+    const [lines, review, posted] = await Promise.all([
+      rowsAll(`/fin_bank_lines?select=id&tran_date=gte.${month}&tran_date=lt.${next}&order=id.asc`),
+      rowsAll(`/fin_allocations?select=id&period=eq.${month}&review_state=neq.ok&order=id.asc`),
+      rowsAll('/fin_allocations?select=bank_line_id,id&posted_at=not.is.null&order=id.asc'),
     ]);
-    const posted = lines.length ? await rows(`/fin_allocations?select=bank_line_id&bank_line_id=in.(${lines.map((l) => l.id).join(',')})&posted_at=not.is.null&limit=50000`) : [];
     const done = new Set(posted.map((a) => a.bank_line_id));
     const unallocated = lines.filter((l) => !done.has(l.id)).length;
     if (unallocated > 0 || review.length > 0) {

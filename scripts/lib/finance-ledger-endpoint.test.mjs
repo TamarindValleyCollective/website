@@ -114,7 +114,12 @@ globalThis.fetch = async (url, init = {}) => {
   }
   if (table.startsWith('fin_')) {
     const rows = db[table] ?? [];
-    if (method === 'GET') return json(rows.filter((r) => matches(r, u.searchParams)));
+    if (method === 'GET') {
+      // Like Supabase's API: offset and limit are honoured, but a request never returns more than 1,000 rows.
+      const offset = Number(u.searchParams.get('offset') ?? 0);
+      const limit = Math.min(Number(u.searchParams.get('limit') ?? 1000), 1000);
+      return json(rows.filter((r) => matches(r, u.searchParams)).slice(offset, offset + limit));
+    }
     if (method === 'POST') {
       const row = { id: ID(++n), active: true, hit_count: 0, ...body };
       rows.push(row);
@@ -391,4 +396,48 @@ test('the requester is set by a director and is the person whose circle payments
   assert.equal((await api(director, '/settings/requester', { method: 'POST', body: { partyId: ID(999) } })).status, 400);
   assert.equal((await api(director, '/settings/requester', { method: 'POST', body: { partyId: P_NURSERY } })).status, 200);
   assert.equal(db.fin_entities[0].requester_party_id, P_NURSERY);
+});
+
+// ---- more than 1,000 rows: Supabase's API returns at most 1,000 per request, whatever limit is asked
+const bulkLines = (count, month, firstId) =>
+  Array.from({ length: count }, (_, i) => ({ id: ID(firstId + i), entity_id: E, bank_account_id: ID(2), tran_date: `${month}-${String((i % 28) + 1).padStart(2, '0')}`, narration: `UPI/P2A/${String(100000000000 + firstId + i)}/Test Vendor/Okbank/x`, direction: 'debit', amount_paise: 1000 }));
+const postedFor = (lines) => lines.map((l) => ({ id: ID(900000 + Number(l.id.slice(-8))), entity_id: E, bank_line_id: l.id, party_id: null, category_id: CAT_OPEX, amount_paise: l.amount_paise, period: `${l.tran_date.slice(0, 7)}-01`, nature: 'Supplies', source: 'manual', review_state: 'ok', review_reason: null, reverses_allocation_id: null, posted_at: '2026-11-04T00:00:00Z', created_by: 'u0' }));
+
+test('the ledger counts every line, not just the first 1,000 the database returns', async () => {
+  reset();
+  db.fin_bank_lines = bulkLines(1376, '2026-07', 1000);
+  const op = sign('u1', 'user');
+  const all = await (await api(op, '/ledger?filter=all')).json();
+  assert.equal(all.total, 1376);
+  assert.equal(all.counts.all, 1376);
+  assert.equal(all.counts.unallocated, 1376);
+  // The oldest lines (beyond the first 1,000 by date) are reachable too.
+  const last = await (await api(op, '/ledger?filter=all&offset=1300')).json();
+  assert.equal(last.lines.length, 76);
+});
+
+test('a line posted beyond the first 1,000 allocations is still seen as allocated', async () => {
+  reset();
+  db.fin_bank_lines = bulkLines(1200, '2026-07', 1000);
+  db.fin_allocations = postedFor(db.fin_bank_lines);
+  const op = sign('u1', 'user');
+  const counts = (await (await api(op, '/ledger?filter=all')).json()).counts;
+  assert.equal(counts.unallocated, 0, 'all 1,200 are posted');
+  assert.equal(counts.review, 0);
+  const overview = await (await api(op, '/overview')).json();
+  assert.equal(overview.attention.toAllocate, 0);
+});
+
+test('a month with more than 1,000 lines closes when they are all posted, and a flagged one past 1,000 still blocks it', async () => {
+  reset();
+  db.fin_bank_lines = bulkLines(1100, '2026-07', 1000);
+  db.fin_allocations = postedFor(db.fin_bank_lines);
+  const director = sign('d1', 'admin');
+  // Flag the very last allocation, which sits beyond the first 1,000.
+  db.fin_allocations[1099].review_state = 'needs_review';
+  const blocked = await api(director, '/periods/2026-07-01/close', { method: 'POST' });
+  assert.equal(blocked.status, 409);
+  assert.equal((await blocked.json()).needsReview, 1);
+  db.fin_allocations[1099].review_state = 'ok';
+  assert.equal((await api(director, '/periods/2026-07-01/close', { method: 'POST' })).status, 200);
 });

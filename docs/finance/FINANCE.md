@@ -260,7 +260,11 @@ categories, the requester); routes in `lib/finance-ledger.ts`. `0083` is applied
   (desktop and 500px, dark appearance) with invented data; not yet with real data or in the light appearance.
 - **Audit.** Every save, review decision, rule and category change, period close and recategorisation is written to `fin_audit_log`
   first, with ids and counts only (never a name, narration or amount); if it cannot be written nothing changes.
-- **Scale.** The ledger list works the state of every line out in the function (a few thousand lines today). Move it into SQL
+- **Scale, and the 1,000-row cap.** Supabase's API returns at most 1,000 rows per request whatever `limit` is asked for. The first
+  version asked for 10,000 and silently showed only 1,000 of the 1,376 lines (found the first time it was opened on real data). Every
+  read of lines or allocations now goes through `rowsAll` in `lib/finance-ledger.ts`, which pages 1,000 at a time in a stable order;
+  never use `limit=` above 1000 there. The endpoint test's fake database enforces the same cap, with tests at 1,376 lines and 1,200
+  posted allocations. The list still works each line's state out in the function (a few thousand lines is fine); move it into SQL
   before the ledger reaches tens of thousands of rows.
 - **Database guards** (checked on a throwaway local Postgres, 2026-11-05): a short sum cannot be posted, an over-sum cannot be
   saved, a split posts, a posted row cannot be changed or deleted, a reversal needs the opposite direction and cannot exceed what is
