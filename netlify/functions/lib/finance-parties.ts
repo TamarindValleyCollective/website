@@ -205,7 +205,7 @@ export async function updateParty(req: Request, id: string): Promise<Response> {
   const body = await readBody(req);
   if (!body) return fail('Send the changes as JSON.');
   try {
-    const [party] = await rows(`/fin_parties?id=eq.${id}&select=id,name,kind,active,household_id`);
+    const [party] = await rows(`/fin_parties?id=eq.${id}&select=id,name,kind,active,household_id,person_id`);
     if (!party) return fail('Not found', 404);
     const change = validatePartyChange(party, body);
     if (change.error || !change.changed) return fail(change.error ?? 'Nothing to change.');
