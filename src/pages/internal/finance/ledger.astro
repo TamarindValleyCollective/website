@@ -1388,7 +1388,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     rowEl.addEventListener('keydown', onKey);
     // Double-click a cell of a line that cannot be edited in its row: a posted line with no party gets its party picker right there; anything else (partly
     // allocated, flagged, posted) opens its sheet. Lines that can be edited in the row keep the single click.
-    rowEl.addEventListener('dblclick', (e) => {
+    rowEl.addEventListener('dblclick', (e: MouseEvent) => {
       const now = byId.get(l.id) ?? l;
       if (editable(now) || !data?.canAllocate || (e.target as HTMLElement).closest('button, input, a, .combo')) return;
       if (now.missingParty && now.state === 'allocated' && partyText.contains(e.target as Node)) void editPartyInline(now, partyText);
