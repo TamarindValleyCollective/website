@@ -56,6 +56,10 @@ disagree `global.css` wins. In any `.astro` or `.css` file:
   dark appearance (same file, tokens only) that follows the device or the account menu's Appearance choice; keep it
   working by using `--tvc-*` tokens for every colour in admin files (a raw colour will not turn dark; mix tokens with
   `color-mix` when you need an in-between shade) and check a new page in Dark as well as Light.
+- Choosing from a long list, or a value that lives under other values (Maintenance › year › unit, Vendors › a vendor), uses the **linked picker**
+  (`scripts/lib/linked-picker.mjs`, styles `src/styles/linked-picker.css`; read `docs/linked-picker.md`), never a native `<select>` with dozens of options. A short fixed
+  list (a handful of choices) stays a `.segmented` or a plain select. `combo()` in `scripts/lib/finance-ui.mjs` is the flat-list wrapper over it. Its list opens outside any scrolling table, so
+  a page does not need to give it room.
 
 `npm run lint:css` checks this (Stylelint); the `Design language` GitHub Action runs it on every
 PR. Raw hex colors are errors (CI fails); radius literals are warnings for now. Admin font sizes outside the scale are errors. A color that genuinely isn't a TVC color (a third-party brand, a data

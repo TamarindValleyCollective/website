@@ -122,6 +122,7 @@ test('editing a party: only fields that really change are patched and named; a m
   assert.ok(validatePartyChange(party, { kind: 'wizard' }).error);
   assert.ok(validatePartyChange(party, { active: 'yes' }).error);
   assert.ok(validatePartyChange({ ...party, kind: 'member', household_id: 'h1' }, { kind: 'vendor' }).error);
+  assert.ok(validatePartyChange({ ...party, kind: 'member', household_id: null, person_id: 'p1' }, { kind: 'vendor' }).error);
 });
 
 test('the import may leave the IFSC out (the sheet has none); the directory form may not', () => {

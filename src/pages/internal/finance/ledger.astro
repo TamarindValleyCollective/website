@@ -11,6 +11,7 @@
 // Same shell as the other internal tools: Google Sign-In gated, unlinked from the public site, noindex. Everything the server returns is
 // placed with textContent only, never as HTML.
 import StaffLayout from '../../../layouts/StaffLayout.astro';
+import '../../../styles/linked-picker.css';
 import SignInGate from '../../../components/SignInGate.astro';
 ---
 
@@ -25,11 +26,14 @@ import SignInGate from '../../../components/SignInGate.astro';
 
     <div id="content" hidden>
       <div class="lbar">
-        <label class="field">
-          <span class="visually-hidden">Search every column</span>
-          <input id="q" type="search" placeholder="Search all columns" autocomplete="off" />
-        </label>
-        <div class="segmented" id="chips" role="group" aria-label="Show"></div>
+        <div class="lsearch">
+          <div class="sbox" id="sbox">
+            <span class="sbox-chips" id="schips"></span>
+            <input id="q" type="search" placeholder="Search every column" aria-label="Search every column. Press Enter to keep it as a chip." autocomplete="off" />
+            <button type="button" id="sopen" class="sbox-caret" aria-expanded="false" aria-controls="spop" aria-label="Filters, group by and favorites">▾</button>
+          </div>
+          <div id="spop" class="spop" hidden></div>
+        </div>
         <label class="sortpick">
           <span>Sort</span>
           <select id="sortpick" aria-label="Sort the lines">
@@ -43,10 +47,36 @@ import SignInGate from '../../../components/SignInGate.astro';
           </select>
         </label>
         <button type="button" id="more-tools" class="button button--outline button--small more-tools" aria-expanded="false">More</button>
-        <button type="button" id="tips-toggle" class="button button--outline button--small" aria-expanded="false" aria-controls="tips">Tips and shortcuts</button>
+        <button type="button" id="select-all-btn" class="button button--outline button--small select-all-btn" hidden>Select all</button>
+        <span class="colmenu-wrap">
+          <button type="button" id="cols-toggle" class="button button--outline button--small" aria-expanded="false" aria-controls="colmenu">Columns</button>
+          <div id="colmenu" class="colmenu" hidden></div>
+        </span>
+        <button type="button" id="colsearch-toggle" class="button button--outline button--small colsearch-toggle" aria-expanded="false">Column search</button>
+        <button type="button" id="tips-toggle" class="button button--outline button--small" aria-expanded="false" aria-controls="tips">Help and shortcuts</button>
         <button type="button" id="accept-all" class="button button--outline" hidden>Fill in the confident suggestions</button>
       </div>
       <div id="tips" class="tips" hidden>
+        <h3 class="tips-title">How a line is described</h3>
+        <p>Every bank line gets four answers. Each answer has a level above it, and the level above narrows the list below it.</p>
+        <ul class="tips-tree">
+          <li><strong>What it was.</strong> Category group (Member money, Running costs, Capital purchases, Income…), then the <strong>category</strong>.
+            <ul>
+              <li>The category field opens one level at a time. A row marked <strong>⟹</strong> opens the next level (Maintenance ⟹ the year ⟹ the unit), the levels above stay on screen, and typing searches only the rows you can see.</li>
+              <li>Maintenance is decided in this order: the <strong>maintenance year</strong> (the payment date's year is listed first: pick another when someone pays another year's), then <strong>which unit's maintenance</strong> it is. The unit is required: a maintenance line is not ready without it. Units can be found by the names of the people living in them.</li>
+              <li>A capital purchase (Plantation, Nursery…) can also be given a <strong>project</strong>.</li>
+            </ul>
+          </li>
+          <li><strong>Who was on the other side.</strong> Kind of party (Member, Vendor, Employee…), then the <strong>party</strong>.
+            <ul>
+              <li>The party field works the same way: the kind (Members, Vendors, Employees… or <em>All parties</em>), then the party. After the category it opens on the kind that goes with it: vendors for running costs, government for taxes. Go back up to the top to see every kind.</li>
+              <li><strong>Maintenance can be paid by anybody</strong>: a member, a relative, a company paying for a unit. So the unit says whose maintenance it is, and the payer is chosen after it. The party list opens on the people living in the chosen unit. If the payer is a member, their own unit is listed first in the unit list (marked "the payer's unit"): it is offered, never filled in for you.</li>
+            </ul>
+          </li>
+          <li><strong>What it was for</strong>, in your own words.</li>
+          <li><strong>The bank's narration</strong> is the evidence, not an answer. Hover a line to read it, open the line to see it under the fields, click the date for the full line, or switch on <em>Columns → Bank narration</em>.</li>
+        </ul>
+        <p>Members come from the member records: everyone in a unit already has a party, and a person added to a unit gets one automatically, so a member is never added here by typing a name. Someone who leaves becomes a <strong>former member</strong>. Their old payments stay under their name and unit.</p>
         <p><strong>Keyboard:</strong> <code>Ctrl+Enter</code> on a line accepts its suggestions and moves to the next · <code>Alt+Up</code> / <code>Alt+Down</code> go to the same cell on the line above or below · <code>Tab</code> walks every line · <code>Shift</code>-click a tick box for a range · <code>Ctrl+Z</code> undoes the last bulk change (for two minutes).</p>
         <p>The box above looks in every column. Under a heading you can be exact:</p>
         <ul>
@@ -78,6 +108,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       <ul class="list" id="months"></ul>
       <p class="hint">Click a heading to sort, type under one to search that column; click a narration to split the line, refund it, or see its history. Tab moves through the cells; Alt+Up and Alt+Down go to the same cell on the line above or below; Ctrl+Enter on a line accepts its suggestions and moves to the next.</p>
     </div>
+    <div id="ltip" class="ltip" role="tooltip" hidden></div>
     <div id="actionbar" class="abar" role="region" aria-label="Selected lines" hidden></div>
     <dialog id="party-sheet" class="sheet" aria-labelledby="party-title"></dialog>
     <dialog id="line-sheet" class="sheet" aria-labelledby="line-title"></dialog>
@@ -89,7 +120,10 @@ import SignInGate from '../../../components/SignInGate.astro';
   import { Virtualizer, elementScroll, observeElementOffset, observeElementRect } from '@tanstack/virtual-core';
   import { StaffAuthError, askSheet, clearStepUp, clearToken, closeOnBackdrop, decodeTokenEmail, getToken, setToken, showToast, staffFetch } from '../../../../scripts/lib/staff-client.mjs';
   import { clearState, showFailure, showLoading } from '../../../../scripts/lib/staff-states.mjs';
-  import { button, categorySelect, h, input, labelled, niceDate, niceMonth, parseRupees, partySelect, pill, present, rupees } from '../../../../scripts/lib/finance-ui.mjs';
+  import { linkedPicker } from '../../../../scripts/lib/linked-picker.mjs';
+  import { categoryNodes, categoryPath, partyNodes, partyPath, partyStart, readCategoryPath } from '../../../../scripts/lib/finance-picker-nodes.mjs';
+  import { button, categoryOptions, combo, h, input, labelled, niceDate, niceMonth, parseRupees, partyOptions, pill, present, rupees, unitOptions } from '../../../../scripts/lib/finance-ui.mjs';
+  import { GROUP_FIELDS, buildItems, defaultUnitFor, financialYearOf, groupLabel, matchOptions, kindLabel, kindsInOrder, optionCounts, optionKeys, optionLabel, passesChips, passesWords, readFavorites, withFavorite } from '../../../../scripts/lib/finance-search.mjs';
   import { compareRows, describeCondition, matchAmount, matchDate, matchText, parseAmount, parseDate, parseText } from '../../../../scripts/lib/finance-columns.mjs';
 
   declare const google: any;
@@ -104,12 +138,16 @@ import SignInGate from '../../../components/SignInGate.astro';
     effective: { category: string; party: string; nature: string }; // what it was posted to, or is suggested: what the column searches read
   };
   type Category = { id: string; name: string; type: string; active: boolean };
-  type Party = { id: string; name: string; kind: string };
+  type Party = { id: string; name: string; kind: string; household_id?: string | null; former_since?: string | null };
   type Project = { id: string; name: string; kind: string; financial_year: number; status: string };
-  type Lookups = { categories: Category[]; parties: Party[]; projects: Project[]; requesterPartyId: string | null; closedMonths: string[]; households: { id: string; label: string }[] };
+  type Lookups = { categories: Category[]; parties: Party[]; projects: Project[]; requesterPartyId: string | null; closedMonths: string[]; households: { id: string; label: string; people?: string[] }[] };
   type Filter = 'unallocated' | 'review' | 'noparty' | 'all';
   type ListData = { canAllocate: boolean; lines: Line[]; lookups: Lookups };
   type Field = 'categoryId' | 'partyId' | 'nature';
+  // Members come from the member records: while the list is limited to members, it says so instead of offering to add one.
+  // Members come from the member records: inside "Members" the party list says so instead of offering to add one.
+  const NO_MEMBER_ADD = 'Members come from the member records. Add a new member in the member portal, and they appear here.';
+  type ComboEl = HTMLElement & { value: string; path: string[]; input: HTMLInputElement; setNodes(list: any[]): void; setStartAt(fn: (() => string[] | null) | null): void; setBlank(text: string): void; setPlaceholder(text: string | null): void; setOptions(list: { value: string; label: string; group?: string }[]): void };
   type Draft = Record<Field, string>;
 
   const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -125,12 +163,30 @@ import SignInGate from '../../../components/SignInGate.astro';
   let data: ListData | null = null;
   let all: Line[] = []; // every bank line, fetched once
   let byId = new Map<string, Line>();
-  let lines: Line[] = []; // the ones the chip, search and column conditions leave, in sort order
+  let lines: Line[] = []; // the ones the chips, search and column conditions leave and that are showing (not inside a closed group), in order
   let counts: Record<Filter, number> = { unallocated: 0, review: 0, noparty: 0, all: 0 };
   let filterErrors: Record<string, string> = {};
   // The address can name the chip to open on (the Overview links to ?filter=review).
-  let filter: Filter = (['unallocated', 'review', 'noparty', 'all'] as const).find((f) => f === new URLSearchParams(location.search).get('filter')) ?? 'unallocated';
-  let query = '';
+  const startFilter = new URLSearchParams(location.search).get('filter');
+  let chips: [string, string][] = startFilter === 'all' ? [] : [['status', ['unallocated', 'review', 'noparty'].includes(startFilter ?? '') ? startFilter! : 'unallocated']];
+  let words: string[] = []; // word chips kept with Enter
+  let query = ''; // what is being typed right now; it filters live
+  let groupBy: string[] = [];
+  const collapsed = new Set<string>();
+  type Item = { kind: 'line'; line: Line } | { kind: 'group'; key: string; depth: number; field: string; label: string; count: number; netPaise: number; open: boolean };
+  let items: Item[] = []; // what the list shows: group headings and the lines of the groups that are open
+  let itemIndexOfLine = new Map<string, number>();
+  let matched = 0; // lines the search leaves, including those inside collapsed groups
+  const today = () => new Date().toISOString().slice(0, 10);
+  // The bank's narration is the evidence the suggestions come from, not what you decide, so it is not a column until asked for (Columns).
+  // It is always one tap away: open a line (its date) for the full text, or open the row to see it under the fields.
+  const narrationKey = 'tvc-ledger-narration-column';
+  let showNarration = false;
+  try {
+    showNarration = localStorage.getItem(narrationKey) === '1';
+  } catch {
+    // storage blocked: the column is off for this visit
+  }
   const colFilters: Record<string, string> = {};
   let loadSeq = 0;
   let postedThisSitting = 0;
@@ -252,6 +308,34 @@ import SignInGate from '../../../components/SignInGate.astro';
       // an unreadable saved draft is ignored
     }
   }
+  // What a line is described with beyond its category, party and wording: the maintenance year, the unit and the project. Only what a person
+  // set is kept here; the rest is worked out (the year of the date, the payer's own unit), so changing the party or category changes it too.
+  type Extra = { householdId?: string; maintenanceYear?: string; projectId?: string };
+  const extras = new Map<string, Extra>();
+  const extraOf = (id: string): Extra => extras.get(id) ?? {};
+  const setExtra = (id: string, patch: Extra) => extras.set(id, { ...extraOf(id), ...patch });
+  let unitLabelsCache: Map<string, string> | null = null;
+  const unitLabels = () => (unitLabelsCache ??= new Map((data?.lookups.households ?? []).map((x) => [x.id, x.label])));
+  const typeOfCategory = (categoryId: string) => data?.lookups.categories.find((c) => c.id === categoryId)?.type ?? '';
+  const partyById = (id: string) => data?.lookups.parties.find((p) => p.id === id) ?? null;
+  // The category a line is being described with (typed, or the one suggested and shown), so the party list and the follow-up fields can follow it.
+  const categoryShown = (l: Line) => draftOf(l.id).categoryId || ghostOf(l, 'categoryId');
+  // What would be posted for the unit, year and project of a line: the person's choice, else the sensible default for this payer and date.
+  function describedWith(l: Line) {
+    const d = draftOf(l.id);
+    const type = typeOfCategory(d.categoryId);
+    const x = extraOf(l.id);
+    const maintenance = type === 'member_contribution';
+    return {
+      type,
+      maintenance,
+      capital: type === 'capex',
+      year: maintenance ? x.maintenanceYear ?? financialYearOf(l.date) : '',
+      unit: maintenance ? x.householdId ?? '' : '',
+      suggestedUnit: maintenance ? defaultUnitFor(partyById(d.partyId)) ?? '' : '', // only offered, never filled in: the payer can be anybody
+      project: type === 'capex' ? x.projectId ?? '' : '',
+    };
+  }
   const editable = (l: Line) => Boolean(data?.canAllocate) && l.state === 'unallocated' && !l.review;
   const nameOf = (list: { id: string; name: string }[], id: string | null) => list.find((x) => x.id === id)?.name ?? '';
   const ghostOf = (l: Line, f: Field): string => {
@@ -269,7 +353,9 @@ import SignInGate from '../../../components/SignInGate.astro';
   };
   const isReady = (l: Line) => {
     const d = draftOf(l.id);
-    return Boolean(d.categoryId && d.nature.trim());
+    if (!(d.categoryId && d.nature.trim())) return false;
+    const dw = describedWith(l);
+    return !(dw.maintenance && !dw.unit); // a maintenance line must say whose maintenance it is
   };
   window.addEventListener('beforeunload', (e) => {
     if ([...drafts.values()].some((d) => d.categoryId || d.partyId || d.nature)) e.preventDefault();
@@ -281,11 +367,11 @@ import SignInGate from '../../../components/SignInGate.astro';
     columns: [
       { id: 'select', header: '', enableSorting: false },
       { id: 'date', header: 'Date', accessorFn: (l: Line) => l.date },
-      { id: 'narration', header: 'Bank narration', accessorFn: (l: Line) => l.narration },
       { id: 'amount', header: 'Amount', accessorFn: (l: Line) => l.amountPaise },
       { id: 'category', header: 'Category', accessorFn: (l: Line) => l.allocation?.categoryId ?? '' },
       { id: 'party', header: 'Paid to / from', accessorFn: (l: Line) => l.allocation?.partyId ?? '' },
-      { id: 'nature', header: 'What it was for', accessorFn: (l: Line) => l.allocation?.nature ?? '' },
+      { id: 'status', header: 'Status', accessorFn: (l: Line) => (l.review ? 'review' : l.state) },
+      { id: 'narration', header: 'Bank narration', accessorFn: (l: Line) => l.narration },
     ],
     getRowId: (l: Line) => l.id,
     getCoreRowModel: getCoreRowModel(),
@@ -329,12 +415,13 @@ import SignInGate from '../../../components/SignInGate.astro';
   let repaint = false; // a measurement changed a row's height while painting: place the rows again
   let pendingFocus: { index: number; field: Field | 'start' | 'end' } | null = null;
   const mounted = new Map<string, HTMLElement>();
+  const mountedGroups = new Map<string, HTMLElement>();
   const virtualizer = new Virtualizer<HTMLElement, HTMLElement>({
     count: 0,
     getScrollElement: () => scrollEl,
-    estimateSize: () => (phone.matches ? 270 : 66),
+    estimateSize: (i) => (items[i]?.kind === 'group' ? 44 : phone.matches ? 64 : 46),
     overscan: 8,
-    getItemKey: (i) => lines[i]?.id ?? i,
+    getItemKey: (i) => { const it = items[i]; return !it ? i : it.kind === 'group' ? `g:${it.key}` : it.line.id; },
     scrollToFn: elementScroll,
     observeElementRect,
     observeElementOffset,
@@ -351,7 +438,7 @@ import SignInGate from '../../../components/SignInGate.astro';
 
   function setCount() {
     syncTable();
-    virtualizer.setOptions({ ...virtualizer.options, count: lines.length });
+    virtualizer.setOptions({ ...virtualizer.options, count: items.length });
     virtualizer._willUpdate();
     paint();
   }
@@ -375,6 +462,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       if (status !== 200) throw new Error('load failed');
       data = out as ListData;
       all = data.lines;
+      unitLabelsCache = null;
       byId = new Map(all.map((l) => [l.id, l]));
       clearState(statusEl);
       intro.hidden = false;
@@ -498,7 +586,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   function editor(dlg: HTMLDialogElement, d: Detail): HTMLElement {
     const lk = d.lookups;
     const line = d.line;
-    type RowUi = { el: HTMLElement; household: HTMLSelectElement; year: HTMLInputElement; unitBox: HTMLElement; amount: HTMLInputElement; category: HTMLSelectElement; party: HTMLSelectElement; nature: HTMLInputElement; period: HTMLInputElement; project: HTMLSelectElement | null; reverses: HTMLSelectElement | null; reason: HTMLInputElement; ruleId: string | null; source: string };
+    type RowUi = { el: HTMLElement; household: ComboEl; year: HTMLInputElement; unitBox: HTMLElement; amount: HTMLInputElement; category: ComboEl; party: ComboEl; nature: HTMLInputElement; period: HTMLInputElement; project: ComboEl | null; reverses: ComboEl | null; reason: HTMLInputElement; ruleId: string | null; source: string };
     const rowsUi: RowUi[] = [];
     const rowsBox = h('div', { class: 'alloc-rows' });
     const remainingEl = h('p', { class: 'remaining', attrs: { 'aria-live': 'polite' } });
@@ -507,19 +595,17 @@ import SignInGate from '../../../components/SignInGate.astro';
     const closedBox = h('div', { class: 'stack-form', attrs: { hidden: '' } }, labelled('Reason for changing a closed month', closedReason));
 
     // Every party picker in this sheet, so a party added in one row is available in all of them.
-    const partySelects: HTMLSelectElement[] = [];
+    const partySelects: ComboEl[] = [];
     function addPartyEverywhere(p: Party) {
       lk.parties.push(p);
-      for (const sel of partySelects) {
-        const opt = h('option', { text: p.name, attrs: { value: p.id } });
-        sel.insertBefore(opt, sel.querySelector(`option[value="${NEW_PARTY}"]`));
-      }
+      lk.parties.sort((a, b) => a.name.localeCompare(b.name));
+      for (const sel of partySelects) sel.setOptions(partyOptions(lk.parties));
     }
     // Add a party that is not in the register yet, right here. Bank details are added later on the Parties page and verified there.
     function openNewParty(box: HTMLElement, name: string, kind: string, onAdded: (id: string) => void) {
       const nameInput = input('newPartyName', { placeholder: 'Name as it should appear in the register' }) as HTMLInputElement;
       nameInput.value = name;
-      const kindSel = h('select', { attrs: { name: 'newPartyKind' } }, ...Object.entries(PARTY_KINDS).map(([k, label]) => h('option', { text: label, attrs: { value: k } }))) as HTMLSelectElement;
+      const kindSel = h('select', { attrs: { name: 'newPartyKind' } }, ...Object.entries(PARTY_KINDS).filter(([k]) => k !== 'member').map(([k, label]) => h('option', { text: label, attrs: { value: k } }))) as HTMLSelectElement;
       kindSel.value = kind;
       const note = h('p', { class: 'error', attrs: { hidden: '' } });
       const add = button('Add to register', async () => {
@@ -558,36 +644,36 @@ import SignInGate from '../../../components/SignInGate.astro';
     function addRow(init: Partial<{ amountPaise: number; categoryId: string; partyId: string; nature: string; period: string; ruleId: string | null; source: string }> = {}) {
       const amount = input('amount', { inputmode: 'decimal', placeholder: '0.00', 'aria-label': 'Amount' }) as HTMLInputElement;
       amount.value = init.amountPaise ? (init.amountPaise / 100).toFixed(2) : '';
-      const category = categorySelect(lk.categories, { selected: init.categoryId ?? '' });
-      const party = partySelect(lk.parties, { selected: init.partyId ?? '' });
-      party.append(h('option', { text: 'Add a new party…', attrs: { value: NEW_PARTY } }));
+      const category = combo({ options: categoryOptions(lk.categories, { selected: init.categoryId ?? '' }), value: init.categoryId ?? '', blank: 'Choose a category', matcher: matchOptions, ariaLabel: 'Category' }) as ComboEl;
       const newBox = h('div', { class: 'stack-form new-party', attrs: { hidden: '' } });
-      party.addEventListener('change', () => {
-        if (party.value !== NEW_PARTY) {
-          newBox.hidden = true;
-          return;
-        }
-        party.value = '';
-        openNewParty(newBox, d.suggestion?.newParty?.name ?? '', d.suggestion?.newParty?.kind ?? (line.direction === 'credit' ? 'customer' : 'vendor'), (id) => {
+      const party = combo({
+        options: partyOptions(lk.parties),
+        value: init.partyId ?? '',
+        blank: 'No one in particular',
+        matcher: matchOptions,
+        ariaLabel: line.direction === 'debit' ? 'Paid to (party)' : 'Received from (party)',
+        addNewLabel: 'Add as a new party',
+        addNew: (typed) => openNewParty(newBox, typed || d.suggestion?.newParty?.name || '', d.suggestion?.newParty?.kind ?? (line.direction === 'credit' ? 'customer' : 'vendor'), (id) => {
           party.value = id;
           refresh();
-        });
-      });
+        }),
+      }) as ComboEl;
+      party.addEventListener('change', () => (newBox.hidden = true));
       partySelects.push(party);
       const nature = input('nature', { placeholder: 'What it was for, in plain words' }) as HTMLInputElement;
       nature.value = init.nature ?? '';
       const period = input('period', { type: 'month', 'aria-label': 'Month it belongs to' }) as HTMLInputElement;
       period.value = monthOf(init.period ?? line.date);
-      const project = lk.projects.length ? (h('select', { attrs: { name: 'project' } }, h('option', { text: 'Not part of a project', attrs: { value: '' } }), ...lk.projects.map((p) => h('option', { text: `${p.name} (${p.financial_year})`, attrs: { value: p.id } }))) as HTMLSelectElement) : null;
+      const project = lk.projects.length ? (combo({ options: lk.projects.map((p) => ({ value: p.id, label: `${p.name} (${p.financial_year})` })), blank: 'Not part of a project', matcher: matchOptions, ariaLabel: 'Project' }) as ComboEl) : null;
       const reverses = d.reversible.length
-        ? (h('select', { attrs: { name: 'reverses' } }, h('option', { text: 'This is not a refund', attrs: { value: '' } }), ...d.reversible.map((r) => h('option', { text: `${niceDate(r.date)} · ${r.nature} · ${rupees(r.remainingPaise)} left`, attrs: { value: r.id } }))) as HTMLSelectElement)
+        ? (combo({ options: d.reversible.map((r) => ({ value: r.id, label: `${niceDate(r.date)} · ${r.nature} · ${rupees(r.remainingPaise)} left` })), blank: 'This is not a refund', matcher: matchOptions, ariaLabel: 'Refund of' }) as ComboEl)
         : null;
       const reason = input('reason', { placeholder: 'Why is it being refunded?' }) as HTMLInputElement;
       const reasonBox = labelled('Reason', reason);
       reasonBox.hidden = true;
       // Maintenance is paid by anybody and allocated to a unit: the unit and the year it pays for are asked for when the category is maintenance.
       const isMaintenance = () => lk.categories.find((c) => c.id === category.value)?.type === 'member_contribution';
-      const household = h('select', { attrs: { name: 'household' } }, h('option', { text: 'Choose the unit…', attrs: { value: '' } }), ...lk.households.map((x) => h('option', { text: x.label, attrs: { value: x.id } }))) as HTMLSelectElement;
+      const household = combo({ options: unitOptions(lk.households), blank: 'Choose the unit…', matcher: matchOptions, ariaLabel: 'Unit' }) as ComboEl;
       const fyOf = (iso: string) => {
         const start = Number(iso.slice(5, 7)) >= 4 ? Number(iso.slice(0, 4)) : Number(iso.slice(0, 4)) - 1;
         return `${start}-${String((start + 1) % 100).padStart(2, '0')}`;
@@ -632,9 +718,11 @@ import SignInGate from '../../../components/SignInGate.astro';
     addRow({ amountPaise: line.amountPaise, categoryId: p?.categoryId ?? '', partyId: p?.partyId ?? '', nature: p?.nature ?? '', ruleId: p?.ruleId ?? null, source: p?.source === 'rule' ? 'rule' : p?.source === 'upi_remark' ? 'upi_remark' : 'manual' });
     // A name in the narration that is not in the register: open the add-party form for the first row, ready to confirm.
     if (d.suggestion?.newParty && !p?.partyId) {
-      const first = rowsUi[0].party;
-      first.value = NEW_PARTY;
-      first.dispatchEvent(new Event('change'));
+      const first = rowsUi[0];
+      openNewParty(first.el.querySelector<HTMLElement>('.new-party')!, d.suggestion.newParty.name, d.suggestion.newParty.kind ?? (line.direction === 'credit' ? 'customer' : 'vendor'), (id) => {
+        first.party.value = id;
+        refresh();
+      });
     }
     const why = d.reasons.map((r) => d.reasonLabels[r]).filter(Boolean);
 
@@ -724,7 +812,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   // The chip, the narration search and the column conditions, then the sort, over every line already here (same rules as the server's:
   // scripts/lib/finance-columns.mjs). Nothing is fetched.
   const dateLabel = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
-  const COLUMN_LABELS: Record<string, string> = { date: 'Date', narration: 'Narration', amount: 'Amount', category: 'Category', party: 'Party', nature: 'Wording' };
+  const COLUMN_LABELS: Record<string, string> = { date: 'Date', narration: 'Narration', amount: 'Amount', category: 'Category', party: 'Party', nature: 'Wording', status: 'Status' };
   const PARSERS: Record<string, (raw: string) => any> = { date: parseDate, narration: parseText, amount: parseAmount, category: parseText, party: parseText, nature: parseText };
   // What a screen reader hears once a search settles (the progress line itself is not a live region: it changes on every keystroke).
   let announceTimer: ReturnType<typeof setTimeout> | undefined;
@@ -732,7 +820,14 @@ import SignInGate from '../../../components/SignInGate.astro';
     clearTimeout(announceTimer);
     announceTimer = setTimeout(() => ($('announce').textContent = message), 600);
   };
-  const hayOf = (l: Line) => [l.narration, l.counterparty, l.remark, l.effective.category, l.effective.party, l.effective.nature, l.allocation?.householdLabel, l.allocation?.maintenanceYear].join(' ').toLowerCase();
+  // The search box also finds a line by the people living in the unit it was posted to (so "Rishi" finds the unit's maintenance, whoever paid).
+  const residentsOfLabel = new Map<string, string>();
+  const residentsOf = (label?: string | null) => {
+    if (!label) return '';
+    if (!residentsOfLabel.size) for (const x of data?.lookups.households ?? []) residentsOfLabel.set(x.label, (x.people ?? []).join(' '));
+    return residentsOfLabel.get(label) ?? '';
+  };
+  const hayOf = (l: Line) => [l.narration, l.counterparty, l.remark, l.effective.category, l.effective.party, l.effective.nature, l.allocation?.householdLabel, residentsOf(l.allocation?.householdLabel), l.allocation?.maintenanceYear].join(' ').toLowerCase();
   function applyView(toTop = false) {
     if (!data) return;
     const conds: Record<string, any> = {};
@@ -743,6 +838,8 @@ import SignInGate from '../../../components/SignInGate.astro';
       if (parsed.error) filterErrors[col] = parsed.error;
       else conds[col] = parsed;
     }
+    const typed = query ? [...words, query] : words;
+    const now = today();
     const base = all.filter(
       (l) =>
         matchDate(conds.date, l.date, dateLabel(l.date)) &&
@@ -751,20 +848,26 @@ import SignInGate from '../../../components/SignInGate.astro';
         matchText(conds.category, l.effective.category) &&
         matchText(conds.party, l.effective.party) &&
         matchText(conds.nature, l.effective.nature) &&
-        (!query || (l.hay ??= hayOf(l)).includes(query)),
+        passesWords((l.hay ??= hayOf(l)), typed),
     );
-    // The chips count every line, whatever is typed in a search, so "71 left" stays 71; "Showing X of N" says what the search leaves.
+    // The counts say how many lines there are in all, whatever is typed in a search, so "71 left" stays 71; "Showing X of N" says what the search leaves.
     counts = { unallocated: 0, review: 0, noparty: 0, all: all.length };
     for (const l of all) {
       if (l.state !== 'allocated') counts.unallocated++;
       if (l.review) counts.review++;
       if (l.missingParty) counts.noparty++;
     }
-    const shown = base.filter((l) => (filter === 'all' ? true : filter === 'unallocated' ? l.state !== 'allocated' : filter === 'noparty' ? l.missingParty : l.review));
+    const shown = base.filter((l) => passesChips(l, chips, now));
     const sort = sortOf();
     const compare = compareRows(sort.key, sort.dir as 'asc' | 'desc');
     const row = (l: Line) => ({ id: l.id, date: l.date, narration: l.narration, amount: l.amountPaise, category: l.effective.category, party: l.effective.party, nature: l.effective.nature, status: l.review ? 'review' : l.state });
-    lines = shown.map((l) => ({ l, r: row(l) })).sort((a, b) => compare(a.r, b.r)).map((x) => x.l);
+    const sorted = shown.map((l) => ({ l, r: row(l) })).sort((a, b) => compare(a.r, b.r)).map((x) => x.l);
+    matched = sorted.length;
+    const built = buildItems(sorted, groupBy, collapsed, niceMonth);
+    items = built.items as Item[];
+    lines = built.visible as Line[];
+    itemIndexOfLine = new Map();
+    items.forEach((it, i) => it.kind === 'line' && itemIndexOfLine.set(it.line.id, i));
     const crumbs = Object.keys(conds).map((c) => describeCondition(COLUMN_LABELS[c], conds[c]));
     for (const box of document.querySelectorAll<HTMLInputElement>('.colfilter')) {
       const bad = Boolean(filterErrors[box.dataset.col!]);
@@ -773,55 +876,194 @@ import SignInGate from '../../../components/SignInGate.astro';
     }
     if (toTop) scrollEl.scrollTop = 0;
     $('applyprompt').hidden = true;
-    announce(`Showing ${lines.length} of ${all.length} lines.`);
-    renderChips();
+    announce(`Showing ${matched} of ${all.length} lines.`);
+    renderSearch();
     renderHead();
     renderProgress(crumbs);
+    for (const el of mountedGroups.values()) el.remove();
+    mountedGroups.clear();
     setCount();
     refreshSelection();
     renderFillButton();
-    $('empty').hidden = lines.length > 0;
-    if (!lines.length) $('empty').textContent = crumbs.length || query ? 'Nothing matches those conditions.' : filter === 'unallocated' ? 'Everything is allocated.' : 'Nothing here right now.';
+    $('empty').hidden = items.length > 0;
+    if (!items.length) $('empty').textContent = crumbs.length || typed.length || chips.length > 1 ? 'Nothing matches those conditions. Remove a chip to widen the search.' : chips[0]?.[1] === 'unallocated' ? 'Everything is allocated.' : 'Nothing here right now.';
   }
 
   // ---- toolbar, progress and headings
-  const CHIPS: [Filter, string][] = [['unallocated', 'To allocate'], ['review', 'To review'], ['noparty', 'No party'], ['all', 'All']];
   function keepFocus(container: HTMLElement, render: () => void) {
     const active = document.activeElement as HTMLElement | null;
     const key = active && container.contains(active) ? active.dataset.key : undefined;
     render();
     if (key) container.querySelector<HTMLElement>(`[data-key="${key}"]`)?.focus();
   }
-  function renderChips() {
-    keepFocus($('chips'), () => renderChipButtons());
-  }
-  function renderChipButtons() {
-    $('chips').replaceChildren(
-      ...CHIPS.map(([f, label]) => {
-        const b = h('button', { attrs: { type: 'button', 'data-key': f, 'aria-pressed': String(f === filter) } }, h('span', { text: `${label} ${counts[f]}` }));
-        b.addEventListener('click', () => {
-          filter = f;
-          applyView(true);
-        });
-        return b;
-      }),
+
+  // ---- the search box: every condition is a chip you can take off; the arrow opens Filters, Group by and Favorites.
+  const favKey = () => `tvc-ledger-favorites:${decodeTokenEmail(getToken() ?? '')}`;
+  type Fav = { name: string; chips: string[][]; words: string[]; groups: string[] };
+  let favorites: Fav[] = [];
+  let favoritesLoaded = false;
+  const loadFavorites = () => {
+    if (favoritesLoaded) return;
+    favoritesLoaded = true;
+    try {
+      favorites = readFavorites(localStorage.getItem(favKey())) as Fav[];
+    } catch {
+      favorites = []; // storage can be blocked: favorites then last for this visit only
+    }
+  };
+  const saveFavorites = () => {
+    try {
+      localStorage.setItem(favKey(), JSON.stringify(favorites));
+    } catch {
+      showToast('Could not keep the favorite in this browser. It lasts until you leave the page.');
+    }
+  };
+  const searchChange = () => {
+    collapsed.clear();
+    applyView(true);
+  };
+  const chipEl = (kindText: string, valueText: string, remove: () => void, group = false) => {
+    const x = h('button', { text: '×', attrs: { type: 'button', 'aria-label': `Remove ${kindText} ${valueText}` } });
+    x.addEventListener('click', () => {
+      remove();
+      searchChange();
+      $<HTMLInputElement>('q').focus();
+    });
+    return h('span', { class: `schip${group ? ' schip--group' : ''}` }, h('span', { class: 'schip-kind', text: `${kindText}:` }), document.createTextNode(` ${valueText}`), x);
+  };
+  function renderSearch() {
+    const now = today();
+    $('schips').replaceChildren(
+      ...chips.map(([k, o], i) => chipEl(kindLabel(k), optionLabel(k, o, now), () => chips.splice(i, 1))),
+      ...words.map((w, i) => chipEl('Search', w, () => words.splice(i, 1))),
+      ...groupBy.map((g, i) => chipEl('Group by', groupLabel(g), () => groupBy.splice(i, 1), true)),
     );
+    $<HTMLInputElement>('q').placeholder = chips.length || words.length || groupBy.length ? '' : 'Search every column';
+    if (!$('spop').hidden) renderPopover();
   }
+  function renderPopover() {
+    loadFavorites();
+    const now = today();
+    const pop = $('spop');
+    const counted = optionCounts(all, now) as Record<string, Record<string, number>>;
+    const option = (label: string, on: boolean, onClick: () => void, extra = '', key = '') => {
+      const b = h('button', { class: 'sopt', attrs: { type: 'button', 'aria-pressed': String(on), ...(key ? { 'data-key': key } : {}) } }, h('span', { class: 'sopt-tick', text: on ? '✓' : '' }), h('span', { text: label }), extra ? h('span', { class: 'sopt-extra', text: extra }) : null);
+      b.addEventListener('click', () => {
+        onClick();
+        searchChange();
+      });
+      return b;
+    };
+    const filters = h('section', { class: 'spop-col' }, h('h3', { text: 'Filters' }));
+    for (const kind of kindsInOrder()) {
+      filters.append(h('h4', { text: kindLabel(kind) }));
+      for (const o of optionKeys(kind, now)) {
+        const i = chips.findIndex((c) => c[0] === kind && c[1] === o);
+        filters.append(option(optionLabel(kind, o, now), i >= 0, () => (i >= 0 ? chips.splice(i, 1) : chips.push([kind, o])), String(counted[kind]?.[o] ?? 0), `f:${kind}:${o}`));
+      }
+    }
+    const groups = h('section', { class: 'spop-col' }, h('h3', { text: 'Group by' }));
+    for (const g of Object.keys(GROUP_FIELDS)) {
+      const i = groupBy.indexOf(g);
+      groups.append(option(groupLabel(g), i >= 0, () => { if (i >= 0) groupBy.splice(i, 1); else { if (groupBy.length >= 2) groupBy.shift(); groupBy.push(g); } }, i >= 0 ? `level ${i + 1}` : '', `g:${g}`));
+    }
+    groups.append(h('p', { class: 'hint', text: 'Pick two to group inside a group.' }));
+    const favs = h('section', { class: 'spop-col' }, h('h3', { text: 'Favorites' }));
+    if (!favorites.length) favs.append(h('p', { class: 'hint', text: 'Nothing saved yet. Set up a search, then name it below.' }));
+    favorites.forEach((f, i) => {
+      const use = h('button', { class: 'sopt', text: f.name, attrs: { type: 'button', 'data-key': `fav:${i}` } });
+      use.addEventListener('click', () => {
+        chips = f.chips.map((c: string[]) => [c[0], c[1]] as [string, string]);
+        words = [...f.words];
+        groupBy = [...f.groups];
+        $<HTMLInputElement>('q').value = '';
+        query = '';
+        closePopover();
+        searchChange();
+      });
+      const del = h('button', { class: 'sopt-del', text: '×', attrs: { type: 'button', 'aria-label': `Delete the favorite ${f.name}` } });
+      del.addEventListener('click', () => {
+        favorites.splice(i, 1);
+        saveFavorites();
+        renderPopover();
+      });
+      favs.append(h('div', { class: 'sfav' }, use, del));
+    });
+    const name = h('input', { attrs: { type: 'text', placeholder: 'Name this search', 'aria-label': 'Name this search', maxlength: '60', autocomplete: 'off' } }) as HTMLInputElement;
+    const save = h('button', { class: 'button button--small', text: 'Save', attrs: { type: 'button' } });
+    const doSave = () => {
+      if (!name.value.trim()) return name.focus();
+      favorites = withFavorite(favorites, { name: name.value, chips, words: query ? [...words, query] : words, groups: groupBy });
+      saveFavorites();
+      showToast(`Saved “${name.value.trim()}”.`);
+      renderPopover();
+    };
+    save.addEventListener('click', doSave);
+    name.addEventListener('keydown', (e) => e.key === 'Enter' && (e.preventDefault(), doSave()));
+    favs.append(h('div', { class: 'ssave' }, name, save));
+    pop.replaceChildren(filters, groups, favs);
+  }
+  function openPopover(open: boolean) {
+    $('spop').hidden = !open;
+    $('sopen').setAttribute('aria-expanded', String(open));
+    if (open) renderPopover();
+  }
+  const closePopover = () => openPopover(false);
+  $('sopen').addEventListener('click', () => openPopover(Boolean($('spop').hidden)));
+  document.addEventListener('click', (e) => {
+    // composedPath, because choosing an option rebuilds the panel and the clicked button is no longer in the page by now
+    if (!$('spop').hidden && !e.composedPath().includes($('spop').parentElement!)) closePopover();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !$('spop').hidden) {
+      closePopover();
+      $('sopen').focus();
+    }
+  });
+
   function renderProgress(crumbs: string[] = []) {
     if (!data) return;
     renderMoreLabel();
     const c = counts;
     const errs = Object.entries(filterErrors).map(([col, why]) => `Can't read the ${COLUMN_LABELS[col]} search: ${why}`);
-    $('progress').textContent = [`Showing ${lines.length} of ${all.length}`, `${c.unallocated} left to allocate`, `${c.review} to review`, c.noparty ? `${c.noparty} posted without a party` : '', postedThisSitting ? `${postedThisSitting} posted this sitting` : '', crumbs.length ? `Searching: ${crumbs.join(', ')}` : '', ...errs].filter(Boolean).join(' · ');
+    $('progress').textContent = [`Showing ${matched} of ${all.length}`, `${c.unallocated} left to allocate`, `${c.review} to review`, c.noparty ? `${c.noparty} posted without a party` : '', postedThisSitting ? `${postedThisSitting} posted this sitting` : '', crumbs.length ? `Searching: ${crumbs.join(', ')}` : '', ...errs].filter(Boolean).join(' · ');
   }
-  const SORTABLE = new Set(['date', 'narration', 'amount', 'category', 'party', 'nature']);
+  const SORTABLE = new Set(['date', 'narration', 'amount', 'category', 'party', 'status']);
   function renderHead() {
     keepFocus($('ghead'), () => renderHeadCells());
+  }
+  // Select all: every line that can be filled in here and is showing (not those inside a closed group). Pressing it again clears them.
+  const selectAllBox = h('input', { attrs: { type: 'checkbox' } }) as HTMLInputElement;
+  const selectAllBtn = $('select-all-btn');
+  function toggleAll() {
+    const pickable = lines.filter(editable);
+    if (!pickable.length) return;
+    const allOn = pickable.every((l) => tstate.rowSelection[l.id]);
+    const next = { ...tstate.rowSelection };
+    for (const l of pickable) {
+      if (allOn) delete next[l.id];
+      else next[l.id] = true;
+    }
+    table.setRowSelection(next);
+  }
+  selectAllBox.addEventListener('click', toggleAll);
+  selectAllBtn.addEventListener('click', toggleAll);
+  function syncSelectAll() {
+    const pickable = lines.filter(editable);
+    const n = pickable.filter((l) => tstate.rowSelection[l.id]).length;
+    selectAllBox.disabled = !pickable.length;
+    selectAllBox.checked = n > 0 && n === pickable.length;
+    selectAllBox.indeterminate = n > 0 && n < pickable.length;
+    const label = n === pickable.length && n > 0 ? 'Clear the selection' : `Select all ${pickable.length} that can be filled in here`;
+    selectAllBox.setAttribute('aria-label', label);
+    selectAllBox.title = label;
+    selectAllBtn.textContent = n === pickable.length && n > 0 ? 'Clear selection' : `Select all ${pickable.length}`;
+    selectAllBtn.hidden = !pickable.length;
   }
   function renderHeadCells() {
     const head = $('ghead');
     head.replaceChildren(
-      ...table.getHeaderGroups()[0].headers.map((header) => {
+      ...table.getHeaderGroups()[0].headers.filter((header) => header.column.id !== 'narration' || showNarration).map((header) => {
         const id = header.column.id;
         const sorted = header.column.getIsSorted();
         const label = String(header.column.columnDef.header ?? '');
@@ -830,7 +1072,8 @@ import SignInGate from '../../../components/SignInGate.astro';
           const b = h('button', { class: 'sorthead', text: `${label}${sorted === 'asc' ? ' ▲' : sorted === 'desc' ? ' ▼' : ' ↕'}`, attrs: { type: 'button', 'data-key': id } });
           b.addEventListener('click', () => header.column.toggleSorting());
           cellEl.append(b);
-        } else cellEl.textContent = label;
+        } else if (id === 'select') cellEl.append(selectAllBox);
+        else cellEl.textContent = label;
         return cellEl;
       }),
     );
@@ -838,10 +1081,10 @@ import SignInGate from '../../../components/SignInGate.astro';
   function renderFilterRow() {
     const row = $('gfilter');
     row.replaceChildren(
-      ...table.getHeaderGroups()[0].headers.map((header) => {
+      ...table.getHeaderGroups()[0].headers.filter((header) => header.column.id !== 'narration' || showNarration).map((header) => {
         const id = header.column.id;
         const cellEl = h('span', { class: `gcell gcell--${id}`, attrs: { role: 'cell' } });
-        if (SORTABLE.has(id)) {
+        if (SORTABLE.has(id) && PARSERS[id]) {
           const box = h('input', { class: 'colfilter', attrs: { 'data-col': id, type: 'search', title: id === 'amount' ? 'In rupees: 2500, >1000, <=500, 1000..3000, !=295' : id === 'date' ? 'Try: 2026-10, oct, >2026-10-15, 2026-10-01..2026-10-31' : 'Words match anywhere. = exact, != not, ^ starts with, ! does not contain. See Search tips.', placeholder: id === 'amount' ? 'e.g. >1000' : id === 'date' ? 'e.g. 2026-10' : 'Search', 'aria-label': `Search the ${String(header.column.columnDef.header)} column`, autocomplete: 'off' } }) as HTMLInputElement;
           let timer: ReturnType<typeof setTimeout>;
           box.addEventListener('input', () => {
@@ -874,6 +1117,45 @@ import SignInGate from '../../../components/SignInGate.astro';
     const open = document.querySelector('.ledger')!.classList.contains('show-tools');
     $('more-tools').textContent = open ? 'Less' : `More · ${counts.unallocated} left`;
   }
+  function renderColMenu() {
+    const b = h('button', { class: 'sopt', attrs: { type: 'button', 'aria-pressed': String(showNarration) } }, h('span', { class: 'sopt-tick', text: showNarration ? '✓' : '' }), h('span', { text: 'Bank narration' }));
+    b.addEventListener('click', () => {
+      showNarration = !showNarration;
+      try {
+        localStorage.setItem(narrationKey, showNarration ? '1' : '0');
+      } catch {
+        // not kept: it lasts for this visit
+      }
+      applyNarration();
+      renderColMenu();
+    });
+    $('colmenu').replaceChildren(b);
+  }
+  function applyNarration() {
+    document.querySelector('.ledger')!.classList.toggle('show-narr', showNarration);
+    renderHeadCells();
+    renderFilterRow();
+    virtualizer.measure();
+    paint();
+  }
+  $('cols-toggle').addEventListener('click', () => {
+    const open = $('colmenu').hidden;
+    $('colmenu').hidden = !open;
+    $('cols-toggle').setAttribute('aria-expanded', String(open));
+    if (open) renderColMenu();
+  });
+  document.addEventListener('click', (e) => {
+    if (!$('colmenu').hidden && !e.composedPath().includes($('colmenu').parentElement!)) {
+      $('colmenu').hidden = true;
+      $('cols-toggle').setAttribute('aria-expanded', 'false');
+    }
+  });
+  document.querySelector('.ledger')!.classList.toggle('show-narr', showNarration);
+  $('colsearch-toggle').addEventListener('click', () => {
+    const open = !document.querySelector('.ledger')!.classList.contains('show-colsearch');
+    document.querySelector('.ledger')!.classList.toggle('show-colsearch', open);
+    $('colsearch-toggle').setAttribute('aria-expanded', String(open));
+  });
   $('tips-toggle').addEventListener('click', () => {
     const open = $('tips').hidden;
     $('tips').hidden = !open;
@@ -887,9 +1169,27 @@ import SignInGate from '../../../components/SignInGate.astro';
       applyView(true);
     }, 150);
   });
+  $<HTMLInputElement>('q').addEventListener('keydown', (e) => {
+    const box = e.target as HTMLInputElement;
+    if (e.key === 'Enter' && box.value.trim()) {
+      e.preventDefault();
+      clearTimeout(qTimer);
+      words.push(box.value.trim().toLowerCase());
+      box.value = '';
+      query = '';
+      searchChange();
+    } else if (e.key === 'Backspace' && !box.value) {
+      // the chip nearest the cursor goes first: groups, then words, then filters
+      if (groupBy.length) groupBy.pop();
+      else if (words.length) words.pop();
+      else if (chips.length) chips.pop();
+      else return;
+      searchChange();
+    }
+  });
 
   // ---- rows. Built once when they scroll into view; an edit changes the cells in place (fill), never the row element.
-  type Refs = { check: HTMLInputElement; narr: HTMLButtonElement; details: HTMLElement; cat: HTMLSelectElement; catTick: HTMLElement; catText: HTMLElement; party: HTMLSelectElement; partyTick: HTMLElement; partyText: HTMLElement; nature: HTMLInputElement; natureTick: HTMLElement; natureText: HTMLElement; pillSlot: HTMLElement };
+  type Refs = { catHint: HTMLElement; check: HTMLInputElement; narr: HTMLButtonElement; details: HTMLElement; cat: ComboEl; catTick: HTMLElement; catText: HTMLElement; party: ComboEl; partyTick: HTMLElement; partyText: HTMLElement; nature: HTMLInputElement; natureTick: HTMLElement; natureText: HTMLElement; pillSlot: HTMLElement; catPeek: HTMLButtonElement; partyPeek: HTMLButtonElement; natureCell: HTMLElement; meta: HTMLElement };
   const refs = new WeakMap<HTMLElement, Refs>();
   const tick = (label: string, onClick: () => void) => h('button', { class: 'tick', text: '✓', attrs: { type: 'button', 'aria-label': label, title: label }, on: { click: onClick } });
   const cell = (cls: string, label: string, ...kids: (Node | null)[]) => h('span', { class: `gcell gcell--${cls}`, attrs: { role: 'cell', 'data-label': label } }, ...kids);
@@ -903,30 +1203,43 @@ import SignInGate from '../../../components/SignInGate.astro';
   // The full text is in the hover and in the line's sheet.
   const shortNarration = (text: string) => text.replace(/\d{9,}/g, '').replace(/\/{2,}/g, '/').replace(/^\/|\/$/g, '').trim() || text;
   function makeRow(l: Line): HTMLElement {
-    const lk = data!.lookups;
     const who = l.narration.length > 40 ? `${l.narration.slice(0, 40)}…` : l.narration;
     const check = h('input', { attrs: { type: 'checkbox', 'aria-label': `Select ${who}` } }) as HTMLInputElement;
     check.addEventListener('click', (e) => pick(l.id, (e as MouseEvent).shiftKey));
     const narr = h('button', { class: 'narr', text: shortNarration(l.narration), attrs: { type: 'button', title: l.account ? `${l.narration}\n${l.account}` : l.narration } }) as HTMLButtonElement;
     narr.addEventListener('click', () => void openLine(l.id));
+    const dateBtn = h('button', { class: 'datebtn', text: shortDate(l.date), attrs: { type: 'button', title: `Open this line: ${l.narration}`, 'aria-label': `Open the line of ${shortDate(l.date)}: ${who}` } }) as HTMLButtonElement;
+    dateBtn.addEventListener('click', () => void openLine(l.id));
     const details = h('span', { class: 'detail' });
 
-    const cat = categorySelect(lk.categories, { selected: '', blank: 'Choose…' }) as HTMLSelectElement;
-    cat.classList.add('cellfield');
-    cat.setAttribute('aria-label', `Category for ${who}`);
-    cat.addEventListener('change', () => edit(l, 'categoryId', cat.value));
+    // Linked pickers, not drop-downs: category > year > unit (maintenance) or > project (capital), and kind > party. You type to search the rows being shown, a row
+    // marked ⟹ opens the next level, and a name that is not in the list can be added from it.
+    const cat = linkedPicker({ nodes: [], blank: 'Choose…', ariaLabel: `Category for ${who}`, rootLabel: 'All categories' }) as ComboEl;
+    cat.addEventListener('change', () => {
+      const path = cat.path;
+      const type = typeOfCategory(path[0] ?? '');
+      const got = readCategoryPath(path, type);
+      if (got.year) setExtra(l.id, { maintenanceYear: got.year });
+      if (got.householdId) setExtra(l.id, { householdId: got.householdId });
+      if (type === 'capex') setExtra(l.id, { projectId: got.projectId });
+      // Choosing only a year or unit leaves the category as it was: no "apply to the others" prompt for a category that did not change.
+      if (got.categoryId === draftOf(l.id).categoryId) syncRow(l);
+      else edit(l, 'categoryId', got.categoryId);
+      // On to who paid, when nobody is chosen yet.
+      if (got.categoryId && !draftOf(l.id).partyId) setTimeout(() => party.focus(), 0);
+    });
     const catTick = tick(`Accept the suggested category for ${who}`, () => edit(l, 'categoryId', ghostOf(l, 'categoryId')));
     const catText = h('span', { class: 'lcell-text' });
+    const catHint = h('span', { class: 'follow-hint follow-hint--warn', attrs: { hidden: '' } });
 
-    const party = partySelect(lk.parties, { selected: '', blank: 'No one in particular' }) as HTMLSelectElement;
-    party.classList.add('cellfield');
-    party.setAttribute('aria-label', `Party for ${who}`);
-    party.append(h('option', { text: 'Add a new party…', attrs: { value: NEW_PARTY } }));
-    party.addEventListener('change', () => {
-      if (party.value !== NEW_PARTY) return edit(l, 'partyId', party.value);
-      party.value = draftOf(l.id).partyId;
-      openAddParty(strangerOf(l), kindFor(l), (id) => afterPartyAdded(l, id));
-    });
+    const party = linkedPicker({
+      nodes: [],
+      blank: 'No one in particular',
+      ariaLabel: `Party for ${who}`,
+      rootLabel: 'All kinds',
+      addNew: { label: 'Add as a new party', onAdd: (typed) => openAddParty(typed || strangerOf(l), kindFor(l), (id) => afterPartyAdded(l, id)), blockedAt: (path) => (path[0] === 'member' || path[0] === 'unit' ? NO_MEMBER_ADD : null) },
+    }) as ComboEl;
+    party.addEventListener('change', () => edit(l, 'partyId', party.value)); // the party is the last part of the path (kind, then the party)
     const partyTick = tick(`Accept the suggested party for ${who}`, async () => {
       const gp = ghostOf(l, 'partyId');
       if (gp) return edit(l, 'partyId', gp);
@@ -945,18 +1258,43 @@ import SignInGate from '../../../components/SignInGate.astro';
     const natureTick = tick(`Accept the suggested wording for ${who}`, () => edit(l, 'nature', ghostOf(l, 'nature')));
     const natureText = h('span', { class: 'lcell-text' });
     const pillSlot = h('span', { class: 'pillslot' });
+    // A line at rest is one quiet row of text. The fields appear when the line is ticked, has something typed in it, or is opened
+    // (click its category or party, or Tab to it).
+    const peek = () => h('button', { class: 'peek', attrs: { type: 'button' } }) as HTMLButtonElement;
+    const catPeek = peek();
+    const partyPeek = peek();
+    const meta = h('span', { class: 'gcell gcell--meta', attrs: { role: 'cell' } });
 
     const rowEl = h(
       'div',
       { class: 'lrow', attrs: { role: 'row', 'data-id': l.id } },
       cell('select', '', check),
-      cell('date', '', document.createTextNode(shortDate(l.date))),
+      cell('date', '', dateBtn),
+      cell(`amount amount--${l.direction}`, '', document.createTextNode(`${l.direction === 'debit' ? '−' : '+'}${rupees(l.amountPaise)}`)),
+      cell('category', 'Category', catPeek, cat, catTick, catText, catHint),
+      cell('party', l.direction === 'debit' ? 'Paid to' : 'Received from', partyPeek, party, partyTick, partyText),
+      cell('status', '', pillSlot),
       cell('narration', '', narr, details),
-      cell(`amount amount--${l.direction}`, '', document.createTextNode(`${l.direction === 'debit' ? '−' : '+'}${rupees(l.amountPaise)}`), pillSlot),
-      cell('category', 'Category', cat, catTick, catText),
-      cell('party', l.direction === 'debit' ? 'Paid to' : 'Received from', party, partyTick, partyText),
-      cell('nature', 'What it was for', nature, natureTick, natureText),
+      meta,
     );
+    const natureCell = cell('nature', 'What it was for', nature, natureTick, natureText);
+    rowEl.append(natureCell);
+    const open = (focus: HTMLElement) => {
+      rowEl.dataset.open = '1';
+      fill(rowEl, l);
+      focus.focus();
+    };
+    catPeek.addEventListener('click', () => open(cat));
+    partyPeek.addEventListener('click', () => open(party));
+    // Leaving the line closes it again, unless it has something in it that must stay visible.
+    // (Checked a moment later: hiding the button that was clicked blurs it before the field takes focus.)
+    rowEl.addEventListener('focusout', () => {
+      setTimeout(() => {
+        if (rowEl.contains(document.activeElement) || !rowEl.dataset.open) return;
+        delete rowEl.dataset.open;
+        fill(rowEl, l);
+      }, 0);
+    });
     const onKey = (e: KeyboardEvent) => {
       const index = lines.findIndex((x) => x.id === l.id);
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
@@ -965,7 +1303,7 @@ import SignInGate from '../../../components/SignInGate.astro';
         focusRow(index + 1, 'categoryId');
       } else if (e.altKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
         e.preventDefault();
-        const field: Field = e.target === nature ? 'nature' : e.target === party ? 'partyId' : 'categoryId';
+        const field: Field = e.target === nature ? 'nature' : e.target === party.input ? 'partyId' : 'categoryId';
         const step = e.key === 'ArrowDown' ? 1 : -1;
         focusRow(index + step, field, step);
       } else if (e.key === 'Tab') {
@@ -984,7 +1322,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       }
     };
     rowEl.addEventListener('keydown', onKey);
-    refs.set(rowEl, { check, narr, details, cat, catTick, catText, party, partyTick, partyText, nature, natureTick, natureText, pillSlot });
+    refs.set(rowEl, { catHint, check, narr, details, cat, catTick, catText, party, partyTick, partyText, nature, natureTick, natureText, pillSlot, catPeek, partyPeek, natureCell, meta });
     fill(rowEl, l);
     return rowEl;
   }
@@ -995,7 +1333,11 @@ import SignInGate from '../../../components/SignInGate.astro';
     if (l.state === 'partly_allocated') return pill('Partly', 'warn');
     if (!editable(l)) return pill('To allocate');
     const d = draftOf(l.id);
-    if (isReady(l)) return !d.partyId && partyNeeded(d.categoryId) ? pill('Ready, no party', 'warn') : pill('Ready', 'ok');
+    const dwNow = describedWith(l);
+    if (dwNow.maintenance && !dwNow.unit) return pill('Needs unit', 'warn');
+    if (isReady(l)) {
+      return !d.partyId && partyNeeded(d.categoryId) ? pill('Ready, no party', 'warn') : pill('Ready', 'ok');
+    }
     if (hasGhost(l)) {
       // Says what is suggested and how sure the app is; the suggested values are the italic ones in the cells.
       const fields = [ghostOf(l, 'categoryId') ? 'category' : '', ghostOf(l, 'partyId') || strangerOf(l) ? (l.direction === 'debit' ? 'who was paid' : 'who paid') : '', ghostOf(l, 'nature') ? 'wording' : ''].filter(Boolean);
@@ -1026,20 +1368,53 @@ import SignInGate from '../../../components/SignInGate.astro';
         upiSays ? h('span', { class: 'detail detail--upi', text: `Paytm: ${upiSays}`, attrs: { title: 'From the Paytm UPI report' } }) : /\bUPI\b/i.test(l.narration) ? h('span', { class: 'detail detail--dim', text: 'No Paytm record for this payment' }) : null,
       ].filter(Boolean) as Node[],
     );
-    for (const x of [r.cat, r.party, r.nature]) x.hidden = !can;
-    for (const x of [r.catText, r.partyText, r.natureText]) x.hidden = can;
+    // Ticking is for the bar at the bottom (one change to many lines), so a ticked line stays a quiet row; only opening a line (click its category or party) or an error expands it.
+    const active = can && (Boolean(error) || el.dataset.open === '1');
+    el.classList.toggle('is-active', active);
+    for (const x of [r.cat, r.party, r.nature]) x.hidden = !active;
+    const dw = describedWith(l);
+    // The pickers' trees are rebuilt only when what they depend on changes: the payer's own unit (offered first in the unit list) and, for the party list, the unit
+    // being paid for (its people come first). The line's date and the lists never change while it is on screen.
+    if (r.cat.dataset.treeKey !== dw.suggestedUnit) {
+      r.cat.dataset.treeKey = dw.suggestedUnit;
+      r.cat.setNodes(categoryNodes({ categories: lk.categories, households: lk.households, projects: lk.projects, date: l.date, suggestedUnit: dw.suggestedUnit }));
+    }
+    const unitForList = dw.maintenance ? dw.unit : '';
+    if (r.party.dataset.unitFor !== unitForList) {
+      r.party.dataset.unitFor = unitForList;
+      r.party.setNodes(partyNodes({ parties: lk.parties, unitId: unitForList, unitLabels: unitLabels() }));
+    }
+    // Where each list opens: a maintenance category without its year and unit opens on the years; the party list opens on the people of the unit being paid for,
+    // or on the kind that goes with the category (members for nothing in particular: the top, all kinds).
+    r.cat.setStartAt(() => {
+      const x = describedWith(l);
+      return x.maintenance && !x.unit ? [draftOf(l.id).categoryId] : null;
+    });
+    r.party.setStartAt(() => {
+      const x = describedWith(l);
+      return partyStart({ categoryType: typeOfCategory(categoryShown(l)), unitId: x.unit, unitHasPeople: lk.parties.some((q) => q.household_id === x.unit && !q.former_since), parties: lk.parties });
+    });
+    r.catHint.hidden = !(active && dw.maintenance && !dw.unit);
+    if (!r.catHint.hidden) {
+      const p = partyById(d.partyId);
+      r.catHint.textContent = dw.suggestedUnit ? `${p?.name ?? 'The payer'} lives in ${unitLabels().get(dw.suggestedUnit) ?? 'a unit'}, which is listed first. Choose the year, then the unit.` : 'Choose the year, then which unit’s maintenance this is. Whoever paid, it is booked to the unit.';
+    }
+    for (const x of [r.catPeek, r.partyPeek]) x.hidden = !(can && !active);
+    for (const x of [r.catText, r.partyText]) x.hidden = can;
+    r.natureText.hidden = can;
+    r.natureCell.hidden = can ? !active : true;
     if (can) {
       const gc = ghostOf(l, 'categoryId');
-      r.cat.value = d.categoryId;
-      r.cat.options[0].text = gc ? nameOf(lk.categories, gc) : 'Choose…';
+      r.cat.path = categoryPath({ categoryId: d.categoryId, type: dw.type, year: dw.year, unit: dw.unit, project: dw.project });
+      r.cat.setPlaceholder(gc ? nameOf(lk.categories, gc) : null);
       r.cat.classList.toggle('ghost', Boolean(gc));
-      r.catTick.hidden = !gc;
+      r.catTick.hidden = !(gc && active);
       const gp = ghostOf(l, 'partyId');
       const stranger = strangerOf(l);
-      r.party.value = d.partyId;
-      r.party.options[0].text = gp ? nameOf(lk.parties, gp) : stranger ? `New: ${stranger}` : 'No one in particular';
+      r.party.path = partyPath(partyById(d.partyId));
+      r.party.setPlaceholder(gp ? nameOf(lk.parties, gp) : stranger ? `New: ${stranger}` : null);
       r.party.classList.toggle('ghost', Boolean(gp || stranger));
-      r.partyTick.hidden = !(gp || stranger);
+      r.partyTick.hidden = !((gp || stranger) && active);
       const tickLabel = gp ? `Accept the suggested party for ${l.narration.slice(0, 40)}` : `Add ${stranger} to the register and use them`;
       r.partyTick.setAttribute('aria-label', tickLabel);
       r.partyTick.title = tickLabel;
@@ -1047,7 +1422,15 @@ import SignInGate from '../../../components/SignInGate.astro';
       if (r.nature.value !== d.nature && document.activeElement !== r.nature) r.nature.value = d.nature;
       r.nature.placeholder = gn || 'What it was for';
       r.nature.classList.toggle('ghost', Boolean(gn));
-      r.natureTick.hidden = !gn;
+      r.natureTick.hidden = !(gn && active);
+      if (!active) {
+        r.catPeek.textContent = d.categoryId ? `${nameOf(lk.categories, d.categoryId)}${dw.maintenance && dw.unit ? ` · ${unitLabels().get(dw.unit) ?? ''} · ${dw.year}` : dw.capital && dw.project ? ` · ${lk.projects.find((p) => p.id === dw.project)?.name ?? ''}` : ''}` : gc ? nameOf(lk.categories, gc) : 'Choose…';
+        r.catPeek.classList.toggle('ghost', !d.categoryId);
+        r.catPeek.setAttribute('aria-label', `Category for ${l.narration.slice(0, 40)}: ${r.catPeek.textContent}. Press to edit.`);
+        r.partyPeek.textContent = d.partyId ? nameOf(lk.parties, d.partyId) : gp ? nameOf(lk.parties, gp) : stranger ? `New: ${stranger}` : 'No one in particular';
+        r.partyPeek.classList.toggle('ghost', !d.partyId);
+        r.partyPeek.setAttribute('aria-label', `Party for ${l.narration.slice(0, 40)}: ${r.partyPeek.textContent}. Press to edit.`);
+      }
     } else {
       for (const t of [r.catTick, r.partyTick, r.natureTick]) t.hidden = true;
       const a = l.allocation;
@@ -1057,6 +1440,10 @@ import SignInGate from '../../../components/SignInGate.astro';
       r.natureText.textContent = a?.nature ?? '';
     }
     r.pillSlot.replaceChildren(pillFor(l));
+    // On a phone a line at rest is two lines: the narration and amount, then date, category and party in one grey line.
+    const catWords = can ? (d.categoryId ? nameOf(lk.categories, d.categoryId) : ghostOf(l, 'categoryId') ? nameOf(lk.categories, ghostOf(l, 'categoryId')) : '') : l.allocation ? nameOf(lk.categories, l.allocation.categoryId) : '';
+    const partyWords = can ? (d.partyId ? nameOf(lk.parties, d.partyId) : '') : l.allocation?.partyId ? nameOf(lk.parties, l.allocation.partyId) : '';
+    r.meta.textContent = [catWords, partyWords].filter(Boolean).join(' · ') || 'Nothing chosen yet';
   }
   const syncRow = (l: Line) => {
     const el = mounted.get(l.id);
@@ -1068,7 +1455,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   function renderFillButton() {
     const btn = $('accept-all');
     const strong = lines.filter((l) => editable(l) && hasGhost(l) && isStrong(l)).length;
-    btn.hidden = !(data?.canAllocate && filter === 'unallocated' && strong > 0);
+    btn.hidden = !(data?.canAllocate && chips.some((c) => c[0] === 'status' && c[1] === 'unallocated') && strong > 0);
     btn.textContent = `Fill in ${strong} confident ${strong === 1 ? 'suggestion' : 'suggestions'}`;
   }
   // Lines that are filled in but not posted, with the one step that is left. Rebuilt only when what it says changes.
@@ -1157,7 +1544,6 @@ import SignInGate from '../../../components/SignInGate.astro';
     box.hidden = false;
   }
   // ---- adding a party that is not in the register, from the cell or the suggestion
-  const NEW_PARTY = '__new_party__';
   const PARTY_KINDS: Record<string, string> = { vendor: 'Vendor', customer: 'Customer', member: 'Member', employee: 'Employee', bank: 'Bank', government: 'Government', director: 'Director', other: 'Other' };
   const kindFor = (l: Line) => (l.direction === 'credit' ? 'customer' : 'vendor');
   async function createParty(name: string, kind: string): Promise<string | null> {
@@ -1179,7 +1565,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     const dlg = $<HTMLDialogElement>('party-sheet');
     const nameInput = input('newPartyName', { placeholder: 'Name as it should appear in the register' }) as HTMLInputElement;
     nameInput.value = name;
-    const kindSel = h('select', { attrs: { name: 'newPartyKind' } }, ...Object.entries(PARTY_KINDS).map(([k, label]) => h('option', { text: label, attrs: { value: k } }))) as HTMLSelectElement;
+    const kindSel = h('select', { attrs: { name: 'newPartyKind' } }, ...Object.entries(PARTY_KINDS).filter(([k]) => k !== 'member').map(([k, label]) => h('option', { text: label, attrs: { value: k } }))) as HTMLSelectElement;
     kindSel.value = kind;
     const msg = h('p', { class: 'error', attrs: { hidden: '' } });
     const form = h(
@@ -1215,7 +1601,9 @@ import SignInGate from '../../../components/SignInGate.astro';
     renderBar();
   }
 
-  function acceptRow(l: Line) {
+  // `withUnit`: also take the payer's own unit as the unit of a maintenance line. Only when the person asks for the suggestions of the selected lines
+  // (the bar's "Accept suggestions"); the automatic "fill in the confident ones" leaves the unit to a person, since the payer can be anybody.
+  function acceptRow(l: Line, withUnit = false) {
     if (!editable(l)) return;
     const patch: Partial<Draft> = {};
     for (const f of ['categoryId', 'partyId', 'nature'] as Field[]) {
@@ -1223,11 +1611,15 @@ import SignInGate from '../../../components/SignInGate.astro';
       if (g) patch[f] = g;
     }
     setDraft(l.id, patch);
+    if (withUnit) {
+      const dw = describedWith(l);
+      if (dw.maintenance && !dw.unit && dw.suggestedUnit) setExtra(l.id, { householdId: dw.suggestedUnit });
+    }
     syncRow(l);
   }
   function goToLine(index: number, field: 'start' | 'end') {
     pendingFocus = { index, field };
-    virtualizer.scrollToIndex(index, { align: 'auto' });
+    virtualizer.scrollToIndex(itemIndexOfLine.get(lines[index]?.id) ?? index, { align: 'auto' });
     paint();
   }
   function focusRow(index: number, field: Field, step = 1) {
@@ -1235,21 +1627,97 @@ import SignInGate from '../../../components/SignInGate.astro';
     while (lines[i] && !editable(lines[i])) i += step;
     if (!lines[i]) return;
     pendingFocus = { index: i, field };
-    virtualizer.scrollToIndex(i, { align: 'auto' });
+    virtualizer.scrollToIndex(itemIndexOfLine.get(lines[i].id) ?? i, { align: 'auto' });
     paint();
+  }
+
+  // Hovering a line (a mouse, not a touch screen) shows the bank's narration and what the Paytm report says, so the evidence is there without
+  // taking a column. Text only. It is skipped when the narration is already on screen (its column, or the line is open).
+  const canHover = window.matchMedia('(hover: hover) and (pointer: fine)');
+  const tip = $('ltip');
+  let tipTimer: ReturnType<typeof setTimeout> | undefined;
+  const hideTip = () => {
+    clearTimeout(tipTimer);
+    tip.hidden = true;
+  };
+  spacer.addEventListener('mouseover', (e) => {
+    const row = (e.target as HTMLElement).closest<HTMLElement>('.lrow');
+    if (!row || !canHover.matches || showNarration || row.classList.contains('is-active') || row.contains(e.relatedTarget as Node | null) || spacer.contains(document.activeElement)) return;
+    const l = byId.get(row.dataset.id ?? '');
+    if (!l) return;
+    clearTimeout(tipTimer);
+    tipTimer = setTimeout(() => {
+      const upi = [l.counterparty, l.remark ? `“${l.remark}”` : ''].filter(Boolean).join(' · ');
+      tip.replaceChildren(
+        h('p', { class: 'ltip-text', text: l.narration }),
+        ...(upi ? [h('p', { class: 'ltip-sub', text: `Paytm: ${upi}` })] : []),
+        ...(l.account ? [h('p', { class: 'ltip-sub', text: l.account })] : []),
+      );
+      tip.hidden = false;
+      const r = row.getBoundingClientRect();
+      const w = tip.offsetWidth;
+      tip.style.left = `${Math.max(8, Math.min(r.left + 90, window.innerWidth - w - 8))}px`;
+      // Never over the bar of selected lines at the bottom: below the line if it fits above the bar, else above the line.
+      const limit = $('actionbar').hidden ? window.innerHeight : $('actionbar').getBoundingClientRect().top;
+      const below = r.bottom + 4;
+      tip.style.top = `${below + tip.offsetHeight > limit - 8 ? Math.max(8, r.top - tip.offsetHeight - 4) : below}px`;
+    }, 350);
+  });
+  spacer.addEventListener('mouseout', (e) => {
+    const row = (e.target as HTMLElement).closest<HTMLElement>('.lrow');
+    if (row && !row.contains(e.relatedTarget as Node | null)) hideTip();
+  });
+  scrollEl.addEventListener('scroll', hideTip, { passive: true });
+  // Working in a line (clicking, tabbing into a field) hides the card, and it stays away until focus leaves the list.
+  spacer.addEventListener('mousedown', hideTip);
+  spacer.addEventListener('focusin', hideTip);
+  document.addEventListener('keydown', (e) => e.key === 'Escape' && hideTip());
+
+  // A group heading: a button that opens or closes the group, with how many lines it holds and what they add up to.
+  function makeGroup(g: Extract<Item, { kind: 'group' }>): HTMLElement {
+    const net = `${g.netPaise < 0 ? '−' : '+'}${rupees(Math.abs(g.netPaise))}`;
+    const b = h(
+      'button',
+      { class: 'ggroup-btn', attrs: { type: 'button', 'aria-expanded': String(g.open) } },
+      h('span', { class: 'ggroup-tri', text: '▸' }),
+      h('span', { class: 'ggroup-label', text: g.label }),
+      h('span', { class: 'ggroup-count', text: `${g.count} ${g.count === 1 ? 'line' : 'lines'}` }),
+      h('span', { class: 'ggroup-net', text: `Net ${net}`, attrs: { title: 'Money in minus money out for these lines' } }),
+    );
+    b.addEventListener('click', () => {
+      if (collapsed.has(g.key)) collapsed.delete(g.key);
+      else collapsed.add(g.key);
+      applyView();
+    });
+    return h('div', { class: `lgroup lgroup--${g.depth + 1}${g.open ? ' is-open' : ''}`, attrs: { role: 'row' } }, b);
   }
 
   function paint() {
     if (painting) return;
     painting = true;
     try {
-      const rows = table.getRowModel().rows;
       spacer.style.height = `${virtualizer.getTotalSize()}px`;
       const keep = new Set<string>();
+      const keepGroups = new Set<string>();
       const inOrder: HTMLElement[] = [];
       for (const item of virtualizer.getVirtualItems()) {
-        const l = rows[item.index]?.original;
-        if (!l) continue;
+        const it = items[item.index];
+        if (!it) continue;
+        if (it.kind === 'group') {
+          keepGroups.add(it.key);
+          const g = mountedGroups.get(it.key) ?? makeGroup(it);
+          if (!mountedGroups.has(it.key)) {
+            mountedGroups.set(it.key, g);
+            spacer.append(g);
+          }
+          g.dataset.index = String(item.index);
+          g.setAttribute('aria-rowindex', String(item.index + 3));
+          inOrder.push(g);
+          g.style.transform = `translateY(${item.start}px)`;
+          virtualizer.measureElement(g);
+          continue;
+        }
+        const l = it.line;
         keep.add(l.id);
         let el = mounted.get(l.id);
         if (!el) {
@@ -1269,14 +1737,24 @@ import SignInGate from '../../../components/SignInGate.astro';
           mounted.delete(id);
         }
       }
+      for (const [key, el] of mountedGroups) {
+        if (!keepGroups.has(key)) {
+          el.remove();
+          mountedGroups.delete(key);
+        }
+      }
       // Keep the page's order the same as the table's, so Tab and a screen reader go down the lines in order (never while focus is inside).
       if (!spacer.contains(document.activeElement) && inOrder.some((el, i) => spacer.children[i] !== el)) spacer.append(...inOrder);
-      $('grid').setAttribute('aria-rowcount', String(lines.length + 2));
+      $('grid').setAttribute('aria-rowcount', String(items.length + 2));
       if (pendingFocus) {
         const l = lines[pendingFocus.index];
         const el = l && mounted.get(l.id);
         if (el) {
           const r = refs.get(el)!;
+          if (pendingFocus.field !== 'start' && pendingFocus.field !== 'end' && editable(l)) {
+            el.dataset.open = '1';
+            fill(el, l);
+          }
           if (pendingFocus.field === 'start' || pendingFocus.field === 'end') {
             const stops = [...el.querySelectorAll<HTMLElement>('input, select, button')].filter((x) => !(x as HTMLInputElement).disabled && !x.hidden && x.offsetParent !== null);
             (pendingFocus.field === 'start' ? stops[0] : stops[stops.length - 1])?.focus();
@@ -1310,6 +1788,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   }
   function refreshSelection() {
     renderDraftNote();
+    syncSelectAll();
     for (const [id, el] of mounted) {
       const l = lines.find((x) => x.id === id);
       if (l) fill(el, l);
@@ -1317,7 +1796,16 @@ import SignInGate from '../../../components/SignInGate.astro';
     renderBar();
   }
 
+  // The bar is fixed to the window, so it starts where the page's own area starts (after the rail and the Finance panel), not under them.
+  const staffMain = document.getElementById('staff-main');
+  function placeBar() {
+    $('actionbar').style.left = staffMain ? `${Math.max(0, staffMain.getBoundingClientRect().left)}px` : '0px';
+  }
+  if (staffMain) new ResizeObserver(placeBar).observe(staffMain);
+  window.addEventListener('resize', placeBar);
   let barFields = { categoryId: '', partyId: '', nature: '' };
+  // Maintenance year and unit chosen in the bar for the selected lines. Empty: each line keeps its own default (the year of its date, its payer's unit).
+  const barExtra = { year: '', unit: '' };
   function renderBar() {
     const bar = $('actionbar');
     const sel = selectedLines();
@@ -1329,11 +1817,49 @@ import SignInGate from '../../../components/SignInGate.astro';
     }
     const ready = sel.filter(isReady).length;
     if ($('selcount').textContent !== `${sel.length} selected, ${ready} ready to post`) $('selcount').textContent = `${sel.length} selected, ${ready} ready to post`;
+    placeBar();
     const lk = data.lookups;
-    const cat = categorySelect(lk.categories, { selected: barFields.categoryId, blank: 'Category…' }) as HTMLSelectElement;
-    const party = partySelect(lk.parties, { selected: barFields.partyId, blank: 'Party…' }) as HTMLSelectElement;
+    // The same linked pickers as on a line. Here the year and the unit may be left to each line, so Maintenance and each year can also be picked as they are; what is
+    // chosen applies to every selected line.
+    const barPath = categoryPath({ categoryId: barFields.categoryId, type: typeOfCategory(barFields.categoryId), year: barExtra.year, unit: barExtra.unit });
+    const barType = typeOfCategory(barFields.categoryId);
+    const maint = barType === 'member_contribution';
+    const cat = linkedPicker({
+      nodes: categoryNodes({ categories: lk.categories, households: lk.households, projects: lk.projects, date: today(), bar: true }),
+      path: maint && !barExtra.unit ? [barFields.categoryId, ...(barExtra.year ? [barExtra.year] : [])] : barPath,
+      blank: 'Category…',
+      ariaLabel: 'Category for the selected lines',
+      rootLabel: 'All categories',
+    }) as ComboEl;
+    // Adding a party here is the same as on a line: the new one is chosen for all the selected lines (nothing is saved to them until they are posted).
+    const kind = sel.every((l) => l.direction === 'credit') ? 'customer' : 'vendor';
+    const party = linkedPicker({
+      nodes: partyNodes({ parties: lk.parties, unitId: maint ? barExtra.unit : '', unitLabels: unitLabels() }),
+      path: partyPath(partyById(barFields.partyId)),
+      blank: 'Party…',
+      ariaLabel: 'Party for the selected lines',
+      rootLabel: 'All kinds',
+      startAt: () => partyStart({ categoryType: barType, unitId: maint ? barExtra.unit : '', unitHasPeople: lk.parties.some((q) => q.household_id === barExtra.unit && !q.former_since), parties: lk.parties }),
+      addNew: {
+        label: 'Add as a new party',
+        blockedAt: (path) => (path[0] === 'member' || path[0] === 'unit' ? NO_MEMBER_ADD : null),
+        onAdd: (typed) =>
+          openAddParty(typed, kind, (id) => {
+            barFields.partyId = id;
+            renderBar();
+          }),
+      },
+    }) as ComboEl;
     const words = h('input', { attrs: { type: 'text', placeholder: 'What it was for…', 'aria-label': 'Wording for the selected lines', autocomplete: 'off', value: barFields.nature } }) as HTMLInputElement;
-    cat.addEventListener('change', () => (barFields.categoryId = cat.value));
+    cat.addEventListener('change', () => {
+      const path = cat.path;
+      const got = readCategoryPath(path, typeOfCategory(path[0] ?? ''));
+      barFields.categoryId = got.categoryId;
+      barExtra.year = got.year;
+      barExtra.unit = got.householdId;
+      renderBar();
+      if (got.categoryId && !barFields.partyId) setTimeout(() => $('actionbar').querySelectorAll<HTMLInputElement>('.combo-input')[1]?.focus(), 0);
+    });
     party.addEventListener('change', () => (barFields.partyId = party.value));
     words.addEventListener('input', () => (barFields.nature = words.value));
     const post = button(`Post ${ready} ready`, () => void postReady(), 'button abar-post') as HTMLButtonElement;
@@ -1346,7 +1872,8 @@ import SignInGate from '../../../components/SignInGate.astro';
       words,
       button('Apply to selected', async () => {
         const patch = Object.fromEntries(Object.entries(barFields).filter(([, v]) => String(v).trim())) as Partial<Draft>;
-        if (!Object.keys(patch).length) {
+        const extraPatch: Extra = { ...(maint && barExtra.year ? { maintenanceYear: barExtra.year } : {}), ...(maint && barExtra.unit ? { householdId: barExtra.unit } : {}) };
+        if (!Object.keys(patch).length && !Object.keys(extraPatch).length) {
           showToast('Choose a category, party or wording first.');
           return;
         }
@@ -1358,11 +1885,12 @@ import SignInGate from '../../../components/SignInGate.astro';
         withUndo(`Applied to ${sel.length} ${sel.length === 1 ? 'line' : 'lines'}.`, sel.map((l) => l.id), () => {
           for (const l of sel) {
             setDraft(l.id, patch);
+            if (Object.keys(extraPatch).length) setExtra(l.id, extraPatch);
             syncRow(l);
           }
         });
       }, 'button button--outline button--small'),
-      button('Accept suggestions', () => withUndo('Suggestions accepted.', sel.map((l) => l.id), () => { for (const l of sel) acceptRow(l); }), 'button button--outline button--small'),
+      button('Accept suggestions', () => withUndo('Suggestions accepted.', sel.map((l) => l.id), () => { for (const l of sel) acceptRow(l, true); }), 'button button--outline button--small'),
       post,
       button('Clear', () => table.resetRowSelection(), 'button button--outline button--small'),
       h('span', { class: 'abar-why', text: why }),
@@ -1406,7 +1934,10 @@ import SignInGate from '../../../components/SignInGate.astro';
       for (let i = 0; i < ready.length; i += 10) {
         const chunk = ready.slice(i, i + 10);
         showToast(`Posting ${Math.min(i + 10, ready.length)} of ${ready.length}…`);
-        const items = chunk.map((l) => ({ lineId: l.id, categoryId: draftOf(l.id).categoryId, partyId: draftOf(l.id).partyId || null, nature: draftOf(l.id).nature.trim() }));
+        const items = chunk.map((l) => {
+          const dw = describedWith(l);
+          return { lineId: l.id, categoryId: draftOf(l.id).categoryId, partyId: draftOf(l.id).partyId || null, nature: draftOf(l.id).nature.trim(), householdId: dw.unit || null, maintenanceYear: dw.year || null, projectId: dw.project || null };
+        });
         let res: { status: number; data: any };
         try {
           res = await call('/api/finance-admin/ledger/post', 'POST', { items });
@@ -1475,6 +2006,295 @@ import SignInGate from '../../../components/SignInGate.astro';
     align-items: center;
     gap: 12px;
     margin-bottom: 8px;
+  }
+
+  /* The search box: chips inside the field, and the arrow that opens Filters / Group by / Favorites. */
+  .ledger .lsearch {
+    position: relative;
+    flex: 1 1 360px;
+    min-width: 0;
+  }
+
+  .ledger .sbox {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-height: 40px;
+    padding: 3px 4px 3px 10px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: var(--radius-field);
+    background: var(--tvc-white);
+  }
+
+  .ledger .sbox:focus-within {
+    border-color: var(--tvc-orange);
+    box-shadow: 0 0 0 3px var(--tvc-orange-tint);
+  }
+
+  .ledger .sbox-chips {
+    display: contents;
+  }
+
+  .ledger .sbox input {
+    flex: 1 1 60px;
+    min-width: 50px;
+    min-height: 32px;
+    border: 0;
+    outline: 0;
+    background: none;
+    color: var(--tvc-ink);
+    font: inherit;
+    padding: 0;
+  }
+
+  .ledger .sbox input:focus-visible {
+    outline: 0;
+  }
+
+  .ledger .schip {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    max-width: 100%;
+    padding: 2px 2px 2px 9px;
+    border-radius: 7px;
+    background: var(--tvc-cream);
+    color: var(--tvc-ink);
+    font-size: var(--text-sm);
+  }
+
+  .ledger .schip--group {
+    background: var(--tvc-green-tint);
+  }
+
+  .ledger .schip-kind {
+    color: var(--tvc-ink-soft);
+    margin-right: 3px;
+  }
+
+  .ledger .schip button,
+  .ledger .sbox-caret {
+    all: unset;
+    cursor: pointer;
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 28px;
+    min-height: 28px;
+    border-radius: 6px;
+    color: var(--tvc-ink-soft);
+  }
+
+  .ledger .sbox-caret {
+    min-width: 36px;
+    min-height: 34px;
+  }
+
+  .ledger .schip button:hover,
+  .ledger .sbox-caret:hover {
+    background: var(--tvc-line);
+  }
+
+  .ledger .schip button:focus-visible,
+  .ledger .sbox-caret:focus-visible,
+  .ledger .sopt:focus-visible,
+  .ledger .sopt-del:focus-visible,
+  .ledger .ggroup-btn:focus-visible {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 2px;
+  }
+
+  .ledger .spop {
+    position: absolute;
+    z-index: 30;
+    left: 0;
+    right: 0;
+    top: calc(100% + 6px);
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px;
+    max-height: min(70vh, 540px);
+    overflow-y: auto;
+    padding: 14px;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    background: var(--tvc-white);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .ledger .spop[hidden] {
+    display: none;
+  }
+
+  .ledger .spop h3 {
+    margin: 0 0 6px;
+    font-size: var(--text-xs);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--tvc-ink-soft);
+  }
+
+  .ledger .spop h4 {
+    margin: 10px 0 2px;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--tvc-ink-soft);
+  }
+
+  .ledger .spop .hint {
+    margin: 6px 6px 0;
+    font-size: var(--text-sm);
+  }
+
+  .ledger .sopt {
+    all: unset;
+    cursor: pointer;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 34px;
+    padding: 4px 6px;
+    border-radius: 7px;
+    font-size: var(--text-sm);
+  }
+
+  .ledger .sopt:hover {
+    background: var(--tvc-cream);
+  }
+
+  .ledger .sopt-tick {
+    flex: none;
+    width: 16px;
+    color: var(--tvc-green-dark);
+    font-weight: 700;
+  }
+
+  .ledger .sopt-extra {
+    margin-left: auto;
+    color: var(--tvc-ink-soft);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .ledger .sfav {
+    display: flex;
+    align-items: center;
+  }
+
+  .ledger .sfav .sopt {
+    flex: 1;
+  }
+
+  .ledger .sopt-del {
+    all: unset;
+    cursor: pointer;
+    box-sizing: border-box;
+    width: 32px;
+    height: 32px;
+    text-align: center;
+    line-height: 32px;
+    border-radius: 6px;
+    color: var(--tvc-ink-soft);
+  }
+
+  .ledger .sopt-del:hover {
+    background: var(--tvc-error-bg);
+    color: var(--tvc-error-text);
+  }
+
+  .ledger .ssave {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+  }
+
+  .ledger .ssave input {
+    flex: 1;
+    min-width: 0;
+    min-height: 36px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: 6px;
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+    font: inherit;
+    font-size: var(--text-sm);
+    padding: 4px 8px;
+  }
+
+  /* A group heading in the list. Same absolute placement as a line. */
+  .ledger .lgroup {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    box-sizing: border-box;
+    border-bottom: 1px solid var(--tvc-line);
+    background: var(--tvc-cream);
+  }
+
+  .ledger .lgroup--2 {
+    background: var(--tvc-white);
+  }
+
+  .ledger .ggroup-btn {
+    all: unset;
+    cursor: pointer;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 44px;
+    padding: 6px 14px;
+    font-weight: 650;
+  }
+
+  .ledger .lgroup--2 .ggroup-btn {
+    padding-left: 34px;
+    font-weight: 600;
+  }
+
+  .ledger .ggroup-tri {
+    flex: none;
+    width: 14px;
+    transition: transform 0.15s;
+  }
+
+  .ledger .lgroup.is-open .ggroup-tri {
+    transform: rotate(90deg);
+  }
+
+  .ledger .ggroup-count {
+    color: var(--tvc-ink-soft);
+    font-weight: 500;
+    font-size: var(--text-sm);
+  }
+
+  .ledger .ggroup-net {
+    margin-left: auto;
+    font-size: var(--text-sm);
+    font-variant-numeric: tabular-nums;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ledger .ggroup-tri {
+      transition: none;
+    }
+  }
+
+  @media (max-width: 900px) {
+    .ledger .spop {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .ledger .twostep {
+    margin: 0 0 10px;
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
   }
 
   .ledger .progress {
@@ -1549,6 +2369,20 @@ import SignInGate from '../../../components/SignInGate.astro';
 
   .ledger .tips p {
     margin: 0 0 6px;
+  }
+
+  .ledger .tips .tips-title {
+    margin: 0 0 6px;
+    font-size: var(--text-sm);
+    font-weight: 650;
+  }
+
+  .ledger .tips .tips-tree {
+    margin: 0 0 8px;
+  }
+
+  .ledger .tips .tips-tree ul {
+    margin: 2px 0 6px;
   }
 
   .ledger .tips ul {
@@ -1755,10 +2589,10 @@ import SignInGate from '../../../components/SignInGate.astro';
   .ledger .gfilter,
   .ledger .lrow {
     display: grid;
-    grid-template-columns: 34px 62px minmax(150px, 1.1fr) 124px minmax(150px, 1fr) minmax(150px, 1fr) minmax(170px, 1.1fr);
+    grid-template-columns: 34px 76px 112px minmax(170px, 1fr) minmax(170px, 1fr) 124px;
     align-items: center;
-    gap: 8px;
-    padding: 6px 12px;
+    gap: 10px;
+    padding: 4px 14px;
   }
 
   .ledger .ghead,
@@ -1844,9 +2678,14 @@ import SignInGate from '../../../components/SignInGate.astro';
     color: var(--tvc-ink-soft);
   }
 
-  .ledger .lrow input[type='checkbox'] {
+  .ledger .lrow input[type='checkbox'],
+  .ledger .ghead input[type='checkbox'] {
     width: 24px;
     height: 24px;
+  }
+
+  main .ledger.section .select-all-btn {
+    display: none;
   }
 
   .ledger .gcell {
@@ -1865,11 +2704,11 @@ import SignInGate from '../../../components/SignInGate.astro';
   .ledger .narr {
     all: unset;
     cursor: pointer;
-    font-weight: 600;
+    font-weight: 500;
     display: -webkit-box;
     -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
     overflow: hidden;
     overflow-wrap: anywhere;
     min-height: 24px;
@@ -1914,11 +2753,8 @@ import SignInGate from '../../../components/SignInGate.astro';
   }
 
   .ledger .gcell--amount {
-    flex-direction: column;
-    align-items: flex-end;
-    justify-content: center;
-    gap: 4px;
-    font-weight: 600;
+    justify-content: flex-end;
+    font-weight: 500;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }
@@ -1931,6 +2767,169 @@ import SignInGate from '../../../components/SignInGate.astro';
   .ledger .gcell--party,
   .ledger .gcell--nature {
     flex-wrap: wrap;
+  }
+
+  /* A line at rest is plain text. Its fields appear when it is ticked, opened or has a problem to show. */
+  .ledger .lrow {
+    min-height: 44px;
+  }
+
+  .ledger .lrow:hover {
+    background: var(--tvc-cream);
+  }
+
+  .ledger .lrow.is-active {
+    background: var(--tvc-cream);
+    padding-block: 8px;
+  }
+
+  .ledger .lrow.is-selected {
+    background: var(--tvc-green-tint);
+  }
+
+  .ledger .gcell--nature {
+    grid-column: 2 / -1;
+  }
+
+  /* The narration is a reference: not a column unless asked for, shown full width under the fields when a line is open. */
+  .ledger.show-narr .ghead,
+  .ledger.show-narr .gfilter,
+  .ledger.show-narr .lrow {
+    grid-template-columns: 34px 76px 112px minmax(150px, 1fr) minmax(150px, 1fr) 124px minmax(200px, 1.4fr);
+  }
+
+  .ledger:not(.show-narr) .gcell--narration {
+    display: none;
+  }
+
+  .ledger:not(.show-narr) .lrow.is-active .gcell--narration {
+    display: flex;
+    grid-column: 2 / -1;
+    color: var(--tvc-ink-soft);
+  }
+
+  .ledger:not(.show-narr) .lrow.is-active .narr {
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    color: var(--tvc-ink-soft);
+  }
+
+  .ledger .gcell--narration .narr {
+    color: var(--tvc-ink-soft);
+  }
+
+  .ltip {
+    position: fixed;
+    z-index: 15;
+    max-width: min(460px, calc(100vw - 16px));
+    padding: 8px 12px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: var(--radius-sm);
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+    box-shadow: var(--shadow-soft);
+    font-size: var(--text-sm);
+    pointer-events: none;
+  }
+
+  .ltip[hidden] {
+    display: none;
+  }
+
+  .ltip p {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .ltip .ltip-sub {
+    margin-top: 4px;
+    color: var(--tvc-ink-soft);
+  }
+
+  .ledger .datebtn {
+    all: unset;
+    cursor: pointer;
+    box-sizing: border-box;
+    min-height: 32px;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .ledger .datebtn:hover {
+    text-decoration: underline;
+    text-decoration-color: var(--tvc-line-strong);
+  }
+
+  .ledger .datebtn:focus-visible {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 2px;
+  }
+
+  .ledger .colmenu-wrap {
+    position: relative;
+    display: inline-block;
+  }
+
+  .ledger .colmenu {
+    position: absolute;
+    z-index: 30;
+    right: 0;
+    top: calc(100% + 4px);
+    min-width: 200px;
+    padding: 6px;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius-sm);
+    background: var(--tvc-white);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .ledger .colmenu[hidden] {
+    display: none;
+  }
+
+  .ledger .gcell--meta {
+    display: none;
+  }
+
+  .ledger .peek {
+    all: unset;
+    cursor: pointer;
+    box-sizing: border-box;
+    display: block;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 4px 0;
+  }
+
+  .ledger .peek[hidden] {
+    display: none;
+  }
+
+  .ledger .peek.ghost {
+    font-style: italic;
+    color: var(--tvc-ink-soft);
+  }
+
+  .ledger .peek:hover {
+    text-decoration: underline;
+    text-decoration-color: var(--tvc-line-strong);
+  }
+
+  .ledger .peek:focus-visible {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 2px;
+  }
+
+  .ledger .lrow:not(.is-active) .detail--upi,
+  .ledger .lrow:not(.is-active) .detail--dim {
+    display: none;
+  }
+
+  .ledger:not(.show-colsearch) .gfilter {
+    display: none;
   }
 
   .ledger .lcell-text {
@@ -1968,10 +2967,58 @@ import SignInGate from '../../../components/SignInGate.astro';
 
   .ledger .gcell--category .cellfield,
   .ledger .gcell--party .cellfield,
-  .ledger .gcell--nature .cellfield {
+  .ledger .gcell--nature .cellfield,
+  .ledger .gcell--category .combo,
+  .ledger .gcell--party .combo {
     flex: 1 1 0;
     min-width: 0;
     width: auto;
+  }
+
+  .ledger .lrow .combo-input {
+    min-height: 36px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: 6px;
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+    font: inherit;
+    font-size: var(--text-sm);
+    padding: 4px 26px 4px 8px;
+  }
+
+  .ledger .combo.ghost .combo-input::placeholder {
+    font-style: italic;
+    color: var(--tvc-ink-soft);
+  }
+
+  .abar .combo {
+    width: 200px;
+  }
+
+  .abar .combo .combo-input {
+    min-height: 36px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: 6px;
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+    font: inherit;
+    font-size: var(--text-sm);
+    padding: 4px 26px 4px 8px;
+  }
+
+  /* The note under a maintenance line's category that still needs its year and unit. */
+  .ledger .follow-hint {
+    flex-basis: 100%;
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  .ledger .follow-hint--warn {
+    color: var(--tvc-orange-text);
+  }
+
+  .ledger .follow-hint[hidden] {
+    display: none;
   }
 
   /* The bar for selected lines: docked, in the same theme as the page, and it says why Post is off. */
@@ -2028,21 +3075,46 @@ import SignInGate from '../../../components/SignInGate.astro';
       display: inline-flex;
     }
 
+    main .ledger.section .colsearch-toggle {
+      display: none;
+    }
+
+    main .ledger.section .select-all-btn:not([hidden]) {
+      display: inline-flex;
+    }
+
     .ledger .gscroll {
       min-width: 0;
       height: 66vh;
     }
 
-    .ledger .lrow {
-      grid-template-columns: 36px 1fr auto;
+    .ledger .lrow,
+    .ledger.show-narr .lrow {
+      grid-template-columns: 44px 1fr auto;
       grid-template-areas:
         'chk date amt'
-        'chk narr narr'
+        'chk meta status';
+      row-gap: 2px;
+      padding: 10px 12px;
+    }
+
+    .ledger.show-narr .lrow {
+      grid-template-areas:
+        'chk date amt'
+        'chk meta status'
+        'chk narr narr';
+    }
+
+    .ledger .lrow.is-active,
+    .ledger.show-narr .lrow.is-active {
+      grid-template-areas:
+        'chk date amt'
         'chk cat cat'
         'chk party party'
-        'chk nature nature';
+        'chk narr narr'
+        'chk nature nature'
+        'chk status status';
       row-gap: 6px;
-      padding: 12px;
     }
 
     .ledger .gcell--select {
@@ -2054,12 +3126,40 @@ import SignInGate from '../../../components/SignInGate.astro';
       grid-area: date;
     }
 
+    .ledger .lrow:not(.is-active) :is(.gcell--category, .gcell--party, .gcell--nature) {
+      display: none;
+    }
+
+    .ledger .gcell--meta {
+      display: block;
+      grid-area: meta;
+      color: var(--tvc-ink-soft);
+      font-size: var(--text-sm);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .ledger .lrow.is-active .gcell--meta {
+      display: none;
+    }
+
+    .ledger .gcell--status {
+      grid-area: status;
+      justify-self: end;
+    }
+
+    .ledger .lrow.is-active .gcell--status {
+      justify-self: start;
+    }
+
     .ledger .gcell--amount {
       grid-area: amt;
     }
 
     .ledger .gcell--narration {
       grid-area: narr;
+      grid-column: auto;
     }
 
     .ledger .gcell--category {
@@ -2072,7 +3172,9 @@ import SignInGate from '../../../components/SignInGate.astro';
 
     .ledger .gcell--nature {
       grid-area: nature;
+      grid-column: auto;
     }
+
 
     .ledger .gcell[data-label]:not([data-label='']) {
       flex-wrap: wrap;

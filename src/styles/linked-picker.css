@@ -1,0 +1,180 @@
+/* The linked picker (scripts/lib/linked-picker.mjs, docs/linked-picker.md) and the typed list built on it. Used by the Ledger, Rules and Parties pages: a field with a caret, and a list that opens beside it. */
+.combo {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+
+.combo .combo-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding-right: 26px;
+  text-overflow: ellipsis;
+}
+
+.combo-caret {
+  position: absolute;
+  right: 9px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--tvc-ink-soft);
+  font-size: var(--text-xs);
+  pointer-events: none;
+}
+
+.combo-pop {
+  position: fixed;
+  z-index: 60;
+  max-width: min(420px, calc(100vw - 16px));
+  overflow-y: auto;
+  padding: 4px;
+  border: 1px solid var(--tvc-line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--tvc-white);
+  color: var(--tvc-ink);
+  box-shadow: var(--shadow-soft);
+  font-size: var(--text-sm);
+}
+
+.combo-pop--inline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  max-height: 260px;
+  max-width: none;
+}
+
+.combo-group {
+  padding: 8px 8px 2px;
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tvc-ink-soft);
+}
+
+.combo-opt {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.combo-opt.is-active {
+  background: var(--tvc-cream);
+}
+
+.combo-opt.is-current {
+  font-weight: 600;
+}
+
+.combo-opt--blank {
+  color: var(--tvc-ink-soft);
+}
+
+.combo-opt--add {
+  position: sticky;
+  bottom: -4px;
+  margin-top: 2px;
+  background: var(--tvc-white);
+  border-top: 1px solid var(--tvc-line);
+  border-radius: 0 0 6px 6px;
+  color: var(--tvc-green-dark);
+  font-weight: 600;
+}
+
+.combo-none {
+  padding: 8px 10px;
+  color: var(--tvc-ink-soft);
+}
+
+.combo-kinds {
+  position: sticky;
+  top: -4px;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: -4px -4px 4px;
+  padding: 8px;
+  border-bottom: 1px solid var(--tvc-line);
+  background: var(--tvc-white);
+}
+
+.combo-chip {
+  all: unset;
+  cursor: pointer;
+  box-sizing: border-box;
+  min-height: 30px;
+  padding: 2px 12px;
+  border: 1px solid var(--tvc-line-strong);
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.combo-chip[aria-pressed='true'] {
+  background: var(--tvc-green);
+  border-color: var(--tvc-green);
+  color: var(--tvc-white);
+}
+
+.combo-chip:focus-visible {
+  outline: 2px solid var(--tvc-orange);
+  outline-offset: 2px;
+}
+
+.combo-note {
+  margin-top: 4px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--tvc-line);
+  color: var(--tvc-ink-soft);
+}
+
+.combo-sub {
+  margin-left: auto;
+  flex: none;
+  color: var(--tvc-ink-soft);
+  font-size: var(--text-xs);
+}
+
+/* The linked picker (scripts/lib/linked-picker.mjs): the levels above stay as header lines, the next level is listed under them. */
+.combo-trail {
+  all: unset;
+  cursor: pointer;
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  padding: 6px 10px;
+  border-radius: 6px;
+  color: var(--tvc-ink-soft);
+  font-size: var(--text-sm);
+}
+
+.combo-trail:hover:not(:disabled) {
+  background: var(--tvc-cream);
+}
+
+.combo-trail--here {
+  font-weight: 600;
+  color: var(--tvc-ink);
+  cursor: default;
+}
+
+.combo-trail--here:not(:disabled) {
+  cursor: pointer;
+}
+
+.combo-trail:focus-visible {
+  outline: 2px solid var(--tvc-orange);
+  outline-offset: 2px;
+}
+
+.combo-enter {
+  margin-left: auto;
+  flex: none;
+  color: var(--tvc-ink-soft);
+}

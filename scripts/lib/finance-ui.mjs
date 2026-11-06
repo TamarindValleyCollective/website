@@ -2,6 +2,8 @@
 // textContent, never as HTML. Money is integer paise; the screens show rupees and convert back with parseRupees, which
 // never goes through a float.
 
+import { linkedPicker } from './linked-picker.mjs';
+
 /** Build an element: h('div', { class, text, attrs, on }, ...children). */
 export function h(tag, props = {}, ...kids) {
   const el = document.createElement(tag);
@@ -58,4 +60,40 @@ export function present(dlg, closeOnBackdrop, ...kids) {
   dlg.replaceChildren(...kids.filter(Boolean));
   if (!dlg.open) dlg.showModal();
   closeOnBackdrop(dlg);
+}
+
+/** Options for a combo from the categories, grouped by type like categorySelect. */
+export function categoryOptions(categories, { includeInactive = false, selected = '' } = {}) {
+  const out = [];
+  for (const type of Object.keys(TYPE_LABELS)) {
+    for (const c of categories.filter((x) => x.type === type && (x.active || includeInactive || x.id === selected))) out.push({ value: c.id, label: c.active ? c.name : `${c.name} (retired)`, group: TYPE_LABELS[type] });
+  }
+  return out;
+}
+/** Party choices: current ones first, former members after them and marked (`former_since` is set once a member's last household link is gone). */
+/** Unit choices: "F-01 · H-10", with the people living there beside it and searchable, so a unit is found by a member's name. */
+export const unitOptions = (households) => households.map((x) => ({ value: x.id, label: x.label, sub: (x.people ?? []).join(', '), search: (x.people ?? []).join(' ') }));
+export function partyOptions(parties, { unitId = '', unitLabels = new Map() } = {}) {
+  // For a unit's maintenance the people in that unit come first (anybody can pay, but they are the likely ones), marked with the unit.
+  const inUnit = (p) => Boolean(unitId) && p.household_id === unitId && !p.former_since;
+  const ordered = [...parties.filter(inUnit), ...parties.filter((p) => !inUnit(p) && !p.former_since), ...parties.filter((p) => !inUnit(p) && p.former_since)];
+  return ordered.map((p) => ({
+    value: p.id,
+    label: p.former_since ? `${p.name} · former member` : p.name,
+    kind: p.kind,
+    sub: inUnit(p) ? 'in this unit' : p.kind === 'member' && p.household_id && !p.former_since ? unitLabels.get(p.household_id) ?? '' : '',
+  }));
+}
+
+/**
+ * A picker you can type into, for lists too long to scroll (parties, categories, units). A flat list is the simplest use of the linked picker
+ * (scripts/lib/linked-picker.mjs, docs/linked-picker.md), which does the work; this keeps the shape the pages already use:
+ * `.value` (an option's value, '' for none), a 'change' event, `.hidden`, `.focus()`, `.input`, `.setBlank(text)`, `.setPlaceholder(text)`, `.setOptions(list)`.
+ * With `addNew`, the list always ends in "<addNewLabel>: “typed”", which calls addNew(typed).
+ * @param {{ options?: { value: string, label: string, kind?: string, sub?: string, search?: string, group?: string }[], value?: string, blank?: string, addNew?: ((typed: string) => void) | null, addNewLabel?: string, matcher?: ((options: any[], query: string) => any[]) | null, ariaLabel?: string }} [config]
+ */
+export function combo({ options = [], value = '', blank = 'Choose…', addNew = null, addNewLabel = 'Add a new entry', matcher = null, ariaLabel = '' } = {}) {
+  const el = linkedPicker({ nodes: options, path: value ? [value] : [], blank, matcher, ariaLabel, display: 'leaf', addNew: addNew ? { label: addNewLabel, depth: 0, onAdd: (typed) => addNew(typed) } : null });
+  el.setOptions = el.setNodes;
+  return el;
 }

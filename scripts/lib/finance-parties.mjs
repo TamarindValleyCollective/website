@@ -23,7 +23,7 @@ export function validateParty(body) {
 }
 
 // An edit to a party's name, kind or active flag. Returns only what really changes, so the audit log can name the
-// fields. A member linked to a household stays a member (the table's check would refuse it anyway).
+// fields. A member linked to a household or a person stays a member (the table's check would refuse it anyway).
 export function validatePartyChange(party, body) {
   const patch = {};
   if (body?.name !== undefined) {
@@ -33,7 +33,7 @@ export function validatePartyChange(party, body) {
   }
   if (body?.kind !== undefined && body.kind !== party.kind) {
     if (!PARTY_KINDS.includes(body.kind)) return { error: 'Choose what kind of party this is.' };
-    if (party.household_id) return { error: 'A member linked to a household stays a member.' };
+    if (party.household_id || party.person_id) return { error: 'A member linked to a household stays a member.' };
     patch.kind = body.kind;
   }
   if (body?.active !== undefined) {
@@ -197,6 +197,7 @@ export function partyForResponse(party, accounts, flags, today = todayIST(), mer
     kind: party.kind,
     active: party.active,
     householdId: party.household_id ?? null,
+    formerSince: party.former_since ?? null,
     accounts: live.map((a) => accountForResponse(a, flags.get(a.id) ?? [], { today, review: review.get(a.id) ?? [], names })),
     earlierAccounts: accounts.length - live.length,
     needsReview: [...review.values()].some((r) => r.length > 0),

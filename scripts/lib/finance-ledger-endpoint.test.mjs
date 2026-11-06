@@ -625,6 +625,22 @@ test('maintenance is saved against a unit and a year, and without a unit it is f
   assert.match(bare.review_reason, /no_unit/);
 });
 
+test('a posted maintenance row with no unit is accepted but sent to review as no_unit, and a unit clears it', async () => {
+  reset();
+  const op = sign('u1', 'user');
+  const base = { amountPaise: 100000, categoryId: CAT_MAINT, partyId: P_NURSERY, nature: 'Maintenance' };
+  assert.equal((await saveRows(op, L_DEBIT, [base])).status, 200, 'the server does not refuse it: review catches it');
+  const bare = db.fin_allocations.find((x) => x.bank_line_id === L_DEBIT);
+  assert.ok(bare.posted_at);
+  assert.equal(bare.review_state, 'needs_review');
+  assert.match(bare.review_reason, /no_unit/);
+  reset();
+  assert.equal((await saveRows(op, L_DEBIT, [{ ...base, householdId: ID(90), maintenanceYear: '2025-26' }])).status, 200);
+  const withUnit = db.fin_allocations.find((x) => x.bank_line_id === L_DEBIT);
+  assert.equal(withUnit.review_state, 'ok');
+  assert.doesNotMatch(withUnit.review_reason ?? '', /no_unit/);
+});
+
 test('a unit that does not exist, or a year that is not like 2025-26, is refused', async () => {
   reset();
   const op = sign('u1', 'user');
