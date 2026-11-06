@@ -109,6 +109,18 @@ globalThis.fetch = async (url, init = {}) => {
     db.fin_periods.push({ entity_id: E, month: body.p_month, status: 'closed' });
     return json(null);
   }
+  if (table === 'rpc/fin_set_allocation_parties') {
+    db.rpc.push({ name: 'setparties', body });
+    let changed = 0;
+    body.p_ids.forEach((id, i) => {
+      const a = db.fin_allocations.find((x) => x.id === id && x.posted_at && !x.party_id);
+      if (a) {
+        a.party_id = body.p_parties[i];
+        changed++;
+      }
+    });
+    return json(changed);
+  }
   if (table === 'rpc/fin_set_allocation_party') {
     db.rpc.push({ name: 'setparty', body });
     const a = db.fin_allocations.find((x) => x.id === body.p_id && x.posted_at && !x.party_id);
@@ -828,4 +840,38 @@ test('a posted allocation with no party can be given one, once, and a closed mon
   assert.equal((await set(op, b.id, { partyId: P_NURSERY })).status, 403);
   assert.equal((await set(director, b.id, { partyId: P_NURSERY })).status, 403);
   assert.equal((await set(director, b.id, { partyId: P_NURSERY, overrideReason: 'Party missing' })).status, 200);
+});
+
+test('parties are proposed from the narration for posted lines that have none, and applied in one go', async () => {
+  reset();
+  const op = sign('u1', 'user');
+  const director = sign('d1', 'admin');
+  const L_OLD = ID(71);
+  db.fin_bank_lines.push({ id: L_OLD, entity_id: E, bank_account_id: ID(2), tran_date: '2026-09-10', narration: 'UPI/P2A/123456789020/Green Nursery/Okbank/Plants', direction: 'debit', amount_paise: 5000 });
+  const posted = (id, lineId, period, extra = {}) => db.fin_allocations.push({ id, entity_id: E, bank_line_id: lineId, category_id: CAT_OPEX, party_id: null, amount_paise: 100, period, nature: 'x', posted_at: '2026-11-04T00:00:00Z', reverses_allocation_id: null, ...extra });
+  const A1 = ID(81), A2 = ID(82), A3 = ID(83), A4 = ID(84);
+  posted(A1, L_DEBIT, '2026-10-01');
+  posted(A2, L_SEP, '2026-09-01'); // 'NEFT/Some payment': nobody named
+  posted(A3, L_REFUND, '2026-11-01');
+  posted(A4, L_OLD, '2026-09-01'); // closed month
+  const seen = await (await api(op, '/ledger/missing-parties')).json();
+  assert.deepEqual(seen.proposals.map((x) => x.allocationId).sort(), [A1, A3, A4].sort());
+  assert.equal(seen.proposals.every((x) => x.partyId === P_NURSERY && x.partyName === 'Green Nursery'), true);
+  assert.equal(seen.needsPerson, 1);
+  const apply = (who, items, extra = {}) => api(who, '/allocations/parties', { method: 'POST', body: { items, ...extra } });
+  const item = (id) => ({ allocationId: id, partyId: P_NURSERY });
+  assert.equal((await apply(op, [])).status, 400);
+  assert.equal((await apply(op, [{ allocationId: A1, partyId: 'nope' }])).status, 400);
+  const done = await (await apply(op, [item(A1), item(A3)])).json();
+  assert.deepEqual([done.changed, done.skipped], [2, 0]);
+  assert.equal(db.fin_allocations.find((a) => a.id === A1).party_id, P_NURSERY);
+  assert.ok(db.audit.some((x) => x.action === 'finance.allocation_parties_set' && x.detail.count === 2));
+  const again = await (await apply(op, [item(A1)])).json(); // already has one: left alone
+  assert.deepEqual([again.changed, again.skipped], [0, 1]);
+  // the closed month: an ordinary user cannot, a director needs a reason
+  assert.equal((await apply(op, [item(A4)])).status, 403);
+  assert.equal((await apply(director, [item(A4)])).status, 403);
+  assert.equal((await apply(director, [item(A4)], { overrideReason: 'Missing party found' })).status, 200);
+  const after = await (await api(op, '/ledger/missing-parties')).json();
+  assert.equal(after.proposals.length, 0);
 });

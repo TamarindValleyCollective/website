@@ -118,6 +118,20 @@ function tally(map, key, categoryId, nature) {
 }
 
 /**
+ * Who a posted line with no party was paid to or received from, read from its bank narration and, where there is one, the
+ * Paytm UPI counterparty. Only a sure answer is returned: the name must match exactly one party (exactly, or as the bank's
+ * shortened form), and when the narration and the UPI report both name someone they must name the same party. Anything else
+ * is null, to be left to a person. Returns { partyId, how, from } or null; from is the name that was matched.
+ */
+export function proposeMissingParty({ line, upi = null, parties }) {
+  const names = [upi?.counterparty, parseNarration(line.narration, line.direction).counterparty].filter(Boolean);
+  const found = names.map((name) => ({ name, hit: matchParty(name, parties) })).filter((x) => x.hit);
+  if (!found.length) return null;
+  if (found.some((x) => x.hit.partyId !== found[0].hit.partyId)) return null;
+  return { partyId: found[0].hit.partyId, how: found.some((x) => x.hit.how === 'exact') ? 'exact' : 'shortened', from: found[0].name };
+}
+
+/**
  * Index earlier postings so a repeat is recognised. rows: posted, non-reversal allocations joined to their bank line:
  * { narration, direction, party_id, category_id, nature }. Matching is by party when the posting named one, and always by
  * the counterparty's name in the narration too, so history works before every payee is in the register.

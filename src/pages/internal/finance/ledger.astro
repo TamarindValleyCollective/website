@@ -530,6 +530,96 @@ import SignInGate from '../../../components/SignInGate.astro';
     picker.input.focus();
   }
 
+  // Posted lines that have no party, where the bank narration (or the Paytm name) names one for certain: listed for a person to tick, then applied together.
+  type PartyProposal = { allocationId: string; lineId: string; date: string; narration: string; direction: string; amountPaise: number; period: string; category: string; unit: string; partyId: string; partyName: string; how: string; from: string };
+  async function openFillParties() {
+    const { status, data: d } = await call('/api/finance-admin/ledger/missing-parties');
+    if (status !== 200) {
+      showToast(d?.error ?? 'Could not read the lines.');
+      return;
+    }
+    const proposals = d.proposals as PartyProposal[];
+    const closedMonths = (d.closedMonths as string[]).map((m) => m.slice(0, 7));
+    if (!proposals.length) {
+      showToast(d.needsPerson ? `Nothing is certain enough to fill in. ${d.needsPerson} lines need a person.` : 'Every posted line already has a party.');
+      return;
+    }
+    const dlg = $<HTMLDialogElement>('line-sheet');
+    dlg.addEventListener('close', () => dlg.replaceChildren(), { once: true });
+    const boxes = proposals.map(() => h('input', { attrs: { type: 'checkbox', checked: '' } }) as HTMLInputElement);
+    const reason = input('closedReason', { placeholder: 'Why is a closed month being changed?' }) as HTMLInputElement;
+    const reasonBox = labelled('Reason for changing a closed month', reason);
+    const msg = h('p', { class: 'error', attrs: { hidden: '' } });
+    const all = h('input', { attrs: { type: 'checkbox', checked: '', 'aria-label': 'Tick or untick every line' } }) as HTMLInputElement;
+    const apply = button('Apply', () => void submit(), 'button button--primary');
+    const picked = () => proposals.filter((_, i) => boxes[i].checked);
+    function refresh() {
+      const sel = picked();
+      apply.textContent = sel.length ? `Apply to ${sel.length} ${sel.length === 1 ? 'line' : 'lines'}` : 'Apply';
+      (apply as HTMLButtonElement).disabled = !sel.length;
+      reasonBox.hidden = !sel.some((x) => closedMonths.includes(x.period.slice(0, 7)));
+      all.checked = sel.length === proposals.length;
+    }
+    for (const b of boxes) b.addEventListener('change', refresh);
+    all.addEventListener('change', () => {
+      for (const b of boxes) b.checked = all.checked;
+      refresh();
+    });
+    async function submit() {
+      msg.hidden = true;
+      const sel = picked();
+      (apply as HTMLButtonElement).disabled = true;
+      let changed = 0;
+      for (let i = 0; i < sel.length; i += 300) {
+        const res = await call('/api/finance-admin/allocations/parties', 'POST', { items: sel.slice(i, i + 300).map((x) => ({ allocationId: x.allocationId, partyId: x.partyId })), overrideReason: reason.value });
+        if (res.status !== 200) {
+          msg.textContent = `${changed ? `${changed} were filled in before this stopped. ` : ''}${res.data?.error ?? 'Could not do that.'}`;
+          msg.hidden = false;
+          (apply as HTMLButtonElement).disabled = false;
+          if (changed) void load();
+          return;
+        }
+        changed += res.data.changed;
+      }
+      dlg.close();
+      showToast(`Added a party to ${changed} ${changed === 1 ? 'line' : 'lines'}.`);
+      void load();
+    }
+    present(
+      dlg,
+      closeOnBackdrop,
+      h('h2', { text: 'Fill parties from the bank narration', attrs: { id: 'line-title' } }),
+      h('p', { class: 'sheet-text', text: `${proposals.length} posted ${proposals.length === 1 ? 'line has' : 'lines have'} no party, and the narration names one for certain.${d.needsPerson ? ` ${d.needsPerson} more have no clear name and stay as they are.` : ''} Untick any you disagree with.` }),
+      labelled('Select all', all),
+      h(
+        'ul',
+        { class: 'list fp-list' },
+        ...proposals.map((x, i) =>
+          h(
+            'li',
+            {},
+            h(
+              'label',
+              { class: 'row alloc-row' },
+              boxes[i],
+              h(
+                'span',
+                { class: 'grow' },
+                h('span', { class: 'title', text: `${x.partyName}${x.how === 'shortened' ? ' (from a shortened name)' : ''}` }),
+                h('span', { class: 'detail', text: [niceDate(x.date), shortNarration(x.narration), x.category, x.unit ? `Unit ${x.unit}` : ''].filter(Boolean).join(' · ') }),
+              ),
+              h('span', { class: 'amount', text: rupees(x.amountPaise) }),
+            ),
+          ),
+        ),
+      ),
+      reasonBox,
+      msg,
+      h('div', { class: 'sheet-actions' }, button('Cancel', () => dlg.close()), apply),
+    );
+    refresh();
+  }
+
   async function openLine(id: string) {
     const dlg = $<HTMLDialogElement>('line-sheet');
     const { status, data: d } = await call(`/api/finance-admin/ledger/${id}`);
@@ -1007,13 +1097,18 @@ import SignInGate from '../../../components/SignInGate.astro';
       applyView();
     }, 'button button--outline button--small');
   }
+  // Offered while some posted lines have no party (the "posted without a party" count) and the person may allocate.
+  function fillPartiesButton(): HTMLElement | null {
+    if (!data?.canAllocate || !counts.noparty) return null;
+    return button(`Fill ${counts.noparty} missing ${counts.noparty === 1 ? 'party' : 'parties'} from narration`, () => void openFillParties(), 'button button--outline button--small');
+  }
   function renderSearch() {
     const now = today();
     $('schips').replaceChildren(
       ...chips.map(([k, o], i) => chipEl(kindLabel(k), optionLabel(k, o, now), () => chips.splice(i, 1))),
       ...words.map((w, i) => chipEl('Search', w, () => words.splice(i, 1))),
       ...groupBy.map((g, i) => chipEl('Group by', groupLabel(g), () => groupBy.splice(i, 1), true)),
-      ...([foldAllButton()].filter(Boolean) as Node[]),
+      ...([foldAllButton(), fillPartiesButton()].filter(Boolean) as Node[]),
     );
     $<HTMLInputElement>('q').placeholder = chips.length || words.length || groupBy.length ? '' : 'Search every column';
     if (!$('spop').hidden) renderPopover();
@@ -2783,6 +2878,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     background: var(--tvc-green-tint);
   }
 
+  .ledger .fp-list { max-height: 50vh; overflow-y: auto; }
   .ledger .pill-button { all: unset; cursor: pointer; border-radius: 999px; }
   .ledger .pill-button:focus-visible { outline: 2px solid var(--tvc-green); outline-offset: 2px; }
   .ledger .lrow.is-locked {

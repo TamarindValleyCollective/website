@@ -48,5 +48,30 @@ begin
 end;
 $$;
 
-revoke all on function fin_set_allocation_party(uuid, uuid, uuid) from public, anon, authenticated;
-grant execute on function fin_set_allocation_party(uuid, uuid, uuid) to service_role;
+-- Many at once (the ledger's "Fill parties from narration"): one party per allocation, in one transaction. Rows that no longer
+-- qualify (already given a party, not posted, a refund) are left alone; the count of rows actually changed is returned.
+create function fin_set_allocation_parties(p_ids uuid[], p_parties uuid[], p_actor uuid) returns integer
+language plpgsql security definer set search_path = public as $$
+declare
+  changed integer := 0;
+  n integer;
+  i integer;
+begin
+  if coalesce(array_length(p_ids, 1), 0) <> coalesce(array_length(p_parties, 1), 0) then raise exception 'one party for each allocation'; end if;
+  if exists (select 1 from unnest(p_parties) as x(id) where not exists (select 1 from fin_parties where fin_parties.id = x.id)) then
+    raise exception 'choose parties in the register';
+  end if;
+  perform set_config('fin.setparty', 'on', true);
+  for i in 1 .. coalesce(array_length(p_ids, 1), 0) loop
+    update fin_allocations set party_id = p_parties[i]
+      where id = p_ids[i] and posted_at is not null and party_id is null and reverses_allocation_id is null;
+    get diagnostics n = row_count;
+    changed := changed + n;
+  end loop;
+  perform set_config('fin.setparty', 'off', true);
+  return changed;
+end;
+$$;
+
+revoke all on function fin_set_allocation_party(uuid, uuid, uuid), fin_set_allocation_parties(uuid[], uuid[], uuid) from public, anon, authenticated;
+grant execute on function fin_set_allocation_party(uuid, uuid, uuid), fin_set_allocation_parties(uuid[], uuid[], uuid) to service_role;
