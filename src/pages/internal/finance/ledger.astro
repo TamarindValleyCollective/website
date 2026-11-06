@@ -500,6 +500,38 @@ import SignInGate from '../../../components/SignInGate.astro';
 
   const monthOf = (iso: string) => iso.slice(0, 7);
 
+  // The party picker in the cell of a posted line that has none. Saving goes through the same route as the sheet's "Add party"; a closed month, a split
+  // line or anything unexpected falls back to the sheet, which can ask for a reason.
+  async function editPartyInline(l: Line, cell: HTMLElement) {
+    const { status, data: d } = await call(`/api/finance-admin/ledger/${l.id}`);
+    const missing = status === 200 ? (d as Detail).allocations.filter((a) => a.posted && !a.partyId && !a.reversesAllocationId) : [];
+    if (missing.length !== 1) return void openLine(l.id);
+    const picker = combo({ options: partyOptions(data!.lookups.parties), value: '', blank: 'Choose a party', matcher: matchOptions, ariaLabel: l.direction === 'debit' ? 'Paid to (party)' : 'Received from (party)' }) as ComboEl;
+    const restore = () => {
+      const el = mounted.get(l.id);
+      if (el) fill(el, byId.get(l.id) ?? l);
+    };
+    picker.addEventListener('keydown', (e) => {
+      if ((e as KeyboardEvent).key === 'Escape') restore();
+    });
+    picker.addEventListener('change', async () => {
+      if (!picker.value) return;
+      const res = await call(`/api/finance-admin/allocations/${missing[0].id}/party`, 'POST', { partyId: picker.value });
+      if (res.status === 200) {
+        showToast('Party added.');
+        void load();
+      } else if (res.status === 403) {
+        showToast(res.data?.error ?? 'That month is closed.');
+        void openLine(l.id);
+      } else {
+        showToast(res.data?.error ?? 'Could not do that.');
+        restore();
+      }
+    });
+    cell.replaceChildren(picker);
+    picker.input.focus();
+  }
+
   async function openLine(id: string) {
     const dlg = $<HTMLDialogElement>('line-sheet');
     const { status, data: d } = await call(`/api/finance-admin/ledger/${id}`);
@@ -1354,6 +1386,14 @@ import SignInGate from '../../../components/SignInGate.astro';
       }
     };
     rowEl.addEventListener('keydown', onKey);
+    // Double-click a cell of a line that cannot be edited in its row: a posted line with no party gets its party picker right there; anything else (partly
+    // allocated, flagged, posted) opens its sheet. Lines that can be edited in the row keep the single click.
+    rowEl.addEventListener('dblclick', (e) => {
+      const now = byId.get(l.id) ?? l;
+      if (editable(now) || !data?.canAllocate || (e.target as HTMLElement).closest('button, input, a, .combo')) return;
+      if (now.missingParty && now.state === 'allocated' && partyText.contains(e.target as Node)) void editPartyInline(now, partyText);
+      else void openLine(l.id);
+    });
     refs.set(rowEl, { catHint, check, narr, details, cat, catTick, catText, party, partyTick, partyText, nature, natureTick, natureText, pillSlot, catPeek, partyPeek, natureCell, meta });
     fill(rowEl, l);
     return rowEl;
