@@ -282,8 +282,8 @@ import SignInGate from '../../../components/SignInGate.astro';
       const when = new Date(saved.at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
       const box = $('restorenote');
       box.replaceChildren(
-        h('span', { text: `${usable.length} ${usable.length === 1 ? 'line was' : 'lines were'} filled in on ${when} and never posted.` }),
-        button('Restore them', () => {
+        h('span', { text: `On ${when} you chose a category or party for ${usable.length} ${usable.length === 1 ? 'line' : 'lines'} but did not post ${usable.length === 1 ? 'it' : 'them'}. These choices are only kept in this browser. Nothing is in the ledger yet.` }),
+        button(usable.length === 1 ? 'Fill it in again' : 'Fill them in again', () => {
           const lk = data!.lookups;
           for (const [id, d] of usable) {
             drafts.set(id, { categoryId: lk.categories.some((c) => c.id === d.categoryId) ? d.categoryId : '', partyId: lk.parties.some((x) => x.id === d.partyId) ? d.partyId : '', nature: d.nature ?? '' });
@@ -294,7 +294,7 @@ import SignInGate from '../../../components/SignInGate.astro';
           applyView();
           showToast(`Restored ${usable.length} ${usable.length === 1 ? 'line' : 'lines'}. Nothing is posted yet.`);
         }, 'button button--small'),
-        button('Discard', () => {
+        button('Forget them', () => {
           try {
             localStorage.removeItem(draftsKey());
           } catch {
@@ -553,6 +553,37 @@ import SignInGate from '../../../components/SignInGate.astro';
             }, 'button button--outline button--small'),
           );
         }
+        // A posted line with no party can be given one here; an existing party is only changed by reversing the line.
+        const fillBox = h('div', { class: 'stack-form', attrs: { hidden: '' } });
+        if (d.canAllocate && a.posted && !a.partyId && !a.reversesAllocationId) {
+          const closedMonth = lk.closedMonths.some((m) => m.slice(0, 7) === a.period.slice(0, 7));
+          const picker = combo({ options: partyOptions(lk.parties), value: '', blank: 'Choose a party', matcher: matchOptions, ariaLabel: d.line.direction === 'debit' ? 'Paid to (party)' : 'Received from (party)' }) as ComboEl;
+          const why = input('closedReason', { placeholder: 'Why is a closed month being changed?' }) as HTMLInputElement;
+          const note = h('p', { class: 'error', attrs: { hidden: '' } });
+          fillBox.append(
+            labelled(d.line.direction === 'debit' ? 'Paid to' : 'Received from', picker),
+            closedMonth ? labelled('Reason for changing a closed month', why) : h('span'),
+            note,
+            h('div', { class: 'sheet-actions' }, button('Save party', async () => {
+              note.hidden = true;
+              if (!picker.value) {
+                note.textContent = 'Choose a party first.';
+                note.hidden = false;
+                return;
+              }
+              const { status, data: out } = await call(`/api/finance-admin/allocations/${a.id}/party`, 'POST', { partyId: picker.value, overrideReason: why.value });
+              if (status === 200) {
+                dlg.close();
+                showToast('Party added.');
+                void load();
+              } else {
+                note.textContent = out?.error ?? 'Could not do that.';
+                note.hidden = false;
+              }
+            })),
+          );
+          actions.push(button('Add party', () => { fillBox.hidden = !fillBox.hidden; }, 'button button--outline button--small'));
+        }
         return h(
           'li',
           {},
@@ -569,6 +600,7 @@ import SignInGate from '../../../components/SignInGate.astro';
             h('span', { class: 'amount', text: rupees(a.amountPaise) }),
             ...actions,
           ),
+          fillBox,
         );
       }),
     );
@@ -1439,7 +1471,15 @@ import SignInGate from '../../../components/SignInGate.astro';
       r.partyText.replaceChildren(a?.partyId ? document.createTextNode(nameOf(lk.parties, a.partyId)) : l.missingParty ? h('span', { class: 'noparty', text: 'No party' }) : document.createTextNode(''));
       r.natureText.textContent = a?.nature ?? '';
     }
-    r.pillSlot.replaceChildren(pillFor(l));
+    // A line that cannot be edited in its row (partly allocated, flagged, or posted without a party) is finished or fixed in its sheet:
+    // its pill opens it, so the way in is visible and not only the narration.
+    const pillNode = pillFor(l);
+    if (!can && data!.canAllocate && (l.review || l.state === 'partly_allocated' || l.missingParty)) {
+      const open = h('button', { class: 'pill-button', text: '', attrs: { type: 'button', title: l.state === 'partly_allocated' ? 'Open to finish allocating this line' : l.missingParty ? 'Open to add the missing party' : 'Open to review' } }) as HTMLButtonElement;
+      open.append(pillNode);
+      open.addEventListener('click', () => void openLine(l.id));
+      r.pillSlot.replaceChildren(open);
+    } else r.pillSlot.replaceChildren(pillNode);
     // On a phone a line at rest is two lines: the narration and amount, then date, category and party in one grey line.
     const catWords = can ? (d.categoryId ? nameOf(lk.categories, d.categoryId) : ghostOf(l, 'categoryId') ? nameOf(lk.categories, ghostOf(l, 'categoryId')) : '') : l.allocation ? nameOf(lk.categories, l.allocation.categoryId) : '';
     const partyWords = can ? (d.partyId ? nameOf(lk.parties, d.partyId) : '') : l.allocation?.partyId ? nameOf(lk.parties, l.allocation.partyId) : '';
@@ -2674,6 +2714,8 @@ import SignInGate from '../../../components/SignInGate.astro';
     background: var(--tvc-green-tint);
   }
 
+  .ledger .pill-button { all: unset; cursor: pointer; border-radius: 999px; }
+  .ledger .pill-button:focus-visible { outline: 2px solid var(--tvc-green); outline-offset: 2px; }
   .ledger .lrow.is-locked {
     color: var(--tvc-ink-soft);
   }

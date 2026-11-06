@@ -106,8 +106,14 @@ globalThis.fetch = async (url, init = {}) => {
   }
   if (table === 'rpc/fin_close_period') {
     db.rpc.push({ name: 'close', body });
-    db.fin_periods.push({ month: body.p_month, status: 'closed' });
+    db.fin_periods.push({ entity_id: E, month: body.p_month, status: 'closed' });
     return json(null);
+  }
+  if (table === 'rpc/fin_set_allocation_party') {
+    db.rpc.push({ name: 'setparty', body });
+    const a = db.fin_allocations.find((x) => x.id === body.p_id && x.posted_at && !x.party_id);
+    if (a) a.party_id = body.p_party;
+    return json(a ? 1 : 0);
   }
   if (table === 'rpc/fin_merge_category') {
     db.rpc.push({ name: 'merge', body });
@@ -153,7 +159,7 @@ const reset = () => {
     fin_projects: [],
     member_households: [{ id: ID(90), farm_unit: 'F-01', house_no: 'H-10' }],
     fin_rules: [],
-    fin_periods: [{ month: '2026-09-01', status: 'closed' }],
+    fin_periods: [{ entity_id: E, month: '2026-09-01', status: 'closed' }],
     fin_bank_accounts: [{ id: ID(2), label: 'Test current' }],
     fin_upi_lines: [{ bank_line_id: L_CIRCLE, counterparty: 'Test Manager', remarks: 'Onion', is_circle: true }],
     fin_bank_lines: [
@@ -799,4 +805,27 @@ test('a column search over 1,376 lines is quick and sees every line', async () =
   const out = await listOf(op, q({ f_category: '=', sort: 'party', dir: 'asc' }));
   assert.equal(out.total, 1376);
   assert.ok(Date.now() - started < 5000, `took ${Date.now() - started} ms`);
+});
+
+test('a posted allocation with no party can be given one, once, and a closed month needs a reason', async () => {
+  reset();
+  const op = sign('u1', 'user');
+  const director = sign('d1', 'admin');
+  await save(op, L_DEBIT, [row(100000, { partyId: null })]);
+  const a = db.fin_allocations[0];
+  assert.equal(a.party_id ?? null, null);
+  const set = (who, id, body) => api(who, `/allocations/${id}/party`, { method: 'POST', body });
+  assert.equal((await set(op, a.id, {})).status, 400); // no party chosen
+  assert.equal((await set(op, a.id, { partyId: ID(999) })).status, 400); // not in the register
+  assert.equal((await set(op, a.id, { partyId: P_NURSERY })).status, 200);
+  assert.equal(a.party_id, P_NURSERY);
+  assert.ok(db.audit.some((x) => x.action === 'finance.allocation_party_set'));
+  assert.equal((await set(op, a.id, { partyId: P_MANAGER })).status, 409); // never replaced here
+  assert.equal(a.party_id, P_NURSERY);
+  // a closed month: refused for an ordinary user, and for a director without a reason
+  await save(director, L_SEP, [row(20000, { partyId: null, period: '2026-09-01' })], { overrideReason: 'Late bill found by the auditor' });
+  const b = db.fin_allocations.find((x) => x.bank_line_id === L_SEP);
+  assert.equal((await set(op, b.id, { partyId: P_NURSERY })).status, 403);
+  assert.equal((await set(director, b.id, { partyId: P_NURSERY })).status, 403);
+  assert.equal((await set(director, b.id, { partyId: P_NURSERY, overrideReason: 'Party missing' })).status, 200);
 });

@@ -673,6 +673,33 @@ export async function reviewAllocation(req: Request, allocationId: string): Prom
   }
 }
 
+// ---------------------------------------------------------------- fill a missing party
+// A posted allocation with no party can be given one (a reversal cannot, and a party already there is never replaced:
+// that is a reversal). Nothing else on the row changes. A closed month needs close-period and a reason, like any write.
+export async function setAllocationParty(req: Request, allocationId: string): Promise<Response> {
+  const auth = await requireStaff(req, 'finance', 'allocate');
+  if (!auth.ok) return fail(auth.error, auth.status);
+  const body = await readBody(req);
+  if (!body || !LEDGER_ID.test(String(body.partyId ?? ''))) return fail('Choose a party.');
+  try {
+    const [a] = await rows(`/fin_allocations?id=eq.${allocationId}&select=id,entity_id,party_id,period,posted_at,reverses_allocation_id`);
+    if (!a) return fail('That allocation does not exist.', 404);
+    if (!a.posted_at) return fail('Only a posted line is changed here; edit a draft in the line itself.', 409);
+    if (a.reverses_allocation_id) return fail('A refund takes the party of what it refunds.', 409);
+    if (a.party_id) return fail('It already has a party. To change it, reverse the line and post it again.', 409);
+    if (!(await lookups()).parties.some((p) => p.id === body.partyId)) return fail('That party is not in the register.');
+    const [closed] = await rows(`/fin_periods?entity_id=eq.${a.entity_id}&month=eq.${String(a.period).slice(0, 10)}&status=eq.closed&select=month`);
+    const decision = periodWriteDecision(closed ? 'closed' : 'open', capabilitiesForRole('finance', auth.staff.role) as string[], String(body.overrideReason ?? ''));
+    if (!decision.ok) return fail(decision.error ?? 'That month is closed.', 403);
+    await audit(auth.staff.id, a.entity_id, 'finance.allocation_party_set', allocationId, { partyId: body.partyId, override: Boolean(decision.override) });
+    const changed = Number(await rpc('fin_set_allocation_party', { p_id: allocationId, p_party: body.partyId, p_actor: auth.staff.id }));
+    if (!changed) return fail('This line changed while you were looking at it. Reload and try again.', 409);
+    return jsonResponse({ ok: true });
+  } catch (err) {
+    return serverError(err, 'set allocation party');
+  }
+}
+
 // ---------------------------------------------------------------- rules
 const ruleForResponse = (r: Json) => ({
   id: r.id, priority: r.priority, matcher: r.matcher, partyId: r.party_id, categoryId: r.category_id,

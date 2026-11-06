@@ -256,6 +256,9 @@ categories, the requester); routes in `lib/finance-ledger.ts`. `0083` is applied
   `fin_recategorise_allocations` moves chosen allocations (splitting a category); changing type asks for confirmation. These two
   are the only way a posted allocation's category changes (a session setting the guard trigger looks for), and both are audited.
   The merge is on the Rules page; recategorising has a route (`POST /categories/recategorise`) but no screen yet.
+  A third narrow exception (migration 0086): `fin_set_allocation_party` gives a posted allocation a party only when it has none
+  (never replacing one, never on a refund); `POST /allocations/{id}/party`, audited as `finance.allocation_party_set`, and a closed
+  month needs close-period and a reason. The posted-line sheet offers it as "Add party".
 - **The Ledger is a table** (docs/finance/FINANCE.md, "The table", below). Filter chips (To allocate, To review, All) with counts and a
   search; a checkbox on every line, shift-click for a range; category, party and wording are cells you edit in place; a bar for what
   to do to the selected lines; posting is a separate, confirmed step. A line that needs splitting, a refund or a review decision opens
