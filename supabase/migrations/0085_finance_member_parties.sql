@@ -1,6 +1,9 @@
 -- Finance module: every member has a party (docs/finance/FINANCE.md, "Member parties").
--- NOT YET APPLIED to TVC ERP (a migration is not applied by merging it). Apply it only after the dry run of
--- scripts/backfill-member-parties.mjs has been read and agreed.
+-- Applied to TVC ERP on 2026-11-06, by hand in the SQL editor (so Supabase did not record it: a migration-history row named
+-- finance_member_parties still has to be added for scripts/check-migrations-applied.mjs to pass). Checked afterwards: both columns, both
+-- triggers, the unique person index, the plain household index, both checks, person_id on delete set null, and no anon execute on either
+-- trigger function. The backfill (scripts/backfill-member-parties.mjs) was run the same day: a canary of 2 + 2, then the rest (94 created,
+-- 7 linked, one inactive person left out).
 --
 -- A member party was one per household (fin_parties_household_idx, unique), but the people who pay are individuals: a spouse, a parent or
 -- a son sends the maintenance, from their own bank account, and the household is only where the payment is booked. So a member party is

@@ -161,29 +161,13 @@ export function withFavorite(list, fav) {
   return [...list.filter((f) => f.name.toLowerCase() !== clean.name.toLowerCase()), clean];
 }
 
-// ---- the searchable pickers (party, category): which options a typed query leaves, best match first
-/** Every word of `query` must appear in the label (any case). Names that start with the query come first, then names with a word that does, then the rest. */
-export function matchOptions(options, query) {
-  const words = String(query ?? '').toLowerCase().split(/\s+/).filter(Boolean);
-  if (!words.length) return options;
-  const rank = (label) => {
-    const l = label.toLowerCase();
-    if (l.startsWith(words[0])) return 0;
-    if (l.split(/[^a-z0-9]+/).some((w) => w.startsWith(words[0]))) return 1;
-    return 2;
-  };
-  return options
-    .filter((o) => words.every((w) => o.label.toLowerCase().includes(w)))
-    .map((o, i) => ({ o, i, r: rank(o.label) }))
-    .sort((a, b) => a.r - b.r || a.i - b.i)
-    .map((x) => x.o);
-}
+// ---- the searchable pickers: the matcher now lives with the linked picker's core, and is re-exported for the pages that import it from here
+export { matchOptions } from './linked-picker-core.mjs';
 
 // ---- the category decides who is likely to be on the other side, and what else has to be said
-/** Party kinds that normally go with a category type (null: no opinion, show everyone). The person can always widen it to all parties. */
+/** Party kinds that normally go with a category type (null: no opinion, show everyone). Maintenance has none: anybody can pay a unit's maintenance (a company, a relative), so the unit says whose it is, not the payer. The person can always widen it to all parties. */
 export function partyKindsFor(categoryType) {
   return {
-    member_contribution: ['member'],
     revenue: ['customer', 'member'],
     opex: ['vendor', 'employee'],
     capex: ['vendor'],
@@ -208,8 +192,8 @@ export function maintenanceYears(iso) {
 }
 
 /**
- * The unit a maintenance payment goes to when nobody has chosen one: the payer's own unit, if the payer is a current member who has one.
- * A former member, a non-member or a member with no unit gives null, so the person is asked instead of the app guessing.
+ * The unit to SUGGEST for a maintenance payment from this payer: their own, if they are a current member who has one. It is only a suggestion (the person
+ * accepts it): the payer can be anybody, so the unit is never assumed from them. A former member, a non-member or a member with no unit gives null.
  */
 export function defaultUnitFor(party) {
   if (!party || party.kind !== 'member' || party.former_since || !party.household_id) return null;

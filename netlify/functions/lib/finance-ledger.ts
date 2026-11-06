@@ -84,7 +84,7 @@ const audit = (actorId: string, entity: string, action: string, target: string |
 // Everything a screen needs to fill its pickers. Names only; no bank details.
 const lookups = () => cached('lookups', loadLookups);
 async function loadLookups() {
-  const [categories, parties, projects, entities, closed, households] = await Promise.all([
+  const [categories, parties, projects, entities, closed, households, residents] = await Promise.all([
     rows('/fin_categories?select=id,name,type,active&order=type.asc,name.asc'),
     // former_since exists once migration 0085 is applied; until then the old list is read, so an unapplied migration never breaks the ledger.
     rowsAll('/fin_parties?select=id,name,kind,household_id,former_since&active=eq.true&merged_into=is.null&order=name.asc,id.asc').catch(() => rowsAll('/fin_parties?select=id,name,kind,household_id&active=eq.true&merged_into=is.null&order=name.asc,id.asc')),
@@ -92,9 +92,16 @@ async function loadLookups() {
     rows('/fin_entities?select=id,requester_party_id&order=created_at.asc&limit=1'),
     rows('/fin_periods?select=month&status=eq.closed'),
     rowsAll('/member_households?select=id,farm_unit,house_no&order=farm_unit.asc,id.asc'),
+    // The people in each unit, so a unit can be found by a member's name. A failure here only loses that convenience.
+    rowsAll('/member_household_members?select=household_id,member_people(full_name,active)&order=household_id.asc').catch(() => [] as Json[]),
   ]);
+  const peopleOf = new Map<string, string[]>();
+  for (const r of residents) {
+    const person = r.member_people as { full_name?: string; active?: boolean } | null;
+    if (person?.active && person.full_name) peopleOf.set(r.household_id as string, [...(peopleOf.get(r.household_id as string) ?? []), person.full_name]);
+  }
   return {
-    households: households.map((x) => ({ id: x.id as string, label: [x.farm_unit, x.house_no].filter(Boolean).join(' · ') })),
+    households: households.map((x) => ({ id: x.id as string, label: [x.farm_unit, x.house_no].filter(Boolean).join(' · '), people: (peopleOf.get(x.id as string) ?? []).sort((a, b) => a.localeCompare(b)) })),
     categories,
     parties,
     projects,

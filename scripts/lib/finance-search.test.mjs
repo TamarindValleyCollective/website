@@ -134,7 +134,8 @@ test('the party picker lists current parties first and marks former members', ()
 
 import { defaultUnitFor, financialYearOf, maintenanceYears, partyKindsFor } from './finance-search.mjs';
 test('the category type suggests party kinds; unknown types suggest none', () => {
-  assert.deepEqual(partyKindsFor('member_contribution'), ['member']);
+  assert.equal(partyKindsFor('member_contribution'), null); // anybody can pay a unit's maintenance
+  assert.deepEqual(partyKindsFor('revenue'), ['customer', 'member']);
   assert.deepEqual(partyKindsFor('opex'), ['vendor', 'employee']);
   assert.equal(partyKindsFor('sinking_fund'), null);
   assert.equal(partyKindsFor(undefined), null);
@@ -146,10 +147,20 @@ test('financial years run April to March; the maintenance years offered surround
   assert.equal(financialYearOf('2099-12-31'), '2099-00'); // century rollover keeps two digits
   assert.deepEqual(maintenanceYears('2026-11-06'), ['2024-25', '2025-26', '2026-27', '2027-28']);
 });
-test('the default unit is only the payer\'s own, for a current member with a unit', () => {
+test('the suggested unit is only the payer\'s own, for a current member with a unit', () => {
   assert.equal(defaultUnitFor({ kind: 'member', household_id: 'h1' }), 'h1');
   assert.equal(defaultUnitFor({ kind: 'member', household_id: 'h1', former_since: '2026-03-01' }), null);
   assert.equal(defaultUnitFor({ kind: 'member', household_id: null }), null);
   assert.equal(defaultUnitFor({ kind: 'vendor', household_id: 'h1' }), null);
   assert.equal(defaultUnitFor(null), null);
+});
+
+import { unitOptions } from './finance-ui.mjs';
+test('a unit is found by the name of someone living in it', () => {
+  const opts = unitOptions([{ id: 'h1', label: 'F-01 · H-10', people: ['Test Person One', 'Test Person Two'] }, { id: 'h2', label: 'F-02 · H-04', people: ['Another Member'] }, { id: 'h3', label: 'F-03 · H-21' }]);
+  assert.deepEqual(matchOptions(opts, 'person two').map((o) => o.value), ['h1']);
+  assert.deepEqual(matchOptions(opts, 'f-02').map((o) => o.value), ['h2']);
+  assert.deepEqual(matchOptions(opts, 'another').map((o) => o.value), ['h2']);
+  assert.equal(opts[0].sub, 'Test Person One, Test Person Two');
+  assert.equal(opts[2].sub, ''); // a unit nobody lives in is still listed
 });

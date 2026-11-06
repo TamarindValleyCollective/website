@@ -353,37 +353,53 @@ Modelled on how ServiceNow lists work, because the sheet's convenience was selec
 - **Not done:** column chooser, grouping by month, saved filters, a Status search box (the chips cover it); drafts are not saved on the
   server (the earlier `Save draft` of the sheet still is).
 
-### Member parties (planned 2026-11-06; dry run done, nothing applied)
+### Member parties (LIVE 2026-11-06: migration `0085` applied, backfill run)
 - **The idea:** every person in the member records has a party, linked to them and to their household, so a payer is chosen from members (not typed) and the unit follows. It also
   stops a member being added by accident, and later lets the category narrow the party list (Member money shows members first).
 - **The model:** one party per **person**, not per household (the people who pay are individuals; the household is where the payment is booked). Migration `0085_finance_member_parties.sql`
-  (**not applied**) adds `fin_parties.person_id` (unique among active parties, kind `member` only) and turns the one-party-per-household index into a plain one.
+  (**applied 2026-11-06**, by hand in the SQL editor) adds `fin_parties.person_id` (unique among active parties, kind `member` only) and turns the one-party-per-household index into a plain one.
 - **The plan:** `scripts/lib/finance-member-parties.mjs` (tested on invented data) matches existing parties to people by normalised name; it never merges, renames or re-kinds. A person with no
   party gets one; a same-named member party is linked; same-named people, same-named parties, a same-named party of another kind, and member parties that match nobody are listed for a person.
-  `scripts/backfill-member-parties.mjs` is a **dry run only** so far (counts, and `--out` for a worklist kept out of the repo).
+  `scripts/backfill-member-parties.mjs` is a dry run by default (counts, and `--out` for a worklist kept out of the repo); `--apply` writes, with `--canary N` first.
 - **Dry run 2026-11-06:** 102 people (101 active) in 53 households, 123 active parties of which 7 are kind member. It would create 97, link 4, skip 1 inactive; 3 member parties matched no person
   (bank-printed names that differ from the member records). With a person's answers for those three (`--answers party,person` lines, kept out of the repo) it would create 94, link 7,
-  skip 1 inactive, and leave nothing undecided. Nothing was written.
+  skip 1 inactive, and leave nothing undecided.
+- **Run 2026-11-06:** a canary (2 links, 2 creates) was checked, then the full run: **94 created, 7 linked, 0 failed**. The one inactive person (in no household) was left out on purpose. Checked afterwards:
+  101 member parties linked to the 101 active people, each with a unit that matches a real household membership; no active person without a party; no duplicate member names; no member party left unlinked;
+  the 118 other active parties untouched (that count includes 2 merged-away ones); linked parties kept their names and bank details. Four bank names differ from the member record and were linked through a
+  person's answers (a full name, a name with a title, a label with "TVC", and a short name). Two audit entries (`finance.member_parties_backfilled`, counts only).
+  **Left to do:** add the `finance_member_parties` row to the migration history (the SQL editor does not record it) so the CI check passes.
 - **Afterwards:** `0085` also adds a trigger on `member_household_members`: whoever puts a person into a household (the portal's family request, the admin member screen, an approved request, the
   import) gets a party if they have none (or an unlinked same-named member party is linked), and their party's household follows them if they move. It never renames or deletes, and it swallows its own
   failures so it can never block adding a member. **Removal:** taking someone out of a household (or marking them inactive) changes nothing in finance: their party stays active with the unit it last
   had, since an ex-member can still pay arrears and old payments must keep matching; a hard delete of the person row only clears the party's `person_id` (`on delete set null`). Someone removed and
-  later re-added as a new person record gets a new party (the old one is linked to the old record): merge the two on the Parties page. The apply step (`--apply`, with `--canary N` first) is written but **has not been run**.
-- **Built in the ledger (2026-11-06, uncommitted):** choosing a category narrows the party list to the kinds that go with its type (chips above the list: Members, Vendors... and "All parties"; a row shows how many are
-  hidden); choosing a category jumps to the party list; a maintenance line shows **Maintenance year** chips (the year of the date, the two before and the next) and a **Unit** picker that is filled from the payer's
-  household when they are a current member (otherwise it asks, with the reason); a capital purchase offers a **Project**. A "Ready, no unit" pill warns before posting. The bar for many lines has the same year and unit
-  (blank unit = each member's own). `POST /ledger/post` items carry `householdId`, `maintenanceYear` and `projectId`. Adding a party by typing can no longer make a member (the kind is not offered).
-  Until `0085` is applied and the backfill has run, parties carry no household, so no unit is filled in and the Members chip lists only the 7 hand-made member parties.
+  later re-added as a new person record gets a new party (the old one is linked to the old record): merge the two on the Parties page. Both triggers are applied but **not yet seen working on a real family-member add or removal**: check the first one.
+- **Built in the ledger (2026-11-06; four commits on `finance-ledger-search-chips`, not pushed, and later work uncommitted):** the category and party fields are **linked pickers** (`docs/linked-picker.md`): one field, one level at a time,
+  a row marked ⟹ opens the next level with the levels above kept on screen, and typing searches only the rows being shown. Category: **category > year > unit** for maintenance (the payment date's year first; the payer's own unit first in the unit
+  list, marked, never filled in), **category > project** for a capital purchase (also pickable as it is). Party: **kind > party** (Members, Vendors... , All parties); it opens on the kind that goes with the category (`partyKindsFor`), or for a
+  unit's maintenance on **People in that unit**; inside Members and People in this unit the add row is replaced by "Members come from the member records". After choosing a category the party field opens by itself. A maintenance line is not ready
+  without a unit ("Needs unit" pill, Post disabled). The bar for many lines uses the same two pickers, where Maintenance and each year can also be picked as they are (unit/year left to each line). `POST /ledger/post` items carry
+  `householdId`, `maintenanceYear` and `projectId`. Adding a party by typing can no longer make a member (the kind is not offered). The trees are built in `scripts/lib/finance-picker-nodes.mjs` (tested); the picker's rules in
+  `scripts/lib/linked-picker-core.mjs` (tested). `combo()` (flat lists in the line sheet, Rules and Parties) is a thin wrapper over the same component.
+- **Where the links come from:** real relationships (party kind, a member's unit through `household_id`, a unit's people through `member_household_members`, an allocation's project) are read from the data. Two links are **conventions in code**, because
+  the tables have no relationship for them: *category type -> what goes under it* (maintenance: year and unit; capital: project) and *category type -> party kinds* (`partyKindsFor`). Making those data (columns on `fin_categories`, editable
+  on the Rules page) is the next step if wanted.
+- **Finding a unit by a member's name:** the Unit picker lists each unit with the people living in it beside it and matches on their names (`unitOptions`, the lookups carry each unit's active people); the search box also finds a posted
+  line by the people of the unit it was posted to. **Back-filling:** on 2026-11-06 all 178 posted maintenance allocations (all from the history load) already had a unit and a year, so there is nothing to back-fill. For lines still being
+  described, the bar's **Accept suggestions** also takes a member payer's own unit for maintenance lines (the automatic "Fill in the confident suggestions" does not, since the payer can be anybody); the bar's year and unit set many lines
+  at once. A posted allocation's unit and year are frozen (a reversal and a new allocation corrects them); if a missing one ever appears, a narrowly-scoped audited "set the unit" function is the way, not editing rows.
 - **Not built / limits:** the unit, year and project chosen on a line are not kept across a refresh and are not covered by Undo (the party and category still are); the line sheet's pickers do not have the kind chips;
   the server does not refuse a `member` party created through the API without a household (only the screens stop offering it).
-- **Still to do:** applying `0085` and running the apply step,
+- **Still to do:** add the `finance_member_parties` row to the migration history; watch the triggers on the first real family-member add and removal; keep unit, year and project across a refresh and in Undo;
+  kind chips in the line sheet's party picker; refuse a `member` party without a household on the server; decide about the one inactive person (no household) if old payments from them turn up.
 
 ### How a line is described (the hierarchy, also in the ledger's Help panel)
 - **What it was:** category group (`fin_categories.type`: Member money, Running costs, Capital purchases, Income, Taxes…) -> category -> for **Maintenance** the maintenance year (`fin_allocations.maintenance_year`, April-March, starts as the year of the date),
   for a **capital purchase** an optional project (`project_id`). Categories themselves are flat (no parent column); the group is the type.
 - **Who:** party kind (`fin_parties.kind`) -> party -> for a **member** their unit (`household_id`). The category type suggests the kinds (`partyKindsFor` in `finance-search.mjs`: member money -> members; revenue -> customers and members;
-  running costs and capital -> vendors and employees; tax -> government; interest and transfers -> banks; reimbursements -> employees, directors, members); the person can always widen to all parties.
-- **Unit:** the payer's own unit if they are a current member with one; for a former member, a non-member or a member with no unit the person chooses it (`defaultUnitFor`). A maintenance line with no unit goes to review (`no_unit`).
+  running costs and capital -> vendors and employees; tax -> government; interest and transfers -> banks; reimbursements -> employees, directors, members; **maintenance -> no limit**, since anybody can pay it); the person can always widen to all parties.
+- **Unit (maintenance):** required, and decided before the payer: year, then **which unit's maintenance**, then who paid. Anybody can pay a unit's maintenance (a member, a relative, a company), so the unit is never assumed from the payer: a current
+  member's own unit is only *suggested* (grey, with a tick; `defaultUnitFor`), and the party list puts the chosen unit's people first. A maintenance line with no unit is not ready to post in the ledger (and would go to review as `no_unit` on the server).
 - **The narration** is the evidence, not a column by default (hover, open line, date, Columns).
 
 ### Search chips, Group By and Favorites (idea 1 of `odoo-inspiration.md`, issue #550)

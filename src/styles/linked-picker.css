@@ -1,4 +1,4 @@
-/* The typed picker (finance-ui.mjs combo), used by the Ledger, Rules and Parties pages: a field with a caret, and a list that opens beside it. */
+/* The linked picker (scripts/lib/linked-picker.mjs, docs/linked-picker.md) and the typed list built on it. Used by the Ledger, Rules and Parties pages: a field with a caret, and a list that opens beside it. */
 .combo {
   position: relative;
   display: block;
@@ -54,6 +54,9 @@
 }
 
 .combo-opt {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
   padding: 8px 10px;
   border-radius: 6px;
   cursor: pointer;
@@ -122,4 +125,56 @@
 .combo-chip:focus-visible {
   outline: 2px solid var(--tvc-orange);
   outline-offset: 2px;
+}
+
+.combo-note {
+  margin-top: 4px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--tvc-line);
+  color: var(--tvc-ink-soft);
+}
+
+.combo-sub {
+  margin-left: auto;
+  flex: none;
+  color: var(--tvc-ink-soft);
+  font-size: var(--text-xs);
+}
+
+/* The linked picker (scripts/lib/linked-picker.mjs): the levels above stay as header lines, the next level is listed under them. */
+.combo-trail {
+  all: unset;
+  cursor: pointer;
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  padding: 6px 10px;
+  border-radius: 6px;
+  color: var(--tvc-ink-soft);
+  font-size: var(--text-sm);
+}
+
+.combo-trail:hover:not(:disabled) {
+  background: var(--tvc-cream);
+}
+
+.combo-trail--here {
+  font-weight: 600;
+  color: var(--tvc-ink);
+  cursor: default;
+}
+
+.combo-trail--here:not(:disabled) {
+  cursor: pointer;
+}
+
+.combo-trail:focus-visible {
+  outline: 2px solid var(--tvc-orange);
+  outline-offset: 2px;
+}
+
+.combo-enter {
+  margin-left: auto;
+  flex: none;
+  color: var(--tvc-ink-soft);
 }

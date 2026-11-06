@@ -11,7 +11,7 @@
 // Same shell as the other internal tools: Google Sign-In gated, unlinked from the public site, noindex. Everything the server returns is
 // placed with textContent only, never as HTML.
 import StaffLayout from '../../../layouts/StaffLayout.astro';
-import '../../../styles/finance-combo.css';
+import '../../../styles/linked-picker.css';
 import SignInGate from '../../../components/SignInGate.astro';
 ---
 
@@ -62,14 +62,15 @@ import SignInGate from '../../../components/SignInGate.astro';
         <ul class="tips-tree">
           <li><strong>What it was.</strong> Category group (Member money, Running costs, Capital purchases, Income…), then the <strong>category</strong>.
             <ul>
-              <li>Maintenance also asks for the <strong>maintenance year</strong> (2026-27). It starts as the year of the payment date: change it when someone pays another year's maintenance.</li>
+              <li>The category field opens one level at a time. A row marked <strong>⟹</strong> opens the next level (Maintenance ⟹ the year ⟹ the unit), the levels above stay on screen, and typing searches only the rows you can see.</li>
+              <li>Maintenance is decided in this order: the <strong>maintenance year</strong> (the payment date's year is listed first: pick another when someone pays another year's), then <strong>which unit's maintenance</strong> it is. The unit is required: a maintenance line is not ready without it. Units can be found by the names of the people living in them.</li>
               <li>A capital purchase (Plantation, Nursery…) can also be given a <strong>project</strong>.</li>
             </ul>
           </li>
           <li><strong>Who was on the other side.</strong> Kind of party (Member, Vendor, Employee…), then the <strong>party</strong>.
             <ul>
-              <li>The category chooses the kind: Maintenance shows members, running costs show vendors and employees, taxes show government. <em>Show all parties</em> is always at the bottom of the list, for exceptions such as another organisation paying maintenance.</li>
-              <li>A member's party carries their <strong>unit</strong>, so choosing a member fills in the unit for maintenance. For anyone else, or a former member, you choose the unit.</li>
+              <li>The party field works the same way: the kind (Members, Vendors, Employees… or <em>All parties</em>), then the party. After the category it opens on the kind that goes with it: vendors for running costs, government for taxes. Go back up to the top to see every kind.</li>
+              <li><strong>Maintenance can be paid by anybody</strong>: a member, a relative, a company paying for a unit. So the unit says whose maintenance it is, and the payer is chosen after it. The party list opens on the people living in the chosen unit. If the payer is a member, their own unit is listed first in the unit list (marked "the payer's unit"): it is offered, never filled in for you.</li>
             </ul>
           </li>
           <li><strong>What it was for</strong>, in your own words.</li>
@@ -119,8 +120,10 @@ import SignInGate from '../../../components/SignInGate.astro';
   import { Virtualizer, elementScroll, observeElementOffset, observeElementRect } from '@tanstack/virtual-core';
   import { StaffAuthError, askSheet, clearStepUp, clearToken, closeOnBackdrop, decodeTokenEmail, getToken, setToken, showToast, staffFetch } from '../../../../scripts/lib/staff-client.mjs';
   import { clearState, showFailure, showLoading } from '../../../../scripts/lib/staff-states.mjs';
-  import { button, categoryOptions, combo, h, input, labelled, niceDate, niceMonth, parseRupees, partyOptions, pill, present, rupees } from '../../../../scripts/lib/finance-ui.mjs';
-  import { GROUP_FIELDS, buildItems, defaultUnitFor, financialYearOf, groupLabel, maintenanceYears, matchOptions, partyKindsFor, kindLabel, kindsInOrder, optionCounts, optionKeys, optionLabel, passesChips, passesWords, readFavorites, withFavorite } from '../../../../scripts/lib/finance-search.mjs';
+  import { linkedPicker } from '../../../../scripts/lib/linked-picker.mjs';
+  import { categoryNodes, categoryPath, partyNodes, partyPath, partyStart, readCategoryPath } from '../../../../scripts/lib/finance-picker-nodes.mjs';
+  import { button, categoryOptions, combo, h, input, labelled, niceDate, niceMonth, parseRupees, partyOptions, pill, present, rupees, unitOptions } from '../../../../scripts/lib/finance-ui.mjs';
+  import { GROUP_FIELDS, buildItems, defaultUnitFor, financialYearOf, groupLabel, matchOptions, kindLabel, kindsInOrder, optionCounts, optionKeys, optionLabel, passesChips, passesWords, readFavorites, withFavorite } from '../../../../scripts/lib/finance-search.mjs';
   import { compareRows, describeCondition, matchAmount, matchDate, matchText, parseAmount, parseDate, parseText } from '../../../../scripts/lib/finance-columns.mjs';
 
   declare const google: any;
@@ -137,12 +140,14 @@ import SignInGate from '../../../components/SignInGate.astro';
   type Category = { id: string; name: string; type: string; active: boolean };
   type Party = { id: string; name: string; kind: string; household_id?: string | null; former_since?: string | null };
   type Project = { id: string; name: string; kind: string; financial_year: number; status: string };
-  type Lookups = { categories: Category[]; parties: Party[]; projects: Project[]; requesterPartyId: string | null; closedMonths: string[]; households: { id: string; label: string }[] };
+  type Lookups = { categories: Category[]; parties: Party[]; projects: Project[]; requesterPartyId: string | null; closedMonths: string[]; households: { id: string; label: string; people?: string[] }[] };
   type Filter = 'unallocated' | 'review' | 'noparty' | 'all';
   type ListData = { canAllocate: boolean; lines: Line[]; lookups: Lookups };
   type Field = 'categoryId' | 'partyId' | 'nature';
-  const PARTY_KIND_CHIPS = [{ key: 'member', label: 'Members' }, { key: 'vendor', label: 'Vendors' }, { key: 'customer', label: 'Customers' }, { key: 'employee', label: 'Employees' }, { key: 'government', label: 'Government' }, { key: 'bank', label: 'Banks' }, { key: 'director', label: 'Directors' }];
-  type ComboEl = HTMLElement & { value: string; input: HTMLInputElement; setKinds(keys: string[] | null): void; setBlank(text: string): void; setOptions(list: { value: string; label: string; group?: string }[]): void };
+  // Members come from the member records: while the list is limited to members, it says so instead of offering to add one.
+  // Members come from the member records: inside "Members" the party list says so instead of offering to add one.
+  const NO_MEMBER_ADD = 'Members come from the member records. Add a new member in the member portal, and they appear here.';
+  type ComboEl = HTMLElement & { value: string; path: string[]; input: HTMLInputElement; setNodes(list: any[]): void; setStartAt(fn: (() => string[] | null) | null): void; setBlank(text: string): void; setPlaceholder(text: string | null): void; setOptions(list: { value: string; label: string; group?: string }[]): void };
   type Draft = Record<Field, string>;
 
   const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -309,6 +314,8 @@ import SignInGate from '../../../components/SignInGate.astro';
   const extras = new Map<string, Extra>();
   const extraOf = (id: string): Extra => extras.get(id) ?? {};
   const setExtra = (id: string, patch: Extra) => extras.set(id, { ...extraOf(id), ...patch });
+  let unitLabelsCache: Map<string, string> | null = null;
+  const unitLabels = () => (unitLabelsCache ??= new Map((data?.lookups.households ?? []).map((x) => [x.id, x.label])));
   const typeOfCategory = (categoryId: string) => data?.lookups.categories.find((c) => c.id === categoryId)?.type ?? '';
   const partyById = (id: string) => data?.lookups.parties.find((p) => p.id === id) ?? null;
   // The category a line is being described with (typed, or the one suggested and shown), so the party list and the follow-up fields can follow it.
@@ -324,7 +331,8 @@ import SignInGate from '../../../components/SignInGate.astro';
       maintenance,
       capital: type === 'capex',
       year: maintenance ? x.maintenanceYear ?? financialYearOf(l.date) : '',
-      unit: maintenance ? x.householdId ?? defaultUnitFor(partyById(d.partyId)) ?? '' : '',
+      unit: maintenance ? x.householdId ?? '' : '',
+      suggestedUnit: maintenance ? defaultUnitFor(partyById(d.partyId)) ?? '' : '', // only offered, never filled in: the payer can be anybody
       project: type === 'capex' ? x.projectId ?? '' : '',
     };
   }
@@ -345,7 +353,9 @@ import SignInGate from '../../../components/SignInGate.astro';
   };
   const isReady = (l: Line) => {
     const d = draftOf(l.id);
-    return Boolean(d.categoryId && d.nature.trim());
+    if (!(d.categoryId && d.nature.trim())) return false;
+    const dw = describedWith(l);
+    return !(dw.maintenance && !dw.unit); // a maintenance line must say whose maintenance it is
   };
   window.addEventListener('beforeunload', (e) => {
     if ([...drafts.values()].some((d) => d.categoryId || d.partyId || d.nature)) e.preventDefault();
@@ -452,6 +462,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       if (status !== 200) throw new Error('load failed');
       data = out as ListData;
       all = data.lines;
+      unitLabelsCache = null;
       byId = new Map(all.map((l) => [l.id, l]));
       clearState(statusEl);
       intro.hidden = false;
@@ -662,7 +673,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       reasonBox.hidden = true;
       // Maintenance is paid by anybody and allocated to a unit: the unit and the year it pays for are asked for when the category is maintenance.
       const isMaintenance = () => lk.categories.find((c) => c.id === category.value)?.type === 'member_contribution';
-      const household = combo({ options: lk.households.map((x) => ({ value: x.id, label: x.label })), blank: 'Choose the unit…', matcher: matchOptions, ariaLabel: 'Unit' }) as ComboEl;
+      const household = combo({ options: unitOptions(lk.households), blank: 'Choose the unit…', matcher: matchOptions, ariaLabel: 'Unit' }) as ComboEl;
       const fyOf = (iso: string) => {
         const start = Number(iso.slice(5, 7)) >= 4 ? Number(iso.slice(0, 4)) : Number(iso.slice(0, 4)) - 1;
         return `${start}-${String((start + 1) % 100).padStart(2, '0')}`;
@@ -809,7 +820,14 @@ import SignInGate from '../../../components/SignInGate.astro';
     clearTimeout(announceTimer);
     announceTimer = setTimeout(() => ($('announce').textContent = message), 600);
   };
-  const hayOf = (l: Line) => [l.narration, l.counterparty, l.remark, l.effective.category, l.effective.party, l.effective.nature, l.allocation?.householdLabel, l.allocation?.maintenanceYear].join(' ').toLowerCase();
+  // The search box also finds a line by the people living in the unit it was posted to (so "Rishi" finds the unit's maintenance, whoever paid).
+  const residentsOfLabel = new Map<string, string>();
+  const residentsOf = (label?: string | null) => {
+    if (!label) return '';
+    if (!residentsOfLabel.size) for (const x of data?.lookups.households ?? []) residentsOfLabel.set(x.label, (x.people ?? []).join(' '));
+    return residentsOfLabel.get(label) ?? '';
+  };
+  const hayOf = (l: Line) => [l.narration, l.counterparty, l.remark, l.effective.category, l.effective.party, l.effective.nature, l.allocation?.householdLabel, residentsOf(l.allocation?.householdLabel), l.allocation?.maintenanceYear].join(' ').toLowerCase();
   function applyView(toTop = false) {
     if (!data) return;
     const conds: Record<string, any> = {};
@@ -1171,7 +1189,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   });
 
   // ---- rows. Built once when they scroll into view; an edit changes the cells in place (fill), never the row element.
-  type Refs = { unit: ComboEl; unitHint: HTMLElement; years: HTMLElement; project: ComboEl; followCell: HTMLElement; check: HTMLInputElement; narr: HTMLButtonElement; details: HTMLElement; cat: ComboEl; catTick: HTMLElement; catText: HTMLElement; party: ComboEl; partyTick: HTMLElement; partyText: HTMLElement; nature: HTMLInputElement; natureTick: HTMLElement; natureText: HTMLElement; pillSlot: HTMLElement; catPeek: HTMLButtonElement; partyPeek: HTMLButtonElement; natureCell: HTMLElement; meta: HTMLElement };
+  type Refs = { catHint: HTMLElement; check: HTMLInputElement; narr: HTMLButtonElement; details: HTMLElement; cat: ComboEl; catTick: HTMLElement; catText: HTMLElement; party: ComboEl; partyTick: HTMLElement; partyText: HTMLElement; nature: HTMLInputElement; natureTick: HTMLElement; natureText: HTMLElement; pillSlot: HTMLElement; catPeek: HTMLButtonElement; partyPeek: HTMLButtonElement; natureCell: HTMLElement; meta: HTMLElement };
   const refs = new WeakMap<HTMLElement, Refs>();
   const tick = (label: string, onClick: () => void) => h('button', { class: 'tick', text: '✓', attrs: { type: 'button', 'aria-label': label, title: label }, on: { click: onClick } });
   const cell = (cls: string, label: string, ...kids: (Node | null)[]) => h('span', { class: `gcell gcell--${cls}`, attrs: { role: 'cell', 'data-label': label } }, ...kids);
@@ -1185,7 +1203,6 @@ import SignInGate from '../../../components/SignInGate.astro';
   // The full text is in the hover and in the line's sheet.
   const shortNarration = (text: string) => text.replace(/\d{9,}/g, '').replace(/\/{2,}/g, '/').replace(/^\/|\/$/g, '').trim() || text;
   function makeRow(l: Line): HTMLElement {
-    const lk = data!.lookups;
     const who = l.narration.length > 40 ? `${l.narration.slice(0, 40)}…` : l.narration;
     const check = h('input', { attrs: { type: 'checkbox', 'aria-label': `Select ${who}` } }) as HTMLInputElement;
     check.addEventListener('click', (e) => pick(l.id, (e as MouseEvent).shiftKey));
@@ -1195,18 +1212,34 @@ import SignInGate from '../../../components/SignInGate.astro';
     dateBtn.addEventListener('click', () => void openLine(l.id));
     const details = h('span', { class: 'detail' });
 
-    // Typed pickers, not drop-downs: the party list runs to hundreds, so you type a few letters, and a name that is not there can be added from the list.
-    const cat = combo({ options: categoryOptions(lk.categories), blank: 'Choose…', matcher: matchOptions, ariaLabel: `Category for ${who}` }) as ComboEl;
+    // Linked pickers, not drop-downs: category > year > unit (maintenance) or > project (capital), and kind > party. You type to search the rows being shown, a row
+    // marked ⟹ opens the next level, and a name that is not in the list can be added from it.
+    const cat = linkedPicker({ nodes: [], blank: 'Choose…', ariaLabel: `Category for ${who}`, rootLabel: 'All categories' }) as ComboEl;
     cat.addEventListener('change', () => {
-      edit(l, 'categoryId', cat.value);
-      // The category narrows the party list, so go straight to it when nobody is chosen yet.
-      if (cat.value && !draftOf(l.id).partyId) setTimeout(() => party.focus(), 0);
+      const path = cat.path;
+      const type = typeOfCategory(path[0] ?? '');
+      const got = readCategoryPath(path, type);
+      if (got.year) setExtra(l.id, { maintenanceYear: got.year });
+      if (got.householdId) setExtra(l.id, { householdId: got.householdId });
+      if (type === 'capex') setExtra(l.id, { projectId: got.projectId });
+      // Choosing only a year or unit leaves the category as it was: no "apply to the others" prompt for a category that did not change.
+      if (got.categoryId === draftOf(l.id).categoryId) syncRow(l);
+      else edit(l, 'categoryId', got.categoryId);
+      // On to who paid, when nobody is chosen yet.
+      if (got.categoryId && !draftOf(l.id).partyId) setTimeout(() => party.focus(), 0);
     });
     const catTick = tick(`Accept the suggested category for ${who}`, () => edit(l, 'categoryId', ghostOf(l, 'categoryId')));
     const catText = h('span', { class: 'lcell-text' });
+    const catHint = h('span', { class: 'follow-hint follow-hint--warn', attrs: { hidden: '' } });
 
-    const party = combo({ options: partyOptions(lk.parties), blank: 'No one in particular', matcher: matchOptions, ariaLabel: `Party for ${who}`, kinds: PARTY_KIND_CHIPS, kindNoun: 'parties', addNewLabel: 'Add as a new party', addNew: (typed) => openAddParty(typed || strangerOf(l), kindFor(l), (id) => afterPartyAdded(l, id)) }) as ComboEl;
-    party.addEventListener('change', () => edit(l, 'partyId', party.value));
+    const party = linkedPicker({
+      nodes: [],
+      blank: 'No one in particular',
+      ariaLabel: `Party for ${who}`,
+      rootLabel: 'All kinds',
+      addNew: { label: 'Add as a new party', onAdd: (typed) => openAddParty(typed || strangerOf(l), kindFor(l), (id) => afterPartyAdded(l, id)), blockedAt: (path) => (path[0] === 'member' || path[0] === 'unit' ? NO_MEMBER_ADD : null) },
+    }) as ComboEl;
+    party.addEventListener('change', () => edit(l, 'partyId', party.value)); // the party is the last part of the path (kind, then the party)
     const partyTick = tick(`Accept the suggested party for ${who}`, async () => {
       const gp = ghostOf(l, 'partyId');
       if (gp) return edit(l, 'partyId', gp);
@@ -1238,28 +1271,14 @@ import SignInGate from '../../../components/SignInGate.astro';
       cell('select', '', check),
       cell('date', '', dateBtn),
       cell(`amount amount--${l.direction}`, '', document.createTextNode(`${l.direction === 'debit' ? '−' : '+'}${rupees(l.amountPaise)}`)),
-      cell('category', 'Category', catPeek, cat, catTick, catText),
+      cell('category', 'Category', catPeek, cat, catTick, catText, catHint),
       cell('party', l.direction === 'debit' ? 'Paid to' : 'Received from', partyPeek, party, partyTick, partyText),
       cell('status', '', pillSlot),
       cell('narration', '', narr, details),
       meta,
     );
-    // Unit and year for maintenance, project for a capital purchase: under the category, only when the category asks for them.
-    const unit = combo({ options: lk.households.map((x) => ({ value: x.id, label: x.label })), blank: 'Choose the unit…', matcher: matchOptions, ariaLabel: `Unit for ${who}` }) as ComboEl;
-    const unitHint = h('span', { class: 'follow-hint' });
-    const years = h('span', { class: 'follow-years', attrs: { role: 'group', 'aria-label': `Maintenance year for ${who}` } });
-    const project = combo({ options: lk.projects.map((p) => ({ value: p.id, label: `${p.name} (${p.financial_year})` })), blank: 'Not part of a project', matcher: matchOptions, ariaLabel: `Project for ${who}` }) as ComboEl;
-    unit.addEventListener('change', () => {
-      setExtra(l.id, { householdId: unit.value });
-      syncRow(l);
-    });
-    project.addEventListener('change', () => {
-      setExtra(l.id, { projectId: project.value });
-      syncRow(l);
-    });
-    const followCell = h('span', { class: 'gcell gcell--follow', attrs: { role: 'cell' } }, h('span', { class: 'follow-unit' }, h('span', { class: 'follow-label', text: 'Unit' }), unit, unitHint), years, h('span', { class: 'follow-project' }, h('span', { class: 'follow-label', text: 'Project' }), project));
     const natureCell = cell('nature', 'What it was for', nature, natureTick, natureText);
-    rowEl.append(followCell, natureCell);
+    rowEl.append(natureCell);
     const open = (focus: HTMLElement) => {
       rowEl.dataset.open = '1';
       fill(rowEl, l);
@@ -1303,7 +1322,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       }
     };
     rowEl.addEventListener('keydown', onKey);
-    refs.set(rowEl, { unit, unitHint, years, project, followCell, check, narr, details, cat, catTick, catText, party, partyTick, partyText, nature, natureTick, natureText, pillSlot, catPeek, partyPeek, natureCell, meta });
+    refs.set(rowEl, { catHint, check, narr, details, cat, catTick, catText, party, partyTick, partyText, nature, natureTick, natureText, pillSlot, catPeek, partyPeek, natureCell, meta });
     fill(rowEl, l);
     return rowEl;
   }
@@ -1314,9 +1333,9 @@ import SignInGate from '../../../components/SignInGate.astro';
     if (l.state === 'partly_allocated') return pill('Partly', 'warn');
     if (!editable(l)) return pill('To allocate');
     const d = draftOf(l.id);
+    const dwNow = describedWith(l);
+    if (dwNow.maintenance && !dwNow.unit) return pill('Needs unit', 'warn');
     if (isReady(l)) {
-      const dw = describedWith(l);
-      if (dw.maintenance && !dw.unit) return pill('Ready, no unit', 'warn');
       return !d.partyId && partyNeeded(d.categoryId) ? pill('Ready, no party', 'warn') : pill('Ready', 'ok');
     }
     if (hasGhost(l)) {
@@ -1353,41 +1372,32 @@ import SignInGate from '../../../components/SignInGate.astro';
     const active = can && (Boolean(error) || el.dataset.open === '1');
     el.classList.toggle('is-active', active);
     for (const x of [r.cat, r.party, r.nature]) x.hidden = !active;
-    // The category narrows the party list (member money -> members, running costs -> vendors and employees...). Set when the category changes, so a
-    // chip the person switched on in the list is not undone by an unrelated redraw.
-    const kindsFor = typeOfCategory(categoryShown(l));
-    if (r.party.dataset.kindsFor !== kindsFor) {
-      r.party.dataset.kindsFor = kindsFor;
-      r.party.setKinds(partyKindsFor(kindsFor));
-    }
     const dw = describedWith(l);
-    const showFollow = active && (dw.maintenance || (dw.capital && lk.projects.length > 0));
-    r.followCell.hidden = !showFollow;
-    if (showFollow) {
-      const unitBox = r.unit.parentElement as HTMLElement;
-      const projectBox = r.project.parentElement as HTMLElement;
-      unitBox.hidden = !dw.maintenance;
-      r.years.hidden = !dw.maintenance;
-      projectBox.hidden = !dw.capital;
-      if (dw.maintenance) {
-        r.unit.value = dw.unit;
-        const p = partyById(d.partyId);
-        const mine = extraOf(l.id).householdId;
-        r.unitHint.className = `follow-hint${!dw.unit ? ' follow-hint--warn' : ''}`;
-        r.unitHint.textContent = mine ? 'Chosen by you.' : dw.unit ? `From the member records: ${p?.name ?? 'the member'} is in this unit.` : !p ? 'Choose who paid first. A member\'s own unit fills in.' : p.former_since ? `${p.name} is a former member, so there is no unit to assume. Choose the unit this is for.` : p.kind === 'member' ? `${p.name} has no unit on record. Choose the unit this is for.` : `${p.name} is not a member. Choose the unit this is for.`;
-        r.years.replaceChildren(
-          h('span', { class: 'follow-label', text: 'Maintenance year' }),
-          ...maintenanceYears(l.date).map((y) => {
-            const b = h('button', { class: 'combo-chip', text: y, attrs: { type: 'button', 'aria-pressed': String(y === dw.year) } });
-            b.addEventListener('click', () => {
-              setExtra(l.id, { maintenanceYear: y });
-              syncRow(l);
-            });
-            return b;
-          }),
-        );
-      }
-      if (dw.capital) r.project.value = dw.project;
+    // The pickers' trees are rebuilt only when what they depend on changes: the payer's own unit (offered first in the unit list) and, for the party list, the unit
+    // being paid for (its people come first). The line's date and the lists never change while it is on screen.
+    if (r.cat.dataset.treeKey !== dw.suggestedUnit) {
+      r.cat.dataset.treeKey = dw.suggestedUnit;
+      r.cat.setNodes(categoryNodes({ categories: lk.categories, households: lk.households, projects: lk.projects, date: l.date, suggestedUnit: dw.suggestedUnit }));
+    }
+    const unitForList = dw.maintenance ? dw.unit : '';
+    if (r.party.dataset.unitFor !== unitForList) {
+      r.party.dataset.unitFor = unitForList;
+      r.party.setNodes(partyNodes({ parties: lk.parties, unitId: unitForList, unitLabels: unitLabels() }));
+    }
+    // Where each list opens: a maintenance category without its year and unit opens on the years; the party list opens on the people of the unit being paid for,
+    // or on the kind that goes with the category (members for nothing in particular: the top, all kinds).
+    r.cat.setStartAt(() => {
+      const x = describedWith(l);
+      return x.maintenance && !x.unit ? [draftOf(l.id).categoryId] : null;
+    });
+    r.party.setStartAt(() => {
+      const x = describedWith(l);
+      return partyStart({ categoryType: typeOfCategory(categoryShown(l)), unitId: x.unit, unitHasPeople: lk.parties.some((q) => q.household_id === x.unit && !q.former_since), parties: lk.parties });
+    });
+    r.catHint.hidden = !(active && dw.maintenance && !dw.unit);
+    if (!r.catHint.hidden) {
+      const p = partyById(d.partyId);
+      r.catHint.textContent = dw.suggestedUnit ? `${p?.name ?? 'The payer'} lives in ${unitLabels().get(dw.suggestedUnit) ?? 'a unit'}, which is listed first. Choose the year, then the unit.` : 'Choose the year, then which unit’s maintenance this is. Whoever paid, it is booked to the unit.';
     }
     for (const x of [r.catPeek, r.partyPeek]) x.hidden = !(can && !active);
     for (const x of [r.catText, r.partyText]) x.hidden = can;
@@ -1395,14 +1405,14 @@ import SignInGate from '../../../components/SignInGate.astro';
     r.natureCell.hidden = can ? !active : true;
     if (can) {
       const gc = ghostOf(l, 'categoryId');
-      r.cat.value = d.categoryId;
-      r.cat.setBlank(gc ? nameOf(lk.categories, gc) : 'Choose…');
+      r.cat.path = categoryPath({ categoryId: d.categoryId, type: dw.type, year: dw.year, unit: dw.unit, project: dw.project });
+      r.cat.setPlaceholder(gc ? nameOf(lk.categories, gc) : null);
       r.cat.classList.toggle('ghost', Boolean(gc));
       r.catTick.hidden = !(gc && active);
       const gp = ghostOf(l, 'partyId');
       const stranger = strangerOf(l);
-      r.party.value = d.partyId;
-      r.party.setBlank(gp ? nameOf(lk.parties, gp) : stranger ? `New: ${stranger}` : 'No one in particular');
+      r.party.path = partyPath(partyById(d.partyId));
+      r.party.setPlaceholder(gp ? nameOf(lk.parties, gp) : stranger ? `New: ${stranger}` : null);
       r.party.classList.toggle('ghost', Boolean(gp || stranger));
       r.partyTick.hidden = !((gp || stranger) && active);
       const tickLabel = gp ? `Accept the suggested party for ${l.narration.slice(0, 40)}` : `Add ${stranger} to the register and use them`;
@@ -1414,7 +1424,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       r.nature.classList.toggle('ghost', Boolean(gn));
       r.natureTick.hidden = !(gn && active);
       if (!active) {
-        r.catPeek.textContent = d.categoryId ? nameOf(lk.categories, d.categoryId) : gc ? nameOf(lk.categories, gc) : 'Choose…';
+        r.catPeek.textContent = d.categoryId ? `${nameOf(lk.categories, d.categoryId)}${dw.maintenance && dw.unit ? ` · ${unitLabels().get(dw.unit) ?? ''} · ${dw.year}` : dw.capital && dw.project ? ` · ${lk.projects.find((p) => p.id === dw.project)?.name ?? ''}` : ''}` : gc ? nameOf(lk.categories, gc) : 'Choose…';
         r.catPeek.classList.toggle('ghost', !d.categoryId);
         r.catPeek.setAttribute('aria-label', `Category for ${l.narration.slice(0, 40)}: ${r.catPeek.textContent}. Press to edit.`);
         r.partyPeek.textContent = d.partyId ? nameOf(lk.parties, d.partyId) : gp ? nameOf(lk.parties, gp) : stranger ? `New: ${stranger}` : 'No one in particular';
@@ -1591,7 +1601,9 @@ import SignInGate from '../../../components/SignInGate.astro';
     renderBar();
   }
 
-  function acceptRow(l: Line) {
+  // `withUnit`: also take the payer's own unit as the unit of a maintenance line. Only when the person asks for the suggestions of the selected lines
+  // (the bar's "Accept suggestions"); the automatic "fill in the confident ones" leaves the unit to a person, since the payer can be anybody.
+  function acceptRow(l: Line, withUnit = false) {
     if (!editable(l)) return;
     const patch: Partial<Draft> = {};
     for (const f of ['categoryId', 'partyId', 'nature'] as Field[]) {
@@ -1599,6 +1611,10 @@ import SignInGate from '../../../components/SignInGate.astro';
       if (g) patch[f] = g;
     }
     setDraft(l.id, patch);
+    if (withUnit) {
+      const dw = describedWith(l);
+      if (dw.maintenance && !dw.unit && dw.suggestedUnit) setExtra(l.id, { householdId: dw.suggestedUnit });
+    }
     syncRow(l);
   }
   function goToLine(index: number, field: 'start' | 'end') {
@@ -1803,43 +1819,46 @@ import SignInGate from '../../../components/SignInGate.astro';
     if ($('selcount').textContent !== `${sel.length} selected, ${ready} ready to post`) $('selcount').textContent = `${sel.length} selected, ${ready} ready to post`;
     placeBar();
     const lk = data.lookups;
-    const cat = combo({ options: categoryOptions(lk.categories), value: barFields.categoryId, blank: 'Category…', matcher: matchOptions, ariaLabel: 'Category for the selected lines' }) as ComboEl;
+    // The same linked pickers as on a line. Here the year and the unit may be left to each line, so Maintenance and each year can also be picked as they are; what is
+    // chosen applies to every selected line.
+    const barPath = categoryPath({ categoryId: barFields.categoryId, type: typeOfCategory(barFields.categoryId), year: barExtra.year, unit: barExtra.unit });
+    const barType = typeOfCategory(barFields.categoryId);
+    const maint = barType === 'member_contribution';
+    const cat = linkedPicker({
+      nodes: categoryNodes({ categories: lk.categories, households: lk.households, projects: lk.projects, date: today(), bar: true }),
+      path: maint && !barExtra.unit ? [barFields.categoryId, ...(barExtra.year ? [barExtra.year] : [])] : barPath,
+      blank: 'Category…',
+      ariaLabel: 'Category for the selected lines',
+      rootLabel: 'All categories',
+    }) as ComboEl;
     // Adding a party here is the same as on a line: the new one is chosen for all the selected lines (nothing is saved to them until they are posted).
     const kind = sel.every((l) => l.direction === 'credit') ? 'customer' : 'vendor';
-    const party = combo({
-      options: partyOptions(lk.parties),
-      value: barFields.partyId,
+    const party = linkedPicker({
+      nodes: partyNodes({ parties: lk.parties, unitId: maint ? barExtra.unit : '', unitLabels: unitLabels() }),
+      path: partyPath(partyById(barFields.partyId)),
       blank: 'Party…',
-      matcher: matchOptions,
       ariaLabel: 'Party for the selected lines',
-      kinds: PARTY_KIND_CHIPS,
-      kindNoun: 'parties',
-      addNewLabel: 'Add as a new party',
-      addNew: (typed) =>
-        openAddParty(typed, kind, (id) => {
-          barFields.partyId = id;
-          renderBar();
-        }),
+      rootLabel: 'All kinds',
+      startAt: () => partyStart({ categoryType: barType, unitId: maint ? barExtra.unit : '', unitHasPeople: lk.parties.some((q) => q.household_id === barExtra.unit && !q.former_since), parties: lk.parties }),
+      addNew: {
+        label: 'Add as a new party',
+        blockedAt: (path) => (path[0] === 'member' || path[0] === 'unit' ? NO_MEMBER_ADD : null),
+        onAdd: (typed) =>
+          openAddParty(typed, kind, (id) => {
+            barFields.partyId = id;
+            renderBar();
+          }),
+      },
     }) as ComboEl;
     const words = h('input', { attrs: { type: 'text', placeholder: 'What it was for…', 'aria-label': 'Wording for the selected lines', autocomplete: 'off', value: barFields.nature } }) as HTMLInputElement;
-    // The chosen category narrows the party list and, for maintenance, asks for the year and unit (many lines: each keeps its own member's unit unless one is chosen).
-    const barType = typeOfCategory(barFields.categoryId);
-    party.setKinds(partyKindsFor(barType));
-    const maint = barType === 'member_contribution';
-    const barUnit = combo({ options: lk.households.map((x) => ({ value: x.id, label: x.label })), value: barExtra.unit, blank: "Each member's own unit", matcher: matchOptions, ariaLabel: 'Unit for the selected lines' }) as ComboEl;
-    barUnit.addEventListener('change', () => (barExtra.unit = barUnit.value));
-    const barYears = h('span', { class: 'follow-years', attrs: { role: 'group', 'aria-label': 'Maintenance year for the selected lines' } }, h('span', { class: 'follow-label', text: 'Year' }), ...maintenanceYears(today()).map((y) => {
-      const b = h('button', { class: 'combo-chip', text: y, attrs: { type: 'button', 'aria-pressed': String(barExtra.year === y) } });
-      b.addEventListener('click', () => {
-        barExtra.year = barExtra.year === y ? '' : y;
-        renderBar();
-      });
-      return b;
-    }));
     cat.addEventListener('change', () => {
-      barFields.categoryId = cat.value;
+      const path = cat.path;
+      const got = readCategoryPath(path, typeOfCategory(path[0] ?? ''));
+      barFields.categoryId = got.categoryId;
+      barExtra.year = got.year;
+      barExtra.unit = got.householdId;
       renderBar();
-      if (cat.value && !barFields.partyId) setTimeout(() => $('actionbar').querySelectorAll<HTMLInputElement>('.combo-input')[1]?.focus(), 0);
+      if (got.categoryId && !barFields.partyId) setTimeout(() => $('actionbar').querySelectorAll<HTMLInputElement>('.combo-input')[1]?.focus(), 0);
     });
     party.addEventListener('change', () => (barFields.partyId = party.value));
     words.addEventListener('input', () => (barFields.nature = words.value));
@@ -1850,7 +1869,6 @@ import SignInGate from '../../../components/SignInGate.astro';
       h('span', { class: 'abar-count', text: `${sel.length} selected · ${ready} ready` }),
       cat,
       party,
-      ...(maint ? [barYears, barUnit] : []),
       words,
       button('Apply to selected', async () => {
         const patch = Object.fromEntries(Object.entries(barFields).filter(([, v]) => String(v).trim())) as Partial<Draft>;
@@ -1872,7 +1890,7 @@ import SignInGate from '../../../components/SignInGate.astro';
           }
         });
       }, 'button button--outline button--small'),
-      button('Accept suggestions', () => withUndo('Suggestions accepted.', sel.map((l) => l.id), () => { for (const l of sel) acceptRow(l); }), 'button button--outline button--small'),
+      button('Accept suggestions', () => withUndo('Suggestions accepted.', sel.map((l) => l.id), () => { for (const l of sel) acceptRow(l, true); }), 'button button--outline button--small'),
       post,
       button('Clear', () => table.resetRowSelection(), 'button button--outline button--small'),
       h('span', { class: 'abar-why', text: why }),
@@ -2988,39 +3006,9 @@ import SignInGate from '../../../components/SignInGate.astro';
     padding: 4px 26px 4px 8px;
   }
 
-  /* Unit, maintenance year and project under a line's category. */
-  .ledger .gcell--follow {
-    grid-column: 2 / -1;
-    flex-wrap: wrap;
-    align-items: flex-start;
-    gap: 10px 18px;
-  }
-
-  .ledger .gcell--follow[hidden] {
-    display: none;
-  }
-
-  .ledger .follow-unit,
-  .ledger .follow-project {
-    display: grid;
-    gap: 4px;
-    min-width: min(100%, 260px);
-    flex: 1 1 260px;
-  }
-
-  .ledger .follow-years {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .ledger .follow-label {
-    font-size: var(--text-sm);
-    color: var(--tvc-ink-soft);
-  }
-
+  /* The note under a maintenance line's category that still needs its year and unit. */
   .ledger .follow-hint {
+    flex-basis: 100%;
     font-size: var(--text-sm);
     color: var(--tvc-ink-soft);
   }
@@ -3029,8 +3017,8 @@ import SignInGate from '../../../components/SignInGate.astro';
     color: var(--tvc-orange-text);
   }
 
-  .abar .follow-years {
-    display: inline-flex;
+  .ledger .follow-hint[hidden] {
+    display: none;
   }
 
   /* The bar for selected lines: docked, in the same theme as the page, and it says why Post is off. */
@@ -3123,7 +3111,6 @@ import SignInGate from '../../../components/SignInGate.astro';
         'chk date amt'
         'chk cat cat'
         'chk party party'
-        'chk follow follow'
         'chk narr narr'
         'chk nature nature'
         'chk status status';
@@ -3139,7 +3126,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       grid-area: date;
     }
 
-    .ledger .lrow:not(.is-active) :is(.gcell--category, .gcell--party, .gcell--nature, .gcell--follow) {
+    .ledger .lrow:not(.is-active) :is(.gcell--category, .gcell--party, .gcell--nature) {
       display: none;
     }
 
@@ -3188,10 +3175,6 @@ import SignInGate from '../../../components/SignInGate.astro';
       grid-column: auto;
     }
 
-    .ledger .gcell--follow {
-      grid-area: follow;
-      grid-column: auto;
-    }
 
     .ledger .gcell[data-label]:not([data-label='']) {
       flex-wrap: wrap;
