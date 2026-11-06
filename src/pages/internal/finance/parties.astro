@@ -7,6 +7,7 @@
 // Same shell as the other internal tools: Google Sign-In gated, unlinked, noindex. Everything the server returns is
 // placed with textContent only, never as HTML.
 import StaffLayout from '../../../layouts/StaffLayout.astro';
+import '../../../styles/finance-combo.css';
 import SignInGate from '../../../components/SignInGate.astro';
 import StepUpSheet from '../../../components/StepUpSheet.astro';
 ---
@@ -52,6 +53,8 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
 </StaffLayout>
 
 <script>
+  import { combo } from '../../../../scripts/lib/finance-ui.mjs';
+  import { matchOptions } from '../../../../scripts/lib/finance-search.mjs';
   import { StaffAuthError, clearStepUp, clearToken, closeOnBackdrop, decodeTokenEmail, getToken, setToken, showToast, staffFetch } from '../../../../scripts/lib/staff-client.mjs';
   import { initStepUpLock } from '../../../../scripts/lib/staff-stepup-ui.mjs';
   import { markDiff, groupFromRight } from '../../../../scripts/lib/finance-diff.mjs';
@@ -62,7 +65,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
 
   type Account = { id: string; method: 'bank' | 'upi'; shown: string; status: 'unverified' | 'verified'; shared: boolean; validFrom: string | null; retiredOn: string | null; payableNow: boolean; review: string[]; verification: { at: string | null; by: string | null; method: string | null; methodLabel: string; note: string | null } | null };
-  type Party = { id: string; name: string; kind: string; active: boolean; householdId: string | null; accounts: Account[]; earlierAccounts: number; needsReview: boolean; mergedCount: number };
+  type Party = { id: string; name: string; kind: string; active: boolean; householdId: string | null; formerSince: string | null; accounts: Account[]; earlierAccounts: number; needsReview: boolean; mergedCount: number };
   type Data = { kinds: string[]; canEdit: boolean; canVerify: boolean; me: { id: string; ready: boolean; hasPasskey: boolean; stepUpValid: boolean } | null; parties: Party[]; needsReviewCount: number };
 
   const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -237,7 +240,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
             h('span', { class: `dot dot--${state}`, attrs: { 'aria-hidden': 'true' } }),
             h('button', { class: 'party-main', attrs: { type: 'button' }, on: { click: () => openDetail(p.id) } }, h('span', { class: 'title', text: p.name }), h('span', { class: 'detail', text: accountSummary(p) }), h('span', { class: 'visually-hidden', text: STATE_TEXT[state] })),
             data?.canEdit ? kindSelect(p) : h('span', { class: 'detail kind-text', text: KIND_LABELS[p.kind] ?? p.kind }),
-            h('span', { class: 'party-flag' }, p.active ? null : pill('Inactive'), p.needsReview ? pill('Needs review', 'crit') : null),
+            h('span', { class: 'party-flag' }, p.active ? null : pill('Inactive'), p.formerSince ? pill('Former member') : null, p.needsReview ? pill('Needs review', 'crit') : null),
           ),
         );
       }),
@@ -288,7 +291,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
   function openAddParty() {
     const dlg = $<HTMLDialogElement>('party-sheet');
     const name = input('name');
-    const kind = h('select', { attrs: { name: 'kind' } }, ...(data?.kinds ?? []).map((k) => h('option', { text: KIND_LABELS[k] ?? k, attrs: { value: k } }))) as HTMLSelectElement;
+    const kind = h('select', { attrs: { name: 'kind' } }, ...(data?.kinds ?? []).filter((k) => k !== 'member').map((k) => h('option', { text: KIND_LABELS[k] ?? k, attrs: { value: k } }))) as HTMLSelectElement;
     kind.value = 'vendor'; // most payees are vendors
     const withPayee = h('input', { attrs: { type: 'checkbox' } }) as HTMLInputElement;
     const payee = payeeFields();
@@ -497,7 +500,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
     $<HTMLDialogElement>('detail-sheet').close();
     const dlg = $<HTMLDialogElement>('account-sheet');
     const others = (data?.parties ?? []).filter((x) => x.id !== p.id);
-    const into = h('select', { attrs: { name: 'into', required: '' } }, h('option', { text: 'Choose the main party…', attrs: { value: '' } }), ...others.map((x) => h('option', { text: x.name, attrs: { value: x.id } }))) as HTMLSelectElement;
+    const into = combo({ options: others.map((x) => ({ value: x.id, label: x.name })), blank: 'Choose the main party…', matcher: matchOptions, ariaLabel: 'The main party' }) as any;
     const msg = h('p', { class: 'error', attrs: { hidden: '' } });
     const form = h(
       'form',

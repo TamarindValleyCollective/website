@@ -197,6 +197,7 @@ export function partyForResponse(party, accounts, flags, today = todayIST(), mer
     kind: party.kind,
     active: party.active,
     householdId: party.household_id ?? null,
+    formerSince: party.former_since ?? null,
     accounts: live.map((a) => accountForResponse(a, flags.get(a.id) ?? [], { today, review: review.get(a.id) ?? [], names })),
     earlierAccounts: accounts.length - live.length,
     needsReview: [...review.values()].some((r) => r.length > 0),

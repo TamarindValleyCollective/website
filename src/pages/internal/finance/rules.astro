@@ -7,6 +7,7 @@
 // Same shell as the other internal tools: Google Sign-In gated, unlinked, noindex. Everything the server returns is placed
 // with textContent only, never as HTML. Viewing is for anyone with finance access; changing needs a director.
 import StaffLayout from '../../../layouts/StaffLayout.astro';
+import '../../../styles/finance-combo.css';
 import SignInGate from '../../../components/SignInGate.astro';
 ---
 
@@ -51,7 +52,8 @@ import SignInGate from '../../../components/SignInGate.astro';
 <script>
   import { StaffAuthError, clearStepUp, clearToken, closeOnBackdrop, decodeTokenEmail, getToken, setToken, showToast, staffFetch } from '../../../../scripts/lib/staff-client.mjs';
   import { clearState, showEmpty, showFailure, showLoading } from '../../../../scripts/lib/staff-states.mjs';
-  import { button, categorySelect, h, input, labelled, parseRupees, partySelect, pill, present, rupees, typeLabel } from '../../../../scripts/lib/finance-ui.mjs';
+  import { button, categoryOptions, combo, h, input, labelled, parseRupees, partyOptions, pill, present, rupees, typeLabel } from '../../../../scripts/lib/finance-ui.mjs';
+  import { matchOptions } from '../../../../scripts/lib/finance-search.mjs';
 
   declare const google: any;
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
@@ -220,7 +222,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     if (!canConfigure) {
       card.replaceChildren(h('p', { class: 'hint', text: lookups.requesterPartyId ? `${nameOf(lookups.parties, lookups.requesterPartyId)}. Circle payments to them always go to review.` : 'Nobody is set yet.' }));
     } else {
-      const party = partySelect(lookups.parties, { selected: lookups.requesterPartyId ?? '', blank: 'Nobody' });
+      const party = combo({ options: partyOptions(lookups.parties), value: lookups.requesterPartyId ?? '', blank: 'Nobody', matcher: matchOptions, ariaLabel: 'Party' }) as any;
       party.addEventListener('change', async () => {
         const { status, data: out } = await call('/api/finance-admin/settings/requester', 'POST', { partyId: party.value || null });
         showToast(status === 200 ? 'Saved.' : out?.error ?? 'Could not save that.');
@@ -246,8 +248,8 @@ import SignInGate from '../../../components/SignInGate.astro';
     min.value = m.minPaise != null ? (m.minPaise / 100).toFixed(2) : '';
     const max = input('max', { inputmode: 'decimal', placeholder: 'No upper limit' }) as HTMLInputElement;
     max.value = m.maxPaise != null ? (m.maxPaise / 100).toFixed(2) : '';
-    const category = categorySelect(lk.categories, { selected: existing?.categoryId ?? '' });
-    const party = partySelect(lk.parties, { selected: existing?.partyId ?? '', blank: 'Leave it to the person' });
+    const category = combo({ options: categoryOptions(lk.categories, { selected: existing?.categoryId ?? '' }), value: existing?.categoryId ?? '', blank: 'Choose a category', matcher: matchOptions, ariaLabel: 'Category' }) as any;
+    const party = combo({ options: partyOptions(lk.parties), value: existing?.partyId ?? '', blank: 'Leave it to the person', matcher: matchOptions, ariaLabel: 'Party' }) as any;
     const nature = input('nature', { placeholder: 'e.g. Cooking gas {remark}' }) as HTMLInputElement;
     nature.value = existing?.natureTemplate ?? '';
     const priority = input('priority', { inputmode: 'numeric' }) as HTMLInputElement;
@@ -331,7 +333,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       kids.push(h('h2', { text: 'Add category', attrs: { id: 'category-title' } }), form);
     } else {
       const same = lk.categories.filter((c) => c.type === existing.type && c.id !== existing.id && c.active);
-      const target = categorySelect(same, { blank: same.length ? 'Choose where it goes' : 'No other category of this type' });
+      const target = combo({ options: categoryOptions(same), blank: same.length ? 'Choose where it goes' : 'No other category of this type', matcher: matchOptions, ariaLabel: 'Merge into' }) as any;
       const rename = h('form', { class: 'stack-form' }, labelled('Name', name), h('div', { class: 'sheet-actions' }, h('button', { class: 'button button--primary', text: 'Save name', attrs: { type: 'submit' } })));
       rename.addEventListener('submit', async (e: Event) => {
         e.preventDefault();

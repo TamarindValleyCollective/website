@@ -123,7 +123,8 @@ export async function listParties(req: Request): Promise<Response> {
   try {
     const q = (new URL(req.url).searchParams.get('q') ?? '').replace(/[*,()%]/g, ' ').trim().slice(0, 60).toLowerCase();
     // Every party is read so that a party merged into another folds into it, whatever the search text matches.
-    const allParties = await rows('/fin_parties?select=id,name,kind,active,household_id,merged_into&order=name.asc');
+    // former_since exists once migration 0085 is applied; until then it is simply not read.
+    const allParties = await rows('/fin_parties?select=id,name,kind,active,household_id,merged_into,former_since&order=name.asc').catch(() => rows('/fin_parties?select=id,name,kind,active,household_id,merged_into&order=name.asc'));
     const accounts = await rows(`/fin_party_accounts?select=${ACCOUNT_COLUMNS}&order=created_at.asc`);
     const { visible, accountsOf, mergedCount, canonicalOf } = foldMerged(allParties, accounts);
     const flags = sharedAccountFlags(accounts, canonicalOf);
