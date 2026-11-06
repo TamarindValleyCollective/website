@@ -2,7 +2,7 @@
 
 Survey done 2026-11-05 in Sharath's live Odoo (`syntropic.odoo.com`, SYNTROPIC Farm Management Pvt Ltd, dark mode),
 read-only. Purpose: pick which ideas to bring to `/internal/finance/ledger/` (backlog: GitHub issue #533, ledger
-rebuilt in PR #532). Nothing here is built. Per the usual flow: mockup artifact with a Current/New switch first.
+rebuilt in PR #532). Idea 1 (search chips, filters, Group By, Favorites) was built on branch `finance-ledger-search-chips` (see FINANCE.md, "Search chips, Group By and Favorites"); the rest is not built. Per the usual flow: mockup artifact with a Current/New switch first.
 
 Not compared yet: our current ledger code (local `main` was behind origin, pull first), the Odoo entry
 Other Info tab, bank reconciliation widget, Customers/Vendors flows (we have no invoices), Settings.
