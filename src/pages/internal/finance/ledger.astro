@@ -500,10 +500,13 @@ import SignInGate from '../../../components/SignInGate.astro';
 
   // The party picker in the cell of a posted line that has none. Saving goes through the same route as the sheet's "Add party"; a closed month, a split
   // line or anything unexpected falls back to the sheet, which can ask for a reason.
-  async function editPartyInline(l: Line, cell: HTMLElement) {
-    const { status, data: d } = await call(`/api/finance-admin/ledger/${l.id}`);
-    const missing = status === 200 ? (d as Detail).allocations.filter((a) => a.posted && !a.partyId && !a.reversesAllocationId) : [];
-    if (missing.length !== 1) return void openLine(l.id);
+  function editPartyInline(l: Line, cell: HTMLElement) {
+    if (cell.querySelector('.combo')) {
+      cell.querySelector<HTMLInputElement>('.combo-input')?.focus();
+      return;
+    }
+    // Asked for now, used when a party is chosen, so the picker does not wait for the network.
+    const lookup = call(`/api/finance-admin/ledger/${l.id}`);
     const picker = combo({ options: partyOptions(data!.lookups.parties), value: '', blank: 'Choose a party', matcher: matchOptions, ariaLabel: l.direction === 'debit' ? 'Paid to (party)' : 'Received from (party)' }) as ComboEl;
     const restore = () => {
       const el = mounted.get(l.id);
@@ -514,6 +517,9 @@ import SignInGate from '../../../components/SignInGate.astro';
     });
     picker.addEventListener('change', async () => {
       if (!picker.value) return;
+      const { status, data: d } = await lookup;
+      const missing = status === 200 ? (d as Detail).allocations.filter((a) => a.posted && !a.partyId && !a.reversesAllocationId) : [];
+      if (missing.length !== 1) return void openLine(l.id); // a split line or one that changed: the sheet handles it
       const res = await call(`/api/finance-admin/allocations/${missing[0].id}/party`, 'POST', { partyId: picker.value });
       if (res.status === 200) {
         showToast('Party added.');
@@ -532,6 +538,121 @@ import SignInGate from '../../../components/SignInGate.astro';
 
   // Posted lines that have no party, where the bank narration (or the Paytm name) names one for certain: listed for a person to tick, then applied together.
   type PartyProposal = { allocationId: string; lineId: string; date: string; narration: string; direction: string; amountPaise: number; period: string; category: string; unit: string; partyId: string; partyName: string; how: string; from: string };
+  // The lines no certain match covers, grouped by who the bank names: a party is chosen once per payee and applies to all of that payee's lines.
+  type PartyPayee = { key: string; name: string; group: string; category: string; unitId: string; unit: string; lines: number; allocationIds: string[]; closed: boolean; best: { id: string; name: string }[] };
+  async function openPayeeReview(loaded?: any) {
+    let d = loaded;
+    if (!d) {
+      const res = await call('/api/finance-admin/ledger/missing-parties');
+      if (res.status !== 200) {
+        showToast(res.data?.error ?? 'Could not read the lines.');
+        return;
+      }
+      d = res.data;
+    }
+    const payees = d.payees as PartyPayee[];
+    if (!payees.length) {
+      showToast(d.noName ? `${d.noName} lines have no name in the narration: open each from the ledger.` : 'Every posted line already has a party.');
+      return;
+    }
+    const lk = data!.lookups;
+    const dlg = $<HTMLDialogElement>('line-sheet');
+    dlg.addEventListener('close', () => dlg.replaceChildren(), { once: true });
+    const optionsFor = (x: PartyPayee) => {
+      const best = x.best.map((b) => ({ value: b.id, label: b.name, sub: 'matches the bank name' }));
+      const taken = new Set(best.map((b) => b.value));
+      return [...best, ...(partyOptions(lk.parties, { unitId: x.unitId, unitLabels: unitLabels() }) as { value: string; label: string; sub?: string }[]).filter((o) => !taken.has(o.value))];
+    };
+    const titleCase = (t: string) => (/[a-z]/.test(t) ? t : t.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase()));
+    const reason = input('closedReason', { placeholder: 'Why is a closed month being changed?' }) as HTMLInputElement;
+    const reasonBox = labelled('Reason for changing a closed month', reason);
+    const msg = h('p', { class: 'error', attrs: { hidden: '' } });
+    const apply = button('Apply', () => void submit(), 'button button--primary') as HTMLButtonElement;
+    const groups = ['All', ...['Salaries', 'Maintenance', 'Everything else'].filter((g) => payees.some((x) => x.group === g))];
+    let tab = 'All';
+    const tabBar = h('div', { class: 'fp-tabs' });
+    const pickers: ComboEl[] = [];
+    const rowEls: HTMLElement[] = [];
+    const chosen = () => payees.filter((_, i) => pickers[i].value);
+    function refresh() {
+      const sel = chosen();
+      const lines = sel.reduce((n, x) => n + x.lines, 0);
+      apply.textContent = sel.length ? `Apply to ${sel.length} ${sel.length === 1 ? 'payee' : 'payees'} (${lines} ${lines === 1 ? 'line' : 'lines'})` : 'Apply';
+      apply.disabled = !sel.length;
+      reasonBox.hidden = !sel.some((x) => x.closed);
+      payees.forEach((x, i) => {
+        rowEls[i].hidden = tab !== 'All' && x.group !== tab;
+        rowEls[i].classList.toggle('is-done', Boolean(pickers[i].value));
+      });
+      tabBar.replaceChildren(...groups.map((g) => {
+        const n = payees.filter((x) => g === 'All' || x.group === g).length;
+        const b = button(`${g} (${n})`, () => { tab = g; refresh(); }, 'button button--outline button--small');
+        b.setAttribute('aria-pressed', String(g === tab));
+        return b;
+      }));
+    }
+    const rows = payees.map((x) => {
+      const picker = combo({
+        options: optionsFor(x),
+        value: '',
+        blank: 'Choose a party',
+        matcher: matchOptions,
+        ariaLabel: `Party for ${x.name}`,
+        // Members come from the member records, so a maintenance payee cannot be added here.
+        ...(x.group === 'Maintenance' ? {} : { addNewLabel: 'Add as a new party', addNew: (typed: string) => openAddParty(typed || titleCase(x.name), x.group === 'Salaries' ? 'employee' : 'vendor', (id) => { pickers.forEach((q, j) => q.setOptions(optionsFor(payees[j]))); picker.value = id; refresh(); }) }),
+      }) as ComboEl;
+      picker.addEventListener('change', refresh);
+      pickers.push(picker);
+      const el = h(
+        'li',
+        {},
+        h(
+          'div',
+          { class: 'row alloc-row fp-row' },
+          h('span', { class: 'grow' }, h('span', { class: 'title', text: x.name }), h('span', { class: 'detail', text: [x.unit ? `Unit ${x.unit}` : '', x.category].filter(Boolean).join(' · ') })),
+          picker,
+          h('span', { class: 'amount', text: `${x.lines} ${x.lines === 1 ? 'line' : 'lines'}` }),
+        ),
+      );
+      rowEls.push(el);
+      return el;
+    });
+    async function submit() {
+      msg.hidden = true;
+      const items = payees.flatMap((x, i) => (pickers[i].value ? x.allocationIds.map((id) => ({ allocationId: id, partyId: pickers[i].value })) : []));
+      apply.disabled = true;
+      let changed = 0;
+      for (let i = 0; i < items.length; i += 300) {
+        const res = await call('/api/finance-admin/allocations/parties', 'POST', { items: items.slice(i, i + 300), overrideReason: reason.value });
+        if (res.status !== 200) {
+          msg.textContent = `${changed ? `${changed} lines were filled in before this stopped. ` : ''}${res.data?.error ?? 'Could not do that.'}`;
+          msg.hidden = false;
+          apply.disabled = false;
+          if (changed) void load();
+          return;
+        }
+        changed += res.data.changed;
+      }
+      dlg.close();
+      showToast(`Added a party to ${changed} ${changed === 1 ? 'line' : 'lines'}.`);
+      void load();
+    }
+    const total = payees.reduce((n, x) => n + x.lines, 0);
+    present(
+      dlg,
+      closeOnBackdrop,
+      h('h2', { text: 'Choose a party for each payee', attrs: { id: 'line-title' } }),
+      h('p', { class: 'sheet-text', text: `${payees.length} payees account for ${total} posted lines that still have no party. Choose a party once and it applies to every line from that payee. Leave a payee empty to skip it.` }),
+      tabBar,
+      h('ul', { class: 'list fp-list' }, ...rows),
+      d.noName ? h('p', { class: 'hint', text: `${d.noName} more lines have no name in the bank narration (card, cash and similar). Open each from the ledger.` }) : null,
+      reasonBox,
+      msg,
+      h('div', { class: 'sheet-actions' }, button('Cancel', () => dlg.close()), apply),
+    );
+    refresh();
+  }
+
   async function openFillParties() {
     const { status, data: d } = await call('/api/finance-admin/ledger/missing-parties');
     if (status !== 200) {
@@ -541,7 +662,8 @@ import SignInGate from '../../../components/SignInGate.astro';
     const proposals = d.proposals as PartyProposal[];
     const closedMonths = (d.closedMonths as string[]).map((m) => m.slice(0, 7));
     if (!proposals.length) {
-      showToast(d.needsPerson ? `Nothing is certain enough to fill in. ${d.needsPerson} lines need a person.` : 'Every posted line already has a party.');
+      if ((d.payees as PartyPayee[]).length) void openPayeeReview(d);
+      else showToast(d.needsPerson ? `Nothing is certain enough to fill in. ${d.needsPerson} lines have no name in the narration.` : 'Every posted line already has a party.');
       return;
     }
     const dlg = $<HTMLDialogElement>('line-sheet');
@@ -615,15 +737,18 @@ import SignInGate from '../../../components/SignInGate.astro';
       ),
       reasonBox,
       msg,
-      h('div', { class: 'sheet-actions' }, button('Cancel', () => dlg.close()), apply),
+      h('div', { class: 'sheet-actions' }, button('Cancel', () => dlg.close()), (d.payees as PartyPayee[]).length ? button(`Choose for the rest (${(d.payees as PartyPayee[]).length} payees)`, () => { dlg.close(); void openPayeeReview(); }) : null, apply),
     );
     refresh();
   }
 
   async function openLine(id: string) {
     const dlg = $<HTMLDialogElement>('line-sheet');
+    present(dlg, closeOnBackdrop, h('p', { class: 'sheet-text', text: 'Opening the line…', attrs: { role: 'status' } }));
     const { status, data: d } = await call(`/api/finance-admin/ledger/${id}`);
     if (status !== 200) {
+      dlg.close();
+      dlg.replaceChildren();
       showToast(d?.error ?? 'Could not open that line.');
       return;
     }
@@ -1100,7 +1225,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   // Offered while some posted lines have no party (the "posted without a party" count) and the person may allocate.
   function fillPartiesButton(): HTMLElement | null {
     if (!data?.canAllocate || !counts.noparty) return null;
-    return button(`Fill ${counts.noparty} missing ${counts.noparty === 1 ? 'party' : 'parties'} from narration`, () => void openFillParties(), 'button button--outline button--small');
+    return button(`Fill ${counts.noparty} missing ${counts.noparty === 1 ? 'party' : 'parties'}`, () => void openFillParties(), 'button button--outline button--small');
   }
   function renderSearch() {
     const now = today();
@@ -1499,7 +1624,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     rowEl.addEventListener('dblclick', (e: MouseEvent) => {
       const now = byId.get(l.id) ?? l;
       if (editable(now) || !data?.canAllocate || (e.target as HTMLElement).closest('button, input, a, .combo')) return;
-      if (now.missingParty && now.state === 'allocated' && partyText.contains(e.target as Node)) void editPartyInline(now, partyText);
+      if (now.missingParty && now.state === 'allocated' && (e.target as HTMLElement).closest('.gcell--party')) editPartyInline(now, partyText);
       else void openLine(l.id);
     });
     refs.set(rowEl, { catHint, check, narr, details, cat, catTick, catText, party, partyTick, partyText, nature, natureTick, natureText, pillSlot, catPeek, partyPeek, natureCell, meta });
@@ -1616,7 +1741,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       const a = l.allocation;
       const forWhom = [a?.householdLabel ? `Unit ${a.householdLabel}` : '', a?.maintenanceYear ?? ''].filter(Boolean).join(' · ');
       r.catText.replaceChildren(document.createTextNode(a ? `${nameOf(lk.categories, a.categoryId)}${a.count > 1 ? ` +${a.count - 1} more` : ''}` : ''), ...(forWhom ? [h('span', { class: 'detail detail--unit', text: forWhom })] : []));
-      r.partyText.replaceChildren(a?.partyId ? document.createTextNode(nameOf(lk.parties, a.partyId)) : l.missingParty ? h('span', { class: 'noparty', text: 'No party' }) : document.createTextNode(''));
+      r.partyText.replaceChildren(a?.partyId ? document.createTextNode(nameOf(lk.parties, a.partyId)) : l.missingParty ? h('span', { class: 'noparty', text: 'No party', attrs: { title: 'Double-click to choose a party' } }) : document.createTextNode(''));
       r.natureText.textContent = a?.nature ?? '';
     }
     // A line that cannot be edited in its row (partly allocated, flagged, or posted without a party) is finished or fixed in its sheet:
@@ -2879,6 +3004,14 @@ import SignInGate from '../../../components/SignInGate.astro';
   }
 
   .ledger .fp-list { max-height: 50vh; overflow-y: auto; }
+  .ledger .fp-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-block: 10px; }
+  .ledger .fp-tabs [aria-pressed='true'] { background: var(--tvc-green); border-color: var(--tvc-green); color: var(--tvc-white); }
+  .ledger .fp-row { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.4fr) auto; gap: 8px 14px; align-items: center; }
+  .ledger .fp-row.is-done, .ledger li.is-done .fp-row { background: var(--tvc-green-tint); }
+  @media (max-width: 640px) { .ledger .fp-row { grid-template-columns: 1fr; } }
+  .ledger .lrow.is-locked .gcell--party,
+  .ledger .lrow.is-locked .gcell--category,
+  .ledger .lrow.is-locked .gcell--status { user-select: none; }
   .ledger .pill-button { all: unset; cursor: pointer; border-radius: 999px; }
   .ledger .pill-button:focus-visible { outline: 2px solid var(--tvc-green); outline-offset: 2px; }
   .ledger .lrow.is-locked {
