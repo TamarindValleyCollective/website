@@ -994,12 +994,26 @@ import SignInGate from '../../../components/SignInGate.astro';
     });
     return h('span', { class: `schip${group ? ' schip--group' : ''}` }, h('span', { class: 'schip-kind', text: `${kindText}:` }), document.createTextNode(` ${valueText}`), x);
   };
+  // Folds or unfolds every top-level group (every month, when grouped by month) in one go; the sub-groups inside keep their own state.
+  function foldAllButton(): HTMLElement | null {
+    const tops = items.filter((it): it is Extract<Item, { kind: 'group' }> => it.kind === 'group' && it.depth === 0);
+    if (!groupBy.length || !tops.length) return null;
+    const allFolded = tops.every((g) => collapsed.has(g.key));
+    return button(allFolded ? 'Unfold all' : 'Fold all', () => {
+      for (const g of tops) {
+        if (allFolded) collapsed.delete(g.key);
+        else collapsed.add(g.key);
+      }
+      applyView();
+    }, 'button button--outline button--small');
+  }
   function renderSearch() {
     const now = today();
     $('schips').replaceChildren(
       ...chips.map(([k, o], i) => chipEl(kindLabel(k), optionLabel(k, o, now), () => chips.splice(i, 1))),
       ...words.map((w, i) => chipEl('Search', w, () => words.splice(i, 1))),
       ...groupBy.map((g, i) => chipEl('Group by', groupLabel(g), () => groupBy.splice(i, 1), true)),
+      ...([foldAllButton()].filter(Boolean) as Node[]),
     );
     $<HTMLInputElement>('q').placeholder = chips.length || words.length || groupBy.length ? '' : 'Search every column';
     if (!$('spop').hidden) renderPopover();
