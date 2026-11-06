@@ -132,6 +132,41 @@ export function proposeMissingParty({ line, upi = null, parties }) {
 }
 
 /**
+ * The payee a line names: the Paytm counterparty, else the narration's name. Returns { name, key } or null when there is none
+ * (card, cash and similar). `key` is the normalised name, so "RAVI SHANKAR T" and "Ravi Shankar T." are one payee.
+ */
+export function payeeOf({ line, upi = null }) {
+  const name = upi?.counterparty || parseNarration(line.narration, line.direction).counterparty;
+  const key = normaliseName(name);
+  return key ? { name: String(name).trim(), key } : null;
+}
+
+/**
+ * Every party a payee's name could be, for a picker's "best match": the exact ones, then those the bank's shortened name fits.
+ * At most `max`. Unlike matchParty this lists several when several fit; a person chooses.
+ */
+export function candidateParties(name, parties, max = 3) {
+  const n = normaliseName(name);
+  if (!n) return [];
+  const exact = parties.filter((p) => normaliseName(p.name) === n);
+  const words = n.split(' ');
+  if (words.length < 2 && words[0].length < 6) return exact.slice(0, max);
+  const fits = parties.filter((p) => {
+    if (exact.includes(p)) return false;
+    const theirs = normaliseName(p.name).split(' ');
+    if (theirs.length < words.length) return false;
+    const used = new Set();
+    return words.every((w) => {
+      const i = theirs.findIndex((t, idx) => !used.has(idx) && t.startsWith(w));
+      if (i < 0) return false;
+      used.add(i);
+      return true;
+    });
+  });
+  return [...exact, ...fits].slice(0, max);
+}
+
+/**
  * Index earlier postings so a repeat is recognised. rows: posted, non-reversal allocations joined to their bank line:
  * { narration, direction, party_id, category_id, nature }. Matching is by party when the posting named one, and always by
  * the counterparty's name in the narration too, so history works before every payee is in the register.

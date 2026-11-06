@@ -875,3 +875,40 @@ test('parties are proposed from the narration for posted lines that have none, a
   const after = await (await api(op, '/ledger/missing-parties')).json();
   assert.equal(after.proposals.length, 0);
 });
+
+test('lines without a certain party are grouped by payee, one row per payee (and per unit for maintenance)', async () => {
+  reset();
+  const op = sign('u1', 'user');
+  db.fin_parties.push({ id: ID(23), name: 'Rohan Kumar Singh', kind: 'member', household_id: ID(90), former_since: null, active: true, merged_into: null });
+  db.fin_parties.push({ id: ID(24), name: 'Rohan Kumar Shah', kind: 'vendor', household_id: null, former_since: null, active: true, merged_into: null });
+  let k = 0;
+  const line = (narration, date = '2026-10-10') => {
+    const id = ID(200 + ++k);
+    db.fin_bank_lines.push({ id, entity_id: E, bank_account_id: ID(2), tran_date: date, narration, direction: 'debit', amount_paise: 1000 });
+    return id;
+  };
+  const posted = (lineId, category, extra = {}) => db.fin_allocations.push({ id: ID(300 + ++k), entity_id: E, bank_line_id: lineId, category_id: category, party_id: null, amount_paise: 100, period: '2026-10-01', nature: 'x', posted_at: '2026-11-04T00:00:00Z', reverses_allocation_id: null, ...extra });
+  // one unknown payee, spelled two ways, on three lines
+  posted(line('UPI/P2A/123456789031/MYSTERY VENDOR/Okbank/x'), CAT_OPEX);
+  posted(line('UPI/P2A/123456789032/Mystery Vendor./Okbank/x'), CAT_OPEX);
+  posted(line('UPI/P2A/123456789033/MYSTERY VENDOR/Okbank/x'), CAT_OPEX);
+  // two units paid for by the same unknown name: two rows
+  posted(line('UPI/P2A/123456789034/SOMEONE ELSE/Okbank/x'), CAT_MAINT, { household_id: ID(90) });
+  posted(line('UPI/P2A/123456789035/SOMEONE ELSE/Okbank/x'), CAT_MAINT, { household_id: ID(91) });
+  // an ambiguous name: no certain party, but both candidates are offered
+  posted(line('UPI/P2A/123456789036/ROHAN KUMAR/Okbank/x'), CAT_OPEX);
+  // no name at all
+  posted(line('CASH DEP/branch counter'), CAT_OPEX);
+  const seen = await (await api(op, '/ledger/missing-parties')).json();
+  const byName = (n) => seen.payees.filter((x) => x.name.toLowerCase().startsWith(n));
+  assert.equal(byName('mystery')[0].lines, 3);
+  assert.equal(byName('mystery').length, 1);
+  assert.equal(byName('mystery')[0].group, 'Everything else');
+  assert.equal(byName('someone').length, 2);
+  assert.equal(byName('someone').every((x) => x.group === 'Maintenance' && x.lines === 1), true);
+  const rohan = byName('rohan')[0];
+  assert.deepEqual(rohan.best.map((x) => x.name).sort(), ['Rohan Kumar Shah', 'Rohan Kumar Singh']);
+  assert.equal(seen.proposals.some((x) => x.from?.toLowerCase().startsWith('rohan')), false);
+  assert.ok(seen.noName >= 1);
+  assert.equal(byName('mystery')[0].allocationIds.length, 3);
+});

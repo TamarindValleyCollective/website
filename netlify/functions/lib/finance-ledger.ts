@@ -11,7 +11,7 @@ import { capabilitiesForRole } from './staff-registry';
 import { logFinanceAction } from './finance-audit';
 import { financialYearOf, lineState, periodOf, periodWriteDecision, planPosting, planReversal } from '../../../scripts/lib/finance-allocation.mjs';
 import { REVIEW_REASONS, partyNeeded, reviewReasons, validateRule } from '../../../scripts/lib/finance-rules.mjs';
-import { buildHistory, proposeMissingParty, suggest } from '../../../scripts/lib/finance-suggest.mjs';
+import { buildHistory, candidateParties, payeeOf, proposeMissingParty, suggest } from '../../../scripts/lib/finance-suggest.mjs';
 import { SORT_KEYS, compareRows, describeCondition, matchAmount, matchDate, matchText, parseAmount, parseDate, parseText } from '../../../scripts/lib/finance-columns.mjs';
 
 type Json = Record<string, any>;
@@ -720,7 +720,10 @@ export async function missingParties(req: Request): Promise<Response> {
     const partyById = new Map(ctx.parties.map((x) => [x.id as string, x]));
     const unitLabel = new Map(households.map((x) => [x.id as string, [x.farm_unit, x.house_no].filter(Boolean).join(' · ')]));
     const proposals: Json[] = [];
+    const payees = new Map<string, Json>();
+    const closedSet = new Set(ctx.closedMonths.map((m) => String(m).slice(0, 10)));
     let needsPerson = 0;
+    let noName = 0;
     for (const a of allocs) {
       const category = categoryById.get(a.category_id);
       if (!partyNeeded(category)) continue;
@@ -729,6 +732,27 @@ export async function missingParties(req: Request): Promise<Response> {
       const hit = proposeMissingParty({ line, upi: upiOf.get(line.id as string) ?? null, parties: ctx.parties }) as { partyId: string; how: string; from: string } | null;
       if (!hit) {
         needsPerson++;
+        // Not certain: grouped by who the bank names, so a person chooses once per payee (a maintenance payee is one row per unit).
+        const payee = payeeOf({ line, upi: upiOf.get(line.id as string) ?? null }) as { name: string; key: string } | null;
+        if (!payee) {
+          noName++;
+          continue;
+        }
+        const maintenance = category?.type === 'member_contribution';
+        const unitId = maintenance ? (a.household_id as string | null) ?? '' : '';
+        const key = `${payee.key}|${unitId}`;
+        let entry = payees.get(key);
+        if (!entry) {
+          entry = {
+            key, name: payee.name, group: maintenance ? 'Maintenance' : /^salar/i.test(category?.name ?? '') ? 'Salaries' : 'Everything else',
+            category: category?.name ?? '', unitId, unit: unitId ? unitLabel.get(unitId) ?? '' : '', lines: 0, allocationIds: [] as string[], closed: false,
+            best: (candidateParties(payee.name, ctx.parties) as Json[]).map((x) => ({ id: x.id, name: x.name })),
+          };
+          payees.set(key, entry);
+        }
+        entry.lines++;
+        (entry.allocationIds as string[]).push(a.id as string);
+        if (closedSet.has(String(a.period).slice(0, 10))) entry.closed = true;
         continue;
       }
       proposals.push({
@@ -737,7 +761,7 @@ export async function missingParties(req: Request): Promise<Response> {
         partyId: hit.partyId, partyName: partyById.get(hit.partyId)?.name ?? '', how: hit.how, from: hit.from,
       });
     }
-    return jsonResponse({ proposals, needsPerson, closedMonths: ctx.closedMonths.map((m) => String(m).slice(0, 10)) });
+    return jsonResponse({ proposals, needsPerson, noName, payees: [...payees.values()].sort((x, y) => (y.lines as number) - (x.lines as number) || String(x.name).localeCompare(String(y.name))), closedMonths: ctx.closedMonths.map((m) => String(m).slice(0, 10)) });
   } catch (err) {
     return serverError(err, 'missing parties');
   }

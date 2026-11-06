@@ -4,7 +4,7 @@
 // amount here is invented.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildHistory, matchParty, normaliseName, parseNarration, proposeMissingParty, suggest } from './finance-suggest.mjs';
+import { buildHistory, matchParty, normaliseName, parseNarration, candidateParties, payeeOf, proposeMissingParty, suggest } from './finance-suggest.mjs';
 
 const line = (narration, direction = 'debit', amount = 150000) => ({ id: 'L', narration, direction, amount_paise: amount, tran_date: '2026-10-12' });
 
@@ -180,4 +180,19 @@ test('a posted line with no party gets the party its narration or UPI name match
   assert.equal(proposeMissingParty({ line: { narration: 'IMPS/x', direction: 'credit' }, upi: { counterparty: 'Bright Hardware' }, parties })?.partyId, 'p3');
   // narration and UPI disagree: left to a person
   assert.equal(proposeMissingParty({ line: upiLine('Asha Rao'), upi: { counterparty: 'Bright Hardware' }, parties }), null);
+});
+
+test('a payee is the same however the bank spells it, and candidates list every party the name could be', () => {
+  const upiLine = (name) => ({ narration: `UPI/P2A/123456789012/${name}/Okbank/x`, direction: 'debit' });
+  assert.equal(payeeOf({ line: upiLine('RAVI SHANKAR T') })?.key, payeeOf({ line: upiLine('Ravi Shankar T.') })?.key);
+  assert.equal(payeeOf({ line: { narration: 'CASH DEP', direction: 'credit' } }), null);
+  assert.equal(payeeOf({ line: { narration: 'CASH DEP', direction: 'credit' }, upi: { counterparty: 'Asha Rao' } })?.name, 'Asha Rao');
+  const parties = [{ id: 'p1', name: 'Asha Rao' }, { id: 'p2', name: 'Asha Menon' }, { id: 'p3', name: 'Bright Hardware' }];
+  assert.deepEqual(candidateParties('Asha', parties), []); // one short word: not enough to list anybody
+  assert.deepEqual(candidateParties('ASHA RAO', parties).map((x) => x.id), ['p1']);
+  assert.deepEqual(candidateParties('Asha R', parties).map((x) => x.id), ['p1']);
+  assert.deepEqual(candidateParties('Ashwini Menon', parties), []);
+  const two = [{ id: 'a', name: 'Rohan Kumar Singh' }, { id: 'b', name: 'Rohan Kumar Shah' }];
+  assert.deepEqual(candidateParties('Rohan Kumar', two).map((x) => x.id), ['a', 'b']); // several fit: both offered
+  assert.equal(proposeMissingParty({ line: upiLine('Rohan Kumar'), parties: two }), null); // but none is certain
 });

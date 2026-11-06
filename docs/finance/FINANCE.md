@@ -261,7 +261,10 @@ categories, the requester); routes in `lib/finance-ledger.ts`. `0083` is applied
   month needs close-period and a reason. In bulk, `GET /ledger/missing-parties` proposes a party for every posted line without one (read from the
   narration and the Paytm name by `proposeMissingParty`, only a certain match: exactly one party, and the two names agree when both exist; a category that needs
   no party is skipped) and `POST /allocations/parties` applies the ticked ones through `fin_set_allocation_parties` (one audit entry for the batch). The ledger's
-  "Fill N missing parties from narration" button opens the list. The posted-line sheet offers it as "Add party", and double-clicking the party cell of such a line edits it in the table row.
+  "Fill N missing parties" button opens the list; its "Choose for the rest" step (also in that response: `payees`, `noName`) groups every
+  line no certain match covers by the payee the bank names (`payeeOf`; one row per unit for maintenance), offers `candidateParties` as the best
+  match and a unit's residents first, and applies one chosen party to all of that payee's lines through the same `POST /allocations/parties`. A
+  maintenance payee cannot be added there (members come from the member records); lines with no name in the narration are left for the line sheet. The posted-line sheet offers it as "Add party", and double-clicking the party cell of such a line edits it in the table row.
 - **The Ledger is a table** (docs/finance/FINANCE.md, "The table", below). Filter chips (To allocate, To review, All) with counts and a
   search; a checkbox on every line, shift-click for a range; category, party and wording are cells you edit in place; a bar for what
   to do to the selected lines; posting is a separate, confirmed step. A line that needs splitting, a refund or a review decision opens
