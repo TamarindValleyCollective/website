@@ -447,6 +447,10 @@ Modelled on how ServiceNow lists work, because the sheet's convenience was selec
   a line under the progress says "a tick only fills a field in; nothing is saved until you tick the lines and press Post", and a note
   says how many lines are filled in but not posted, with a button to tick them; the previous calendar month's status (what is left, or
   Close month when it is done) sits above the table; text boxes and selects have a visible focus ring; sorting and the chips keep focus.
+  **Months live in the table (2026-11-06):** the ledger opens on every line, grouped by month, newest first (a chip only when the address asks for one,
+  e.g. `?filter=review`). Each month heading shows its state (what is left to allocate or review, Ready to close, or a lock for a closed month) and,
+  for someone who can close months, a Close month button once nothing is left. A closed month starts folded away. The separate Months list under the
+  table is gone; the strip above the table still names the previous month's status.
   **Then the P2s:** bulk changes (Fill in the suggestions, Accept suggestions, Apply to selected, the apply-to-others prompt) can be undone from
   the toast, and say how many lines already hold a different value before replacing it; the "Suggested" pill's hover text says what is suggested
   and how sure the app is; the Party column reads "Paid to / from" (cards say "Paid to" or "Received from"); in the line sheet Month, Refund of

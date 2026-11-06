@@ -95,7 +95,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       <div id="draftnote" class="postnote applyprompt" role="status" hidden></div>
       <div id="monthstrip" class="postnote applyprompt" role="status" hidden></div>
 
-      <a class="skiplink" href="#months-title">Skip the table</a>
+      <a class="skiplink" href="#ledger-end">Skip the table</a>
       <div class="grid" id="grid" role="table" aria-label="Bank lines" aria-colcount="7">
         <div class="ghead" id="ghead" role="row" aria-rowindex="1"></div>
         <div class="gfilter" id="gfilter" role="row" aria-rowindex="2" aria-label="Column searches"></div>
@@ -104,9 +104,7 @@ import SignInGate from '../../../components/SignInGate.astro';
         </div>
       </div>
       <div id="empty" class="hint" aria-live="polite" hidden></div>
-      <h2 class="list-title" id="months-title" tabindex="-1">Months</h2>
-      <ul class="list" id="months"></ul>
-      <p class="hint">Click a heading to sort, type under one to search that column; click a narration to split the line, refund it, or see its history. Tab moves through the cells; Alt+Up and Alt+Down go to the same cell on the line above or below; Ctrl+Enter on a line accepts its suggestions and moves to the next.</p>
+      <p class="hint" id="ledger-end" tabindex="-1">Click a heading to sort, type under one to search that column; click a narration to split the line, refund it, or see its history. Tab moves through the cells; Alt+Up and Alt+Down go to the same cell on the line above or below; Ctrl+Enter on a line accepts its suggestions and moves to the next.</p>
     </div>
     <div id="ltip" class="ltip" role="tooltip" hidden></div>
     <div id="actionbar" class="abar" role="region" aria-label="Selected lines" hidden></div>
@@ -168,10 +166,10 @@ import SignInGate from '../../../components/SignInGate.astro';
   let filterErrors: Record<string, string> = {};
   // The address can name the chip to open on (the Overview links to ?filter=review).
   const startFilter = new URLSearchParams(location.search).get('filter');
-  let chips: [string, string][] = startFilter === 'all' ? [] : [['status', ['unallocated', 'review', 'noparty'].includes(startFilter ?? '') ? startFilter! : 'unallocated']];
+  let chips: [string, string][] = ['unallocated', 'review', 'noparty'].includes(startFilter ?? '') ? [['status', startFilter!]] : [];
   let words: string[] = []; // word chips kept with Enter
   let query = ''; // what is being typed right now; it filters live
-  let groupBy: string[] = [];
+  let groupBy: string[] = ['month']; // months are headings in the table: status, Close month and the lock live there
   const collapsed = new Set<string>();
   type Item = { kind: 'line'; line: Line } | { kind: 'group'; key: string; depth: number; field: string; label: string; count: number; netPaise: number; open: boolean };
   let items: Item[] = []; // what the list shows: group headings and the lines of the groups that are open
@@ -825,15 +823,20 @@ import SignInGate from '../../../components/SignInGate.astro';
   }
 
 
-  // ---- months: what is left in each, and closing one once everything in it is posted and checked
+  // ---- months: what is left in each, and closing one once everything in it is posted and checked. They show on the table's month headings.
   type Month = { month: string; status: 'open' | 'closed'; unallocated: number; review: number };
+  let monthStatus = new Map<string, Month>(); // by 2026-10
+  let canCloseMonths = false;
+  let closedFolded = false;
+  const monthOfKey = (key: string) => /\/month:(\d{4}-\d{2})$/.exec(key)?.[1] ?? null;
+  const monthLeft = (m: Month) => [m.unallocated ? `${m.unallocated} to allocate` : '', m.review ? `${m.review} to review` : ''].filter(Boolean).join(' · ');
   async function closeMonth(month: string) {
-    const res = await call(`/api/finance-admin/periods/${month}/close`, 'POST');
+    const res = await call(`/api/finance-admin/periods/${month.slice(0, 7)}-01/close`, 'POST');
     showToast(res.status === 200 ? `${niceMonth(month)} closed.` : res.data?.error ?? 'Could not close it.');
     void loadMonths();
   }
   // The month to finish is the previous calendar month (if it is still open, else the newest open one): what is left in it, or a
-  // Close month button when it is done. Older months left open for good reasons are in the Months list, not nagging here.
+  // Close month button when it is done. Older months left open for good reasons just show their state on their heading.
   function renderMonthStrip(months: Month[], canClose: boolean) {
     const box = $('monthstrip');
     const open = months.filter((m) => m.status === 'open');
@@ -846,12 +849,10 @@ import SignInGate from '../../../components/SignInGate.astro';
       return;
     }
     const ready = m.unallocated === 0 && m.review === 0;
-    const left = [m.unallocated ? `${m.unallocated} to allocate` : '', m.review ? `${m.review} to review` : ''].filter(Boolean).join(' · ');
     box.replaceChildren(
       ...[
-        h('span', { text: ready ? `${niceMonth(m.month)} is ready to close.` : `${niceMonth(m.month)}: ${left}.` }),
+        h('span', { text: ready ? `${niceMonth(m.month)} is ready to close.` : `${niceMonth(m.month)}: ${monthLeft(m)}.` }),
         ready && canClose ? button('Close month', () => void closeMonth(m.month), 'button button--small') : null,
-        button('All months', () => $('months-title').focus(), 'button button--outline button--small'),
       ].filter(Boolean),
     );
     box.hidden = false;
@@ -859,18 +860,16 @@ import SignInGate from '../../../components/SignInGate.astro';
   async function loadMonths() {
     const { status, data: out } = await call('/api/finance-admin/periods');
     if (status !== 200) return;
-    const canClose = Boolean(out.canClose);
+    canCloseMonths = Boolean(out.canClose);
     const months = out.months as Month[];
-    renderMonthStrip(months, canClose);
-    renderProgress();
-    $('months').replaceChildren(
-      ...months.map((m) => {
-        const ready = m.unallocated === 0 && m.review === 0;
-        const detail = m.status === 'closed' ? 'Closed' : ready ? 'Everything is posted and checked.' : [m.unallocated ? `${m.unallocated} to allocate` : '', m.review ? `${m.review} to review` : ''].filter(Boolean).join(' · ');
-        const close = canClose && m.status === 'open' && ready ? button('Close month', () => void closeMonth(m.month)) : null;
-        return h('li', {}, h('div', { class: 'row' }, h('span', { class: 'grow' }, h('span', { class: 'title', text: niceMonth(m.month) }), h('span', { class: 'detail', text: detail })), m.status === 'closed' ? pill('Closed', 'ok') : null, close));
-      }),
-    );
+    monthStatus = new Map(months.map((m) => [m.month.slice(0, 7), m]));
+    renderMonthStrip(months, canCloseMonths);
+    // A closed month starts folded away, once: after that the person's own folding is left alone.
+    if (!closedFolded) {
+      closedFolded = true;
+      for (const m of months) if (m.status === 'closed') collapsed.add(`/month:${m.month.slice(0, 7)}`);
+    }
+    applyView();
   }
 
   // The chip, the narration search and the column conditions, then the sort, over every line already here (same rules as the server's:
@@ -1756,11 +1755,16 @@ import SignInGate from '../../../components/SignInGate.astro';
   // A group heading: a button that opens or closes the group, with how many lines it holds and what they add up to.
   function makeGroup(g: Extract<Item, { kind: 'group' }>): HTMLElement {
     const net = `${g.netPaise < 0 ? '−' : '+'}${rupees(Math.abs(g.netPaise))}`;
+    const month = g.field === 'month' ? monthOfKey(g.key) : null;
+    const m = month ? monthStatus.get(month) : undefined;
+    const ready = Boolean(m && m.status === 'open' && m.unallocated === 0 && m.review === 0);
+    const state = !m ? null : m.status === 'closed' ? pill('🔒 Closed', 'ok') : ready ? pill('Ready to close', 'ok') : pill(monthLeft(m), 'warn');
     const b = h(
       'button',
       { class: 'ggroup-btn', attrs: { type: 'button', 'aria-expanded': String(g.open) } },
       h('span', { class: 'ggroup-tri', text: '▸' }),
       h('span', { class: 'ggroup-label', text: g.label }),
+      state,
       h('span', { class: 'ggroup-count', text: `${g.count} ${g.count === 1 ? 'line' : 'lines'}` }),
       h('span', { class: 'ggroup-net', text: `Net ${net}`, attrs: { title: 'Money in minus money out for these lines' } }),
     );
@@ -1769,7 +1773,9 @@ import SignInGate from '../../../components/SignInGate.astro';
       else collapsed.add(g.key);
       applyView();
     });
-    return h('div', { class: `lgroup lgroup--${g.depth + 1}${g.open ? ' is-open' : ''}`, attrs: { role: 'row' } }, b);
+    // A button cannot sit inside the heading button, so Close month sits beside it.
+    const close = month && ready && canCloseMonths ? button('Close month', () => void closeMonth(month), 'button button--small') : null;
+    return h('div', { class: `lgroup lgroup--${g.depth + 1}${g.open ? ' is-open' : ''}${m?.status === 'closed' ? ' is-closed' : ''}`, attrs: { role: 'row' } }, b, close);
   }
 
   function paint() {
@@ -2306,6 +2312,10 @@ import SignInGate from '../../../components/SignInGate.astro';
 
   /* A group heading in the list. Same absolute placement as a line. */
   .ledger .lgroup {
+    display: flex;
+    align-items: center;
+    padding-right: 14px;
+    gap: 10px;
     position: absolute;
     top: 0;
     left: 0;
@@ -2319,14 +2329,19 @@ import SignInGate from '../../../components/SignInGate.astro';
     background: var(--tvc-white);
   }
 
+  .ledger .lgroup.is-closed .ggroup-label {
+    color: var(--tvc-ink-soft);
+  }
+
   .ledger .ggroup-btn {
     all: unset;
     cursor: pointer;
     box-sizing: border-box;
     display: flex;
     align-items: center;
+    flex: 1;
+    min-width: 0;
     gap: 10px;
-    width: 100%;
     min-height: 44px;
     padding: 6px 14px;
     font-weight: 650;
