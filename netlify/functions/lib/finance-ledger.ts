@@ -11,7 +11,7 @@ import { capabilitiesForRole } from './staff-registry';
 import { logFinanceAction } from './finance-audit';
 import { financialYearOf, lineState, periodOf, periodWriteDecision, planPosting, planReversal } from '../../../scripts/lib/finance-allocation.mjs';
 import { REVIEW_REASONS, partyNeeded, reviewReasons, validateRule } from '../../../scripts/lib/finance-rules.mjs';
-import { buildHistory, suggest } from '../../../scripts/lib/finance-suggest.mjs';
+import { buildHistory, proposeMissingParty, suggest } from '../../../scripts/lib/finance-suggest.mjs';
 import { SORT_KEYS, compareRows, describeCondition, matchAmount, matchDate, matchText, parseAmount, parseDate, parseText } from '../../../scripts/lib/finance-columns.mjs';
 
 type Json = Record<string, any>;
@@ -670,6 +670,111 @@ export async function reviewAllocation(req: Request, allocationId: string): Prom
     return jsonResponse({ ok: true });
   } catch (err) {
     return serverError(err, 'review');
+  }
+}
+
+// ---------------------------------------------------------------- fill a missing party
+// A posted allocation with no party can be given one (a reversal cannot, and a party already there is never replaced:
+// that is a reversal). Nothing else on the row changes. A closed month needs close-period and a reason, like any write.
+export async function setAllocationParty(req: Request, allocationId: string): Promise<Response> {
+  const auth = await requireStaff(req, 'finance', 'allocate');
+  if (!auth.ok) return fail(auth.error, auth.status);
+  const body = await readBody(req);
+  if (!body || !LEDGER_ID.test(String(body.partyId ?? ''))) return fail('Choose a party.');
+  try {
+    const [a] = await rows(`/fin_allocations?id=eq.${allocationId}&select=id,entity_id,party_id,period,posted_at,reverses_allocation_id`);
+    if (!a) return fail('That allocation does not exist.', 404);
+    if (!a.posted_at) return fail('Only a posted line is changed here; edit a draft in the line itself.', 409);
+    if (a.reverses_allocation_id) return fail('A refund takes the party of what it refunds.', 409);
+    if (a.party_id) return fail('It already has a party. To change it, reverse the line and post it again.', 409);
+    if (!(await lookups()).parties.some((p) => p.id === body.partyId)) return fail('That party is not in the register.');
+    const [closed] = await rows(`/fin_periods?entity_id=eq.${a.entity_id}&month=eq.${String(a.period).slice(0, 10)}&status=eq.closed&select=month`);
+    const decision = periodWriteDecision(closed ? 'closed' : 'open', capabilitiesForRole('finance', auth.staff.role) as string[], String(body.overrideReason ?? ''));
+    if (!decision.ok) return fail(decision.error ?? 'That month is closed.', 403);
+    await audit(auth.staff.id, a.entity_id, 'finance.allocation_party_set', allocationId, { partyId: body.partyId, override: Boolean(decision.override) });
+    const changed = Number(await rpc('fin_set_allocation_party', { p_id: allocationId, p_party: body.partyId, p_actor: auth.staff.id }));
+    if (!changed) return fail('This line changed while you were looking at it. Reload and try again.', 409);
+    return jsonResponse({ ok: true });
+  } catch (err) {
+    return serverError(err, 'set allocation party');
+  }
+}
+
+// Many at once. The proposals come from the bank narration and the Paytm counterparty (proposeMissingParty): only certain matches,
+// never a guess, and nothing for a category that needs no party. Reading changes nothing; applying goes through
+// fin_set_allocation_parties, which only fills an empty party on a posted line.
+export async function missingParties(req: Request): Promise<Response> {
+  const auth = await requireStaff(req, 'finance', 'allocate');
+  if (!auth.ok) return fail(auth.error, auth.status);
+  try {
+    const [{ lines }, ctx, households, upis, allocs] = await Promise.all([
+      loadLedger(null, null),
+      lookups(),
+      cached('households', () => rowsAll('/member_households?select=id,farm_unit,house_no&order=id.asc')),
+      cached('upi-linked', () => rowsAll('/fin_upi_lines?select=bank_line_id,counterparty,remarks,is_circle&bank_line_id=not.is.null&order=id.asc')),
+      rowsAll('/fin_allocations?select=id,bank_line_id,category_id,amount_paise,period,household_id&posted_at=not.is.null&party_id=is.null&reverses_allocation_id=is.null&order=id.asc'),
+    ]);
+    const lineById = new Map(lines.map((l) => [l.id as string, l]));
+    const upiOf = new Map(upis.map((u) => [u.bank_line_id as string, u]));
+    const categoryById = new Map(ctx.categories.map((c) => [c.id as string, c]));
+    const partyById = new Map(ctx.parties.map((x) => [x.id as string, x]));
+    const unitLabel = new Map(households.map((x) => [x.id as string, [x.farm_unit, x.house_no].filter(Boolean).join(' · ')]));
+    const proposals: Json[] = [];
+    let needsPerson = 0;
+    for (const a of allocs) {
+      const category = categoryById.get(a.category_id);
+      if (!partyNeeded(category)) continue;
+      const line = lineById.get(a.bank_line_id);
+      if (!line) continue;
+      const hit = proposeMissingParty({ line, upi: upiOf.get(line.id as string) ?? null, parties: ctx.parties }) as { partyId: string; how: string; from: string } | null;
+      if (!hit) {
+        needsPerson++;
+        continue;
+      }
+      proposals.push({
+        allocationId: a.id, lineId: line.id, date: line.tran_date, narration: line.narration, direction: line.direction, amountPaise: a.amount_paise,
+        period: String(a.period).slice(0, 10), category: category?.name ?? '', unit: a.household_id ? unitLabel.get(a.household_id) ?? '' : '',
+        partyId: hit.partyId, partyName: partyById.get(hit.partyId)?.name ?? '', how: hit.how, from: hit.from,
+      });
+    }
+    return jsonResponse({ proposals, needsPerson, closedMonths: ctx.closedMonths.map((m) => String(m).slice(0, 10)) });
+  } catch (err) {
+    return serverError(err, 'missing parties');
+  }
+}
+
+const PARTIES_MAX = 300;
+export async function setAllocationParties(req: Request): Promise<Response> {
+  const auth = await requireStaff(req, 'finance', 'allocate');
+  if (!auth.ok) return fail(auth.error, auth.status);
+  const body = await readBody(req);
+  const items = Array.isArray(body?.items) ? (body!.items as Json[]) : [];
+  if (!items.length) return fail('Choose at least one line.');
+  if (items.length > PARTIES_MAX) return fail(`At most ${PARTIES_MAX} at a time.`);
+  if (items.some((i) => !LEDGER_ID.test(String(i?.allocationId ?? '')) || !LEDGER_ID.test(String(i?.partyId ?? '')))) return fail('Each line needs an allocation and a party.');
+  if (new Set(items.map((i) => i.allocationId)).size !== items.length) return fail('A line was listed twice.');
+  try {
+    const ids = items.map((i) => i.allocationId as string);
+    const found = await rows(`/fin_allocations?id=in.(${ids.join(',')})&select=id,entity_id,party_id,period,posted_at,reverses_allocation_id`);
+    const okRows = new Map(found.filter((a) => a.posted_at && !a.party_id && !a.reverses_allocation_id).map((a) => [a.id as string, a]));
+    const parties = new Set((await lookups()).parties.map((p) => p.id as string));
+    const todo = items.filter((i) => okRows.has(i.allocationId) && parties.has(i.partyId));
+    const skipped = items.length - todo.length;
+    if (!todo.length) return jsonResponse({ changed: 0, skipped });
+    const closed = new Set((await lookups()).closedMonths.map((m) => String(m).slice(0, 10)));
+    const capabilities = capabilitiesForRole('finance', auth.staff.role) as string[];
+    let override = false;
+    for (const month of new Set(todo.map((i) => String(okRows.get(i.allocationId)!.period).slice(0, 10)))) {
+      const d = periodWriteDecision(closed.has(month) ? 'closed' : 'open', capabilities, String(body?.overrideReason ?? ''));
+      if (!d.ok) return fail(d.error ?? 'That month is closed.', 403);
+      if (d.override) override = true;
+    }
+    const entity = okRows.get(todo[0].allocationId)!.entity_id as string;
+    await audit(auth.staff.id, entity, 'finance.allocation_parties_set', undefined, { count: todo.length, skipped, override, allocations: todo.map((i) => i.allocationId) });
+    const changed = Number(await rpc('fin_set_allocation_parties', { p_ids: todo.map((i) => i.allocationId), p_parties: todo.map((i) => i.partyId), p_actor: auth.staff.id }));
+    return jsonResponse({ changed, skipped: items.length - changed });
+  } catch (err) {
+    return serverError(err, 'set allocation parties');
   }
 }
 

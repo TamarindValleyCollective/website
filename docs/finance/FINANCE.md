@@ -256,6 +256,12 @@ categories, the requester); routes in `lib/finance-ledger.ts`. `0083` is applied
   `fin_recategorise_allocations` moves chosen allocations (splitting a category); changing type asks for confirmation. These two
   are the only way a posted allocation's category changes (a session setting the guard trigger looks for), and both are audited.
   The merge is on the Rules page; recategorising has a route (`POST /categories/recategorise`) but no screen yet.
+  A third narrow exception (migration 0086): `fin_set_allocation_party` gives a posted allocation a party only when it has none
+  (never replacing one, never on a refund); `POST /allocations/{id}/party`, audited as `finance.allocation_party_set`, and a closed
+  month needs close-period and a reason. In bulk, `GET /ledger/missing-parties` proposes a party for every posted line without one (read from the
+  narration and the Paytm name by `proposeMissingParty`, only a certain match: exactly one party, and the two names agree when both exist; a category that needs
+  no party is skipped) and `POST /allocations/parties` applies the ticked ones through `fin_set_allocation_parties` (one audit entry for the batch). The ledger's
+  "Fill N missing parties from narration" button opens the list. The posted-line sheet offers it as "Add party", and double-clicking the party cell of such a line edits it in the table row.
 - **The Ledger is a table** (docs/finance/FINANCE.md, "The table", below). Filter chips (To allocate, To review, All) with counts and a
   search; a checkbox on every line, shift-click for a range; category, party and wording are cells you edit in place; a bar for what
   to do to the selected lines; posting is a separate, confirmed step. A line that needs splitting, a refund or a review decision opens
@@ -444,6 +450,10 @@ Modelled on how ServiceNow lists work, because the sheet's convenience was selec
   a line under the progress says "a tick only fills a field in; nothing is saved until you tick the lines and press Post", and a note
   says how many lines are filled in but not posted, with a button to tick them; the previous calendar month's status (what is left, or
   Close month when it is done) sits above the table; text boxes and selects have a visible focus ring; sorting and the chips keep focus.
+  **Months live in the table (2026-11-06):** the ledger opens on every line, grouped by month, newest first (a chip only when the address asks for one,
+  e.g. `?filter=review`). Each month heading shows its state (what is left to allocate or review, Ready to close, or a lock for a closed month) and,
+  for someone who can close months, a Close month button once nothing is left. A closed month starts folded away, and a Fold all / Unfold all button beside the chips folds every month at once. The separate Months list under the
+  table is gone; the strip above the table still names the previous month's status.
   **Then the P2s:** bulk changes (Fill in the suggestions, Accept suggestions, Apply to selected, the apply-to-others prompt) can be undone from
   the toast, and say how many lines already hold a different value before replacing it; the "Suggested" pill's hover text says what is suggested
   and how sure the app is; the Party column reads "Paid to / from" (cards say "Paid to" or "Received from"); in the line sheet Month, Refund of

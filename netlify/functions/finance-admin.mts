@@ -21,7 +21,7 @@ import { attentionOf } from '../../scripts/lib/finance-attention.mjs';
 import { PARTY_ID, addPayeeAccount, createParty, listParties, mergeParty, retirePayeeAccount, revealPayeeAccount, reviewParty, unmergeParty, updateParty, verifyPayeeAccount } from './lib/finance-parties';
 import { heldCoverage, reconciliationOf, runImport } from './lib/finance-import';
 import { supabaseImportStore } from './lib/finance-import-store';
-import { LEDGER_ID, clearLedgerCache, closePeriod, ledgerAll, ledgerCounts, ledgerLine, listLedger, listPeriods, listRules, postBatch, recategorise, reviewAllocation, saveAllocations, saveCategory, saveRule, setRequester } from './lib/finance-ledger';
+import { LEDGER_ID, clearLedgerCache, closePeriod, ledgerAll, ledgerCounts, ledgerLine, listLedger, listPeriods, listRules, missingParties, postBatch, recategorise, reviewAllocation, saveAllocations, saveCategory, saveRule, setAllocationParties, setAllocationParty, setRequester } from './lib/finance-ledger';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
@@ -208,6 +208,8 @@ const dispatch = async (req: Request): Promise<Response> => {
   if (route === '/ledger' && req.method === 'GET') return listLedger(req);
   if (route === '/ledger/all' && req.method === 'GET') return ledgerAll(req);
   if (route === '/ledger/post' && req.method === 'POST') return postBatch(req);
+  if (route === '/ledger/missing-parties' && req.method === 'GET') return missingParties(req);
+  if (route === '/allocations/parties' && req.method === 'POST') return setAllocationParties(req);
   const line = /^\/ledger\/([^/]+)(\/allocations)?$/.exec(route);
   if (line && LEDGER_ID.test(line[1])) {
     if (!line[2] && req.method === 'GET') return ledgerLine(req, line[1]);
@@ -215,6 +217,8 @@ const dispatch = async (req: Request): Promise<Response> => {
   }
   const review = /^\/allocations\/([^/]+)\/review$/.exec(route);
   if (review && LEDGER_ID.test(review[1]) && req.method === 'POST') return reviewAllocation(req, review[1]);
+  const setParty = /^\/allocations\/([^/]+)\/party$/.exec(route);
+  if (setParty && LEDGER_ID.test(setParty[1]) && req.method === 'POST') return setAllocationParty(req, setParty[1]);
   if (route === '/rules' && req.method === 'GET') return listRules(req);
   if (route === '/rules' && req.method === 'POST') return saveRule(req, null);
   const rule = /^\/rules\/([^/]+)$/.exec(route);

@@ -95,7 +95,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       <div id="draftnote" class="postnote applyprompt" role="status" hidden></div>
       <div id="monthstrip" class="postnote applyprompt" role="status" hidden></div>
 
-      <a class="skiplink" href="#months-title">Skip the table</a>
+      <a class="skiplink" href="#ledger-end">Skip the table</a>
       <div class="grid" id="grid" role="table" aria-label="Bank lines" aria-colcount="7">
         <div class="ghead" id="ghead" role="row" aria-rowindex="1"></div>
         <div class="gfilter" id="gfilter" role="row" aria-rowindex="2" aria-label="Column searches"></div>
@@ -104,9 +104,7 @@ import SignInGate from '../../../components/SignInGate.astro';
         </div>
       </div>
       <div id="empty" class="hint" aria-live="polite" hidden></div>
-      <h2 class="list-title" id="months-title" tabindex="-1">Months</h2>
-      <ul class="list" id="months"></ul>
-      <p class="hint">Click a heading to sort, type under one to search that column; click a narration to split the line, refund it, or see its history. Tab moves through the cells; Alt+Up and Alt+Down go to the same cell on the line above or below; Ctrl+Enter on a line accepts its suggestions and moves to the next.</p>
+      <p class="hint" id="ledger-end" tabindex="-1">Click a heading to sort, type under one to search that column; click a narration to split the line, refund it, or see its history. Tab moves through the cells; Alt+Up and Alt+Down go to the same cell on the line above or below; Ctrl+Enter on a line accepts its suggestions and moves to the next.</p>
     </div>
     <div id="ltip" class="ltip" role="tooltip" hidden></div>
     <div id="actionbar" class="abar" role="region" aria-label="Selected lines" hidden></div>
@@ -168,10 +166,10 @@ import SignInGate from '../../../components/SignInGate.astro';
   let filterErrors: Record<string, string> = {};
   // The address can name the chip to open on (the Overview links to ?filter=review).
   const startFilter = new URLSearchParams(location.search).get('filter');
-  let chips: [string, string][] = startFilter === 'all' ? [] : [['status', ['unallocated', 'review', 'noparty'].includes(startFilter ?? '') ? startFilter! : 'unallocated']];
+  let chips: [string, string][] = ['unallocated', 'review', 'noparty'].includes(startFilter ?? '') ? [['status', startFilter!]] : [];
   let words: string[] = []; // word chips kept with Enter
   let query = ''; // what is being typed right now; it filters live
-  let groupBy: string[] = [];
+  let groupBy: string[] = ['month']; // months are headings in the table: status, Close month and the lock live there
   const collapsed = new Set<string>();
   type Item = { kind: 'line'; line: Line } | { kind: 'group'; key: string; depth: number; field: string; label: string; count: number; netPaise: number; open: boolean };
   let items: Item[] = []; // what the list shows: group headings and the lines of the groups that are open
@@ -282,8 +280,8 @@ import SignInGate from '../../../components/SignInGate.astro';
       const when = new Date(saved.at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
       const box = $('restorenote');
       box.replaceChildren(
-        h('span', { text: `${usable.length} ${usable.length === 1 ? 'line was' : 'lines were'} filled in on ${when} and never posted.` }),
-        button('Restore them', () => {
+        h('span', { text: `On ${when} you chose a category or party for ${usable.length} ${usable.length === 1 ? 'line' : 'lines'} but did not post ${usable.length === 1 ? 'it' : 'them'}. These choices are only kept in this browser. Nothing is in the ledger yet.` }),
+        button(usable.length === 1 ? 'Fill it in again' : 'Fill them in again', () => {
           const lk = data!.lookups;
           for (const [id, d] of usable) {
             drafts.set(id, { categoryId: lk.categories.some((c) => c.id === d.categoryId) ? d.categoryId : '', partyId: lk.parties.some((x) => x.id === d.partyId) ? d.partyId : '', nature: d.nature ?? '' });
@@ -294,7 +292,7 @@ import SignInGate from '../../../components/SignInGate.astro';
           applyView();
           showToast(`Restored ${usable.length} ${usable.length === 1 ? 'line' : 'lines'}. Nothing is posted yet.`);
         }, 'button button--small'),
-        button('Discard', () => {
+        button('Forget them', () => {
           try {
             localStorage.removeItem(draftsKey());
           } catch {
@@ -500,6 +498,128 @@ import SignInGate from '../../../components/SignInGate.astro';
 
   const monthOf = (iso: string) => iso.slice(0, 7);
 
+  // The party picker in the cell of a posted line that has none. Saving goes through the same route as the sheet's "Add party"; a closed month, a split
+  // line or anything unexpected falls back to the sheet, which can ask for a reason.
+  async function editPartyInline(l: Line, cell: HTMLElement) {
+    const { status, data: d } = await call(`/api/finance-admin/ledger/${l.id}`);
+    const missing = status === 200 ? (d as Detail).allocations.filter((a) => a.posted && !a.partyId && !a.reversesAllocationId) : [];
+    if (missing.length !== 1) return void openLine(l.id);
+    const picker = combo({ options: partyOptions(data!.lookups.parties), value: '', blank: 'Choose a party', matcher: matchOptions, ariaLabel: l.direction === 'debit' ? 'Paid to (party)' : 'Received from (party)' }) as ComboEl;
+    const restore = () => {
+      const el = mounted.get(l.id);
+      if (el) fill(el, byId.get(l.id) ?? l);
+    };
+    picker.addEventListener('keydown', (e) => {
+      if ((e as KeyboardEvent).key === 'Escape') restore();
+    });
+    picker.addEventListener('change', async () => {
+      if (!picker.value) return;
+      const res = await call(`/api/finance-admin/allocations/${missing[0].id}/party`, 'POST', { partyId: picker.value });
+      if (res.status === 200) {
+        showToast('Party added.');
+        void load();
+      } else if (res.status === 403) {
+        showToast(res.data?.error ?? 'That month is closed.');
+        void openLine(l.id);
+      } else {
+        showToast(res.data?.error ?? 'Could not do that.');
+        restore();
+      }
+    });
+    cell.replaceChildren(picker);
+    picker.input.focus();
+  }
+
+  // Posted lines that have no party, where the bank narration (or the Paytm name) names one for certain: listed for a person to tick, then applied together.
+  type PartyProposal = { allocationId: string; lineId: string; date: string; narration: string; direction: string; amountPaise: number; period: string; category: string; unit: string; partyId: string; partyName: string; how: string; from: string };
+  async function openFillParties() {
+    const { status, data: d } = await call('/api/finance-admin/ledger/missing-parties');
+    if (status !== 200) {
+      showToast(d?.error ?? 'Could not read the lines.');
+      return;
+    }
+    const proposals = d.proposals as PartyProposal[];
+    const closedMonths = (d.closedMonths as string[]).map((m) => m.slice(0, 7));
+    if (!proposals.length) {
+      showToast(d.needsPerson ? `Nothing is certain enough to fill in. ${d.needsPerson} lines need a person.` : 'Every posted line already has a party.');
+      return;
+    }
+    const dlg = $<HTMLDialogElement>('line-sheet');
+    dlg.addEventListener('close', () => dlg.replaceChildren(), { once: true });
+    const boxes = proposals.map(() => h('input', { attrs: { type: 'checkbox', checked: '' } }) as HTMLInputElement);
+    const reason = input('closedReason', { placeholder: 'Why is a closed month being changed?' }) as HTMLInputElement;
+    const reasonBox = labelled('Reason for changing a closed month', reason);
+    const msg = h('p', { class: 'error', attrs: { hidden: '' } });
+    const all = h('input', { attrs: { type: 'checkbox', checked: '', 'aria-label': 'Tick or untick every line' } }) as HTMLInputElement;
+    const apply = button('Apply', () => void submit(), 'button button--primary');
+    const picked = () => proposals.filter((_, i) => boxes[i].checked);
+    function refresh() {
+      const sel = picked();
+      apply.textContent = sel.length ? `Apply to ${sel.length} ${sel.length === 1 ? 'line' : 'lines'}` : 'Apply';
+      (apply as HTMLButtonElement).disabled = !sel.length;
+      reasonBox.hidden = !sel.some((x) => closedMonths.includes(x.period.slice(0, 7)));
+      all.checked = sel.length === proposals.length;
+    }
+    for (const b of boxes) b.addEventListener('change', refresh);
+    all.addEventListener('change', () => {
+      for (const b of boxes) b.checked = all.checked;
+      refresh();
+    });
+    async function submit() {
+      msg.hidden = true;
+      const sel = picked();
+      (apply as HTMLButtonElement).disabled = true;
+      let changed = 0;
+      for (let i = 0; i < sel.length; i += 300) {
+        const res = await call('/api/finance-admin/allocations/parties', 'POST', { items: sel.slice(i, i + 300).map((x) => ({ allocationId: x.allocationId, partyId: x.partyId })), overrideReason: reason.value });
+        if (res.status !== 200) {
+          msg.textContent = `${changed ? `${changed} were filled in before this stopped. ` : ''}${res.data?.error ?? 'Could not do that.'}`;
+          msg.hidden = false;
+          (apply as HTMLButtonElement).disabled = false;
+          if (changed) void load();
+          return;
+        }
+        changed += res.data.changed;
+      }
+      dlg.close();
+      showToast(`Added a party to ${changed} ${changed === 1 ? 'line' : 'lines'}.`);
+      void load();
+    }
+    present(
+      dlg,
+      closeOnBackdrop,
+      h('h2', { text: 'Fill parties from the bank narration', attrs: { id: 'line-title' } }),
+      h('p', { class: 'sheet-text', text: `${proposals.length} posted ${proposals.length === 1 ? 'line has' : 'lines have'} no party, and the narration names one for certain.${d.needsPerson ? ` ${d.needsPerson} more have no clear name and stay as they are.` : ''} Untick any you disagree with.` }),
+      labelled('Select all', all),
+      h(
+        'ul',
+        { class: 'list fp-list' },
+        ...proposals.map((x, i) =>
+          h(
+            'li',
+            {},
+            h(
+              'label',
+              { class: 'row alloc-row' },
+              boxes[i],
+              h(
+                'span',
+                { class: 'grow' },
+                h('span', { class: 'title', text: `${x.partyName}${x.how === 'shortened' ? ' (from a shortened name)' : ''}` }),
+                h('span', { class: 'detail', text: [niceDate(x.date), shortNarration(x.narration), x.category, x.unit ? `Unit ${x.unit}` : ''].filter(Boolean).join(' · ') }),
+              ),
+              h('span', { class: 'amount', text: rupees(x.amountPaise) }),
+            ),
+          ),
+        ),
+      ),
+      reasonBox,
+      msg,
+      h('div', { class: 'sheet-actions' }, button('Cancel', () => dlg.close()), apply),
+    );
+    refresh();
+  }
+
   async function openLine(id: string) {
     const dlg = $<HTMLDialogElement>('line-sheet');
     const { status, data: d } = await call(`/api/finance-admin/ledger/${id}`);
@@ -553,6 +673,37 @@ import SignInGate from '../../../components/SignInGate.astro';
             }, 'button button--outline button--small'),
           );
         }
+        // A posted line with no party can be given one here; an existing party is only changed by reversing the line.
+        const fillBox = h('div', { class: 'stack-form', attrs: { hidden: '' } });
+        if (d.canAllocate && a.posted && !a.partyId && !a.reversesAllocationId) {
+          const closedMonth = lk.closedMonths.some((m) => m.slice(0, 7) === a.period.slice(0, 7));
+          const picker = combo({ options: partyOptions(lk.parties), value: '', blank: 'Choose a party', matcher: matchOptions, ariaLabel: d.line.direction === 'debit' ? 'Paid to (party)' : 'Received from (party)' }) as ComboEl;
+          const why = input('closedReason', { placeholder: 'Why is a closed month being changed?' }) as HTMLInputElement;
+          const note = h('p', { class: 'error', attrs: { hidden: '' } });
+          fillBox.append(
+            labelled(d.line.direction === 'debit' ? 'Paid to' : 'Received from', picker),
+            closedMonth ? labelled('Reason for changing a closed month', why) : h('span'),
+            note,
+            h('div', { class: 'sheet-actions' }, button('Save party', async () => {
+              note.hidden = true;
+              if (!picker.value) {
+                note.textContent = 'Choose a party first.';
+                note.hidden = false;
+                return;
+              }
+              const { status, data: out } = await call(`/api/finance-admin/allocations/${a.id}/party`, 'POST', { partyId: picker.value, overrideReason: why.value });
+              if (status === 200) {
+                dlg.close();
+                showToast('Party added.');
+                void load();
+              } else {
+                note.textContent = out?.error ?? 'Could not do that.';
+                note.hidden = false;
+              }
+            })),
+          );
+          actions.push(button('Add party', () => { fillBox.hidden = !fillBox.hidden; }, 'button button--outline button--small'));
+        }
         return h(
           'li',
           {},
@@ -569,6 +720,7 @@ import SignInGate from '../../../components/SignInGate.astro';
             h('span', { class: 'amount', text: rupees(a.amountPaise) }),
             ...actions,
           ),
+          fillBox,
         );
       }),
     );
@@ -761,15 +913,20 @@ import SignInGate from '../../../components/SignInGate.astro';
   }
 
 
-  // ---- months: what is left in each, and closing one once everything in it is posted and checked
+  // ---- months: what is left in each, and closing one once everything in it is posted and checked. They show on the table's month headings.
   type Month = { month: string; status: 'open' | 'closed'; unallocated: number; review: number };
+  let monthStatus = new Map<string, Month>(); // by 2026-10
+  let canCloseMonths = false;
+  let closedFolded = false;
+  const monthOfKey = (key: string) => /\/month:(\d{4}-\d{2})$/.exec(key)?.[1] ?? null;
+  const monthLeft = (m: Month) => [m.unallocated ? `${m.unallocated} to allocate` : '', m.review ? `${m.review} to review` : ''].filter(Boolean).join(' · ');
   async function closeMonth(month: string) {
-    const res = await call(`/api/finance-admin/periods/${month}/close`, 'POST');
+    const res = await call(`/api/finance-admin/periods/${month.slice(0, 7)}-01/close`, 'POST');
     showToast(res.status === 200 ? `${niceMonth(month)} closed.` : res.data?.error ?? 'Could not close it.');
     void loadMonths();
   }
   // The month to finish is the previous calendar month (if it is still open, else the newest open one): what is left in it, or a
-  // Close month button when it is done. Older months left open for good reasons are in the Months list, not nagging here.
+  // Close month button when it is done. Older months left open for good reasons just show their state on their heading.
   function renderMonthStrip(months: Month[], canClose: boolean) {
     const box = $('monthstrip');
     const open = months.filter((m) => m.status === 'open');
@@ -782,12 +939,10 @@ import SignInGate from '../../../components/SignInGate.astro';
       return;
     }
     const ready = m.unallocated === 0 && m.review === 0;
-    const left = [m.unallocated ? `${m.unallocated} to allocate` : '', m.review ? `${m.review} to review` : ''].filter(Boolean).join(' · ');
     box.replaceChildren(
       ...[
-        h('span', { text: ready ? `${niceMonth(m.month)} is ready to close.` : `${niceMonth(m.month)}: ${left}.` }),
+        h('span', { text: ready ? `${niceMonth(m.month)} is ready to close.` : `${niceMonth(m.month)}: ${monthLeft(m)}.` }),
         ready && canClose ? button('Close month', () => void closeMonth(m.month), 'button button--small') : null,
-        button('All months', () => $('months-title').focus(), 'button button--outline button--small'),
       ].filter(Boolean),
     );
     box.hidden = false;
@@ -795,18 +950,16 @@ import SignInGate from '../../../components/SignInGate.astro';
   async function loadMonths() {
     const { status, data: out } = await call('/api/finance-admin/periods');
     if (status !== 200) return;
-    const canClose = Boolean(out.canClose);
+    canCloseMonths = Boolean(out.canClose);
     const months = out.months as Month[];
-    renderMonthStrip(months, canClose);
-    renderProgress();
-    $('months').replaceChildren(
-      ...months.map((m) => {
-        const ready = m.unallocated === 0 && m.review === 0;
-        const detail = m.status === 'closed' ? 'Closed' : ready ? 'Everything is posted and checked.' : [m.unallocated ? `${m.unallocated} to allocate` : '', m.review ? `${m.review} to review` : ''].filter(Boolean).join(' · ');
-        const close = canClose && m.status === 'open' && ready ? button('Close month', () => void closeMonth(m.month)) : null;
-        return h('li', {}, h('div', { class: 'row' }, h('span', { class: 'grow' }, h('span', { class: 'title', text: niceMonth(m.month) }), h('span', { class: 'detail', text: detail })), m.status === 'closed' ? pill('Closed', 'ok') : null, close));
-      }),
-    );
+    monthStatus = new Map(months.map((m) => [m.month.slice(0, 7), m]));
+    renderMonthStrip(months, canCloseMonths);
+    // A closed month starts folded away, once: after that the person's own folding is left alone.
+    if (!closedFolded) {
+      closedFolded = true;
+      for (const m of months) if (m.status === 'closed') collapsed.add(`/month:${m.month.slice(0, 7)}`);
+    }
+    applyView();
   }
 
   // The chip, the narration search and the column conditions, then the sort, over every line already here (same rules as the server's:
@@ -931,12 +1084,31 @@ import SignInGate from '../../../components/SignInGate.astro';
     });
     return h('span', { class: `schip${group ? ' schip--group' : ''}` }, h('span', { class: 'schip-kind', text: `${kindText}:` }), document.createTextNode(` ${valueText}`), x);
   };
+  // Folds or unfolds every top-level group (every month, when grouped by month) in one go; the sub-groups inside keep their own state.
+  function foldAllButton(): HTMLElement | null {
+    const tops = items.filter((it): it is Extract<Item, { kind: 'group' }> => it.kind === 'group' && it.depth === 0);
+    if (!groupBy.length || !tops.length) return null;
+    const allFolded = tops.every((g) => collapsed.has(g.key));
+    return button(allFolded ? 'Unfold all' : 'Fold all', () => {
+      for (const g of tops) {
+        if (allFolded) collapsed.delete(g.key);
+        else collapsed.add(g.key);
+      }
+      applyView();
+    }, 'button button--outline button--small');
+  }
+  // Offered while some posted lines have no party (the "posted without a party" count) and the person may allocate.
+  function fillPartiesButton(): HTMLElement | null {
+    if (!data?.canAllocate || !counts.noparty) return null;
+    return button(`Fill ${counts.noparty} missing ${counts.noparty === 1 ? 'party' : 'parties'} from narration`, () => void openFillParties(), 'button button--outline button--small');
+  }
   function renderSearch() {
     const now = today();
     $('schips').replaceChildren(
       ...chips.map(([k, o], i) => chipEl(kindLabel(k), optionLabel(k, o, now), () => chips.splice(i, 1))),
       ...words.map((w, i) => chipEl('Search', w, () => words.splice(i, 1))),
       ...groupBy.map((g, i) => chipEl('Group by', groupLabel(g), () => groupBy.splice(i, 1), true)),
+      ...([foldAllButton(), fillPartiesButton()].filter(Boolean) as Node[]),
     );
     $<HTMLInputElement>('q').placeholder = chips.length || words.length || groupBy.length ? '' : 'Search every column';
     if (!$('spop').hidden) renderPopover();
@@ -1322,6 +1494,14 @@ import SignInGate from '../../../components/SignInGate.astro';
       }
     };
     rowEl.addEventListener('keydown', onKey);
+    // Double-click a cell of a line that cannot be edited in its row: a posted line with no party gets its party picker right there; anything else (partly
+    // allocated, flagged, posted) opens its sheet. Lines that can be edited in the row keep the single click.
+    rowEl.addEventListener('dblclick', (e: MouseEvent) => {
+      const now = byId.get(l.id) ?? l;
+      if (editable(now) || !data?.canAllocate || (e.target as HTMLElement).closest('button, input, a, .combo')) return;
+      if (now.missingParty && now.state === 'allocated' && partyText.contains(e.target as Node)) void editPartyInline(now, partyText);
+      else void openLine(l.id);
+    });
     refs.set(rowEl, { catHint, check, narr, details, cat, catTick, catText, party, partyTick, partyText, nature, natureTick, natureText, pillSlot, catPeek, partyPeek, natureCell, meta });
     fill(rowEl, l);
     return rowEl;
@@ -1439,7 +1619,15 @@ import SignInGate from '../../../components/SignInGate.astro';
       r.partyText.replaceChildren(a?.partyId ? document.createTextNode(nameOf(lk.parties, a.partyId)) : l.missingParty ? h('span', { class: 'noparty', text: 'No party' }) : document.createTextNode(''));
       r.natureText.textContent = a?.nature ?? '';
     }
-    r.pillSlot.replaceChildren(pillFor(l));
+    // A line that cannot be edited in its row (partly allocated, flagged, or posted without a party) is finished or fixed in its sheet:
+    // its pill opens it, so the way in is visible and not only the narration.
+    const pillNode = pillFor(l);
+    if (!can && data!.canAllocate && (l.review || l.state === 'partly_allocated' || l.missingParty)) {
+      const open = h('button', { class: 'pill-button', text: '', attrs: { type: 'button', title: l.state === 'partly_allocated' ? 'Open to finish allocating this line' : l.missingParty ? 'Open to add the missing party' : 'Open to review' } }) as HTMLButtonElement;
+      open.append(pillNode);
+      open.addEventListener('click', () => void openLine(l.id));
+      r.pillSlot.replaceChildren(open);
+    } else r.pillSlot.replaceChildren(pillNode);
     // On a phone a line at rest is two lines: the narration and amount, then date, category and party in one grey line.
     const catWords = can ? (d.categoryId ? nameOf(lk.categories, d.categoryId) : ghostOf(l, 'categoryId') ? nameOf(lk.categories, ghostOf(l, 'categoryId')) : '') : l.allocation ? nameOf(lk.categories, l.allocation.categoryId) : '';
     const partyWords = can ? (d.partyId ? nameOf(lk.parties, d.partyId) : '') : l.allocation?.partyId ? nameOf(lk.parties, l.allocation.partyId) : '';
@@ -1676,11 +1864,16 @@ import SignInGate from '../../../components/SignInGate.astro';
   // A group heading: a button that opens or closes the group, with how many lines it holds and what they add up to.
   function makeGroup(g: Extract<Item, { kind: 'group' }>): HTMLElement {
     const net = `${g.netPaise < 0 ? '−' : '+'}${rupees(Math.abs(g.netPaise))}`;
+    const month = g.field === 'month' ? monthOfKey(g.key) : null;
+    const m = month ? monthStatus.get(month) : undefined;
+    const ready = Boolean(m && m.status === 'open' && m.unallocated === 0 && m.review === 0);
+    const state = !m ? null : m.status === 'closed' ? pill('🔒 Closed', 'ok') : ready ? pill('Ready to close', 'ok') : pill(monthLeft(m), 'warn');
     const b = h(
       'button',
       { class: 'ggroup-btn', attrs: { type: 'button', 'aria-expanded': String(g.open) } },
       h('span', { class: 'ggroup-tri', text: '▸' }),
       h('span', { class: 'ggroup-label', text: g.label }),
+      state,
       h('span', { class: 'ggroup-count', text: `${g.count} ${g.count === 1 ? 'line' : 'lines'}` }),
       h('span', { class: 'ggroup-net', text: `Net ${net}`, attrs: { title: 'Money in minus money out for these lines' } }),
     );
@@ -1689,7 +1882,9 @@ import SignInGate from '../../../components/SignInGate.astro';
       else collapsed.add(g.key);
       applyView();
     });
-    return h('div', { class: `lgroup lgroup--${g.depth + 1}${g.open ? ' is-open' : ''}`, attrs: { role: 'row' } }, b);
+    // A button cannot sit inside the heading button, so Close month sits beside it.
+    const close = month && ready && canCloseMonths ? button('Close month', () => void closeMonth(month), 'button button--small') : null;
+    return h('div', { class: `lgroup lgroup--${g.depth + 1}${g.open ? ' is-open' : ''}${m?.status === 'closed' ? ' is-closed' : ''}`, attrs: { role: 'row' } }, b, close);
   }
 
   function paint() {
@@ -2226,6 +2421,10 @@ import SignInGate from '../../../components/SignInGate.astro';
 
   /* A group heading in the list. Same absolute placement as a line. */
   .ledger .lgroup {
+    display: flex;
+    align-items: center;
+    padding-right: 14px;
+    gap: 10px;
     position: absolute;
     top: 0;
     left: 0;
@@ -2239,14 +2438,19 @@ import SignInGate from '../../../components/SignInGate.astro';
     background: var(--tvc-white);
   }
 
+  .ledger .lgroup.is-closed .ggroup-label {
+    color: var(--tvc-ink-soft);
+  }
+
   .ledger .ggroup-btn {
     all: unset;
     cursor: pointer;
     box-sizing: border-box;
     display: flex;
     align-items: center;
+    flex: 1;
+    min-width: 0;
     gap: 10px;
-    width: 100%;
     min-height: 44px;
     padding: 6px 14px;
     font-weight: 650;
@@ -2674,6 +2878,9 @@ import SignInGate from '../../../components/SignInGate.astro';
     background: var(--tvc-green-tint);
   }
 
+  .ledger .fp-list { max-height: 50vh; overflow-y: auto; }
+  .ledger .pill-button { all: unset; cursor: pointer; border-radius: 999px; }
+  .ledger .pill-button:focus-visible { outline: 2px solid var(--tvc-green); outline-offset: 2px; }
   .ledger .lrow.is-locked {
     color: var(--tvc-ink-soft);
   }

@@ -4,7 +4,7 @@
 // amount here is invented.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildHistory, matchParty, normaliseName, parseNarration, suggest } from './finance-suggest.mjs';
+import { buildHistory, matchParty, normaliseName, parseNarration, proposeMissingParty, suggest } from './finance-suggest.mjs';
 
 const line = (narration, direction = 'debit', amount = 150000) => ({ id: 'L', narration, direction, amount_paise: amount, tran_date: '2026-10-12' });
 
@@ -167,4 +167,17 @@ test('nothing in a suggestion can be a name that is not in the narration, the re
   assert.equal(s.newParty, null);
   assert.equal(s.nature, '');
   assert.equal(s.confidence, 'none');
+});
+
+test('a posted line with no party gets the party its narration or UPI name matches, and only when that is certain', () => {
+  const parties = [{ id: 'p1', name: 'Asha Rao' }, { id: 'p2', name: 'Asha Menon' }, { id: 'p3', name: 'Bright Hardware Pvt Ltd' }];
+  const upiLine = (name) => ({ narration: `UPI/123456789012/12:00:00/${name}/payer@bank/maintenance`, direction: 'credit' });
+  assert.deepEqual(proposeMissingParty({ line: upiLine('Asha Rao'), parties }), { partyId: 'p1', how: 'exact', from: 'Asha Rao' });
+  assert.equal(proposeMissingParty({ line: upiLine('Asha'), parties }), null); // two Ashas: not certain
+  assert.equal(proposeMissingParty({ line: upiLine('Stranger Person'), parties }), null);
+  assert.equal(proposeMissingParty({ line: { narration: 'CASH DEP', direction: 'credit' }, parties }), null);
+  // the Paytm report names someone the narration does not
+  assert.equal(proposeMissingParty({ line: { narration: 'IMPS/x', direction: 'credit' }, upi: { counterparty: 'Bright Hardware' }, parties })?.partyId, 'p3');
+  // narration and UPI disagree: left to a person
+  assert.equal(proposeMissingParty({ line: upiLine('Asha Rao'), upi: { counterparty: 'Bright Hardware' }, parties }), null);
 });
