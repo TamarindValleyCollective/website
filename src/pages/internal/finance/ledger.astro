@@ -1725,7 +1725,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     const badgeFor = (key: string): HTMLElement => {
       const b = data?.badges?.[key];
       const label = b?.label ?? key;
-      const inner = b?.logoUrl ? h('img', { attrs: { src: b.logoUrl, alt: label, height: '16' } }) : document.createTextNode(b?.short ?? key);
+      const inner = b?.logoUrl ? h('img', { attrs: { src: b.logoUrl, alt: label, height: '20' } }) : document.createTextNode(b?.short ?? key);
       const linked = l.upiRef && (key === 'bhim' || key === 'paytm');
       const node = h(linked ? 'a' : 'span', { class: `badge badge--${b?.kind ?? 'bank'}`, attrs: { title: linked ? `${label}: open this payment in the UPI table` : label, ...(linked ? { href: `/internal/finance/upi/?ref=${l.upiRef}` } : {}) } }, inner);
       if (linked) node.addEventListener('click', (ev: Event) => ev.stopPropagation());
@@ -2990,7 +2990,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   .ledger .gfilter,
   .ledger .lrow {
     display: grid;
-    grid-template-columns: 34px 76px 120px 112px minmax(170px, 1fr) minmax(170px, 1fr) 124px;
+    grid-template-columns: 34px 76px 136px 112px minmax(170px, 1fr) minmax(170px, 1fr) 124px;
     align-items: center;
     gap: 10px;
     padding: 4px 14px;
@@ -3194,7 +3194,7 @@ import SignInGate from '../../../components/SignInGate.astro';
 
   .ledger .badge img {
     display: block;
-    height: 16px;
+    height: 20px;
     width: auto;
   }
 
@@ -3266,7 +3266,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   .ledger.show-narr .ghead,
   .ledger.show-narr .gfilter,
   .ledger.show-narr .lrow {
-    grid-template-columns: 34px 76px 120px 112px minmax(150px, 1fr) minmax(150px, 1fr) 124px minmax(200px, 1.4fr);
+    grid-template-columns: 34px 76px 136px 112px minmax(150px, 1fr) minmax(150px, 1fr) 124px minmax(200px, 1.4fr);
   }
 
   .ledger:not(.show-narr) .gcell--narration {
