@@ -82,6 +82,8 @@ test('planning: a second run adds nothing, a repeated reference loads once, a pa
   const neft = first.insert.find((r) => r.kind === 'request');
   assert.equal(neft.party_id, 'party-1');
   assert.equal(neft.recipient_text, null);
+  assert.equal(neft.mode, null, 'the old sheet never said how a request was to be paid');
+  assert.equal(first.insert.find((r) => r.kind === 'log').mode, 'upi');
   assert.equal(neft.source, 'history');
   assert.equal(neft.status, 'paid');
   assert.equal(neft.requester_id, null);

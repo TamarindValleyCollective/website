@@ -661,6 +661,13 @@ after approval) of the same amount, better when the payee name is in the row, an
 statement row and re-checks amount and direction; accepting marks a request paid on the statement date). Never linked on a guess. **One link is enough** (`deriveLinks`): a UPI row is joined to its bank line, so a record linked on either side is linked on both; the other side is derived (never stored twice), a payment already taken on either side is not offered or accepted for another record, and the Approvals page shows "UPI + bank", "UPI" or "Bank" under the match. An approved request
 unmatched for 14 days is counted on the Approvals page.
 
+**How it was paid.** A request may be paid another way than asked (asked for NEFT, paid by UPI), so every record is offered both UPI rows and bank lines
+to match, and the Approvals page has a **Method** column: the method of the payment it is tied to (`fulfilledVia`), else what was asked in grey (the
+tooltip says so), with a small orange "asked for NEFT" when they differ. A UPI row names its app ("UPI, Paytm"); otherwise the bank's narration says,
+read off the real statements from its first two segments: `NEFT/...`, `IMPS/...`, `UPI/...`, and internet banking as `INB/NEFT/...` (most NEFT payments) or `INB/IFT/...` (an internal transfer); card lines are "Card"; the
+rest (GST, charges) are "Bank transfer". The old sheet never recorded a method, so records loaded from it have none (`mode` is null; migration `0093`, **not yet applied**,
+clears the NEFT placeholder the first load wrote; until then the page treats those rows as having none). Old-sheet rows carry a small `*` beside the date and a footnote under the table.
+
 **Pages.** `/internal/finance-requests/` (the requester's, built for a phone: ask for a payment, record a spend, add a vendor, attach a photo, see their
 own records, cancel) and `/internal/finance/requests/` (nav "Approvals": to approve, to match, to review, all; approve behind the unlock, reject with a reason, accept a suggested match, open the files).
 

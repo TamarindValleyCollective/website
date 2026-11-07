@@ -19,7 +19,7 @@ import { deleteFinanceVoucher, getFinanceVoucher, putFinanceVoucher } from './fi
 import { sendEmail } from './booking-notify';
 import { escapeHtml, renderStaffEmail } from './email-layout';
 import { todayIST } from '../../../scripts/lib/finance-parties.mjs';
-import { VOUCHER_MAX_BYTES, decide, exactMatches, planMatch, deriveLinks, proposeMatches, purposeIndex, reviewFlag, sniffVoucher, validateRecord, agingUnmatched } from '../../../scripts/lib/finance-requests.mjs';
+import { VOUCHER_MAX_BYTES, decide, exactMatches, planMatch, deriveLinks, fulfilledVia, proposeMatches, purposeIndex, reviewFlag, sniffVoucher, validateRecord, agingUnmatched } from '../../../scripts/lib/finance-requests.mjs';
 
 type Json = Record<string, any>;
 const PAGE = 1000;
@@ -91,7 +91,8 @@ const shape = (r: Json, n: Names, vouchers: Map<string, number>) => ({
   partyId: r.party_id as string | null,
   payee: (r.party_id ? n.party.get(r.party_id) : null) ?? (r.recipient_text as string | null),
   amountPaise: Number(r.amount_paise),
-  mode: r.mode as string,
+  // The old sheet never recorded how a request was to be paid; the loader's NEFT is a placeholder, so it is not shown as fact.
+  mode: (r.source === 'history' && r.kind === 'request' ? null : r.mode) as string | null,
   purpose: r.purpose as string,
   neededBy: r.needed_by as string | null,
   reimbursement: Boolean(r.reimbursement),
@@ -288,14 +289,14 @@ export async function listRequests(req: Request): Promise<Response> {
   try {
     const [records, upi, bank, vouchers, ent] = await Promise.all([
       all(`/fin_payment_requests?select=${COLUMNS}&order=created_at.desc,id.asc`),
-      all('/fin_upi_lines?select=id,upi_ref,paid_at,amount_paise,direction,counterparty,remarks,bank_line_id&ignored=eq.false&direction=eq.debit&order=paid_at.desc,id.asc'),
+      all('/fin_upi_lines?select=id,upi_ref,paid_at,amount_paise,direction,counterparty,remarks,app,bank_line_id&ignored=eq.false&direction=eq.debit&order=paid_at.desc,id.asc'),
       all('/fin_bank_lines?select=id,tran_date,amount_paise,direction,narration,upi_rrn&direction=eq.debit&order=tran_date.desc,id.asc'),
       voucherCounts(),
       rows('/fin_entities?select=requester_party_id&order=created_at.asc&limit=1'),
     ]);
     const names = await namesFor(records);
     const shaped = records.map((r) => shape(r, names, vouchers));
-    const upiLines = upi.map((u) => ({ id: u.id as string, upiRef: u.upi_ref as string, paidAt: u.paid_at as string, amountPaise: Number(u.amount_paise), direction: 'debit' as const, counterparty: u.counterparty as string | null, remark: u.remarks as string | null, bankLineId: u.bank_line_id as string | null }));
+    const upiLines = upi.map((u) => ({ id: u.id as string, upiRef: u.upi_ref as string, paidAt: u.paid_at as string, amountPaise: Number(u.amount_paise), direction: 'debit' as const, counterparty: u.counterparty as string | null, remark: u.remarks as string | null, app: u.app as string, bankLineId: u.bank_line_id as string | null }));
     const bankLines = bank.map((b) => ({ id: b.id as string, tranDate: b.tran_date as string, amountPaise: Number(b.amount_paise), direction: 'debit' as const, narration: b.narration as string, upiRrn: b.upi_rrn as string | null }));
     const live = records.filter((r) => r.status !== 'rejected' && r.status !== 'cancelled');
     // Exact (reference) matches need no stored link; a stored link is one a person accepted or the history load found.
@@ -309,15 +310,16 @@ export async function listRequests(req: Request): Promise<Response> {
     const upiById = new Map(upiLines.map((u) => [u.id, u]));
     const bankById = new Map(bankLines.map((b) => [b.id, b]));
     const proposals = proposeMatches(
-      unmatched.map((r) => ({ id: r.id, mode: r.mode, amountPaise: Number(r.amount_paise), partyName: r.party_id ? names.party.get(r.party_id) ?? null : null, recipientText: r.recipient_text, purpose: r.purpose, paidOn: r.paid_on, decidedOn: r.decided_at ? String(r.decided_at).slice(0, 10) : null, createdOn: String(r.created_at).slice(0, 10) })),
+      unmatched.map((r) => ({ id: r.id, mode: r.source === 'history' && r.kind === 'request' ? null : r.mode, amountPaise: Number(r.amount_paise), partyName: r.party_id ? names.party.get(r.party_id) ?? null : null, recipientText: r.recipient_text, purpose: r.purpose, paidOn: r.paid_on, decidedOn: r.decided_at ? String(r.decided_at).slice(0, 10) : null, createdOn: String(r.created_at).slice(0, 10) })),
       upiLines, bankLines, { claimedUpi, claimedBank },
     ) as { recordId: string; type: 'upi' | 'bank'; targetId: string; score: number; reasons: string[] }[];
     const proposalsBy = new Map<string, Json[]>();
     for (const p of proposals) {
       const t = p.type === 'upi' ? upiById.get(p.targetId) : bankById.get(p.targetId);
       if (!t) continue;
+      const via = p.type === 'upi' ? fulfilledVia({ upiApp: (t as any).app }) : fulfilledVia({ narration: (t as any).narration });
       const view = p.type === 'upi' ? { date: (t as any).paidAt, who: [(t as any).counterparty, (t as any).remark ? `“${(t as any).remark}”` : ''].filter(Boolean).join(' · ') } : { date: (t as any).tranDate, who: (t as any).narration };
-      proposalsBy.set(p.recordId, [...(proposalsBy.get(p.recordId) ?? []), { type: p.type, targetId: p.targetId, reasons: p.reasons, ...view }]);
+      proposalsBy.set(p.recordId, [...(proposalsBy.get(p.recordId) ?? []), { type: p.type, targetId: p.targetId, reasons: p.reasons, via: (via as { label: string } | null)?.label ?? null, ...view }]);
     }
     const requesterIds = ent[0]?.requester_party_id ? [ent[0].requester_party_id as string] : [];
     const caps = capabilitiesForRole('finance', auth.staff.role) as string[];
@@ -326,7 +328,11 @@ export async function listRequests(req: Request): Promise<Response> {
       const link = exact.links.get(r.id);
       const matched = stored(r) ? 'accepted' : link ? 'reference' : null;
       const d = derived.get(r.id as string);
-      return { ...s, matched, linked: d && (d.upiLineId || d.bankLineId) ? { upi: Boolean(d.upiLineId), bank: Boolean(d.bankLineId) } : null, mismatch: exact.mismatches.includes(r.id), proposals: proposalsBy.get(r.id) ?? [], ownParty: reviewFlag({ partyId: r.party_id }, requesterIds) === 'own_party' };
+      // How it was actually paid, from what it is tied to (a UPI row names its app; a bank line starts with its method).
+      const upiTied = d?.upiLineId ? upiById.get(d.upiLineId) : undefined;
+      const bankTied = d?.bankLineId ? bankById.get(d.bankLineId) : undefined;
+      const fulfilled = fulfilledVia({ upiApp: upiTied?.app, narration: bankTied?.narration }) as { method: string; label: string } | null;
+      return { ...s, matched, fulfilled, linked: d && (d.upiLineId || d.bankLineId) ? { upi: Boolean(d.upiLineId), bank: Boolean(d.bankLineId) } : null, mismatch: exact.mismatches.includes(r.id), proposals: proposalsBy.get(r.id) ?? [], ownParty: reviewFlag({ partyId: r.party_id }, requesterIds) === 'own_party' };
     });
     const aging = agingUnmatched(records.map((r) => ({ id: r.id, kind: r.kind, status: r.status, decidedOn: r.decided_at ? String(r.decided_at).slice(0, 10) : null, bankLineId: r.bank_line_id, upiLineId: r.upi_line_id })), todayIST()) as Json[];
     const mfa = caps.includes('approve') ? await mfaSummary(auth.staff.id) : null;

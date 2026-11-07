@@ -2,7 +2,7 @@
 // Invented data only.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { agingUnmatched, deriveLinks, descriptionWords, matchWords, cleanUpiRef, decide, exactMatches, padUpiRef, planMatch, proposeMatches, purposeIndex, reviewFlag, sniffVoucher, validateRecord } from './finance-requests.mjs';
+import { agingUnmatched, fulfilledVia, deriveLinks, descriptionWords, matchWords, cleanUpiRef, decide, exactMatches, padUpiRef, planMatch, proposeMatches, purposeIndex, reviewFlag, sniffVoucher, validateRecord } from './finance-requests.mjs';
 
 const P1 = '11111111-1111-4111-8111-111111111111';
 const today = '2026-11-07';
@@ -252,4 +252,27 @@ test('one link is enough: the other side of the same payment is derived from the
   assert.deepEqual(deriveLinks({ bankLineId: 'b9' }, upi), { upiLineId: null, bankLineId: 'b9' });
   assert.deepEqual(deriveLinks({}, upi), { upiLineId: null, bankLineId: null });
   assert.deepEqual(deriveLinks({ upiLineId: 'u1', bankLineId: 'bx' }, upi), { upiLineId: 'u1', bankLineId: 'bx' }, 'a stored pair is left as it is');
+});
+
+test('a NEFT request is also offered a UPI payment of the same amount: it may have been paid another way', () => {
+  const r = { id: 'r', mode: 'neft', amountPaise: 50_000, partyName: 'Seed Store', purpose: 'Seeds', decidedOn: '2026-11-04', createdOn: '2026-11-03' };
+  const upi = [{ id: 'u1', upiRef: '1', amountPaise: 50_000, direction: 'debit', paidAt: '2026-11-05', counterparty: 'Seed Store', remark: 'Seeds', bankLineId: null }];
+  const out = proposeMatches([r], upi, []);
+  assert.deepEqual(out.map((p) => [p.type, p.targetId]), [['upi', 'u1']]);
+  // before the approval is too early for a request that was not paid yet
+  assert.equal(proposeMatches([{ ...r, decidedOn: '2026-11-09' }], upi, []).length, 0);
+});
+
+test('how a payment was made: the UPI app, else the method its narration starts with', () => {
+  assert.deepEqual(fulfilledVia({ upiApp: 'paytm' }), { method: 'upi', label: 'UPI, Paytm' });
+  assert.deepEqual(fulfilledVia({ narration: 'NEFT/ACME/ref' }), { method: 'neft', label: 'NEFT' });
+  assert.deepEqual(fulfilledVia({ narration: 'imps/123/x' }), { method: 'imps', label: 'IMPS' });
+  assert.deepEqual(fulfilledVia({ narration: 'UPI/P2A/123/x' }), { method: 'upi', label: 'UPI' });
+  assert.deepEqual(fulfilledVia({ narration: 'INB/NEFT/123456/ACME' }), { method: 'neft', label: 'NEFT' }, 'internet banking says NEFT in its second segment');
+  assert.deepEqual(fulfilledVia({ narration: 'INB/IFT/123/ACME' }), { method: 'ift', label: 'Internal transfer' });
+  assert.deepEqual(fulfilledVia({ narration: 'MMT/IMPS/123/ACME' }), { method: 'imps', label: 'IMPS' });
+  assert.deepEqual(fulfilledVia({ narration: 'POS/SHOP/123' }), { method: 'card', label: 'Card' });
+  assert.deepEqual(fulfilledVia({ narration: 'CHQ PAID 0001' }), { method: 'bank', label: 'Bank transfer' });
+  assert.equal(fulfilledVia({ narration: 'GST/ACME/INBOUND' }).method, 'bank', 'a method word beyond the second segment is not read');
+  assert.equal(fulfilledVia({}), null);
 });

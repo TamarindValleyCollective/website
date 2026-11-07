@@ -164,10 +164,10 @@ export function exactMatches(records, upiLines, bankLines) {
 }
 
 /**
- * Suggested matches for records that have no link yet; a person accepts one, nothing is linked on a guess. A UPI-mode record is
- * offered UPI rows, any record is offered bank debits. A target needs the same amount and to be a debit, and to fall in the
+ * Suggested matches for records that have no link yet; a person accepts one, nothing is linked on a guess. Any record is offered UPI rows and bank debits. A target needs the same amount and to be a debit, and to fall in the
  * date window; one already linked to another record is not offered. A payee name that appears in the row or narration raises the
- * score; so does a word of what it was for (the record's purpose) in the row's remark or the narration.
+ * score; so does a word of what it was for (the record's purpose) in the row's remark or the narration. Both kinds of row are offered to
+ * every record, whatever mode it asked for.
  * -> [{ recordId, type: 'upi'|'bank', targetId, score, reasons[] }] best first per record.
  * `records`: { id, mode, amountPaise, partyName, recipientText, purpose, paidOn, decidedOn, createdOn }; a UPI row may carry its `remark`.
  */
@@ -184,15 +184,17 @@ export function proposeMatches(records, upiLines, bankLines, { claimedUpi = new 
       return about.filter((w) => have.has(w)).length / about.length;
     };
     const found = [];
-    if (r.mode === 'upi') {
-      for (const u of upiLines) {
-        if (u.direction !== 'debit' || claimedUpi.has(u.id) || u.amountPaise !== r.amountPaise) continue;
-        const gap = Math.abs(daysBetween(anchor, u.paidAt));
-        if (gap > PROPOSAL_DAYS_UPI) continue;
-        const nm = nameScore(who, u.counterparty);
-        const ds = aboutScore(`${u.remark ?? ''} ${u.counterparty ?? ''}`);
-        found.push({ recordId: r.id, type: 'upi', targetId: u.id, score: 10 - gap + nm * 5 + ds * 5, reasons: ['same amount', gap === 0 ? 'same day' : `${gap} day${gap === 1 ? '' : 's'} apart`, ...(nm > 0 ? ['payee name matches'] : []), ...(ds > 0 ? ['description matches'] : [])] });
-      }
+    // A request may be fulfilled another way than the one asked for (asked for NEFT, paid by UPI), so UPI rows are offered to every
+    // record. A UPI request is dated near what was typed; any other kind lands after the approval.
+    for (const u of upiLines) {
+      if (u.direction !== 'debit' || claimedUpi.has(u.id) || u.amountPaise !== r.amountPaise) continue;
+      const after = daysBetween(anchor, u.paidAt);
+      const ok = r.mode === 'upi' ? Math.abs(after) <= PROPOSAL_DAYS_UPI : after >= 0 && after <= PROPOSAL_DAYS_BANK;
+      if (!ok) continue;
+      const gap = Math.abs(after);
+      const nm = nameScore(who, u.counterparty);
+      const ds = aboutScore(`${u.remark ?? ''} ${u.counterparty ?? ''}`);
+      found.push({ recordId: r.id, type: 'upi', targetId: u.id, score: 10 - gap / (r.mode === 'upi' ? 1 : 3) + nm * 5 + ds * 5, reasons: ['same amount', gap === 0 ? 'same day' : `${gap} day${gap === 1 ? '' : 's'} apart`, ...(nm > 0 ? ['payee name matches'] : []), ...(ds > 0 ? ['description matches'] : [])] });
     }
     for (const b of bankLines) {
       if (b.direction !== 'debit' || claimedBank.has(b.id) || b.amountPaise !== r.amountPaise) continue;
@@ -281,4 +283,25 @@ export function deriveLinks(link, upiLines) {
   if (upiLineId && !bankLineId) bankLineId = bankOfUpi.get(upiLineId) ?? null;
   if (bankLineId && !upiLineId) upiLineId = upiOfBank.get(bankLineId) ?? null;
   return { upiLineId, bankLineId };
+}
+
+const APP_NAME = { bhim: 'BHIM', paytm: 'Paytm' };
+/**
+ * How a payment was actually made, read from what it is tied to: a UPI row names its app; otherwise the bank's own narration says
+ * (read off the real statements): "NEFT/...", "IMPS/...", "UPI/...", and internet banking as "INB/NEFT/..." or "INB/IFT/..." (an
+ * internal transfer), so the method is looked for in the first two segments. -> { method, label } or null when nothing is tied yet.
+ * method: 'upi' | 'neft' | 'imps' | 'rtgs' | 'ift' | 'card' | 'bank'.
+ * @param {{ upiApp?: string | null, narration?: string | null }} how
+ */
+export function fulfilledVia({ upiApp, narration }) {
+  if (upiApp) return { method: 'upi', label: `UPI, ${APP_NAME[upiApp] ?? upiApp}` };
+  const n = String(narration ?? '').trim();
+  if (!n) return null;
+  const parts = n.split('/').map((x) => x.trim().toUpperCase());
+  const found = parts.slice(0, 2).find((x) => /^(NEFT|IMPS|RTGS|UPI|IFT)$/.test(x));
+  if (found === 'IFT') return { method: 'ift', label: 'Internal transfer' };
+  if (found === 'UPI') return { method: 'upi', label: 'UPI' };
+  if (found) return { method: found.toLowerCase(), label: found };
+  if (/^(POS|ECOM)\b/i.test(n)) return { method: 'card', label: 'Card' };
+  return { method: 'bank', label: 'Bank transfer' };
 }

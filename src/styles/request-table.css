@@ -77,6 +77,18 @@
   color: var(--tvc-ink-soft);
 }
 
+.rq-table .star {
+  margin-left: 2px;
+  color: var(--tvc-ink-soft);
+  text-decoration: none;
+  cursor: help;
+}
+
+.rq-table .warnsub {
+  color: var(--tvc-orange-text);
+  font-weight: 600;
+}
+
 .rq-table .tags {
   display: flex;
   flex-wrap: wrap;

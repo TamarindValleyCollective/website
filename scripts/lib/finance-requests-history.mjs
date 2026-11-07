@@ -144,7 +144,8 @@ export function planHistory(records, { existing, partyOf, entityId }) {
     }
     insert.push({
       entity_id: entityId, kind: r.kind, status: 'paid', source: 'history', requester_id: null,
-      party_id: partyId, recipient_text: partyId ? null : r.name, amount_paise: r.amountPaise, mode: r.kind === 'log' ? 'upi' : 'neft',
+      party_id: partyId, recipient_text: partyId ? null : r.name, amount_paise: r.amountPaise, // The old sheet never recorded how a request was to be paid, so none is claimed: how it was paid is read from the matched payment.
+      mode: r.kind === 'log' ? 'upi' : null,
       purpose: r.purpose, paid_on: r.date, paid_via: r.kind === 'log' ? r.paidVia : null, upi_ref: r.upiRef ?? null,
     });
   }
