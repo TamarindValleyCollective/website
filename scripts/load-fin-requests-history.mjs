@@ -68,10 +68,17 @@ for (const p of live) byName.set(p.name.toLowerCase(), [...(byName.get(p.name.to
 const nameOf = new Map(parties.map((p) => [p.id, p.name]));
 let linkedByAccount = 0;
 let linkedByName = 0;
+// Without the payee key (FINANCE_PAYEE_KEY / STAFF_MFA_KEY) accounts cannot be fingerprinted: linking falls back to names only.
+let fingerprintsOn = true;
 const partyOf = (r) => {
-  if (r.account) {
-    const hit = byFingerprint.get(fingerprintFinanceText(fingerprintText({ method: 'bank', account: r.account, ifsc: r.ifsc })));
-    if (hit) return (linkedByAccount += 1), hit;
+  if (r.account && fingerprintsOn) {
+    try {
+      const hit = byFingerprint.get(fingerprintFinanceText(fingerprintText({ method: 'bank', account: r.account, ifsc: r.ifsc })));
+      if (hit) return (linkedByAccount += 1), hit;
+    } catch (err) {
+      if (!String(err?.message).includes('STAFF_MFA_KEY')) throw err;
+      fingerprintsOn = false;
+    }
   }
   const names = r.name ? byName.get(r.name.toLowerCase()) : undefined;
   if (names?.length === 1) return (linkedByName += 1), names[0];
@@ -89,6 +96,7 @@ console.log(`${apply ? 'APPLY' : 'DRY RUN'}`);
 console.log(`transfer tab: ${transferRows.length > 0 ? transferRows.length - 1 : 0} rows, ${transfer.records.length} readable; skipped`, JSON.stringify(transfer.skipped));
 console.log(`circle tab:   ${circleRows.length > 0 ? circleRows.length - 1 : 0} rows, ${circle.records.length} readable; skipped`, JSON.stringify(circle.skipped));
 console.log(`to insert: ${plan.insert.length} (${count(plan.insert, (r) => r.kind === 'request')} requests, ${count(plan.insert, (r) => r.kind === 'log')} logs); already loaded or repeated: ${plan.duplicates}; no name: ${plan.noName}`);
+if (!fingerprintsOn) console.log('NOTE: the payee key is not set here, so rows were linked by name only. Run with the key set to link by account number as well.');
 console.log(`linked to a saved party: ${count(plan.insert, (r) => r.party_id)} (${linkedByAccount} by account, ${linkedByName} by name); name kept as typed: ${count(plan.insert, (r) => !r.party_id)}`);
 
 if (!apply) {
