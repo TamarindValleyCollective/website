@@ -1,0 +1,406 @@
+---
+// Finance (internal), session 08: every payment request and logged spend, for the people who approve and match them. Backed by
+// netlify/functions/finance-admin.mts (/requests, lib/finance-requests.ts); the rules are scripts/lib/finance-requests.mjs.
+//   * approve or reject a request (approving needs the same unlock as verifying a payee; whoever raised it cannot decide it)
+//   * match a record to the UPI row or bank line it became: an exact UPI reference is shown as matched; anything else is a
+//     suggestion that a person accepts, never linked on a guess
+//   * look at the bill or payment photo; clear the flag on a payment to the requester's own party
+// What a record says it was for is shown on the UPI page and in the ledger once it is matched.
+//
+// Same shell as the other internal tools: Google Sign-In gated, unlinked, noindex. Everything the server returns is
+// placed with textContent only, never as HTML.
+import StaffLayout from '../../../layouts/StaffLayout.astro';
+import '../../../styles/request-table.css';
+import SignInGate from '../../../components/SignInGate.astro';
+import StepUpSheet from '../../../components/StepUpSheet.astro';
+---
+
+<StaffLayout title="Approvals" description="Finance payment requests." current="finance" currentPage="finance-approvals">
+  <button slot="toolbar" type="button" id="lock" class="lock-pill" hidden></button>
+
+  <section class="finance finance-appr section wrapper">
+    <h1>Payment requests</h1>
+    <p id="intro" class="hint">Sign in to see the payment requests.</p>
+
+    <SignInGate forbiddenWhat="finance" />
+
+    <div id="status" aria-live="polite" class="hint" hidden></div>
+
+    <div id="content" hidden>
+      <div class="filters">
+        <div class="segmented" id="chips" role="group" aria-label="Show"></div>
+        <label class="field"><span class="visually-hidden">Search</span><input id="q" type="search" placeholder="Search by payee, purpose or reference" autocomplete="off" /></label>
+      </div>
+      <div class="rq-table-scroll">
+        <table class="rq-table">
+          <thead>
+            <tr id="head">
+              <th data-sort="date" aria-sort="descending"><button type="button" class="sorthead">Date</button></th>
+              <th data-sort="payee"><button type="button" class="sorthead">Payee</button></th>
+              <th data-sort="purpose"><button type="button" class="sorthead">Purpose</button></th>
+              <th data-sort="amountPaise" class="num"><button type="button" class="sorthead">Amount</button></th>
+              <th data-sort="method"><button type="button" class="sorthead">Method</button></th>
+              <th data-sort="status"><button type="button" class="sorthead">Status</button></th>
+              <th>Match</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="records"></tbody>
+        </table>
+      </div>
+      <p id="empty" class="hint" hidden>Nothing here.</p>
+      <p id="footnote" class="hint" hidden>* From the old transfer-request sheet.</p>
+    </div>
+    <StepUpSheet />
+  </section>
+</StaffLayout>
+
+<script>
+  import { StaffAuthError, clearStepUp, clearToken, decodeTokenEmail, getToken, setToken, showToast, staffFetch } from '../../../../scripts/lib/staff-client.mjs';
+  import { matchWords } from '../../../../scripts/lib/finance-requests.mjs';
+  import { initStepUpLock } from '../../../../scripts/lib/staff-stepup-ui.mjs';
+  import { clearState, showFailure, showLoading } from '../../../../scripts/lib/staff-states.mjs';
+
+  declare const google: any;
+  const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
+  const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+  const gate = $('gate');
+  const gateError = $('gate-error');
+  const forbidden = $('forbidden');
+  const statusEl = $('status');
+  const content = $('content');
+  const intro = $('intro');
+
+  type Proposal = { type: 'upi' | 'bank'; targetId: string; reasons: string[]; via: string | null; alsoBank: boolean; date: string; who: string | null };
+  type Rec = {
+    id: string; kind: 'request' | 'log'; status: string; source: 'app' | 'history'; requester: string | null; requesterId: string | null; payee: string | null; amountPaise: number; mode: string | null; purpose: string;
+    neededBy: string | null; reimbursement: boolean; paidOn: string | null; paidVia: string | null; upiRef: string | null; decidedBy: string | null; decisionReason: string | null; reviewFlag: string | null;
+    vouchers: number; createdAt: string; fulfilled: { method: string; label: string } | null; matched: 'reference' | 'accepted' | null; linked: { upi: boolean; bank: boolean; upiRef: string | null; bankLineId: string | null } | null; mismatch: boolean; proposals: Proposal[]; ownParty: boolean;
+  };
+  let data: { me: { id: string; ready: boolean; hasPasskey: boolean; stepUpValid: boolean }; can: { approve: boolean; allocate: boolean }; records: Rec[]; agingCount: number } | null = null;
+  const filter = { chip: 'waiting', q: '' };
+  let chosenByUser = false;
+
+  const rupees = (paise: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(paise / 100);
+  const day = (iso: string | null) => (iso ? new Date(`${iso.slice(0, 10)}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) : '');
+  const MODE: Record<string, string> = { neft: 'NEFT', upi: 'UPI', imps: 'IMPS', rtgs: 'RTGS' };
+  const STATUS: Record<string, { text: string; kind: string }> = {
+    submitted: { text: 'To approve', kind: 'warn' },
+    approved: { text: 'Approved', kind: 'ok' },
+    paid: { text: 'Paid', kind: 'ok' },
+    rejected: { text: 'Rejected', kind: 'crit' },
+    cancelled: { text: 'Cancelled', kind: 'dim' },
+  };
+  const CHIPS: { id: string; label: string; test: (r: Rec) => boolean }[] = [
+    { id: 'waiting', label: 'To approve', test: (r) => r.kind === 'request' && r.status === 'submitted' },
+    { id: 'tomatch', label: 'To match', test: (r) => !r.matched && r.status !== 'rejected' && r.status !== 'cancelled' && (r.kind === 'log' || r.status === 'approved' || r.status === 'paid') },
+    { id: 'review', label: 'To review', test: (r) => Boolean(r.reviewFlag) },
+    { id: 'all', label: 'All', test: () => true },
+  ];
+
+  function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string): HTMLElementTagNameMap[K] {
+    const e = document.createElement(tag);
+    if (className) e.className = className;
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+  function showGate(message?: string) {
+    gate.hidden = false;
+    forbidden.hidden = true;
+    content.hidden = true;
+    clearState(statusEl);
+    intro.hidden = false;
+    intro.textContent = 'Sign in to see the payment requests.';
+    gateError.hidden = !message;
+    if (message) gateError.textContent = message;
+    renderSignInButton();
+  }
+  function showForbidden() {
+    gate.hidden = true;
+    content.hidden = true;
+    clearState(statusEl);
+    forbidden.hidden = false;
+    $('forbidden-email').textContent = decodeTokenEmail(getToken() ?? '');
+  }
+  function fail(err: unknown) {
+    if (err instanceof StaffAuthError) {
+      if (err.kind === 'unauthorized') showGate('Your session expired. Sign in again.');
+      else showForbidden();
+      return true;
+    }
+    return false;
+  }
+
+  const lock = initStepUpLock({ getMe: () => data?.me ?? null, onChange: () => {} });
+
+  // A record someone has just acted on stays in the list, highlighted, even though it no longer fits the tab it was in (a matched
+  // record leaves "To match"): it would otherwise vanish with no sign it worked. It is let go when the tab or the search changes.
+  const recent = new Set<string>();
+
+  async function act(path: string, body: unknown, done: string, id?: string) {
+    try {
+      const { status, data: out } = await staffFetch(path, { method: 'POST', body });
+      if (status === 403 && out?.code === 'STEP_UP_REQUIRED') return void (showToast(data?.me?.ready ? 'Unlock first.' : 'Set up two second factors first (see Security).'), lock.open());
+      if (status >= 400) return void showToast(out?.error ?? 'Could not do that.');
+      showToast(done);
+      if (id) {
+        recent.add(id);
+        chosenByUser = true; // stay on this tab rather than jumping to another
+      }
+      await load();
+    } catch (err) {
+      if (!fail(err)) showToast('Could not do that.');
+    }
+  }
+
+  // A bill or payment photo is fetched with the token and opened from memory; there is no link to it.
+  async function openVoucher(id: string) {
+    const res = await fetch(`/api/finance-admin/vouchers/${id}`, { headers: { authorization: `Bearer ${getToken() ?? ''}` } });
+    if (!res.ok) return void showToast('Could not open the file.');
+    window.open(URL.createObjectURL(await res.blob()), '_blank', 'noopener');
+  }
+
+  const cell = (text: string, cls?: string) => el('td', cls, text);
+  const pill = (text: string, kind = '') => el('span', `pill${kind ? ` pill--${kind}` : ''}`, text);
+
+  // On a narrow screen each row is stacked, and each value carries the name of its column.
+  const labelRow = (tr: HTMLElement) => {
+    const heads = Array.from($('head').querySelectorAll('th')).map((th) => th.textContent ?? '');
+    Array.from(tr.children).forEach((td, i) => ((td as HTMLElement).dataset.label = heads[i] ?? ''));
+  };
+
+  // Words to light up where they appear in a suggested payment: the payee's name and what the record says it was for.
+  function highlighted(text: string, words: string[]): HTMLElement {
+    const out = el('span', 'suggest-text');
+    if (!words.length) return (out.textContent = text), out;
+    const re = new RegExp(`(${words.join('|')})`, 'ig'); // the words are letters and digits only
+    text.split(re).forEach((part, i) => out.append(i % 2 ? el('mark', 'hl', part) : document.createTextNode(part)));
+    return out;
+  }
+
+  const openIds = new Set<string>(); // records whose suggested payments are showing
+
+  function rowsOf(r: Rec): HTMLElement[] {
+    const tr = el('tr', recent.has(r.id) ? 'just-done' : undefined);
+    const st = STATUS[r.status] ?? { text: r.status, kind: 'dim' };
+    const when = r.kind === 'log' ? r.paidOn : r.paidOn ?? r.createdAt;
+    const date = cell(day(when), 'nowrap');
+    if (r.source === 'history') {
+      // Loaded from the old transfer-request sheet: a small asterisk, explained by the footnote under the table.
+      const star = el('abbr', 'star', '*');
+      star.title = 'From the old transfer-request sheet';
+      date.append(star);
+    } else if (r.requester) date.append(el('span', 'sub', `by ${r.requester}`));
+    const payee = cell(r.payee ?? 'Unknown');
+    // A request is the usual case and says nothing; only a spend already made is marked, since it was never approved.
+    if (r.kind === 'log') payee.append(el('span', 'sub', `Logged spend${r.paidVia ? `, ${r.paidVia === 'delegate' ? 'by a delegate' : 'from the account'}` : ''}`));
+    // How it was paid, in its own column: the method of the payment it is tied to; until then what was asked for, in grey.
+    const f = r.fulfilled;
+    const method = el('td', f ? undefined : 'dim', f ? f.label : r.mode ? MODE[r.mode] ?? r.mode : '—');
+    if (!f && r.mode) method.title = `Asked for ${MODE[r.mode] ?? r.mode}. How it was paid shows once a payment is matched.`;
+    if (f && r.kind === 'request' && r.mode && f.method !== r.mode && !(['bank', 'ift'].includes(f.method) && ['neft', 'imps', 'rtgs'].includes(r.mode))) method.append(el('span', 'sub warnsub', `asked for ${MODE[r.mode] ?? r.mode}`));
+    const purpose = cell(r.purpose, 'purpose');
+    if (r.decisionReason) purpose.append(el('span', 'sub', `${r.status === 'rejected' ? 'Rejected' : 'Note'}: ${r.decisionReason}`));
+    const status = el('td');
+    const tags = el('div', 'tags');
+    tags.append(pill(r.kind === 'log' ? 'Paid' : st.text, st.kind));
+    if (r.reviewFlag) tags.append(pill('Own party', 'warn'));
+    if (r.reimbursement) tags.append(pill(r.vouchers ? 'Reimbursement' : 'Reimbursement: no bill', r.vouchers ? '' : 'warn'));
+    status.append(tags);
+    const payment = el('td');
+    if (r.mismatch) payment.append(pill('Amount differs', 'crit'));
+    else if (r.matched) {
+      // One pill for each place the payment is tied (the UPI payment, the bank line), each a link to it. One link is enough: the
+      // other side is derived. Hover says whether it was matched by reference or by a person.
+      const how = r.matched === 'reference' ? 'Matched by the UPI reference' : 'Matched by a person';
+      const pills = el('div', 'tags');
+      const link = (label: string, href: string, title: string) => {
+        const a = el('a', 'pill pill--ok pill--link', label);
+        a.href = href;
+        a.title = `${title}. ${how}.`;
+        pills.append(a);
+      };
+      if (r.linked?.upi && r.linked.upiRef) link('UPI', `/internal/finance/upi/?ref=${r.linked.upiRef}`, 'Open this payment on the UPI page');
+      if (r.linked?.bank && r.linked.bankLineId) link('Bank', `/internal/finance/ledger/?line=${r.linked.bankLineId}`, 'Open this line in the ledger');
+      if (!pills.children.length) pills.append(pill('Matched', 'ok'));
+      payment.append(pills);
+    }
+    else if (r.proposals.length && data?.can.allocate) {
+      const open = openIds.has(r.id);
+      const t = el('button', 'linklike', `${r.proposals.length} ${r.proposals.length === 1 ? 'suggestion' : 'suggestions'} ${open ? '▴' : '▾'}`);
+      t.type = 'button';
+      t.setAttribute('aria-expanded', String(open));
+      t.addEventListener('click', () => {
+        if (open) openIds.delete(r.id);
+        else openIds.add(r.id);
+        render();
+      });
+      payment.append(t);
+    }
+    else payment.append(el('span', 'dim', '—'));
+    const acts = el('td');
+    const box = el('div', 'acts');
+    const btn = (label: string, fn: () => void, primary = false) => {
+      const b = el('button', `button button--small${primary ? ' button--primary' : ''}`, label);
+      b.type = 'button';
+      b.addEventListener('click', fn);
+      box.append(b);
+    };
+    if (data?.can.approve && r.kind === 'request' && r.status === 'submitted') {
+      if (r.requesterId === data.me.id) box.append(el('span', 'dim', 'Someone else must approve'));
+      else {
+        btn('Approve', () => act(`/api/finance-admin/requests/${r.id}/decide`, { action: 'approve' }, 'Approved.', r.id), true);
+        btn('Reject', () => {
+          const reason = prompt('Why is it rejected?');
+          if (reason) void act(`/api/finance-admin/requests/${r.id}/decide`, { action: 'reject', reason }, 'Rejected.', r.id);
+        });
+      }
+    }
+    if (data?.can.allocate && r.reviewFlag && r.requesterId !== data.me.id) btn('Reviewed', () => act(`/api/finance-admin/requests/${r.id}/review`, {}, 'Reviewed.', r.id));
+    if (r.vouchers)
+      btn(`File${r.vouchers > 1 ? 's' : ''}`, async () => {
+        // The list does not carry voucher ids (they are fetched by the request): ask the server once.
+        const res = await staffFetch(`/api/finance-admin/requests/${r.id}/files`);
+        for (const f of res.data.files ?? []) await openVoucher(f.id);
+      });
+    if (data?.can.allocate && r.matched === 'accepted') btn('Unmatch', () => confirm('Remove the match?') && void act(`/api/finance-admin/requests/${r.id}/unmatch`, {}, 'Unmatched.', r.id));
+    acts.append(box);
+    tr.append(date, payee, purpose, cell(rupees(r.amountPaise), 'num'), method, status, payment, acts);
+    labelRow(tr);
+    const out = [tr];
+    if (data?.can.allocate && !r.matched && r.proposals.length && openIds.has(r.id)) {
+      // Opened from the record's own "suggestions" link, and drawn as part of it: a green edge down both rows.
+      tr.classList.add('has-suggest');
+      const sub = el('tr', 'suggest');
+      const td = el('td');
+      td.colSpan = 8;
+      td.append(el('div', 'suggest-head', `Possible payments for ${r.payee ?? 'this record'}, ${rupees(r.amountPaise)} (the same amount in each)`));
+      const words = matchWords(r.payee, r.purpose) as string[];
+      for (const p of r.proposals) {
+        const row = el('div', 'suggest-row');
+        const line = el('div', 'suggest-line');
+        line.append(el('span', 'suggest-kind', `${p.via ?? (p.type === 'upi' ? 'UPI' : 'Bank')}${p.alsoBank ? ' + bank statement' : ''}`));
+        const gap = p.reasons.find((x) => /apart|same day/.test(x));
+        const when = el('span', 'nowrap', `${day(p.date)}${gap && gap !== 'same day' ? ` (${gap.replace(' apart', ' off')})` : ''}`);
+        if (gap === 'same day') when.classList.add('hl');
+        line.append(when);
+        if (p.who) line.append(highlighted(p.who.slice(0, 80), words));
+        const b = el('button', 'button button--small', 'Match');
+        b.type = 'button';
+        b.setAttribute('aria-label', `Match ${r.payee ?? 'this record'} to the ${p.type === 'upi' ? 'UPI payment' : 'bank line'} of ${day(p.date)}`);
+        b.addEventListener('click', () => act(`/api/finance-admin/requests/${r.id}/match`, { type: p.type, targetId: p.targetId }, 'Matched.', r.id));
+        row.append(line, b);
+        td.append(row);
+      }
+      sub.append(td);
+      out.push(sub);
+    }
+    return out;
+  }
+
+  const sort = { key: 'date', dir: 'desc' as 'asc' | 'desc' };
+  const sortValue = (r: Rec, key: string): string | number => {
+    if (key === 'date') return (r.kind === 'log' ? r.paidOn : r.paidOn ?? r.createdAt)?.slice(0, 10) ?? '';
+    if (key === 'payee') return (r.payee ?? '').toLowerCase();
+    if (key === 'purpose') return r.purpose.toLowerCase();
+    if (key === 'amountPaise') return r.amountPaise;
+    if (key === 'method') return (r.fulfilled?.label ?? (r.mode ? MODE[r.mode] ?? r.mode : '')).toLowerCase();
+    return r.status;
+  };
+  for (const th of Array.from($('head').querySelectorAll<HTMLElement>('th[data-sort]'))) {
+    th.querySelector('button')!.addEventListener('click', () => {
+      const key = th.dataset.sort!;
+      sort.dir = sort.key === key ? (sort.dir === 'asc' ? 'desc' : 'asc') : key === 'amountPaise' || key === 'date' ? 'desc' : 'asc';
+      sort.key = key;
+      render();
+    });
+  }
+
+  function render() {
+    if (!data) return;
+    // Open on the first view that has something in it, until the person picks one.
+    if (!chosenByUser) filter.chip = CHIPS.find((c) => data!.records.some(c.test))?.id ?? 'all';
+    const chips = $('chips');
+    chips.replaceChildren(
+      ...CHIPS.map((c) => {
+        const n = data!.records.filter(c.test).length;
+        const b = el('button', 'chip', c.id === 'all' ? c.label : `${c.label} (${n})`);
+        b.type = 'button';
+        b.setAttribute('aria-pressed', String(filter.chip === c.id));
+        b.addEventListener('click', () => ((chosenByUser = true), recent.clear(), (filter.chip = c.id), render()));
+        return b;
+      }),
+    );
+    const test = CHIPS.find((c) => c.id === filter.chip)!.test;
+    const q = filter.q.trim().toLowerCase();
+    const shown = data.records.filter((r) => (test(r) || recent.has(r.id)) && (!q || [r.payee, r.purpose, r.upiRef, r.requester].join(' ').toLowerCase().includes(q)));
+    const cap = 200;
+    shown.sort((a, b) => {
+      const [x, y] = [sortValue(a, sort.key), sortValue(b, sort.key)];
+      const c = x < y ? -1 : x > y ? 1 : 0;
+      return (sort.dir === 'asc' ? c : -c) || (a.id < b.id ? -1 : 1);
+    });
+    $('records').replaceChildren(...shown.slice(0, cap).flatMap(rowsOf));
+    for (const th of Array.from($('head').querySelectorAll<HTMLElement>('th[data-sort]'))) th.setAttribute('aria-sort', th.dataset.sort === sort.key ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none');
+    $('footnote').hidden = !shown.slice(0, cap).some((r) => r.source === 'history');
+    $('empty').hidden = shown.length > 0 && shown.length <= cap;
+    if (shown.length === 0) $('empty').textContent = 'Nothing here.';
+    if (shown.length > cap) $('empty').textContent = `Showing the first ${cap} of ${shown.length}. Search to narrow them.`;
+    lock.render();
+  }
+  $<HTMLInputElement>('q').addEventListener('input', (ev) => ((filter.q = (ev.target as HTMLInputElement).value), recent.clear(), render()));
+
+  async function load() {
+    gate.hidden = true;
+    forbidden.hidden = true;
+    showLoading(statusEl);
+    try {
+      const { status, data: out } = await staffFetch('/api/finance-admin/requests');
+      if (status !== 200) throw new Error('load failed');
+      clearState(statusEl);
+      data = out;
+      intro.hidden = false;
+      intro.textContent = out.agingCount ? `${out.agingCount} approved ${out.agingCount === 1 ? 'request has' : 'requests have'} waited over two weeks for a payment to match.` : 'What each record was for shows on the UPI page and in the ledger once it is matched.';
+      render();
+      content.hidden = false;
+    } catch (err) {
+      if (fail(err)) return;
+      content.hidden = true;
+      intro.hidden = true;
+      showFailure(statusEl, { title: "Couldn't load the requests", text: "The server didn't answer. Nothing was changed. Check your connection and try again; if it keeps failing, tell a super admin.", onRetry: load });
+    }
+  }
+
+  function handleCredentialResponse(response: { credential: string }) {
+    setToken(response.credential);
+    load();
+  }
+  function renderSignInButton() {
+    if (typeof google === 'undefined') return;
+    google.accounts.id.initialize({ client_id: CLIENT_ID, callback: handleCredentialResponse });
+    google.accounts.id.renderButton(document.getElementById('g_id_signin'), { theme: (window as any).tvcGsiTheme?.() ?? 'outline', size: 'large' });
+  }
+  $('use-different-account').addEventListener('click', () => {
+    clearToken();
+    clearStepUp();
+    if (typeof google !== 'undefined') google.accounts.id.disableAutoSelect();
+    showGate();
+  });
+
+  if (getToken()) load();
+  else showGate();
+</script>
+<script is:inline src="https://accounts.google.com/gsi/client"></script>
+
+<style is:global>
+  .finance-appr .filters {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 14px 0;
+  }
+
+  .finance-appr .segmented {
+    flex-wrap: wrap;
+  }
+</style>

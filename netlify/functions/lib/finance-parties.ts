@@ -197,6 +197,36 @@ export async function createParty(req: Request): Promise<Response> {
   }
 }
 
+// A new vendor added by whoever raises payment requests (the farm manager, who has no `finance` access). Always a vendor, never
+// linked to a household, and its account details start unverified: an approver verifies them before anything is paid.
+export async function addVendor(req: Request): Promise<Response> {
+  const own = await requireStaff(req, 'finance-requests', 'add-vendor');
+  const auth = own.ok ? own : await requireStaff(req, 'finance', 'request');
+  if (!auth.ok) return fail(auth.error, auth.status);
+  const body = await readBody(req);
+  if (!body) return fail('Send the vendor as JSON.');
+  const checked = validateParty({ name: body.name, kind: 'vendor' });
+  if (checked.error || !checked.party) return fail(checked.error ?? 'Enter the vendor.');
+  if (body.payee !== undefined && body.payee !== null) {
+    const p = validatePayeeDetails(body.payee);
+    if (p.error) return fail(p.error);
+  }
+  try {
+    const entity = await entityId();
+    const same = await rows(`/fin_parties?entity_id=eq.${entity}&active=eq.true&name=ilike.${encodeURIComponent(checked.party.name.replace(/[*%,()]/g, ' ').trim())}&select=id&limit=1`);
+    if (same[0]) return jsonResponse({ error: 'There is already a payee with that name. Choose them from the list.', existingId: same[0].id }, 409);
+    const res = await rest('/fin_parties', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ entity_id: entity, ...checked.party, created_by: auth.staff.id }) });
+    const [party] = (await res.json()) as Json[];
+    let added: Awaited<ReturnType<typeof addAccount>> | null = null;
+    if (body.payee) added = await addAccount(party.id, entity, auth.staff.id, body.payee, []);
+    await audit(auth.staff.id, entity, 'finance.party_created', party.id, { kind: 'vendor', linkedHousehold: false, withPayee: Boolean(body.payee), viaRequests: true });
+    if (added && 'created' in added && added.created) await audit(auth.staff.id, entity, 'finance.payee_added', added.created.id, { partyId: party.id, method: added.method });
+    return jsonResponse({ id: party.id, name: party.name, account: body.payee ? 'unverified' : 'none' }, 201);
+  } catch (err) {
+    return serverError(err, 'add vendor');
+  }
+}
+
 // -------------------------------------------------------------- update
 export async function updateParty(req: Request, id: string): Promise<Response> {
   const auth = await requireStaff(req, 'finance', 'allocate');

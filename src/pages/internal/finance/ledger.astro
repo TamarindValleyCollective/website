@@ -130,7 +130,7 @@ import SignInGate from '../../../components/SignInGate.astro';
 
   type Suggestion = { categoryId: string | null; partyId: string | null; nature: string; confidence: string; newPartyName: string | null };
   type Line = {
-    id: string; date: string; narration: string; direction: 'debit' | 'credit'; amountPaise: number; account: string; remark: string | null; counterparty: string | null; origin?: string; sources?: string[]; reversal?: { role: 'original' | 'reversal'; otherId: string; otherDate: string | null } | null; noteKey?: string; note?: string | null; upiRef?: string | null;
+    id: string; date: string; narration: string; direction: 'debit' | 'credit'; amountPaise: number; account: string; remark: string | null; counterparty: string | null; origin?: string; sources?: string[]; reversal?: { role: 'original' | 'reversal'; otherId: string; otherDate: string | null } | null; noteKey?: string; note?: string | null; purpose?: string | null; upiRef?: string | null;
     allocatedPaise: number; state: 'unallocated' | 'partly_allocated' | 'allocated'; review: boolean; missingParty: boolean; suggestion: Suggestion | null;
     allocation: { categoryId: string; partyId: string | null; nature: string; count: number; householdLabel: string | null; maintenanceYear: string | null } | null;
     hay?: string; // lower-case text the search box looks in, worked out once
@@ -500,6 +500,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     origin?: string;
     upiRef?: string | null;
     noteKey?: string | null;
+    purpose?: string | null;
     note?: string | null;
     state: string;
     allocations: Alloc[];
@@ -760,10 +761,10 @@ import SignInGate from '../../../components/SignInGate.astro';
   // The note on a payment, beside what the bank said (which never changes). Starts as the app's own wording when there is one
   // (a Paytm remark) and no note yet; saving stores it as the note. Shared with the UPI table: it is the same payment.
   function noteEditor(d: Detail): HTMLElement {
-    const given = d.upi?.remark ?? '';
+    const given = d.purpose ?? d.upi?.remark ?? '';
     const box = h('input', { attrs: { type: 'text', maxlength: '300', 'aria-label': 'Note on this payment', placeholder: 'What was this payment for?' } }) as HTMLInputElement;
     box.value = d.note ?? given;
-    const msg = h('span', { class: 'hint', text: d.note ? '' : given ? 'From the payment app. Edit it to keep your own wording.' : '' });
+    const msg = h('span', { class: 'hint', text: d.note ? '' : given ? (d.purpose ? 'From the payment request or log. Edit it to keep your own wording.' : 'From the payment app. Edit it to keep your own wording.') : '' });
     const save = button('Save note', async () => {
       const text = box.value.trim() === given && !d.note ? '' : box.value;
       const { status, data: out } = await call('/api/finance-admin/payment-note', 'POST', { key: d.noteKey, note: text });
@@ -1158,7 +1159,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     return accountCount > 1;
   };
   const originText = (l: Line) => (l.origin ? originLabel(l.origin) : '');
-  const hayOf = (l: Line) => [l.narration, l.note, l.origin ? originLabel(l.origin) : '', l.account, l.counterparty, l.remark, l.effective.category, l.effective.party, l.effective.nature, l.allocation?.householdLabel, residentsOf(l.allocation?.householdLabel), l.allocation?.maintenanceYear].join(' ').toLowerCase();
+  const hayOf = (l: Line) => [l.narration, l.note, l.origin ? originLabel(l.origin) : '', l.account, l.counterparty, l.remark, l.purpose, l.effective.category, l.effective.party, l.effective.nature, l.allocation?.householdLabel, residentsOf(l.allocation?.householdLabel), l.allocation?.maintenanceYear].join(' ').toLowerCase();
   function applyView(toTop = false) {
     if (!data) return;
     const conds: Record<string, any> = {};
@@ -1726,9 +1727,9 @@ import SignInGate from '../../../components/SignInGate.astro';
     const badgeFor = (key: string): HTMLElement => {
       const b = data?.badges?.[key];
       const label = b?.label ?? key;
-      const inner = b?.logoUrl ? h('img', { attrs: { src: b.logoUrl, alt: label, height: '20' } }) : document.createTextNode(b?.short ?? key);
+      const inner = b?.logoUrl ? h('img', { attrs: { src: b.logoUrl, alt: label, height: '17', width: '17' } }) : document.createTextNode(b?.short ?? key);
       const linked = l.upiRef && (key === 'bhim' || key === 'paytm');
-      const node = h(linked ? 'a' : 'span', { class: `badge badge--${b?.kind ?? 'bank'}`, attrs: { title: linked ? `${label}: open this payment in the UPI table` : label, ...(linked ? { href: `/internal/finance/upi/?ref=${l.upiRef}` } : {}) } }, inner);
+      const node = h(linked ? 'a' : 'span', { class: `badge badge--${b?.kind ?? 'bank'} ${b?.logoUrl ? 'badge--icon' : 'badge--text'}`, attrs: { title: linked ? `${label}: open this payment in the UPI table` : label, ...(linked ? { href: `/internal/finance/upi/?ref=${l.upiRef}` } : {}) } }, inner);
       if (linked) node.addEventListener('click', (ev: Event) => ev.stopPropagation());
       return node;
     };
@@ -1752,7 +1753,7 @@ import SignInGate from '../../../components/SignInGate.astro';
               return b;
             })()
           : null,
-        l.note ? h('span', { class: 'detail detail--note', text: `Note: ${l.note}`, attrs: { title: 'A note added here or on the UPI page' } }) : null,
+        l.note ? h('span', { class: 'detail detail--note', text: `Note: ${l.note}`, attrs: { title: 'A note added here or on the UPI page' } }) : l.purpose ? h('span', { class: 'detail detail--note detail--given', text: `For: ${l.purpose}`, attrs: { title: 'From the payment request or logged spend. Write a note to replace it.' } }) : null,
         l.origin ? h('span', { class: 'detail detail--origin', text: originLabel(l.origin), attrs: { title: ORIGINS[l.origin as keyof typeof ORIGINS]?.hint ?? '' } }) : null,
         upiSays ? h('span', { class: 'detail detail--upi', text: `${l.origin ? originLabel(l.origin) : 'UPI app'}: ${upiSays}`, attrs: { title: 'From the UPI app report' } }) : l.origin === 'upi_unknown' ? h('span', { class: 'detail detail--dim', text: 'No BHIM or Paytm record for this payment' }) : null,
       ].filter(Boolean) as Node[],
@@ -3102,10 +3103,52 @@ import SignInGate from '../../../components/SignInGate.astro';
     color: var(--tvc-ink-soft);
   }
 
+  /* The box is drawn small whatever the screen; the finger-sized target on touch screens is an invisible extension of it, so the
+     box itself never grows. */
   .ledger .lrow input[type='checkbox'],
   .ledger .ghead input[type='checkbox'] {
-    width: 24px;
-    height: 24px;
+    appearance: none;
+    position: relative;
+    flex: none;
+    width: 20px;
+    height: 20px;
+    margin: 0;
+    border: 2px solid var(--tvc-line-strong);
+    border-radius: 5px;
+    background: var(--tvc-white);
+    cursor: pointer;
+  }
+
+  .ledger .lrow input[type='checkbox']::before,
+  .ledger .ghead input[type='checkbox']::before {
+    content: '';
+    position: absolute;
+    inset: -12px;
+  }
+
+  .ledger .lrow input[type='checkbox']:checked,
+  .ledger .ghead input[type='checkbox']:checked {
+    border-color: var(--tvc-green);
+    background: var(--tvc-green);
+  }
+
+  .ledger .lrow input[type='checkbox']:checked::after,
+  .ledger .ghead input[type='checkbox']:checked::after {
+    content: '';
+    position: absolute;
+    left: 5px;
+    top: 1px;
+    width: 5px;
+    height: 10px;
+    border: solid var(--tvc-white);
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+  }
+
+  .ledger .lrow input[type='checkbox']:focus-visible,
+  .ledger .ghead input[type='checkbox']:focus-visible {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 2px;
   }
 
   main .ledger.section .select-all-btn {
@@ -3179,6 +3222,11 @@ import SignInGate from '../../../components/SignInGate.astro';
     color: var(--tvc-ink);
   }
 
+  /* The wording a payment request or logged spend gave, until a person writes a note (as a suggestion shows). */
+  .ledger .detail--given {
+    font-style: italic;
+  }
+
   .ledger .detail--reversal {
     all: unset;
     cursor: pointer;
@@ -3199,13 +3247,12 @@ import SignInGate from '../../../components/SignInGate.astro';
     gap: 4px;
   }
 
+  /* A source badge is a small icon in a circle, as in a payment app's receipt: no border, the name on hover. A badge with no logo yet
+     is its short name in quiet text. */
   .ledger .badge {
     display: inline-flex;
     align-items: center;
-    padding: 1px 6px;
-    border: 1px solid var(--tvc-line-strong);
-    border-radius: var(--radius-sm);
-    background: var(--tvc-white);
+    justify-content: center;
     color: var(--tvc-ink);
     font-size: var(--text-xs);
     font-weight: 600;
@@ -3214,14 +3261,33 @@ import SignInGate from '../../../components/SignInGate.astro';
     white-space: nowrap;
   }
 
+  .ledger .badge--icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--tvc-white);
+    box-shadow: 0 0 0 1px var(--tvc-line);
+  }
+
+  .ledger .badge--text {
+    padding: 0 4px;
+    color: var(--tvc-ink-soft);
+  }
+
   .ledger a.badge:hover {
     text-decoration: underline;
   }
 
+  .ledger .badge--icon:hover,
+  .ledger .badge--icon:focus-visible {
+    box-shadow: 0 0 0 2px var(--tvc-green);
+  }
+
   .ledger .badge img {
     display: block;
-    height: 20px;
-    width: auto;
+    width: 17px;
+    height: 17px;
+    object-fit: contain;
   }
 
   .ledger .origin-account {
@@ -3697,8 +3763,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     }
 
 
-    .ledger .tick,
-    .ledger .lrow input[type='checkbox'] {
+    .ledger .tick {
       min-width: 36px;
       min-height: 36px;
     }
@@ -3722,8 +3787,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       bottom: calc(var(--tabbar-h, 64px) + env(safe-area-inset-bottom));
     }
 
-    .ledger .tick,
-    .ledger .lrow input[type='checkbox'] {
+    .ledger .tick {
       min-width: 44px;
       min-height: 44px;
     }
@@ -3731,8 +3795,7 @@ import SignInGate from '../../../components/SignInGate.astro';
 
   /* Touch screens of any width get finger-sized targets (the shell's own small-button rule is beaten on purpose: main .button--small). */
   @media (pointer: coarse) {
-    .ledger .tick,
-    .ledger .lrow input[type='checkbox'] {
+    .ledger .tick {
       min-width: 44px;
       min-height: 44px;
     }

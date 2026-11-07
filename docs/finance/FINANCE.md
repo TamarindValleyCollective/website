@@ -17,7 +17,8 @@ model are in [DESIGN.md](DESIGN.md); how to build it is in [README.md](README.md
 | 05 Ledger & review | **Merged (PR #529).** Posting rules, rules engine, ledger and rules screens, period close. Migration `0083` **applied to TVC ERP on 2026-11-05** (recorded as `finance_ledger`). |
 | 06 History load | **Loaded on 2026-11-05** (PR #530, migration `0084` applied): 1,031 allocations on 783 bank lines. Still open: the 2023-24 tracker tab, party on the history rows with none (the "No party" chip lists them), project details for the Farm Project placeholders (issue #531). |
 | 05/06 follow-up: the new ledger | **Draft PR #532.** The ledger page is rebuilt (TanStack Table and Virtual; every line fetched once, searched and sorted in the browser; cards on phones; saved drafts; undo; a line sheet that can set a maintenance unit and year) and replaces the first version at `/internal/finance/ledger/`; faster list, Paytm line, "No party" chip and flags. Critique 22 → 26 → 30 → 27 / 40 over four rounds (reviewers vary by about 3). No migration. Not yet tried on the real ledger. |
-| 02, 07-13 | Not started |
+| 08 Payment requests & bills | First slice built on branch `finance-08-requests` (draft PR). Migration `0092` **applied 2026-11-07**. See "Payment requests and spend logs" below. |
+| 02, 07, 09-13 | Not started |
 
 ## Access
 
@@ -280,11 +281,11 @@ types the importer knows; each batch stores its `source`: `axis_statement`, `pay
 - **Source badges** (migration `0090`, **applied 2026-11-07**). The Origin column shows small badges for the records that vouch for a line:
   its bank (always), then the BHIM or Paytm app when a UPI row is joined, Paypro or Razorpay when the narration says so
   (`sourcesOf` in `finance-origin.mjs`). The badges live in a table, `fin_source_badges` (key, label, short label, kind, `logo_url`,
-  sort, active): a badge shows its logo once `logo_url` is set (a path on this site or a full URL), else its short name as a text chip, so a
+  sort, active): a badge shows its logo once `logo_url` is set (a path on this site or a full URL) as a small icon in a circle with no border (as a payment app's receipt does; the name is on hover), else its short name as quiet text, so a
   logo is swapped, or a bank added, by editing a row, with no code change. There is no admin screen for the table yet: change it in
   the database. Each bank account carries its own bank badge (`fin_bank_accounts.badge_key`, chosen when the account is added on the
   Import page), so Bank 2 shows its own logo. BHIM and Paytm badges link to that payment in the UPI table.
-  Logos live in `public/finance-badges/` (Axis, Paytm as SVG; BHIM and Razorpay as PNG; the BHIM one is the icons8 "BHIM UPI" icon (used on an internal admin screen, so no attribution is shown); the Razorpay one is from Razorpay's logo pack) and are pointed at by migration `0091` (applied 2026-11-07, before the PR merged, as the "Migrations applied" check requires; until the deploy carries the files a badge shows its label text instead of the image). Paypro and the
+  Logos live in `public/finance-badges/` (Axis, Paytm as SVG; BHIM and Razorpay as PNG; the BHIM one is the BHIM arrows mark that Sharath supplied on 2026-11-07 (resized to 128px high, transparent; the BHIM name and mark belong to NPCI, and it is used here only to label a payment source on an internal admin screen); the Razorpay one is from Razorpay's logo pack) and are pointed at by migration `0091` (applied 2026-11-07, before the PR merged, as the "Migrations applied" check requires; until the deploy carries the files a badge shows its label text instead of the image). Paypro and the
   generic bank badge have no logo and stay text. Swapping one: add the file and update the row's `logo_url`.
 - **Cross-references: what exists and what each still needs.** *Ledger → UPI* and *UPI → ledger* are built (above). *Paypro:* there is
   no Paypro record to link to (the bank only shows a batch line); it needs the Paypro batch file or the payroll/payment-request
@@ -629,3 +630,54 @@ pure rules in `scripts/lib/finance-history.mjs` (tested on invented rows). Count
 - **Not built:** the reconciliation of module totals against the sheet's own summary tabs by month and category; rules are not seeded (the hidden
   "Lookups" tab holds only payment-mode keywords, and the suggestion engine learns from the loaded history instead); the 2023-24 tracker tab and the
   older years (the ledger holds 476 bank lines before April 2024; the same script takes `--tab` and `--since`).
+
+## Payment requests and spend logs (session 08, first slice, migration `0092_finance_payment_requests.sql`, **applied 2026-11-07**)
+
+One table, `fin_payment_requests`, holds two kinds of record with the same fields (rules in `scripts/lib/finance-requests.mjs`, server in
+`lib/finance-requests.ts`, routes in `finance-admin.mts`):
+
+- a **request**, raised before paying: payee (a saved party), amount, mode (NEFT, UPI, IMPS, RTGS), purpose, needed-by, optional "paid in cash,
+  reimburse me" (which needs a bill before it can be approved). Flow: `submitted` -> `approved` / `rejected` -> `paid` (set when a payment is matched) or `cancelled`.
+- a **log**, a spend already made by UPI (a UPI Circle delegate or a direct payment) recorded afterwards by whoever paid: payee (saved party or a
+  name as typed), amount, date, direct or delegate, optional 12-digit UPI reference, purpose, a photo of the payment. It needs no approval (stored as `paid`).
+  A log (or request) whose payee is the requester party (Settings, `requester_party_id`) is flagged for review; another person clears it.
+- `fin_vouchers` (from 0083) gains `request_id` and `kind` (`bill` | `payment_screenshot`). Files go to the private R2 prefix `finance/vouchers/`
+  (JPEG, PNG, WebP or PDF, checked by their first bytes, 4 MB each) and are read back only through `GET /vouchers/:id` (the person who raised the record, or `finance` view).
+
+**Who may do what.** Raising, logging, attaching a file and adding a vendor: `finance-requests` (the farm manager) **or** `finance` `request`;
+holding `finance-requests` opens nothing else (tested, including that it is not treated as a `finance` role when checking who may attach a file).
+The list of every record needs `finance` view; matching and clearing a flag need `allocate`; approving needs `approve` **and** the MFA step-up;
+whoever raised a request can never approve or reject it (`decide`, `makerIsNotChecker`). Every change writes `fin_audit_log` first (ids and field names only).
+Submitting a request emails `core-team@` (best effort; WhatsApp not used). A new vendor added by a requester is an unverified party; an approver verifies it on Parties.
+
+**Pulled, not copied.** A record's purpose is shown on the UPI page (the Note column) and in the ledger (under the narration, italic "For: ..."; the
+line sheet's note box starts with it) as the default wording until a person writes a payment note, exactly like a Paytm remark; the payment note
+(`fin_payment_notes`) stays the manual override. `loadPurposes()` looks a payment up by UPI reference, UPI row or bank line.
+
+**How a record is matched.** Exactly, by the 12-digit reference (a log typed with it, or loaded from the old sheet), joining the UPI row and the bank
+debit that carry it, only when the amount agrees (a reference with a different amount is flagged, never linked; a reversal credit is not the
+payment). No reference: `proposeMatches` suggests a UPI row (within 3 days) and/or bank debit (a UPI log within 3 days, a NEFT request up to 21 days
+after approval) of the same amount, better when the payee name is in the row, and when a word of the record's purpose (four letters or more, not a common one) is in the UPI remark or the narration (`description matches`); the Approvals page highlights those words, the amount and the day; a person accepts one (`POST /requests/:id/match`, which re-reads the
+statement row and re-checks amount and direction; accepting marks a request paid on the statement date). Never linked on a guess. **One link is enough** (`deriveLinks`): a UPI row is joined to its bank line, so a record linked on either side is linked on both; the other side is derived (never stored twice), a payment already taken on either side is not offered or accepted for another record, and the Approvals page's **Match** column shows a pill for each place the payment is tied (`UPI`, `Bank`), each a link to that payment on the UPI page or that line in the ledger. An approved request
+unmatched for 14 days is counted on the Approvals page.
+
+**How it was paid.** A request may be paid another way than asked (asked for NEFT, paid by UPI), so every record is offered both UPI rows and bank lines
+to match, and the Approvals page has a **Method** column: the method of the payment it is tied to (`fulfilledVia`), else what was asked in grey (the
+tooltip says so), with a small orange "asked for NEFT" when they differ. A UPI row names its app ("UPI, Paytm"); otherwise the bank's narration says,
+read off the real statements from its first two segments: `NEFT/...`, `IMPS/...`, `UPI/...`, and internet banking as `INB/NEFT/...` (most NEFT payments) or `INB/IFT/...` (an internal transfer); card lines are "Card"; the
+rest (GST, charges) are "Bank transfer". The old sheet never recorded a method, so records loaded from it have none (`mode` is null; migration `0093`, **applied 2026-11-07**,
+cleared the NEFT placeholder the first load wrote from the 164 requests). Old-sheet rows carry a small `*` beside the date and a footnote under the table.
+
+**Pages.** `/internal/finance-requests/` (the requester's, built for a phone: ask for a payment, record a spend, add a vendor, attach a photo, see their
+own records, cancel) and `/internal/finance/requests/` (nav "Approvals": to approve, to match, to review, all; approve behind the unlock, reject with a reason, accept a suggested match, open the files).
+
+**History load (operator script, run once).** `scripts/load-fin-requests-history.mjs --sheet <id> [--apply]` (dry run by default; counts only are printed):
+the old sheet's "Fund Transfer Request" tab becomes already-paid requests and its "UPI Circle Transactions" tab becomes logs (`source = 'history'`, no requester).
+Rules: failure/expired rows moved no money and are skipped; a row naming a bank account that is not a registered one is skipped; a row naming our bank and CR is money in
+and is skipped; a row naming no bank is a delegated payment out; references are padded to 12 digits; rows without a purpose are skipped. A row links to a saved
+party by the account number's fingerprint, then by an exact name that is unique; otherwise the typed name is kept. Account numbers are fingerprinted, never stored or printed here.
+Running it again adds nothing. Checked against the real sheet read-only (parse only, no write): the columns and formats are as the parser expects.
+
+**Not built yet (next):** the bill scanner (edge detection, crop, multi-page) and the vision reading of vendor, date, amount and UPI reference off a bill or screenshot (the files are
+attached as plain photos today, and the reference is typed); approver-queue polish; per-delegate spend limits (who paid is recorded: `requester_id` and `paid_via`); a vendor bulk file;
+payment links from the ledger's Paypro/bank lines to a request. **Not verified:** the pages in a browser on a real phone, the upload to R2, the approval email, and the loader's `--apply`.

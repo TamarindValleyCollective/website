@@ -24,3 +24,31 @@ export async function deleteFinanceImport(key: string): Promise<void> {
   const res = await client.fetch(urlFor(base, key), { method: 'DELETE' });
   if (!res.ok && res.status !== 404) throw new Error(`R2 delete failed: ${res.status}`);
 }
+
+// Vouchers (a bill, or a screenshot of a payment attached to a payment request): finance/vouchers/<voucher uuid>.<ext>, the same
+// private bucket. They are only ever read back through an authenticated function, never by a link.
+const VOUCHER_KEY = /^finance\/vouchers\/[0-9a-f-]{36}\.(jpg|png|webp|pdf)$/;
+const voucherUrl = (base: string, key: string) => {
+  if (!VOUCHER_KEY.test(key)) throw new Error('Invalid storage key');
+  return `${base}/${key}`;
+};
+
+export async function putFinanceVoucher(key: string, bytes: Uint8Array, mime: string): Promise<void> {
+  const { client, base } = r2Config();
+  const res = await client.fetch(voucherUrl(base, key), { method: 'PUT', headers: { 'content-type': mime }, body: bytes as BodyInit });
+  if (!res.ok) throw new Error(`R2 put failed: ${res.status}`);
+}
+
+export async function getFinanceVoucher(key: string): Promise<Uint8Array | null> {
+  const { client, base } = r2Config();
+  const res = await client.fetch(voucherUrl(base, key));
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`R2 get failed: ${res.status}`);
+  return new Uint8Array(await res.arrayBuffer());
+}
+
+export async function deleteFinanceVoucher(key: string): Promise<void> {
+  const { client, base } = r2Config();
+  const res = await client.fetch(voucherUrl(base, key), { method: 'DELETE' });
+  if (!res.ok && res.status !== 404) throw new Error(`R2 delete failed: ${res.status}`);
+}
