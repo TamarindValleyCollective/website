@@ -281,7 +281,7 @@ types the importer knows; each batch stores its `source`: `axis_statement`, `pay
 - **Source badges** (migration `0090`, **applied 2026-11-07**). The Origin column shows small badges for the records that vouch for a line:
   its bank (always), then the BHIM or Paytm app when a UPI row is joined, Paypro or Razorpay when the narration says so
   (`sourcesOf` in `finance-origin.mjs`). The badges live in a table, `fin_source_badges` (key, label, short label, kind, `logo_url`,
-  sort, active): a badge shows its logo once `logo_url` is set (a path on this site or a full URL), else its short name as a text chip, so a
+  sort, active): a badge shows its logo once `logo_url` is set (a path on this site or a full URL) as a small icon in a circle with no border (as a payment app's receipt does; the name is on hover), else its short name as quiet text, so a
   logo is swapped, or a bank added, by editing a row, with no code change. There is no admin screen for the table yet: change it in
   the database. Each bank account carries its own bank badge (`fin_bank_accounts.badge_key`, chosen when the account is added on the
   Import page), so Bank 2 shows its own logo. BHIM and Paytm badges link to that payment in the UPI table.
