@@ -133,12 +133,20 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
 
   const lock = initStepUpLock({ getMe: () => data?.me ?? null, onChange: () => {} });
 
-  async function act(path: string, body: unknown, done: string) {
+  // A record someone has just acted on stays in the list, highlighted, even though it no longer fits the tab it was in (a matched
+  // record leaves "To match"): it would otherwise vanish with no sign it worked. It is let go when the tab or the search changes.
+  const recent = new Set<string>();
+
+  async function act(path: string, body: unknown, done: string, id?: string) {
     try {
       const { status, data: out } = await staffFetch(path, { method: 'POST', body });
       if (status === 403 && out?.code === 'STEP_UP_REQUIRED') return void (showToast(data?.me?.ready ? 'Unlock first.' : 'Set up two second factors first (see Security).'), lock.open());
       if (status >= 400) return void showToast(out?.error ?? 'Could not do that.');
       showToast(done);
+      if (id) {
+        recent.add(id);
+        chosenByUser = true; // stay on this tab rather than jumping to another
+      }
       await load();
     } catch (err) {
       if (!fail(err)) showToast('Could not do that.');
@@ -173,7 +181,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
   const openIds = new Set<string>(); // records whose suggested payments are showing
 
   function rowsOf(r: Rec): HTMLElement[] {
-    const tr = el('tr');
+    const tr = el('tr', recent.has(r.id) ? 'just-done' : undefined);
     const st = STATUS[r.status] ?? { text: r.status, kind: 'dim' };
     const when = r.kind === 'log' ? r.paidOn : r.paidOn ?? r.createdAt;
     const date = cell(day(when), 'nowrap');
@@ -232,21 +240,21 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
     if (data?.can.approve && r.kind === 'request' && r.status === 'submitted') {
       if (r.requesterId === data.me.id) box.append(el('span', 'dim', 'Someone else must approve'));
       else {
-        btn('Approve', () => act(`/api/finance-admin/requests/${r.id}/decide`, { action: 'approve' }, 'Approved.'), true);
+        btn('Approve', () => act(`/api/finance-admin/requests/${r.id}/decide`, { action: 'approve' }, 'Approved.', r.id), true);
         btn('Reject', () => {
           const reason = prompt('Why is it rejected?');
-          if (reason) void act(`/api/finance-admin/requests/${r.id}/decide`, { action: 'reject', reason }, 'Rejected.');
+          if (reason) void act(`/api/finance-admin/requests/${r.id}/decide`, { action: 'reject', reason }, 'Rejected.', r.id);
         });
       }
     }
-    if (data?.can.allocate && r.reviewFlag && r.requesterId !== data.me.id) btn('Reviewed', () => act(`/api/finance-admin/requests/${r.id}/review`, {}, 'Reviewed.'));
+    if (data?.can.allocate && r.reviewFlag && r.requesterId !== data.me.id) btn('Reviewed', () => act(`/api/finance-admin/requests/${r.id}/review`, {}, 'Reviewed.', r.id));
     if (r.vouchers)
       btn(`File${r.vouchers > 1 ? 's' : ''}`, async () => {
         // The list does not carry voucher ids (they are fetched by the request): ask the server once.
         const res = await staffFetch(`/api/finance-admin/requests/${r.id}/files`);
         for (const f of res.data.files ?? []) await openVoucher(f.id);
       });
-    if (data?.can.allocate && r.matched === 'accepted') btn('Unmatch', () => confirm('Remove the match?') && void act(`/api/finance-admin/requests/${r.id}/unmatch`, {}, 'Unmatched.'));
+    if (data?.can.allocate && r.matched === 'accepted') btn('Unmatch', () => confirm('Remove the match?') && void act(`/api/finance-admin/requests/${r.id}/unmatch`, {}, 'Unmatched.', r.id));
     acts.append(box);
     tr.append(date, payee, purpose, cell(rupees(r.amountPaise), 'num'), method, status, payment, acts);
     labelRow(tr);
@@ -271,7 +279,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
         const b = el('button', 'button button--small', 'Match');
         b.type = 'button';
         b.setAttribute('aria-label', `Match ${r.payee ?? 'this record'} to the ${p.type === 'upi' ? 'UPI payment' : 'bank line'} of ${day(p.date)}`);
-        b.addEventListener('click', () => act(`/api/finance-admin/requests/${r.id}/match`, { type: p.type, targetId: p.targetId }, 'Matched.'));
+        b.addEventListener('click', () => act(`/api/finance-admin/requests/${r.id}/match`, { type: p.type, targetId: p.targetId }, 'Matched.', r.id));
         row.append(line, b);
         td.append(row);
       }
@@ -310,13 +318,13 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
         const b = el('button', 'chip', c.id === 'all' ? c.label : `${c.label} (${n})`);
         b.type = 'button';
         b.setAttribute('aria-pressed', String(filter.chip === c.id));
-        b.addEventListener('click', () => ((chosenByUser = true), (filter.chip = c.id), render()));
+        b.addEventListener('click', () => ((chosenByUser = true), recent.clear(), (filter.chip = c.id), render()));
         return b;
       }),
     );
     const test = CHIPS.find((c) => c.id === filter.chip)!.test;
     const q = filter.q.trim().toLowerCase();
-    const shown = data.records.filter((r) => test(r) && (!q || [r.payee, r.purpose, r.upiRef, r.requester].join(' ').toLowerCase().includes(q)));
+    const shown = data.records.filter((r) => (test(r) || recent.has(r.id)) && (!q || [r.payee, r.purpose, r.upiRef, r.requester].join(' ').toLowerCase().includes(q)));
     const cap = 200;
     shown.sort((a, b) => {
       const [x, y] = [sortValue(a, sort.key), sortValue(b, sort.key)];
@@ -331,7 +339,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
     if (shown.length > cap) $('empty').textContent = `Showing the first ${cap} of ${shown.length}. Search to narrow them.`;
     lock.render();
   }
-  $<HTMLInputElement>('q').addEventListener('input', (ev) => ((filter.q = (ev.target as HTMLInputElement).value), render()));
+  $<HTMLInputElement>('q').addEventListener('input', (ev) => ((filter.q = (ev.target as HTMLInputElement).value), recent.clear(), render()));
 
   async function load() {
     gate.hidden = true;

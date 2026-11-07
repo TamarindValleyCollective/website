@@ -77,6 +77,10 @@
   color: var(--tvc-ink-soft);
 }
 
+.rq-table tr.just-done td {
+  background: var(--tvc-green-tint);
+}
+
 .rq-table .star {
   margin-left: 2px;
   color: var(--tvc-ink-soft);
