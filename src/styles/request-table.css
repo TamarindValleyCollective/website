@@ -98,6 +98,26 @@
 
 .rq-table .suggest td {
   background: var(--tvc-cream);
+  padding: 10px 12px 14px;
+  box-shadow: inset 4px 0 0 var(--tvc-green);
+}
+
+/* The record a suggestion belongs to joins it: no rule between them, the same green edge. */
+.rq-table tr.has-suggest td {
+  border-bottom: 0;
+}
+
+.rq-table tr.has-suggest td:first-child {
+  box-shadow: inset 4px 0 0 var(--tvc-green);
+}
+
+.rq-table .suggest-head {
+  margin-bottom: 8px;
+  color: var(--tvc-ink);
+}
+
+.rq-table .suggest-for {
+  color: var(--tvc-green-dark);
 }
 
 .rq-table .suggest-row {
@@ -106,6 +126,42 @@
   align-items: center;
   gap: 12px;
   margin-top: 6px;
+  padding: 8px 10px;
+  background: var(--tvc-white);
+  border-radius: var(--radius-sm, 6px);
+  box-shadow: 0 0 0 1px var(--tvc-line) inset;
+}
+
+.rq-table .suggest-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  align-items: baseline;
+  color: var(--tvc-ink);
+}
+
+.rq-table .suggest-kind {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--tvc-ink-soft);
+}
+
+.rq-table .suggest-why {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+/* What the suggestion has in common with the record: the amount, the day, the words of the payee's name. */
+.rq-table .hl {
+  padding: 0 3px;
+  border-radius: 3px;
+  background: var(--tvc-green-tint);
+  color: var(--tvc-green-dark);
+  font-weight: 600;
 }
 
 .rq-table .pill {
@@ -202,5 +258,13 @@
   .rq-table .suggest-row {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .rq-table tr.has-suggest {
+    border-bottom: 0;
+  }
+
+  .rq-table tr.has-suggest td:first-child {
+    box-shadow: none;
   }
 }

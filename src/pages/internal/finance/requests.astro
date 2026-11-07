@@ -158,6 +158,16 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
     Array.from(tr.children).forEach((td, i) => ((td as HTMLElement).dataset.label = heads[i] ?? ''));
   };
 
+  // The words of a payee's name (three letters or more), to light up where they appear in a bank narration.
+  const nameWords = (name: string | null) => [...new Set((name ?? '').toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 3))];
+  function highlighted(text: string, words: string[]): HTMLElement {
+    const out = el('span', 'suggest-text');
+    if (!words.length) return (out.textContent = text), out;
+    const re = new RegExp(`(${words.join('|')})`, 'ig'); // the words are letters and digits only
+    text.split(re).forEach((part, i) => out.append(i % 2 ? el('mark', 'hl', part) : document.createTextNode(part)));
+    return out;
+  }
+
   function rowsOf(r: Rec): HTMLElement[] {
     const tr = el('tr');
     const st = STATUS[r.status] ?? { text: r.status, kind: 'dim' };
@@ -210,17 +220,36 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
     labelRow(tr);
     const out = [tr];
     if (data?.can.allocate && !r.matched && r.proposals.length) {
+      // The suggestion is drawn as part of the record above it: a green edge down both rows, and it opens by naming that record.
+      tr.classList.add('has-suggest');
       const sub = el('tr', 'suggest');
       const td = el('td');
       td.colSpan = 7;
-      td.append(el('span', 'dim', 'Could this be the payment?'));
+      const head = el('div', 'suggest-head');
+      head.append(el('strong', undefined, 'Is this the payment for '), el('strong', 'suggest-for', `${r.payee ?? 'this record'}, ${rupees(r.amountPaise)}`), el('strong', undefined, '?'));
+      td.append(head);
+      const words = nameWords(r.payee);
       for (const p of r.proposals) {
         const row = el('div', 'suggest-row');
-        row.append(el('span', undefined, `${p.type === 'upi' ? 'UPI' : 'Bank'} ${day(p.date)}${p.who ? ` · ${p.who.slice(0, 70)}` : ''} (${p.reasons.join(', ')})`));
-        const b = el('button', 'button button--small', 'Yes, match');
+        const info = el('div', 'suggest-info');
+        const line = el('div', 'suggest-line');
+        line.append(el('span', 'suggest-kind', p.type === 'upi' ? 'UPI payment' : 'Bank line'));
+        const when = el('span', undefined, day(p.date));
+        if (p.reasons.includes('same day')) when.classList.add('hl');
+        line.append(when);
+        if (p.who) line.append(highlighted(p.who.slice(0, 80), words));
+        const amount = el('span', 'hl', rupees(r.amountPaise));
+        amount.title = 'Same amount';
+        line.append(amount);
+        info.append(line);
+        const why = el('div', 'suggest-why');
+        for (const reason of p.reasons) why.append(el('span', 'pill pill--ok', reason));
+        info.append(why);
+        const b = el('button', 'button button--small', 'Match to this');
         b.type = 'button';
+        b.setAttribute('aria-label', `Match ${r.payee ?? 'this record'} to the ${p.type === 'upi' ? 'UPI payment' : 'bank line'} of ${day(p.date)}`);
         b.addEventListener('click', () => act(`/api/finance-admin/requests/${r.id}/match`, { type: p.type, targetId: p.targetId }, 'Matched.'));
-        row.append(b);
+        row.append(info, b);
         td.append(row);
       }
       sub.append(td);
