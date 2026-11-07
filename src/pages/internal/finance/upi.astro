@@ -98,7 +98,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   const APP = { bhim: 'BHIM', paytm: 'Paytm' } as const;
   const STATE = { matched: { text: 'In the ledger', kind: 'ok' }, waiting: { text: 'Waiting for statement', kind: 'warn' }, unmatched: { text: 'Not in the statement', kind: 'crit' } } as const;
 
-  type Upi = { id: string; paidAt: string; time: string | null; app: 'bhim' | 'paytm'; counterparty: string | null; remark: string | null; amountPaise: number; direction: 'debit' | 'credit'; isCircle: boolean; upiRef: string; note: string | null; bankLineId: string | null; account: string | null; state: 'matched' | 'waiting' | 'unmatched' };
+  type Upi = { id: string; paidAt: string; time: string | null; app: 'bhim' | 'paytm'; counterparty: string | null; remark: string | null; amountPaise: number; direction: 'debit' | 'credit'; isCircle: boolean; upiRef: string; note: string | null; purpose: string | null; bankLineId: string | null; account: string | null; state: 'matched' | 'waiting' | 'unmatched' };
   let all: Upi[] = [];
   let canEdit = false;
   // A link from the ledger arrives as ?ref=<UPI reference>: the table opens filtered to that one payment.
@@ -175,7 +175,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   const sort = { key: 'paidAt', dir: 'desc' as 'asc' | 'desc' };
   const sortValue = (u: Upi, key: string): string | number => {
     if (key === 'direction') return u.direction;
-    if (key === 'note') return (u.note ?? u.remark ?? '').toLowerCase();
+    if (key === 'note') return (u.note ?? u.purpose ?? u.remark ?? '').toLowerCase();
     if (key === 'kind') return u.isCircle ? 'Delegate' : 'Direct';
     if (key === 'app') return APP[u.app];
     if (key === 'account') return (u.account ?? '').toLowerCase();
@@ -198,7 +198,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   function noteCell(u: Upi): HTMLTableCellElement {
     const td = document.createElement('td');
     td.className = 'note-cell';
-    const given = u.remark ?? '';
+    const given = u.purpose ?? u.remark ?? '';
     const paint = () => {
       const text = u.note ?? given;
       if (!canEdit) {
@@ -207,7 +207,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       }
       const peek = el('button', `peek${u.note ? '' : ' ghost'}`, text || 'Add a note');
       peek.type = 'button';
-      peek.title = u.note ? 'Click to edit the note' : given ? 'From the payment app. Click to write your own note' : 'Click to add a note';
+      peek.title = u.note ? 'Click to edit the note' : given ? (u.purpose ? 'From the payment request or log. Click to write your own note' : 'From the payment app. Click to write your own note') : 'Click to add a note';
       peek.addEventListener('click', edit);
       td.replaceChildren(peek);
     };
@@ -255,7 +255,7 @@ import SignInGate from '../../../components/SignInGate.astro';
           (filter.app === 'all' || u.app === filter.app) &&
           (filter.kind === 'all' || (filter.kind === 'delegate' ? u.isCircle : !u.isCircle)) &&
           (filter.state === 'all' || u.state === filter.state) &&
-          (!q || [u.counterparty, u.remark, u.note, u.upiRef, u.account ?? ''].join(' ').toLowerCase().includes(q)),
+          (!q || [u.counterparty, u.remark, u.purpose ?? '', u.note, u.upiRef, u.account ?? ''].join(' ').toLowerCase().includes(q)),
       )
       .sort((a, b) => {
         const [x, y] = [sortValue(a, sort.key), sortValue(b, sort.key)];

@@ -1,13 +1,590 @@
 ---
-// Finance requests (internal), session 01: a placeholder so a granted person's tile leads somewhere. Raising
-// requests, adding vendors and scanning bills arrive in a later finance session (docs/finance/sessions/08).
-// It calls no function and shows no data; holding this module grants nothing in `finance`.
+// Finance requests (internal), session 08: the requester's page, built for a phone. Ask for a payment before it is made, or log a
+// spend already made (a UPI Circle or a direct UPI payment) with a photo of the payment; add a new vendor; attach a bill. Backed by
+// netlify/functions/finance-admin.mts (/requests, /vendors, lib/finance-requests.ts). Holding `finance-requests` opens nothing in
+// `finance`: this page shows only the person's own records and payee names (never their bank details).
+//
+// The bill scanner (edge detection, crop, reading the vendor and amount off the photo) is not built yet: a bill is attached as a
+// photo from the camera or a file. Everything the server returns is placed with textContent only, never as HTML.
 import StaffLayout from '../../layouts/StaffLayout.astro';
+import SignInGate from '../../components/SignInGate.astro';
 ---
 
-<StaffLayout title="Finance requests" description="Finance requests." current="finance-requests">
-  <section class="section wrapper">
+<StaffLayout title="Finance requests" description="Finance requests." current="finance-requests" currentPage="finance-requests">
+  <section class="finance-req section wrapper">
     <h1>Finance requests</h1>
-    <p class="hint">Raising payment requests, adding vendors and scanning bills is being built. Nothing to do here yet.</p>
+    <p id="intro" class="hint">Sign in to ask for a payment or record one.</p>
+
+    <SignInGate forbiddenWhat="finance requests" />
+
+    <div id="status" aria-live="polite" class="hint" hidden></div>
+
+    <div id="content" hidden>
+      <div class="actions">
+        <button type="button" id="new-request" class="button button--primary">Ask for a payment</button>
+        <button type="button" id="new-log" class="button">Record a payment already made</button>
+      </div>
+
+      <form id="form" class="card form" hidden novalidate>
+        <h2 id="form-title"></h2>
+        <p class="hint" id="form-hint"></p>
+
+        <label class="field" id="f-payee-wrap">
+          <span>Who is it for?</span>
+          <input id="f-payee" list="payees" autocomplete="off" placeholder="Start typing a name" />
+          <datalist id="payees"></datalist>
+        </label>
+        <p class="hint" id="payee-state" aria-live="polite"></p>
+        <button type="button" id="add-vendor" class="linklike">Not in the list? Add a new vendor</button>
+
+        <label class="field">
+          <span>Amount (₹)</span>
+          <input id="f-amount" inputmode="decimal" autocomplete="off" placeholder="0" />
+        </label>
+
+        <label class="field" id="f-mode-wrap">
+          <span>How will it be paid?</span>
+          <select id="f-mode">
+            <option value="neft">Bank transfer (NEFT)</option>
+            <option value="upi">UPI</option>
+            <option value="imps">IMPS</option>
+            <option value="rtgs">RTGS</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>What is it for?</span>
+          <input id="f-purpose" maxlength="300" autocomplete="off" placeholder="For example: pump repair" />
+        </label>
+
+        <label class="field" id="f-needed-wrap">
+          <span>Needed by (optional)</span>
+          <input id="f-needed" type="date" />
+        </label>
+
+        <label class="check" id="f-reimb-wrap">
+          <input id="f-reimb" type="checkbox" />
+          <span>I already paid this in cash and want it paid back (needs a bill)</span>
+        </label>
+
+        <div id="log-fields" hidden>
+          <label class="field">
+            <span>Date paid</span>
+            <input id="f-paid-on" type="date" />
+          </label>
+          <label class="field">
+            <span>Who paid?</span>
+            <select id="f-paid-via">
+              <option value="delegate">A delegate (UPI Circle)</option>
+              <option value="direct">Directly, from the account</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>UPI reference (optional, 12 digits)</span>
+            <input id="f-ref" inputmode="numeric" autocomplete="off" maxlength="14" />
+          </label>
+        </div>
+
+        <label class="field">
+          <span id="f-file-label">Bill</span>
+          <input id="f-file" type="file" accept="image/*,application/pdf" multiple />
+        </label>
+        <p class="hint" id="f-file-hint"></p>
+
+        <p class="signin-error" id="form-error" role="alert" hidden></p>
+        <div class="actions">
+          <button type="submit" id="submit" class="button button--primary">Send</button>
+          <button type="button" id="cancel-form" class="button">Cancel</button>
+        </div>
+      </form>
+
+      <form id="vendor-form" class="card form" hidden novalidate>
+        <h2>New vendor</h2>
+        <p class="hint">An approver checks the payee before anything is paid to them.</p>
+        <label class="field"><span>Name</span><input id="v-name" autocomplete="off" maxlength="120" /></label>
+        <label class="field">
+          <span>Pay them by</span>
+          <select id="v-method">
+            <option value="bank">Bank transfer</option>
+            <option value="upi">UPI</option>
+            <option value="none">I do not have their details yet</option>
+          </select>
+        </label>
+        <div id="v-bank">
+          <label class="field"><span>Account number</span><input id="v-account" inputmode="numeric" autocomplete="off" /></label>
+          <label class="field"><span>IFSC code</span><input id="v-ifsc" autocomplete="off" maxlength="11" /></label>
+        </div>
+        <div id="v-upi" hidden>
+          <label class="field"><span>UPI id</span><input id="v-upiid" autocomplete="off" placeholder="name@bank" /></label>
+        </div>
+        <p class="signin-error" id="vendor-error" role="alert" hidden></p>
+        <div class="actions">
+          <button type="submit" class="button button--primary">Save vendor</button>
+          <button type="button" id="cancel-vendor" class="button">Cancel</button>
+        </div>
+      </form>
+
+      <h2 class="list-title">Your requests and records</h2>
+      <ul class="records" id="records"></ul>
+      <p id="records-empty" class="hint" hidden>Nothing yet.</p>
+      <input id="late-file" type="file" accept="image/*,application/pdf" multiple hidden />
+    </div>
   </section>
 </StaffLayout>
+
+<script>
+  import { StaffAuthError, clearStepUp, clearToken, decodeTokenEmail, getToken, setToken, showToast, staffFetch } from '../../../scripts/lib/staff-client.mjs';
+  import { clearState, showFailure, showLoading } from '../../../scripts/lib/staff-states.mjs';
+
+  declare const google: any;
+  const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
+  const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+  const gate = $('gate');
+  const gateError = $('gate-error');
+  const forbidden = $('forbidden');
+  const statusEl = $('status');
+  const content = $('content');
+  const intro = $('intro');
+
+  type Payee = { id: string; name: string; kind: string; account: 'verified' | 'unverified' | 'none' };
+  type Rec = { id: string; kind: 'request' | 'log'; status: string; payee: string | null; amountPaise: number; mode: string; purpose: string; paidOn: string | null; neededBy: string | null; vouchers: number; decisionReason: string | null; reimbursement: boolean; createdAt: string };
+  let payees: Payee[] = [];
+  let records: Rec[] = [];
+  let today = '';
+  let mode: 'request' | 'log' = 'request';
+  let chosen: Payee | null = null;
+  let lateFor: string | null = null;
+
+  const rupees = (paise: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(paise / 100);
+  const day = (iso: string | null) => (iso ? new Date(`${iso.slice(0, 10)}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) : '');
+  const STATUS: Record<string, { text: string; kind: string }> = {
+    submitted: { text: 'Waiting for approval', kind: 'warn' },
+    approved: { text: 'Approved, to be paid', kind: 'ok' },
+    paid: { text: 'Paid', kind: 'ok' },
+    rejected: { text: 'Not approved', kind: 'crit' },
+    cancelled: { text: 'Cancelled', kind: 'dim' },
+  };
+
+  function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string): HTMLElementTagNameMap[K] {
+    const e = document.createElement(tag);
+    if (className) e.className = className;
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+
+  function showGate(message?: string) {
+    gate.hidden = false;
+    forbidden.hidden = true;
+    content.hidden = true;
+    clearState(statusEl);
+    intro.hidden = false;
+    intro.textContent = 'Sign in to ask for a payment or record one.';
+    gateError.hidden = !message;
+    if (message) gateError.textContent = message;
+    renderSignInButton();
+  }
+  function showForbidden() {
+    gate.hidden = true;
+    content.hidden = true;
+    clearState(statusEl);
+    forbidden.hidden = false;
+    $('forbidden-email').textContent = decodeTokenEmail(getToken() ?? '');
+  }
+  function fail(err: unknown) {
+    if (err instanceof StaffAuthError) {
+      if (err.kind === 'unauthorized') showGate('Your session expired. Sign in again.');
+      else showForbidden();
+      return true;
+    }
+    return false;
+  }
+
+  // Files go as a form upload; staffFetch sends JSON, so this one carries the token itself.
+  async function upload(id: string, file: File, kind: 'bill' | 'payment_screenshot'): Promise<string | null> {
+    const form = new FormData();
+    form.set('file', file);
+    form.set('kind', kind);
+    const res = await fetch(`/api/finance-admin/requests/${id}/vouchers`, { method: 'POST', headers: { authorization: `Bearer ${getToken() ?? ''}` }, body: form });
+    if (res.status === 401) throw new StaffAuthError('unauthorized');
+    if (res.ok) return null;
+    return ((await res.json().catch(() => ({}))) as { error?: string }).error ?? 'The file could not be saved.';
+  }
+
+  function renderRecords() {
+    $('records-empty').hidden = records.length > 0;
+    $('records').replaceChildren(
+      ...records.map((r) => {
+        const li = el('li', 'record');
+        const top = el('div', 'record-top');
+        top.append(el('span', 'record-payee', r.payee ?? 'Unknown'), el('span', 'record-amount', rupees(r.amountPaise)));
+        const meta = el('div', 'record-meta');
+        const st = STATUS[r.status] ?? { text: r.status, kind: 'dim' };
+        meta.append(el('span', `pill pill--${st.kind}`, r.kind === 'log' ? 'Recorded' : st.text), el('span', 'dim', r.kind === 'log' ? `Paid ${day(r.paidOn)}` : `Asked ${day(r.createdAt)}`));
+        li.append(top, el('div', 'record-purpose', r.purpose), meta);
+        if (r.status === 'rejected' && r.decisionReason) li.append(el('div', 'record-reason', `Reason: ${r.decisionReason}`));
+        const acts = el('div', 'record-actions');
+        if (r.status !== 'rejected' && r.status !== 'cancelled') {
+          const attach = el('button', 'linklike', r.vouchers ? `${r.vouchers} attached · add another` : r.kind === 'log' ? 'Add the payment photo' : r.reimbursement ? 'Add the bill (needed)' : 'Add a bill');
+          attach.type = 'button';
+          attach.addEventListener('click', () => {
+            lateFor = r.id;
+            $<HTMLInputElement>('late-file').click();
+          });
+          acts.append(attach);
+        }
+        if (r.kind === 'request' && (r.status === 'submitted' || r.status === 'approved')) {
+          const cancel = el('button', 'linklike', 'Cancel this request');
+          cancel.type = 'button';
+          cancel.addEventListener('click', async () => {
+            if (!confirm('Cancel this request?')) return;
+            try {
+              const { status, data } = await staffFetch(`/api/finance-admin/requests/${r.id}/decide`, { method: 'POST', body: { action: 'cancel' } });
+              if (status !== 200) throw new Error(data.error ?? 'failed');
+              showToast('Cancelled.');
+              await load();
+            } catch (err) {
+              if (!fail(err)) showToast(err instanceof Error && err.message !== 'failed' ? err.message : 'Could not cancel it.');
+            }
+          });
+          acts.append(cancel);
+        }
+        li.append(acts);
+        return li;
+      }),
+    );
+  }
+
+  $<HTMLInputElement>('late-file').addEventListener('change', async (ev) => {
+    const input = ev.target as HTMLInputElement;
+    const id = lateFor;
+    const files = [...(input.files ?? [])];
+    input.value = '';
+    if (!id || !files.length) return;
+    try {
+      for (const f of files) {
+        const err = await upload(id, f, records.find((r) => r.id === id)?.kind === 'log' ? 'payment_screenshot' : 'bill');
+        if (err) return void showToast(err);
+      }
+      showToast('Saved.');
+      await load();
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+  // ---- the form
+  function openForm(kind: 'request' | 'log') {
+    mode = kind;
+    chosen = null;
+    $<HTMLFormElement>('form').reset();
+    $('vendor-form').hidden = true;
+    $('form').hidden = false;
+    $('form-error').hidden = true;
+    $('payee-state').textContent = '';
+    const log = kind === 'log';
+    $('form-title').textContent = log ? 'Record a payment already made' : 'Ask for a payment';
+    $('form-hint').textContent = log ? 'For a payment you or a delegate have already made by UPI. It needs no approval; it lets the ledger say what the payment was for.' : 'An approver is told. You can add the bill now or later.';
+    $('f-mode-wrap').hidden = log;
+    $('f-needed-wrap').hidden = log;
+    $('f-reimb-wrap').hidden = log;
+    $('log-fields').hidden = !log;
+    $('f-file-label').textContent = log ? 'Photo of the payment' : 'Bill (photo or PDF)';
+    $('f-file-hint').textContent = log ? 'A screenshot of the payment from the UPI app.' : 'Take a photo of each page, or choose a file.';
+    $<HTMLInputElement>('f-paid-on').max = today;
+    $<HTMLInputElement>('f-paid-on').value = today;
+    $('form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  $('new-request').addEventListener('click', () => openForm('request'));
+  $('new-log').addEventListener('click', () => openForm('log'));
+  $('cancel-form').addEventListener('click', () => ($('form').hidden = true));
+
+  $<HTMLInputElement>('f-payee').addEventListener('input', () => {
+    const v = $<HTMLInputElement>('f-payee').value.trim().toLowerCase();
+    chosen = payees.find((p) => p.name.toLowerCase() === v) ?? null;
+    $('payee-state').textContent = chosen ? (chosen.account === 'verified' ? 'Payee details are checked.' : chosen.account === 'unverified' ? 'Payee details are waiting to be checked.' : 'No payment details saved for them yet.') : '';
+  });
+
+  $('form').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const err = $('form-error');
+    err.hidden = true;
+    const amount = $<HTMLInputElement>('f-amount').value.replace(/[₹,\s]/g, '');
+    if (!/^\d+(\.\d{1,2})?$/.test(amount)) return void ((err.textContent = 'Enter the amount in rupees, for example 2500 or 2500.50.'), (err.hidden = false));
+    const typed = $<HTMLInputElement>('f-payee').value.trim();
+    if (mode === 'request' && !chosen) return void ((err.textContent = 'Choose the payee from the list, or add a new vendor.'), (err.hidden = false));
+    const files = [...($<HTMLInputElement>('f-file').files ?? [])];
+    const reimb = $<HTMLInputElement>('f-reimb').checked;
+    if (mode === 'request' && reimb && !files.length) return void ((err.textContent = 'A payment you made in cash needs a bill.'), (err.hidden = false));
+    if (mode === 'log' && !files.length && !confirm('Save it without a photo of the payment?')) return;
+    const body: Record<string, unknown> = {
+      kind: mode, partyId: chosen?.id ?? null, recipientText: chosen ? null : typed || null, amountPaise: Math.round(parseFloat(amount) * 100), purpose: $<HTMLInputElement>('f-purpose').value,
+    };
+    if (mode === 'request') Object.assign(body, { mode: $<HTMLSelectElement>('f-mode').value, neededBy: $<HTMLInputElement>('f-needed').value || null, reimbursement: reimb });
+    else Object.assign(body, { paidOn: $<HTMLInputElement>('f-paid-on').value, paidVia: $<HTMLSelectElement>('f-paid-via').value, upiRef: $<HTMLInputElement>('f-ref').value || null });
+    const submit = $<HTMLButtonElement>('submit');
+    submit.disabled = true;
+    try {
+      const { status, data } = await staffFetch('/api/finance-admin/requests', { method: 'POST', body });
+      if (status !== 201) throw new Error(data.error ?? 'failed');
+      for (const f of files) {
+        const e = await upload(data.id, f, mode === 'log' ? 'payment_screenshot' : 'bill');
+        if (e) showToast(`Saved, but a file was not attached: ${e}`);
+      }
+      $('form').hidden = true;
+      showToast(mode === 'log' ? 'Recorded.' : 'Sent for approval.');
+      await load();
+    } catch (e) {
+      if (fail(e)) return;
+      err.textContent = e instanceof Error && e.message !== 'failed' ? e.message : 'Could not save it. Nothing was sent.';
+      err.hidden = false;
+    } finally {
+      submit.disabled = false;
+    }
+  });
+
+  // ---- a new vendor
+  $('add-vendor').addEventListener('click', () => {
+    $<HTMLFormElement>('vendor-form').reset();
+    $<HTMLInputElement>('v-name').value = $<HTMLInputElement>('f-payee').value;
+    syncMethod();
+    $('vendor-error').hidden = true;
+    $('vendor-form').hidden = false;
+    $('vendor-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+  $('cancel-vendor').addEventListener('click', () => ($('vendor-form').hidden = true));
+  const syncMethod = () => {
+    const m = $<HTMLSelectElement>('v-method').value;
+    $('v-bank').hidden = m !== 'bank';
+    $('v-upi').hidden = m !== 'upi';
+  };
+  $('v-method').addEventListener('change', syncMethod);
+  $('vendor-form').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const err = $('vendor-error');
+    err.hidden = true;
+    const m = $<HTMLSelectElement>('v-method').value;
+    const payee = m === 'bank' ? { method: 'bank', account: $<HTMLInputElement>('v-account').value, ifsc: $<HTMLInputElement>('v-ifsc').value } : m === 'upi' ? { method: 'upi', upi: $<HTMLInputElement>('v-upiid').value } : null;
+    try {
+      const { status, data } = await staffFetch('/api/finance-admin/vendors', { method: 'POST', body: { name: $<HTMLInputElement>('v-name').value, payee } });
+      if (status !== 201) throw new Error(data.error ?? 'failed');
+      payees.push({ id: data.id, name: data.name, kind: 'vendor', account: data.account });
+      fillPayees();
+      $<HTMLInputElement>('f-payee').value = data.name;
+      $<HTMLInputElement>('f-payee').dispatchEvent(new Event('input'));
+      $('vendor-form').hidden = true;
+      showToast('Vendor added.');
+    } catch (e) {
+      if (fail(e)) return;
+      err.textContent = e instanceof Error && e.message !== 'failed' ? e.message : 'Could not add the vendor.';
+      err.hidden = false;
+    }
+  });
+
+  const fillPayees = () => {
+    $('payees').replaceChildren(
+      ...payees.map((p) => {
+        const o = document.createElement('option');
+        o.value = p.name;
+        return o;
+      }),
+    );
+  };
+
+  async function load() {
+    gate.hidden = true;
+    forbidden.hidden = true;
+    showLoading(statusEl);
+    try {
+      const { status, data } = await staffFetch('/api/finance-admin/requests/mine');
+      if (status !== 200) throw new Error('load failed');
+      clearState(statusEl);
+      intro.hidden = false;
+      intro.textContent = 'Ask for a payment before it is made, or record one that already was. An approver is told about requests.';
+      payees = data.payees;
+      records = data.records;
+      today = data.today;
+      fillPayees();
+      renderRecords();
+      content.hidden = false;
+    } catch (err) {
+      if (fail(err)) return;
+      content.hidden = true;
+      intro.hidden = true;
+      showFailure(statusEl, { title: "Couldn't load your requests", text: "The server didn't answer. Nothing was changed. Check your connection and try again; if it keeps failing, tell a super admin.", onRetry: load });
+    }
+  }
+
+  function handleCredentialResponse(response: { credential: string }) {
+    setToken(response.credential);
+    load();
+  }
+  function renderSignInButton() {
+    if (typeof google === 'undefined') return;
+    google.accounts.id.initialize({ client_id: CLIENT_ID, callback: handleCredentialResponse });
+    google.accounts.id.renderButton(document.getElementById('g_id_signin'), { theme: (window as any).tvcGsiTheme?.() ?? 'outline', size: 'large' });
+  }
+  $('use-different-account').addEventListener('click', () => {
+    clearToken();
+    clearStepUp();
+    if (typeof google !== 'undefined') google.accounts.id.disableAutoSelect();
+    showGate();
+  });
+
+  if (getToken()) load();
+  else showGate();
+</script>
+<script is:inline src="https://accounts.google.com/gsi/client"></script>
+
+<style is:global>
+  .finance-req.section.wrapper {
+    padding-top: 32px;
+    padding-bottom: 48px;
+    max-width: 40rem;
+  }
+
+  .finance-req .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 14px 0;
+  }
+
+  .finance-req .card {
+    margin-top: 14px;
+    padding: 18px;
+    background: var(--tvc-white);
+    border-radius: var(--radius);
+    box-shadow: 0 0 0 1px var(--tvc-line) inset;
+  }
+
+  .finance-req .form .field {
+    display: block;
+    margin-top: 14px;
+  }
+
+  .finance-req .form .field > span {
+    display: block;
+    margin-bottom: 4px;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--tvc-ink);
+  }
+
+  .finance-req .form input:not([type='checkbox']),
+  .finance-req .form select {
+    width: 100%;
+    min-height: 44px;
+    padding: 8px 10px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: var(--radius-sm, 6px);
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+    font: inherit;
+  }
+
+  .finance-req .form .check {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    margin-top: 14px;
+    font-size: var(--text-sm);
+  }
+
+  .finance-req .linklike {
+    all: unset;
+    cursor: pointer;
+    margin-top: 8px;
+    font-size: var(--text-sm);
+    color: var(--tvc-ink);
+    text-decoration: underline;
+    text-decoration-color: var(--tvc-line-strong);
+  }
+
+  .finance-req .linklike:focus-visible {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 2px;
+  }
+
+  .finance-req .list-title {
+    margin: 26px 0 8px;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--tvc-ink-soft);
+  }
+
+  .finance-req .records {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 10px;
+  }
+
+  .finance-req .record {
+    padding: 14px;
+    background: var(--tvc-white);
+    border-radius: var(--radius);
+    box-shadow: 0 0 0 1px var(--tvc-line) inset;
+  }
+
+  .finance-req .record-top {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-weight: 600;
+  }
+
+  .finance-req .record-amount {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .finance-req .record-purpose {
+    margin-top: 4px;
+    color: var(--tvc-ink);
+  }
+
+  .finance-req .record-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin-top: 8px;
+    font-size: var(--text-sm);
+  }
+
+  .finance-req .record-reason {
+    margin-top: 6px;
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  .finance-req .record-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .finance-req .dim {
+    color: var(--tvc-ink-soft);
+  }
+
+  .finance-req .pill {
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    background: var(--tvc-cream);
+    color: var(--tvc-ink);
+  }
+
+  .finance-req .pill--ok {
+    background: var(--tvc-green-tint);
+    color: var(--tvc-green-dark);
+  }
+
+  .finance-req .pill--warn {
+    background: var(--tvc-orange-tint);
+    color: var(--tvc-orange-text);
+  }
+</style>

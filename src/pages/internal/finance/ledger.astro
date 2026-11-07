@@ -130,7 +130,7 @@ import SignInGate from '../../../components/SignInGate.astro';
 
   type Suggestion = { categoryId: string | null; partyId: string | null; nature: string; confidence: string; newPartyName: string | null };
   type Line = {
-    id: string; date: string; narration: string; direction: 'debit' | 'credit'; amountPaise: number; account: string; remark: string | null; counterparty: string | null; origin?: string; sources?: string[]; reversal?: { role: 'original' | 'reversal'; otherId: string; otherDate: string | null } | null; noteKey?: string; note?: string | null; upiRef?: string | null;
+    id: string; date: string; narration: string; direction: 'debit' | 'credit'; amountPaise: number; account: string; remark: string | null; counterparty: string | null; origin?: string; sources?: string[]; reversal?: { role: 'original' | 'reversal'; otherId: string; otherDate: string | null } | null; noteKey?: string; note?: string | null; purpose?: string | null; upiRef?: string | null;
     allocatedPaise: number; state: 'unallocated' | 'partly_allocated' | 'allocated'; review: boolean; missingParty: boolean; suggestion: Suggestion | null;
     allocation: { categoryId: string; partyId: string | null; nature: string; count: number; householdLabel: string | null; maintenanceYear: string | null } | null;
     hay?: string; // lower-case text the search box looks in, worked out once
@@ -500,6 +500,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     origin?: string;
     upiRef?: string | null;
     noteKey?: string | null;
+    purpose?: string | null;
     note?: string | null;
     state: string;
     allocations: Alloc[];
@@ -760,10 +761,10 @@ import SignInGate from '../../../components/SignInGate.astro';
   // The note on a payment, beside what the bank said (which never changes). Starts as the app's own wording when there is one
   // (a Paytm remark) and no note yet; saving stores it as the note. Shared with the UPI table: it is the same payment.
   function noteEditor(d: Detail): HTMLElement {
-    const given = d.upi?.remark ?? '';
+    const given = d.purpose ?? d.upi?.remark ?? '';
     const box = h('input', { attrs: { type: 'text', maxlength: '300', 'aria-label': 'Note on this payment', placeholder: 'What was this payment for?' } }) as HTMLInputElement;
     box.value = d.note ?? given;
-    const msg = h('span', { class: 'hint', text: d.note ? '' : given ? 'From the payment app. Edit it to keep your own wording.' : '' });
+    const msg = h('span', { class: 'hint', text: d.note ? '' : given ? (d.purpose ? 'From the payment request or log. Edit it to keep your own wording.' : 'From the payment app. Edit it to keep your own wording.') : '' });
     const save = button('Save note', async () => {
       const text = box.value.trim() === given && !d.note ? '' : box.value;
       const { status, data: out } = await call('/api/finance-admin/payment-note', 'POST', { key: d.noteKey, note: text });
@@ -1158,7 +1159,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     return accountCount > 1;
   };
   const originText = (l: Line) => (l.origin ? originLabel(l.origin) : '');
-  const hayOf = (l: Line) => [l.narration, l.note, l.origin ? originLabel(l.origin) : '', l.account, l.counterparty, l.remark, l.effective.category, l.effective.party, l.effective.nature, l.allocation?.householdLabel, residentsOf(l.allocation?.householdLabel), l.allocation?.maintenanceYear].join(' ').toLowerCase();
+  const hayOf = (l: Line) => [l.narration, l.note, l.origin ? originLabel(l.origin) : '', l.account, l.counterparty, l.remark, l.purpose, l.effective.category, l.effective.party, l.effective.nature, l.allocation?.householdLabel, residentsOf(l.allocation?.householdLabel), l.allocation?.maintenanceYear].join(' ').toLowerCase();
   function applyView(toTop = false) {
     if (!data) return;
     const conds: Record<string, any> = {};
@@ -1752,7 +1753,7 @@ import SignInGate from '../../../components/SignInGate.astro';
               return b;
             })()
           : null,
-        l.note ? h('span', { class: 'detail detail--note', text: `Note: ${l.note}`, attrs: { title: 'A note added here or on the UPI page' } }) : null,
+        l.note ? h('span', { class: 'detail detail--note', text: `Note: ${l.note}`, attrs: { title: 'A note added here or on the UPI page' } }) : l.purpose ? h('span', { class: 'detail detail--note detail--given', text: `For: ${l.purpose}`, attrs: { title: 'From the payment request or logged spend. Write a note to replace it.' } }) : null,
         l.origin ? h('span', { class: 'detail detail--origin', text: originLabel(l.origin), attrs: { title: ORIGINS[l.origin as keyof typeof ORIGINS]?.hint ?? '' } }) : null,
         upiSays ? h('span', { class: 'detail detail--upi', text: `${l.origin ? originLabel(l.origin) : 'UPI app'}: ${upiSays}`, attrs: { title: 'From the UPI app report' } }) : l.origin === 'upi_unknown' ? h('span', { class: 'detail detail--dim', text: 'No BHIM or Paytm record for this payment' }) : null,
       ].filter(Boolean) as Node[],
@@ -3177,6 +3178,11 @@ import SignInGate from '../../../components/SignInGate.astro';
 
   .ledger .detail--note {
     color: var(--tvc-ink);
+  }
+
+  /* The wording a payment request or logged spend gave, until a person writes a note (as a suggestion shows). */
+  .ledger .detail--given {
+    font-style: italic;
   }
 
   .ledger .detail--reversal {

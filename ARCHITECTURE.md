@@ -109,7 +109,7 @@ flowchart TD
         FUNC_SRC14["netlify/functions/event-payments-admin.mts<br/>Serverless function, Google Sign-In gated —<br/>per-event registrations/cancellations/money<br/>collected from Supabase, issues real Razorpay<br/>refunds (tier-suggested, admin-confirmed)"]
         FUNC_SRC15["netlify/functions/usage-collect.mts<br/>Scheduled function (cron, every 6 hours) — appends<br/>the Supabase database size, open connections + biggest tables, Netlify's plan<br/>credits + billing cycle and Resend's email quota to usage_snapshots for<br/>the free-tier usage dashboard. Optional secrets:<br/>NETLIFY_ACCESS_TOKEN, RESEND_USAGE_API_KEY,<br/>CLOUDFLARE_ANALYTICS_TOKEN"]
         FUNC_SRC16["netlify/functions/usage-admin.mts<br/>Serverless function, Google Sign-In gated (usage module) —<br/>overview of free-tier/credit usage, live domain<br/>expiry lookups, typed-in provider readings and<br/>price/limit settings (admins only, audit-logged)"]
-        FUNC_SRC20["netlify/functions/finance-admin.mts<br/>Serverless function, Google Sign-In gated (finance module) —<br/>session 01: overview (counts, access); session 03: statement import<br/>(Axis yearly Excel files, Paytm UPI export, BHIM transaction-history PDF read with unpdf), UPI page (`/upi-lines`) and bank account setup;<br/>auditor visits and imports are written to fin_audit_log;<br/>session 05: ledger (allocations, review, rules, categories, period close)"]
+        FUNC_SRC20["netlify/functions/finance-admin.mts<br/>Serverless function, Google Sign-In gated (finance module) —<br/>session 01: overview (counts, access); session 03: statement import<br/>(Axis yearly Excel files, Paytm UPI export, BHIM transaction-history PDF read with unpdf), UPI page (`/upi-lines`) and bank account setup;<br/>auditor visits and imports are written to fin_audit_log;<br/>session 05: ledger (allocations, review, rules, categories, period close);<br/>session 08: payment requests and spend logs, vouchers, matching"]
         FUNC_SRC17["netlify/functions/usage-alerts.mts<br/>Scheduled function (cron, hourly) — evaluates the<br/>usage rules and emails core-team@tvc.farm one digest<br/>per new or worsened warning; remembers what it sent"]
         SCRIPT_SRC["scripts/build-chat-context.mjs<br/>Strips nav/footer from built HTML →<br/>content corpus for the chatbot"]
     end
@@ -189,7 +189,7 @@ flowchart TD
         ANTHROPIC["Anthropic Claude API<br/>(chat.mts server-side,<br/>search-ai.mts's fallback,<br/>members-me.mts's story check,<br/>and caption-photos.mjs locally)"]
         GEMINI["Google Gemini API (free tier)<br/>search-ai.mts server-side —<br/>site search's AI answer, tried first"]
         TYPESAFE["TypeSafe API (Jev model)<br/>whatsapp-webhook.mts server-side —<br/>shadow-mode read of each inbound WhatsApp<br/>message; off unless TYPESAFE_WHATSAPP_SHADOW=true"]
-        R2["Cloudflare R2<br/>media.tvc.farm — curated photo storage,<br/>served directly to the browser;<br/>private prefix finance/imports/ for raw statement files"]
+        R2["Cloudflare R2<br/>media.tvc.farm — curated photo storage,<br/>served directly to the browser;<br/>private prefixes finance/imports/ (raw statement files) and finance/vouchers/ (bills and payment photos)"]
         GTAG["Google Analytics<br/>googletagmanager.com/gtag/js"]
         CLARITYEXT["Microsoft Clarity<br/>www.clarity.ms tag → scripts.clarity.ms<br/>bundle → *.clarity.ms/collect (subdomain<br/>varies, load-balanced)"]
         METEO["Open-Meteo API<br/>Free, no key required"]
@@ -466,6 +466,7 @@ outside both the local machine and Netlify (the member-update-email workflow).
   (text via `unpdf`, `finance-bhim.mjs`) into `fin_upi_lines` with an `app` column, kept in R2 as `.pdf`; `finance-admin.mts` serves
   `/upi-lines` (`lib/finance-upi-view.ts`) for `/internal/finance/upi/`; the ledger derives each line's origin
   (`finance-origin.mjs`). Payment notes (`/payment-note`, `lib/finance-notes.ts`, table `fin_payment_notes`, migration `0089`, applied 2026-11-07) are shared by the ledger and the UPI page. Source badges (`fin_source_badges`, `fin_bank_accounts.badge_key`, migration `0090`, applied 2026-11-07) are read by the ledger. No new external service.
+  **Session 08 (payment requests and spend logs, migration `0092`)** adds `lib/finance-requests.ts` (routes `/requests`, `/vendors`, `/vouchers/*` on `finance-admin.mts`), the pages `/internal/finance-requests/` and `/internal/finance/requests/`, files in the private R2 prefix `finance/vouchers/` (`lib/finance-storage.ts`), a best-effort Resend email to `core-team@` when a request is raised, and the operator script `scripts/load-fin-requests-history.mjs`. A record's purpose is read into the UPI page and the ledger; no Anthropic call yet (the bill scanner and vision reading are next).
   Pure rules (expiry, maker-is-not-checker, finance field masking) are in `finance-access.mjs` with tests.
   **Design-review changes (PR #528):** the Overview answers "what needs me?" from `/overview`'s `attention` (counts only,
   `scripts/lib/finance-attention.mjs`); verifying records how the details were checked (migration `0082_finance_verification_evidence.sql`,

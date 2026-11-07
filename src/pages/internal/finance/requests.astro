@@ -1,0 +1,363 @@
+---
+// Finance (internal), session 08: every payment request and logged spend, for the people who approve and match them. Backed by
+// netlify/functions/finance-admin.mts (/requests, lib/finance-requests.ts); the rules are scripts/lib/finance-requests.mjs.
+//   * approve or reject a request (approving needs the same unlock as verifying a payee; whoever raised it cannot decide it)
+//   * match a record to the UPI row or bank line it became: an exact UPI reference is shown as matched; anything else is a
+//     suggestion that a person accepts, never linked on a guess
+//   * look at the bill or payment photo; clear the flag on a payment to the requester's own party
+// What a record says it was for is shown on the UPI page and in the ledger once it is matched.
+//
+// Same shell as the other internal tools: Google Sign-In gated, unlinked, noindex. Everything the server returns is
+// placed with textContent only, never as HTML.
+import StaffLayout from '../../../layouts/StaffLayout.astro';
+import SignInGate from '../../../components/SignInGate.astro';
+import StepUpSheet from '../../../components/StepUpSheet.astro';
+---
+
+<StaffLayout title="Approvals" description="Finance payment requests." current="finance" currentPage="finance-approvals">
+  <button slot="toolbar" type="button" id="lock" class="lock-pill" hidden></button>
+
+  <section class="finance finance-appr section wrapper">
+    <h1>Payment requests</h1>
+    <p id="intro" class="hint">Sign in to see the payment requests.</p>
+
+    <SignInGate forbiddenWhat="finance" />
+
+    <div id="status" aria-live="polite" class="hint" hidden></div>
+
+    <div id="content" hidden>
+      <div class="filters">
+        <div class="segmented" id="chips" role="group" aria-label="Show"></div>
+        <label class="field"><span class="visually-hidden">Search</span><input id="q" type="search" placeholder="Search by payee, purpose or reference" autocomplete="off" /></label>
+      </div>
+      <ul class="records" id="records"></ul>
+      <p id="empty" class="hint" hidden>Nothing here.</p>
+    </div>
+    <StepUpSheet />
+  </section>
+</StaffLayout>
+
+<script>
+  import { StaffAuthError, clearStepUp, clearToken, decodeTokenEmail, getToken, setToken, showToast, staffFetch } from '../../../../scripts/lib/staff-client.mjs';
+  import { initStepUpLock } from '../../../../scripts/lib/staff-stepup-ui.mjs';
+  import { clearState, showFailure, showLoading } from '../../../../scripts/lib/staff-states.mjs';
+
+  declare const google: any;
+  const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
+  const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+  const gate = $('gate');
+  const gateError = $('gate-error');
+  const forbidden = $('forbidden');
+  const statusEl = $('status');
+  const content = $('content');
+  const intro = $('intro');
+
+  type Proposal = { type: 'upi' | 'bank'; targetId: string; reasons: string[]; date: string; who: string | null };
+  type Rec = {
+    id: string; kind: 'request' | 'log'; status: string; source: 'app' | 'history'; requester: string | null; requesterId: string | null; payee: string | null; amountPaise: number; mode: string; purpose: string;
+    neededBy: string | null; reimbursement: boolean; paidOn: string | null; paidVia: string | null; upiRef: string | null; decidedBy: string | null; decisionReason: string | null; reviewFlag: string | null;
+    vouchers: number; createdAt: string; matched: 'reference' | 'accepted' | null; mismatch: boolean; proposals: Proposal[]; ownParty: boolean;
+  };
+  let data: { me: { id: string; ready: boolean; hasPasskey: boolean; stepUpValid: boolean }; can: { approve: boolean; allocate: boolean }; records: Rec[]; agingCount: number } | null = null;
+  const filter = { chip: 'waiting', q: '' };
+
+  const rupees = (paise: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(paise / 100);
+  const day = (iso: string | null) => (iso ? new Date(`${iso.slice(0, 10)}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) : '');
+  const MODE: Record<string, string> = { neft: 'NEFT', upi: 'UPI', imps: 'IMPS', rtgs: 'RTGS' };
+  const STATUS: Record<string, { text: string; kind: string }> = {
+    submitted: { text: 'Waiting for approval', kind: 'warn' },
+    approved: { text: 'Approved', kind: 'ok' },
+    paid: { text: 'Paid', kind: 'ok' },
+    rejected: { text: 'Rejected', kind: 'crit' },
+    cancelled: { text: 'Cancelled', kind: 'dim' },
+  };
+  const CHIPS: { id: string; label: string; test: (r: Rec) => boolean }[] = [
+    { id: 'waiting', label: 'To approve', test: (r) => r.kind === 'request' && r.status === 'submitted' },
+    { id: 'tomatch', label: 'To match', test: (r) => !r.matched && (r.kind === 'log' || r.status === 'approved') },
+    { id: 'review', label: 'To review', test: (r) => Boolean(r.reviewFlag) },
+    { id: 'all', label: 'All', test: () => true },
+  ];
+
+  function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string): HTMLElementTagNameMap[K] {
+    const e = document.createElement(tag);
+    if (className) e.className = className;
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+  function showGate(message?: string) {
+    gate.hidden = false;
+    forbidden.hidden = true;
+    content.hidden = true;
+    clearState(statusEl);
+    intro.hidden = false;
+    intro.textContent = 'Sign in to see the payment requests.';
+    gateError.hidden = !message;
+    if (message) gateError.textContent = message;
+    renderSignInButton();
+  }
+  function showForbidden() {
+    gate.hidden = true;
+    content.hidden = true;
+    clearState(statusEl);
+    forbidden.hidden = false;
+    $('forbidden-email').textContent = decodeTokenEmail(getToken() ?? '');
+  }
+  function fail(err: unknown) {
+    if (err instanceof StaffAuthError) {
+      if (err.kind === 'unauthorized') showGate('Your session expired. Sign in again.');
+      else showForbidden();
+      return true;
+    }
+    return false;
+  }
+
+  const lock = initStepUpLock({ getMe: () => data?.me ?? null, onChange: () => {} });
+
+  async function act(path: string, body: unknown, done: string) {
+    try {
+      const { status, data: out } = await staffFetch(path, { method: 'POST', body });
+      if (status === 403 && out?.code === 'STEP_UP_REQUIRED') return void (showToast(data?.me?.ready ? 'Unlock first.' : 'Set up two second factors first (see Security).'), lock.open());
+      if (status >= 400) return void showToast(out?.error ?? 'Could not do that.');
+      showToast(done);
+      await load();
+    } catch (err) {
+      if (!fail(err)) showToast('Could not do that.');
+    }
+  }
+
+  // A bill or payment photo is fetched with the token and opened from memory; there is no link to it.
+  async function openVoucher(id: string) {
+    const res = await fetch(`/api/finance-admin/vouchers/${id}`, { headers: { authorization: `Bearer ${getToken() ?? ''}` } });
+    if (!res.ok) return void showToast('Could not open the file.');
+    window.open(URL.createObjectURL(await res.blob()), '_blank', 'noopener');
+  }
+
+  function card(r: Rec): HTMLElement {
+    const li = el('li', 'record');
+    const top = el('div', 'record-top');
+    top.append(el('span', 'record-payee', r.payee ?? 'Unknown'), el('span', 'record-amount', rupees(r.amountPaise)));
+    li.append(top, el('div', 'record-purpose', r.purpose));
+    const meta = el('div', 'record-meta');
+    const st = STATUS[r.status] ?? { text: r.status, kind: 'dim' };
+    meta.append(el('span', `pill pill--${st.kind}`, r.kind === 'log' ? 'Logged spend' : st.text));
+    meta.append(el('span', 'dim', [r.kind === 'log' ? `Paid ${day(r.paidOn)}${r.paidVia ? ` by ${r.paidVia === 'delegate' ? 'a delegate' : 'the account'}` : ''}` : `${MODE[r.mode] ?? r.mode}, asked ${day(r.createdAt)}`, r.requester ? `by ${r.requester}` : r.source === 'history' ? 'from the old sheet' : ''].filter(Boolean).join(' · ')));
+    if (r.matched) meta.append(el('span', 'pill pill--ok', r.matched === 'reference' ? 'Matched by reference' : 'Matched'));
+    if (r.mismatch) meta.append(el('span', 'pill pill--crit', 'Reference found with a different amount'));
+    if (r.reviewFlag) meta.append(el('span', 'pill pill--warn', 'Paid to the requester’s own party'));
+    if (r.reimbursement) meta.append(el('span', 'pill', r.vouchers ? 'Reimbursement' : 'Reimbursement, no bill yet'));
+    li.append(meta);
+    if (r.decisionReason) li.append(el('div', 'record-reason', `${r.status === 'rejected' ? 'Rejected' : 'Note'}: ${r.decisionReason}`));
+    const acts = el('div', 'record-actions');
+    const btn = (label: string, fn: () => void, primary = false) => {
+      const b = el('button', `button button--small${primary ? ' button--primary' : ''}`, label);
+      b.type = 'button';
+      b.addEventListener('click', fn);
+      acts.append(b);
+    };
+    if (data?.can.approve && r.kind === 'request' && r.status === 'submitted') {
+      if (r.requesterId === data.me.id) acts.append(el('span', 'dim', 'Someone else must approve this.'));
+      else {
+        btn('Approve', () => act(`/api/finance-admin/requests/${r.id}/decide`, { action: 'approve' }, 'Approved.'), true);
+        btn('Reject', () => {
+          const reason = prompt('Why is it rejected?');
+          if (reason) void act(`/api/finance-admin/requests/${r.id}/decide`, { action: 'reject', reason }, 'Rejected.');
+        });
+      }
+    }
+    if (data?.can.allocate && r.reviewFlag && r.requesterId !== data.me.id) btn('Mark reviewed', () => act(`/api/finance-admin/requests/${r.id}/review`, {}, 'Reviewed.'));
+    if (r.vouchers) btn(`See the file${r.vouchers > 1 ? 's' : ''}`, async () => {
+      // The list does not carry voucher ids (they are fetched by the request): ask the server once.
+      const res = await staffFetch(`/api/finance-admin/requests/${r.id}/files`);
+      for (const f of res.data.files ?? []) await openVoucher(f.id);
+    });
+    if (data?.can.allocate && r.matched === 'accepted') btn('Unmatch', () => confirm('Remove the match?') && void act(`/api/finance-admin/requests/${r.id}/unmatch`, {}, 'Unmatched.'));
+    li.append(acts);
+    if (data?.can.allocate && !r.matched && r.proposals.length) {
+      const box = el('div', 'proposals');
+      box.append(el('div', 'dim', 'Could this be the payment?'));
+      for (const p of r.proposals) {
+        const row = el('div', 'proposal');
+        row.append(el('span', undefined, `${p.type === 'upi' ? 'UPI' : 'Bank'} ${day(p.date)}${p.who ? ` · ${p.who.slice(0, 60)}` : ''} (${p.reasons.join(', ')})`));
+        const b = el('button', 'button button--small', 'Yes, match');
+        b.type = 'button';
+        b.addEventListener('click', () => act(`/api/finance-admin/requests/${r.id}/match`, { type: p.type, targetId: p.targetId }, 'Matched.'));
+        row.append(b);
+        box.append(row);
+      }
+      li.append(box);
+    }
+    return li;
+  }
+
+  function render() {
+    if (!data) return;
+    const chips = $('chips');
+    chips.replaceChildren(
+      ...CHIPS.map((c) => {
+        const n = data!.records.filter(c.test).length;
+        const b = el('button', 'chip', c.id === 'all' ? c.label : `${c.label} (${n})`);
+        b.type = 'button';
+        b.setAttribute('aria-pressed', String(filter.chip === c.id));
+        b.addEventListener('click', () => ((filter.chip = c.id), render()));
+        return b;
+      }),
+    );
+    const test = CHIPS.find((c) => c.id === filter.chip)!.test;
+    const q = filter.q.trim().toLowerCase();
+    const shown = data.records.filter((r) => test(r) && (!q || [r.payee, r.purpose, r.upiRef, r.requester].join(' ').toLowerCase().includes(q)));
+    const cap = 200;
+    $('records').replaceChildren(...shown.slice(0, cap).map(card));
+    $('empty').hidden = shown.length > 0;
+    $('empty').textContent = shown.length > cap ? '' : 'Nothing here.';
+    if (shown.length > cap) $('records').append(el('li', 'hint', `Showing the first ${cap} of ${shown.length}. Search to narrow them.`));
+    lock.render();
+  }
+  $<HTMLInputElement>('q').addEventListener('input', (ev) => ((filter.q = (ev.target as HTMLInputElement).value), render()));
+
+  async function load() {
+    gate.hidden = true;
+    forbidden.hidden = true;
+    showLoading(statusEl);
+    try {
+      const { status, data: out } = await staffFetch('/api/finance-admin/requests');
+      if (status !== 200) throw new Error('load failed');
+      clearState(statusEl);
+      data = out;
+      intro.hidden = false;
+      intro.textContent = `Requests raised on the Requests page and spends logged there. What a record says it was for shows on the UPI page and in the ledger once it is matched.${out.agingCount ? ` ${out.agingCount} approved ${out.agingCount === 1 ? 'request has' : 'requests have'} been waiting over two weeks for a payment to match.` : ''}`;
+      render();
+      content.hidden = false;
+    } catch (err) {
+      if (fail(err)) return;
+      content.hidden = true;
+      intro.hidden = true;
+      showFailure(statusEl, { title: "Couldn't load the requests", text: "The server didn't answer. Nothing was changed. Check your connection and try again; if it keeps failing, tell a super admin.", onRetry: load });
+    }
+  }
+
+  function handleCredentialResponse(response: { credential: string }) {
+    setToken(response.credential);
+    load();
+  }
+  function renderSignInButton() {
+    if (typeof google === 'undefined') return;
+    google.accounts.id.initialize({ client_id: CLIENT_ID, callback: handleCredentialResponse });
+    google.accounts.id.renderButton(document.getElementById('g_id_signin'), { theme: (window as any).tvcGsiTheme?.() ?? 'outline', size: 'large' });
+  }
+  $('use-different-account').addEventListener('click', () => {
+    clearToken();
+    clearStepUp();
+    if (typeof google !== 'undefined') google.accounts.id.disableAutoSelect();
+    showGate();
+  });
+
+  if (getToken()) load();
+  else showGate();
+</script>
+<script is:inline src="https://accounts.google.com/gsi/client"></script>
+
+<style is:global>
+  .finance-appr .filters {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 14px 0;
+  }
+
+  .finance-appr .segmented {
+    flex-wrap: wrap;
+  }
+
+  .finance-appr .records {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 10px;
+  }
+
+  .finance-appr .record {
+    padding: 14px;
+    background: var(--tvc-white);
+    border-radius: var(--radius);
+    box-shadow: 0 0 0 1px var(--tvc-line) inset;
+  }
+
+  .finance-appr .record-top {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-weight: 600;
+  }
+
+  .finance-appr .record-amount {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .finance-appr .record-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin-top: 8px;
+    font-size: var(--text-sm);
+  }
+
+  .finance-appr .record-reason {
+    margin-top: 6px;
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  .finance-appr .record-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin-top: 10px;
+  }
+
+  .finance-appr .proposals {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--tvc-line);
+    font-size: var(--text-sm);
+  }
+
+  .finance-appr .proposal {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-top: 6px;
+  }
+
+  .finance-appr .dim {
+    color: var(--tvc-ink-soft);
+  }
+
+  .finance-appr .pill {
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    background: var(--tvc-cream);
+    color: var(--tvc-ink);
+  }
+
+  .finance-appr .pill--ok {
+    background: var(--tvc-green-tint);
+    color: var(--tvc-green-dark);
+  }
+
+  .finance-appr .pill--crit {
+    background: var(--tvc-orange-tint);
+    color: var(--tvc-orange-text);
+  }
+
+  .finance-appr .pill--warn {
+    background: var(--tvc-orange-tint);
+    color: var(--tvc-orange-text);
+  }
+</style>

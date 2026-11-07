@@ -9,6 +9,7 @@ import { originOf, sourcesOf } from '../../../scripts/lib/finance-origin.mjs';
 import { noteKeyOf } from '../../../scripts/lib/finance-notes.mjs';
 import { pairReversals } from '../../../scripts/lib/finance-reversals.mjs';
 import { loadNotes } from './finance-notes';
+import { loadPurposes } from './finance-requests';
 import { requireStaff } from './staff-access';
 import { rest } from './staff-mfa-store';
 import { capabilitiesForRole } from './staff-registry';
@@ -287,14 +288,15 @@ export async function ledgerAll(req: Request): Promise<Response> {
   const auth = await requireStaff(req, 'finance', 'view');
   if (!auth.ok) return fail(auth.error, auth.status);
   try {
-    const [{ lines, byLine }, ctx, accounts, households, upis, notes, badges] = await Promise.all([
+    const [{ lines, byLine }, ctx, accounts, households, upis, notes, badges, purposeOf] = await Promise.all([
       loadLedger(null, null),
       lookups(),
       cached('bank-accounts-badges', () => rows('/fin_bank_accounts?select=id,label,badge_key')),
       cached('households', () => rowsAll('/member_households?select=id,farm_unit,house_no&order=id.asc')),
-      cached('upi-linked', () => rowsAll('/fin_upi_lines?select=bank_line_id,counterparty,remarks,is_circle,app,upi_ref&bank_line_id=not.is.null&order=id.asc')),
+      cached('upi-linked', () => rowsAll('/fin_upi_lines?select=id,bank_line_id,counterparty,remarks,is_circle,app,upi_ref&bank_line_id=not.is.null&order=id.asc')),
       loadNotes(),
       cached('source-badges', () => rows('/fin_source_badges?select=key,label,short_label,kind,logo_url&active=eq.true&order=sort.asc')),
+      loadPurposes(),
       reviewRef(), // started now so the suggestion context below does not wait for it
     ]);
     const sc = await suggestionContext(lines, byLine, ctx);
@@ -337,6 +339,8 @@ export async function ledgerAll(req: Request): Promise<Response> {
         sources: sourcesOf({ bankBadge: accountBadge.get(l.bank_account_id) ?? null, origin }),
         noteKey,
         note: notes.get(noteKey) ?? null,
+        // What the payment was for, from a payment request or a logged spend: the default wording until a note is written.
+        purpose: purposeOf({ upiRef: (upi?.upi_ref as string | undefined) ?? l.upi_rrn ?? undefined, upiLineId: upi?.id as string | undefined, bankLineId: l.id }) as string | null,
         upiRef: (upi?.upi_ref as string | undefined) ?? l.upi_rrn ?? null,
         allocatedPaise: allocs.reduce((n, a) => n + a.amount_paise, 0),
         state,
@@ -425,7 +429,7 @@ export async function ledgerLine(req: Request, lineId: string): Promise<Response
   try {
     const [line] = await rows(`/fin_bank_lines?id=eq.${lineId}&select=id,bank_account_id,tran_date,narration,direction,amount_paise,upi_rrn`);
     if (!line) return fail('That line does not exist.', 404);
-    const [upi] = await rows(`/fin_upi_lines?bank_line_id=eq.${lineId}&select=counterparty,remarks,is_circle,upi_ref,app`);
+    const [upi] = await rows(`/fin_upi_lines?bank_line_id=eq.${lineId}&select=id,counterparty,remarks,is_circle,upi_ref,app`);
     const allocations = await rows(`/fin_allocations?bank_line_id=eq.${lineId}&select=id,party_id,category_id,project_id,amount_paise,period,nature,remarks,source,rule_id,review_state,review_reason,reverses_allocation_id,reversal_reason,household_id,maintenance_year,posted_at&order=created_at.asc`);
     const ctx = await lookups();
     const { lines: everyLine, byLine } = await loadLedger(null, null);
@@ -453,6 +457,7 @@ export async function ledgerLine(req: Request, lineId: string): Promise<Response
       upiRef: (upi?.upi_ref as string | undefined) ?? line.upi_rrn ?? null,
       noteKey: noteKeyOf({ upiRef: upi?.upi_ref as string | undefined, upiRrn: line.upi_rrn ?? undefined, bankLineId: line.id as string }),
       note: (await loadNotes()).get(noteKeyOf({ upiRef: upi?.upi_ref as string | undefined, upiRrn: line.upi_rrn ?? undefined, bankLineId: line.id as string }) as string) ?? null,
+      purpose: (await loadPurposes())({ upiRef: (upi?.upi_ref as string | undefined) ?? line.upi_rrn ?? undefined, upiLineId: upi?.id as string | undefined, bankLineId: line.id as string }) as string | null,
       state: posted ? 'allocated' : lineState(line, allocations),
       allocations: allocations.map((a) => ({
         id: a.id,

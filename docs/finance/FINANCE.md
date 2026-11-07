@@ -17,7 +17,8 @@ model are in [DESIGN.md](DESIGN.md); how to build it is in [README.md](README.md
 | 05 Ledger & review | **Merged (PR #529).** Posting rules, rules engine, ledger and rules screens, period close. Migration `0083` **applied to TVC ERP on 2026-11-05** (recorded as `finance_ledger`). |
 | 06 History load | **Loaded on 2026-11-05** (PR #530, migration `0084` applied): 1,031 allocations on 783 bank lines. Still open: the 2023-24 tracker tab, party on the history rows with none (the "No party" chip lists them), project details for the Farm Project placeholders (issue #531). |
 | 05/06 follow-up: the new ledger | **Draft PR #532.** The ledger page is rebuilt (TanStack Table and Virtual; every line fetched once, searched and sorted in the browser; cards on phones; saved drafts; undo; a line sheet that can set a maintenance unit and year) and replaces the first version at `/internal/finance/ledger/`; faster list, Paytm line, "No party" chip and flags. Critique 22 → 26 → 30 → 27 / 40 over four rounds (reviewers vary by about 3). No migration. Not yet tried on the real ledger. |
-| 02, 07-13 | Not started |
+| 08 Payment requests & bills | First slice built on branch `finance-08-requests` (draft PR). Migration `0092` **not yet applied**. See "Payment requests and spend logs" below. |
+| 02, 07, 09-13 | Not started |
 
 ## Access
 
@@ -629,3 +630,47 @@ pure rules in `scripts/lib/finance-history.mjs` (tested on invented rows). Count
 - **Not built:** the reconciliation of module totals against the sheet's own summary tabs by month and category; rules are not seeded (the hidden
   "Lookups" tab holds only payment-mode keywords, and the suggestion engine learns from the loaded history instead); the 2023-24 tracker tab and the
   older years (the ledger holds 476 bank lines before April 2024; the same script takes `--tab` and `--since`).
+
+## Payment requests and spend logs (session 08, first slice, migration `0092_finance_payment_requests.sql`, **not yet applied**)
+
+One table, `fin_payment_requests`, holds two kinds of record with the same fields (rules in `scripts/lib/finance-requests.mjs`, server in
+`lib/finance-requests.ts`, routes in `finance-admin.mts`):
+
+- a **request**, raised before paying: payee (a saved party), amount, mode (NEFT, UPI, IMPS, RTGS), purpose, needed-by, optional "paid in cash,
+  reimburse me" (which needs a bill before it can be approved). Flow: `submitted` -> `approved` / `rejected` -> `paid` (set when a payment is matched) or `cancelled`.
+- a **log**, a spend already made by UPI (a UPI Circle delegate or a direct payment) recorded afterwards by whoever paid: payee (saved party or a
+  name as typed), amount, date, direct or delegate, optional 12-digit UPI reference, purpose, a photo of the payment. It needs no approval (stored as `paid`).
+  A log (or request) whose payee is the requester party (Settings, `requester_party_id`) is flagged for review; another person clears it.
+- `fin_vouchers` (from 0083) gains `request_id` and `kind` (`bill` | `payment_screenshot`). Files go to the private R2 prefix `finance/vouchers/`
+  (JPEG, PNG, WebP or PDF, checked by their first bytes, 4 MB each) and are read back only through `GET /vouchers/:id` (the person who raised the record, or `finance` view).
+
+**Who may do what.** Raising, logging, attaching a file and adding a vendor: `finance-requests` (the farm manager) **or** `finance` `request`;
+holding `finance-requests` opens nothing else (tested, including that it is not treated as a `finance` role when checking who may attach a file).
+The list of every record needs `finance` view; matching and clearing a flag need `allocate`; approving needs `approve` **and** the MFA step-up;
+whoever raised a request can never approve or reject it (`decide`, `makerIsNotChecker`). Every change writes `fin_audit_log` first (ids and field names only).
+Submitting a request emails `core-team@` (best effort; WhatsApp not used). A new vendor added by a requester is an unverified party; an approver verifies it on Parties.
+
+**Pulled, not copied.** A record's purpose is shown on the UPI page (the Note column) and in the ledger (under the narration, italic "For: ..."; the
+line sheet's note box starts with it) as the default wording until a person writes a payment note, exactly like a Paytm remark; the payment note
+(`fin_payment_notes`) stays the manual override. `loadPurposes()` looks a payment up by UPI reference, UPI row or bank line.
+
+**How a record is matched.** Exactly, by the 12-digit reference (a log typed with it, or loaded from the old sheet), joining the UPI row and the bank
+debit that carry it, only when the amount agrees (a reference with a different amount is flagged, never linked; a reversal credit is not the
+payment). No reference: `proposeMatches` suggests a UPI row (within 3 days) and/or bank debit (a UPI log within 3 days, a NEFT request up to 21 days
+after approval) of the same amount, better when the payee name is in the row; a person accepts one (`POST /requests/:id/match`, which re-reads the
+statement row and re-checks amount and direction; accepting marks a request paid on the statement date). Never linked on a guess. An approved request
+unmatched for 14 days is counted on the Approvals page.
+
+**Pages.** `/internal/finance-requests/` (the requester's, built for a phone: ask for a payment, record a spend, add a vendor, attach a photo, see their
+own records, cancel) and `/internal/finance/requests/` (nav "Approvals": to approve, to match, to review, all; approve behind the unlock, reject with a reason, accept a suggested match, open the files).
+
+**History load (operator script, run once).** `scripts/load-fin-requests-history.mjs --sheet <id> [--apply]` (dry run by default; counts only are printed):
+the old sheet's "Fund Transfer Request" tab becomes already-paid requests and its "UPI Circle Transactions" tab becomes logs (`source = 'history'`, no requester).
+Rules: failure/expired rows moved no money and are skipped; a row naming a bank account that is not a registered one is skipped; a row naming our bank and CR is money in
+and is skipped; a row naming no bank is a delegated payment out; references are padded to 12 digits; rows without a purpose are skipped. A row links to a saved
+party by the account number's fingerprint, then by an exact name that is unique; otherwise the typed name is kept. Account numbers are fingerprinted, never stored or printed here.
+Running it again adds nothing. Checked against the real sheet read-only (parse only, no write): the columns and formats are as the parser expects.
+
+**Not built yet (next):** the bill scanner (edge detection, crop, multi-page) and the vision reading of vendor, date, amount and UPI reference off a bill or screenshot (the files are
+attached as plain photos today, and the reference is typed); approver-queue polish; per-delegate spend limits (who paid is recorded: `requester_id` and `paid_via`); a vendor bulk file;
+payment links from the ledger's Paypro/bank lines to a request. **Not verified:** the pages in a browser on a real phone, the upload to R2, the approval email, and the loader's `--apply` (the table is not applied yet).

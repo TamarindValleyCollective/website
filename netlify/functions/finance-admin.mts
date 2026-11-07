@@ -18,7 +18,8 @@ import { restHeaders } from '../../scripts/lib/supabase.mjs';
 import { payeeFieldVisibility } from '../../scripts/lib/finance-access.mjs';
 import { todayIST } from '../../scripts/lib/finance-parties.mjs';
 import { attentionOf } from '../../scripts/lib/finance-attention.mjs';
-import { PARTY_ID, addPayeeAccount, createParty, listParties, mergeParty, retirePayeeAccount, revealPayeeAccount, reviewParty, unmergeParty, updateParty, verifyPayeeAccount } from './lib/finance-parties';
+import { PARTY_ID, addVendor, addPayeeAccount, createParty, listParties, mergeParty, retirePayeeAccount, revealPayeeAccount, reviewParty, unmergeParty, updateParty, verifyPayeeAccount } from './lib/finance-parties';
+import { REQUEST_ID, addVoucher, cancelOrDecide, listFiles, createRecord, getVoucher, listMine, listRequests, matchRecord, reviewRecord, unmatchRecord } from './lib/finance-requests';
 import { listUpiLines } from './lib/finance-upi-view';
 import { setPaymentNote } from './lib/finance-notes';
 import { heldCoverage, reconciliationOf, runImport } from './lib/finance-import';
@@ -211,6 +212,23 @@ const dispatch = async (req: Request): Promise<Response> => {
     if (account[2] === 'retire') return retirePayeeAccount(req, account[1]);
     return verifyPayeeAccount(req, account[1]);
   }
+  // Payment requests and spend logs (session 08)
+  if (route === '/requests/mine' && req.method === 'GET') return listMine(req);
+  if (route === '/requests' && req.method === 'GET') return listRequests(req);
+  if (route === '/requests' && req.method === 'POST') return createRecord(req);
+  if (route === '/vendors' && req.method === 'POST') return addVendor(req);
+  const voucher = /^\/vouchers\/([^/]+)$/.exec(route);
+  if (voucher && REQUEST_ID.test(voucher[1]) && req.method === 'GET') return getVoucher(req, voucher[1]);
+  const files = /^\/requests\/([^/]+)\/files$/.exec(route);
+  if (files && REQUEST_ID.test(files[1]) && req.method === 'GET') return listFiles(req, files[1]);
+  const request = /^\/requests\/([^/]+)\/(vouchers|decide|match|unmatch|review)$/.exec(route);
+  if (request && REQUEST_ID.test(request[1]) && req.method === 'POST') {
+    if (request[2] === 'vouchers') return addVoucher(req, request[1]);
+    if (request[2] === 'decide') return cancelOrDecide(req, request[1]);
+    if (request[2] === 'match') return matchRecord(req, request[1]);
+    if (request[2] === 'unmatch') return unmatchRecord(req, request[1]);
+    return reviewRecord(req, request[1]);
+  }
   // Ledger and review (session 05)
   if (route === '/upi-lines' && req.method === 'GET') return listUpiLines(req);
   if (route === '/payment-note' && req.method === 'POST') return setPaymentNote(req);
@@ -257,6 +275,10 @@ export const config = {
     '/api/finance-admin/parties/*',
     '/api/finance-admin/accounts/*',
     '/api/finance-admin/upi-lines',
+    '/api/finance-admin/requests',
+    '/api/finance-admin/requests/*',
+    '/api/finance-admin/vendors',
+    '/api/finance-admin/vouchers/*',
     '/api/finance-admin/payment-note',
     '/api/finance-admin/ledger',
     '/api/finance-admin/ledger/*',
