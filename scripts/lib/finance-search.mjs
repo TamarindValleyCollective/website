@@ -4,6 +4,8 @@
 // A search is: filter chips (a kind and an option), text chips (words that must all appear), and up to two Group By fields.
 // Options of the same kind are alternatives ("To allocate" or "To review"); different kinds all have to hold.
 //
+import { ORIGINS, originLabel } from './finance-origin.mjs';
+
 // A line here is the page's `Line`: { id, date (ISO), direction ('debit'|'credit'), amountPaise, state, review, missingParty,
 // effective: { category, party }, allocation: { householdLabel, maintenanceYear } | null }.
 
@@ -23,6 +25,10 @@ export const FILTER_KINDS = {
       in: ['Money in', (l) => l.direction === 'credit'],
       out: ['Money out', (l) => l.direction === 'debit'],
     },
+  },
+  origin: {
+    label: 'Origin',
+    options: Object.fromEntries(Object.entries(ORIGINS).map(([k, o]) => [k, [o.label, (l) => l.origin === k]])),
   },
   // Period options depend on today, so they are built from a `now` ISO date.
   period: { label: 'Date' },
@@ -84,6 +90,8 @@ export const GROUP_FIELDS = {
   party: ['Party', (l) => l.effective?.party || 'No party'],
   unit: ['Unit', (l) => l.allocation?.householdLabel || 'No unit'],
   month: ['Month', (l) => l.date.slice(0, 7)],
+  account: ['Account', (l) => l.account || 'No account'],
+  origin: ['Origin', (l) => (l.origin ? originLabel(l.origin) : 'Not known')],
   status: ['Status', (l) => STATUS_WORDS[l.review ? 'review' : l.state] ?? l.state],
 };
 export const groupLabel = (field) => GROUP_FIELDS[field]?.[0] ?? field;

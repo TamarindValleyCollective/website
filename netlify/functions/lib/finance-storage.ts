@@ -1,9 +1,9 @@
 // Where the raw statement files are kept: the same PRIVATE Cloudflare R2 bucket as contracts and land documents, under
-// finance/imports/<batch uuid>.xlsx. Nothing is public and no link is ever handed out. The file is kept so a parser
+// finance/imports/<batch uuid>.xlsx (or .pdf for a BHIM history). Nothing is public and no link is ever handed out. The file is kept so a parser
 // bug can be fixed and the file re-read, and as the evidence behind the lines.
 import { r2Config } from './land-doc-storage';
 
-const KEY = /^finance\/imports\/[0-9a-f-]{36}\.xlsx$/;
+const KEY = /^finance\/imports\/[0-9a-f-]{36}\.(xlsx|pdf)$/;
 const urlFor = (base: string, key: string) => {
   if (!KEY.test(key)) throw new Error('Invalid storage key');
   return `${base}/${key}`;
@@ -13,7 +13,7 @@ export async function putFinanceImport(key: string, bytes: Uint8Array): Promise<
   const { client, base } = r2Config();
   const res = await client.fetch(urlFor(base, key), {
     method: 'PUT',
-    headers: { 'content-type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
+    headers: { 'content-type': key.endsWith('.pdf') ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
     body: bytes as BodyInit,
   });
   if (!res.ok) throw new Error(`R2 put failed: ${res.status}`);

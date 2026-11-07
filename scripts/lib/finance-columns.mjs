@@ -114,12 +114,12 @@ export function describeCondition(label, cond) {
 }
 
 // ---- sort
-export const SORT_KEYS = ['date', 'narration', 'amount', 'category', 'party', 'nature', 'status'];
+export const SORT_KEYS = ['date', 'origin', 'narration', 'amount', 'category', 'party', 'nature', 'status'];
 // Working order: what needs a person first.
 const STATUS_RANK = { review: 0, unallocated: 1, partly_allocated: 2, allocated: 3 };
 
 /**
- * A comparator for rows { id, date, narration, amount, category, party, nature, status }. Empty cells go last whichever way, so a sort
+ * A comparator for rows { id, date, origin, narration, amount, category, party, nature, status }. Empty cells go last whichever way, so a sort
  * by Category brings the filled ones to the top. Ties break by newest date, then id, so the order is the same on every request and
  * paging never repeats or skips a line.
  */

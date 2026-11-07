@@ -221,6 +221,75 @@ Page `/internal/finance/import/`; routes in `finance-admin.mts` (`GET /imports`,
   A bank API would feed the same planning/storing step; none is built.
 - **Audit.** `finance.import_committed` (counts only) is written before anything is stored; `finance.bank_account_added`.
 
+### BHIM history, origin of a line and the UPI page (branch `finance-upi-circle-bhim`, migration `0088`, **applied 2026-11-07**)
+
+Before the circle moved to Paytm (31 Aug 2026) it ran on BHIM. The BHIM "Transaction History" PDF is now a third file type beside
+the Axis Excel statement and the Paytm Excel export (`FILE_TYPES` in `lib/finance-import.ts` is the read-only record of which file
+types the importer knows; each batch stores its `source`: `axis_statement`, `paytm_upi`, `bhim_upi`).
+
+- **Reading the PDF.** `unpdf` gives one text line per transaction; `scripts/lib/finance-bhim.mjs` parses it (pure, tested). Only
+  successful `PAY` rows are stored; a `FAILURE` row moved no money, so it is counted and shown on the preview but not stored. A row
+  that cannot be read is listed with its line number, never dropped.
+- **Account.** A UPI app can be linked to several banks and pay from any, so the file cannot always say. A row that names its
+  account (`XXXX…0099` → `0099`) is placed on the registered account with those last four digits; a row that names none (a circle
+  payment) is stored **with no account**, and its account is read from the bank line it is joined to by reference (the UPI
+  page does this at read time; `fin_upi_lines` is link-only, so the row itself never changes). Only a row naming an account that is
+  not registered **blocks** the file (`account_not_registered`), so a payment is never put on a wrong account. A row with no bank line
+  yet shows "account not known yet".
+- **Circle reading (INFERRED).** `bhimIsCircle` in `finance-upi-plan.mjs`: no bank named and marked `CR` = a UPI Circle payment;
+  bank named and `DR` = paid from the account. All 30 payments in the two sample files are bank debits (29 matched by reference),
+  so DR/CR is *not* the direction of the money. Not yet confirmed against the old "UPI Circle Transactions" sheet.
+- **Same table, one more column.** Rows go into `fin_upi_lines` with `app` (`bhim` | `paytm`, existing rows are `paytm`), the same
+  unique reference (so a payment in both files is stored once) and the same join to bank lines. Raw PDFs are kept in R2 as `.pdf`.
+- **Channel ("origin") of a bank line** (`scripts/lib/finance-origin.mjs`, derived at read time, not stored). A line has two
+  independent facts: the **account** it hit and the **channel** it came through. `CHANNELS` is the registry (label, `kind`:
+  `upi_app | bulk | gateway | card | bank`, `flows`: in/out); `RULES` are the narration readings, first match wins. Today: `bhim` /
+  `paytm` (a joined UPI row names the app), `paypro` (a NEFT **debit** shaped `NEFT/<number>/<number>/` with no payee: agreed with
+  Sharath 2026-11-07), `gateway` (a **credit** narrated `Razorpay…`: the payment gateway paying out; only one, a test, has appeared so
+  far, so real settlements are unverified), `card` (`POS/`, `ECOM PUR/`, and `VISA MERCH Refund`), `upi_unknown` (a UPI narration with no
+  BHIM or Paytm row) and `bank` (everything else: net banking, NEFT, IMPS, charges). **To add a channel** (a POS terminal, a second
+  gateway): one `CHANNELS` entry and, if the bank's narration identifies it, one rule; a channel with a statement of its own is
+  identified by the joined row instead. No POS terminal exists today, so none is defined. Each reading is an inference from
+  narrations, not a label from the bank. The ledger shows it as the **Origin** column (sortable, searchable, a filter chip and Group By;
+  on phone cards a label under the narration), with the account under it once there is more than one account (also a Group By field and
+  searchable), and in the line sheet. Not built: reconciling gateway settlements to the individual online payments (the gateway's
+  settlement report would join like the UPI exports do).
+- **UPI page** `/internal/finance/upi/` (`GET /upi-lines`, `lib/finance-upi-view.ts`, pure rules in `finance-upi-circle.mjs`): a
+  sortable table of every UPI row (date, paid to, amount, app, **paid by**, account, state against the statement, reference), with
+  filters by app, paid by and state. *Paid by* is **Direct** (an operator of the account paid in their own app) or **Delegate**
+  (a delegated payment, "UPI Circle": a delegate pays with a spend right and limit the operator gave them; only the account's
+  operators can add the account to their UPI apps, and there can be several delegates, each with their own limit). Every download
+  is in the operator's name, so a file never says *which* delegate paid; today there is one, and a delegate field would be needed
+  for more. State: *in the ledger* / *waiting for the statement* / *not in the statement*. Delegated spend per calendar month is
+  shown against the Rs 15,000 allowance (`CIRCLE_CAP_PAISE`, a constant; it is not yet per delegate), and so is the count of bank UPI
+  debits that no BHIM/Paytm row explains. Code and the database still say `is_circle` for "delegated".
+- **Notes and links between the ledger and the UPI page** (migration `0089`, **applied 2026-11-07**). The bank's or the app's wording is never
+  changed. A **note** sits beside it: one per payment, in `fin_payment_notes`, keyed `upi:<12-digit reference>` for a UPI payment (so a UPI
+  row and its bank line share one note, before and after they are joined) or `bank:<line id>` otherwise. It is shown and edited in the
+  UPI table (a Note column, prefilled with the Paytm remark when no note was written; saving stores it as the note) and in the ledger
+  (under the narration, and a Note field in the line sheet). Writing one needs `allocate` (`POST /payment-note`,
+  `lib/finance-notes.ts`, rules in `finance-notes.mjs`): at most 300 characters, no account number, UPI id or IFSC, an empty note clears
+  it, and the audit entry (`finance.payment_note_set`) is written first and holds the length, never the text. **Links both ways:** in the
+  ledger the Origin of a BHIM or Paytm payment links to that payment in the UPI table (`/internal/finance/upi/?ref=<reference>`, and the
+  line sheet has the same link); in the UPI table a payment joined to a bank line has *Open in the ledger*
+  (`/internal/finance/ledger/?line=<line id>`, which opens the line sheet). The UPI table also has its own **Debit / credit** column.
+  Other channels (Paypro, gateway, card) have no page of their own to link to yet.
+- **Source badges** (migration `0090`, **applied 2026-11-07**). The Origin column shows small badges for the records that vouch for a line:
+  its bank (always), then the BHIM or Paytm app when a UPI row is joined, Paypro or Razorpay when the narration says so
+  (`sourcesOf` in `finance-origin.mjs`). The badges live in a table, `fin_source_badges` (key, label, short label, kind, `logo_url`,
+  sort, active): a badge shows its logo once `logo_url` is set (a path on this site or a full URL), else its short name as a text chip, so a
+  logo is swapped, or a bank added, by editing a row, with no code change. There is no admin screen for the table yet: change it in
+  the database. Each bank account carries its own bank badge (`fin_bank_accounts.badge_key`, chosen when the account is added on the
+  Import page), so Bank 2 shows its own logo. BHIM and Paytm badges link to that payment in the UPI table.
+- **Cross-references: what exists and what each still needs.** *Ledger → UPI* and *UPI → ledger* are built (above). *Paypro:* there is
+  no Paypro record to link to (the bank only shows a batch line); it needs the Paypro batch file or the payroll/payment-request
+  sessions (08/09) to exist first. *Razorpay settlement:* the payments module already stores `settlement_id`, `settlement_utr` and
+  `settled_at` per payment, so a gateway credit can be matched to a settlement (by the settlement's UTR in the narration if the bank
+  prints one, else by net amount and date, and only a unique match is shown); that is designed but **not built or verified**: the
+  statement holds only one test credit and no payment is settled yet. Do it with the first real settlement in hand.
+- **Not done:** an Account filter *chip* in the ledger (Group By, search and the line sheet cover it), and the dashboards, period
+  close and the Overview's statement-gap check have not been checked for a second bank account.
+
 ## Ledger (session 05, migration `0083_finance_ledger.sql`, applied 2026-11-05)
 
 Pages `/internal/finance/ledger/` (the Ledger, with the review queue and the months) and `/internal/finance/rules/` (rules,

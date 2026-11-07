@@ -19,6 +19,8 @@ import { payeeFieldVisibility } from '../../scripts/lib/finance-access.mjs';
 import { todayIST } from '../../scripts/lib/finance-parties.mjs';
 import { attentionOf } from '../../scripts/lib/finance-attention.mjs';
 import { PARTY_ID, addPayeeAccount, createParty, listParties, mergeParty, retirePayeeAccount, revealPayeeAccount, reviewParty, unmergeParty, updateParty, verifyPayeeAccount } from './lib/finance-parties';
+import { listUpiLines } from './lib/finance-upi-view';
+import { setPaymentNote } from './lib/finance-notes';
 import { heldCoverage, reconciliationOf, runImport } from './lib/finance-import';
 import { supabaseImportStore } from './lib/finance-import-store';
 import { LEDGER_ID, clearLedgerCache, closePeriod, ledgerAll, ledgerCounts, ledgerLine, listLedger, listPeriods, listRules, missingParties, postBatch, recategorise, reviewAllocation, saveAllocations, saveCategory, saveRule, setAllocationParties, setAllocationParty, setRequester } from './lib/finance-ledger';
@@ -88,14 +90,16 @@ async function handleImportList(req: Request): Promise<Response> {
   try {
     const store = supabaseImportStore();
     const capabilities = capabilitiesForRole('finance', auth.staff.role);
-    const accounts = (await (await rest('/fin_bank_accounts?select=id,label,last4,upi_label&active=eq.true&kind=eq.bank&order=created_at.asc')).json()) as { id: string; label: string; last4: string | null; upi_label: string | null }[];
+    const accounts = (await (await rest('/fin_bank_accounts?select=id,label,last4,upi_label,badge_key&active=eq.true&kind=eq.bank&order=created_at.asc')).json()) as { id: string; label: string; last4: string | null; upi_label: string | null; badge_key: string | null }[];
+    const bankBadges = (await (await rest('/fin_source_badges?select=key,label&kind=eq.bank&active=eq.true&order=sort.asc')).json()) as { key: string; label: string }[];
     const batches = await (
       await rest('/fin_import_batches?select=id,source,file_name,period_from,period_to,first_line_date,last_line_date,inserted_count,duplicate_count,ignored_count,failed_count,created_at&order=created_at.desc&limit=60')
     ).json();
     return jsonResponse({
       canImport: capabilities.includes('import'),
       canConfigure: capabilities.includes('configure'),
-      accounts: accounts.map((a) => ({ id: a.id, label: a.label, last4: a.last4, hasUpiLabel: Boolean(a.upi_label) })),
+      accounts: accounts.map((a) => ({ id: a.id, label: a.label, last4: a.last4, hasUpiLabel: Boolean(a.upi_label), badgeKey: a.badge_key })),
+      bankBadges,
       batches,
       coverage: await heldCoverage(store),
       reconciliation: await reconciliationOf(store),
@@ -135,7 +139,7 @@ async function handleImport(req: Request, commit: boolean): Promise<Response> {
 async function handleAddBankAccount(req: Request): Promise<Response> {
   const auth = await requireStaff(req, 'finance', 'configure');
   if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
-  let body: { label?: unknown; last4?: unknown; upiLabel?: unknown };
+  let body: { label?: unknown; last4?: unknown; upiLabel?: unknown; badgeKey?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -147,13 +151,16 @@ async function handleAddBankAccount(req: Request): Promise<Response> {
   if (!label || label.length > 60) return jsonResponse({ error: 'Give the account a short name.' }, 400);
   if (!/^\d{4}$/.test(last4)) return jsonResponse({ error: 'Enter the last four digits of the account number, and no more.' }, 400);
   if (upiLabel && upiLabel.length > 60) return jsonResponse({ error: 'The Paytm account label is too long.' }, 400);
+  const badgeKey = typeof body.badgeKey === 'string' && body.badgeKey ? body.badgeKey : null;
   try {
+    if (badgeKey && !/^[a-z][a-z0-9_]{1,30}$/.test(badgeKey)) return jsonResponse({ error: 'Choose the bank from the list.' }, 400);
+    if (badgeKey && ((await (await rest(`/fin_source_badges?key=eq.${badgeKey}&kind=eq.bank&active=eq.true&select=key`)).json()) as unknown[]).length === 0) return jsonResponse({ error: 'Choose the bank from the list.' }, 400);
     const entities = (await (await rest('/fin_entities?select=id&order=created_at.asc&limit=1')).json()) as { id: string }[];
     if (!entities[0]) return jsonResponse({ error: 'Server error' }, 500);
     const res = await fetch(`${process.env.SUPABASE_URL}/rest/v1/fin_bank_accounts`, {
       method: 'POST',
       headers: restHeaders({ Prefer: 'return=representation' }),
-      body: JSON.stringify({ entity_id: entities[0].id, label, last4, upi_label: upiLabel, kind: 'bank' }),
+      body: JSON.stringify({ entity_id: entities[0].id, label, last4, upi_label: upiLabel, kind: 'bank', badge_key: badgeKey }),
     });
     if (res.status === 409) return jsonResponse({ error: 'An account with that name already exists.' }, 409);
     if (!res.ok) throw new Error(`insert failed: ${res.status}`);
@@ -205,6 +212,8 @@ const dispatch = async (req: Request): Promise<Response> => {
     return verifyPayeeAccount(req, account[1]);
   }
   // Ledger and review (session 05)
+  if (route === '/upi-lines' && req.method === 'GET') return listUpiLines(req);
+  if (route === '/payment-note' && req.method === 'POST') return setPaymentNote(req);
   if (route === '/ledger' && req.method === 'GET') return listLedger(req);
   if (route === '/ledger/all' && req.method === 'GET') return ledgerAll(req);
   if (route === '/ledger/post' && req.method === 'POST') return postBatch(req);
@@ -247,6 +256,8 @@ export const config = {
     '/api/finance-admin/parties',
     '/api/finance-admin/parties/*',
     '/api/finance-admin/accounts/*',
+    '/api/finance-admin/upi-lines',
+    '/api/finance-admin/payment-note',
     '/api/finance-admin/ledger',
     '/api/finance-admin/ledger/*',
     '/api/finance-admin/allocations/*',

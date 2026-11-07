@@ -4,6 +4,10 @@
 > script, sheet layout, trigger cadence, or Drive folder — update this file in the same change.
 > See the note in `AGENTS.md`.
 
+> **Superseded in part (2026-11-07):** the finance module's Import page now reads the same BHIM history PDFs
+> (`docs/finance/FINANCE.md`, "BHIM history, origin of a line and the UPI page") and matches them to the bank
+> statement. This Apps Script is still what feeds the old sheet until the cutover session retires it.
+
 ## What this is
 
 Not part of tvc.farm's website — a standalone Google Apps Script automation for TVC's internal

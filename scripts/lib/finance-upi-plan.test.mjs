@@ -138,3 +138,36 @@ test('summary: a payment after the last bank line is awaiting; one inside the st
   assert.deepEqual(s.unmatchedInStatement, { count: 1, totalPaise: 1 });
   assert.deepEqual(s.bankWithoutUpi, { predatesExport: 1, inExportPeriod: 1 });
 });
+
+// ---- BHIM -----------------------------------------------------------------------------------------------------------
+import { planBhimImport, bhimIsCircle } from './finance-upi-plan.mjs';
+
+const bhimLine = (o) => ({ row: 4, paidAt: '2026-08-26', time: '10:00:00', sender: { id: 's@upi', name: 'S' }, receiver: { id: 'r@ybl', name: 'Shop' }, accountLast4: null, bankName: null, drcr: 'CR', upiRef: '600000000001', amountPaise: 15000, ...o });
+const bhimFile = (lines, extra = {}) => ({ id: '0', fileHash: 'h1', parsed: { from: '2026-07-01', to: '2026-11-07', lines, failed: [], unsuccessful: { count: 0, totalPaise: 0 }, ...extra } });
+const axis = { id: 'a1', label: 'Axis current', last4: '0099', upiLabel: null };
+const other = { id: 'a2', label: 'Second bank', last4: '0123', upiLabel: null };
+const none = { fileHashes: [], refs: [] };
+
+test('BHIM: a row naming its account is placed on it; a circle row names none and is stored with no account (its bank line says which)', () => {
+  const plan = planBhimImport({ file: bhimFile([bhimLine({}), bhimLine({ upiRef: '600000000002', bankName: 'AXIS BANK', accountLast4: '0099', drcr: 'DR' })]), accounts: [axis, other], held: none });
+  assert.equal(plan.status, 'ok');
+  assert.deepEqual(plan.newLines.map((l) => [l.accountId, l.isCircle, l.direction, l.app]), [[null, true, 'debit', 'bhim'], ['a1', false, 'debit', 'bhim']]);
+  assert.deepEqual(plan.newLines.map((l) => l.accountLabel), ['BHIM', 'BHIM · Axis current']);
+  assert.equal(bhimIsCircle(bhimLine({ bankName: 'AXIS BANK', drcr: 'DR' })), false);
+});
+
+test('BHIM: a file of circle rows alone, or naming two accounts, is accepted (the account is not read from the file); only an unregistered account blocks', () => {
+  assert.equal(planBhimImport({ file: bhimFile([bhimLine({})]), accounts: [axis, other], held: none }).status, 'ok');
+  const two = planBhimImport({ file: bhimFile([bhimLine({}), bhimLine({ upiRef: '600000000002', bankName: 'AXIS BANK', accountLast4: '0099', drcr: 'DR' }), bhimLine({ upiRef: '600000000003', bankName: 'X', accountLast4: '0123', drcr: 'DR' })]), accounts: [axis, other], held: none });
+  assert.deepEqual(two.newLines.map((l) => l.accountId), [null, 'a1', 'a2']);
+  const unreg = planBhimImport({ file: bhimFile([bhimLine({ bankName: 'AXIS BANK', accountLast4: '7777', drcr: 'DR' })]), accounts: [axis], held: none });
+  assert.deepEqual(unreg.errors, [{ type: 'account_not_registered', last4: ['7777'] }]);
+});
+
+test('BHIM: references already held (from Paytm or an earlier BHIM file) and repeats in one file are counted, not stored twice; the same file is a duplicate', () => {
+  const lines = [bhimLine({ bankName: 'AXIS BANK', accountLast4: '0099', drcr: 'DR' }), bhimLine({ bankName: 'AXIS BANK', accountLast4: '0099', drcr: 'DR' }), bhimLine({ upiRef: '600000000009', bankName: 'AXIS BANK', accountLast4: '0099', drcr: 'DR' })];
+  const plan = planBhimImport({ file: bhimFile(lines), accounts: [axis], held: { fileHashes: [], refs: ['600000000009'] } });
+  assert.equal(plan.counts.new, 1);
+  assert.equal(plan.counts.alreadyHeld, 2);
+  assert.equal(planBhimImport({ file: bhimFile(lines), accounts: [axis], held: { fileHashes: ['h1'], refs: [] } }).status, 'duplicate_file');
+});

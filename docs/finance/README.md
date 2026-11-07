@@ -71,5 +71,6 @@ run at any time. Run 13 last.
 | 04 | Built 2026-11-02, draft PR (`finance-04-parties`) | Parties directory, encrypted payee accounts, reveal/verify behind the step-up, shared-account flags, operator import from a Google Sheet. Migration `0079` **applied 2026-11-02**. See [FINANCE.md](FINANCE.md). |
 | 04 follow-up | Design-review changes, draft PR #528 | Admin navigation by blocks, needs-you Overview, verification work queue and evidence (migration `0082`, applied 2026-11-02), states, Import regrouped. See [FINANCE.md](FINANCE.md). |
 | 05 | Built 2026-11-05, draft PR #529 (`worktree-finance-05-ledger`) | Posting rules, rules engine and review flags, ledger and rules screens, bulk apply, refunds, period close, category merge. Migration `0083` **applied 2026-11-05**. See [FINANCE.md](FINANCE.md). |
+| 05 follow-up | BHIM import, origin column, UPI page, branch `finance-upi-circle-bhim` | Migrations `0088` **applied 2026-11-07**, `0089` (payment notes) **applied 2026-11-07**, `0090` (source badges) **applied 2026-11-07** (the ledger reads `fin_upi_lines.app`, so it must stay applied before this merges). See [FINANCE.md](FINANCE.md). |
 | 06 | In progress, branch `worktree-finance-06-history` | The tracker is matched to the bank lines (dry run: 95.3% of rows). Mapping and the apply step are next. See [FINANCE.md](FINANCE.md). |
 | 02, 07-13 | Not started | |

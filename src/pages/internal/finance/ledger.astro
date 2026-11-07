@@ -122,6 +122,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   import { categoryNodes, categoryPath, partyNodes, partyPath, partyStart, readCategoryPath } from '../../../../scripts/lib/finance-picker-nodes.mjs';
   import { button, categoryOptions, combo, h, input, labelled, niceDate, niceMonth, parseRupees, partyOptions, pill, present, rupees, unitOptions } from '../../../../scripts/lib/finance-ui.mjs';
   import { GROUP_FIELDS, buildItems, defaultUnitFor, financialYearOf, groupLabel, matchOptions, kindLabel, kindsInOrder, optionCounts, optionKeys, optionLabel, passesChips, passesWords, readFavorites, withFavorite } from '../../../../scripts/lib/finance-search.mjs';
+  import { originLabel, ORIGINS } from '../../../../scripts/lib/finance-origin.mjs';
   import { compareRows, describeCondition, matchAmount, matchDate, matchText, parseAmount, parseDate, parseText } from '../../../../scripts/lib/finance-columns.mjs';
 
   declare const google: any;
@@ -129,7 +130,7 @@ import SignInGate from '../../../components/SignInGate.astro';
 
   type Suggestion = { categoryId: string | null; partyId: string | null; nature: string; confidence: string; newPartyName: string | null };
   type Line = {
-    id: string; date: string; narration: string; direction: 'debit' | 'credit'; amountPaise: number; account: string; remark: string | null; counterparty: string | null;
+    id: string; date: string; narration: string; direction: 'debit' | 'credit'; amountPaise: number; account: string; remark: string | null; counterparty: string | null; origin?: string; sources?: string[]; noteKey?: string; note?: string | null; upiRef?: string | null;
     allocatedPaise: number; state: 'unallocated' | 'partly_allocated' | 'allocated'; review: boolean; missingParty: boolean; suggestion: Suggestion | null;
     allocation: { categoryId: string; partyId: string | null; nature: string; count: number; householdLabel: string | null; maintenanceYear: string | null } | null;
     hay?: string; // lower-case text the search box looks in, worked out once
@@ -140,7 +141,8 @@ import SignInGate from '../../../components/SignInGate.astro';
   type Project = { id: string; name: string; kind: string; financial_year: number; status: string };
   type Lookups = { categories: Category[]; parties: Party[]; projects: Project[]; requesterPartyId: string | null; closedMonths: string[]; households: { id: string; label: string; people?: string[] }[] };
   type Filter = 'unallocated' | 'review' | 'noparty' | 'all';
-  type ListData = { canAllocate: boolean; lines: Line[]; lookups: Lookups };
+  type Badge = { label: string; short: string; kind: string; logoUrl: string | null };
+  type ListData = { canAllocate: boolean; lines: Line[]; lookups: Lookups; badges?: Record<string, Badge> };
   type Field = 'categoryId' | 'partyId' | 'nature';
   // Members come from the member records: while the list is limited to members, it says so instead of offering to add one.
   // Members come from the member records: inside "Members" the party list says so instead of offering to add one.
@@ -160,12 +162,14 @@ import SignInGate from '../../../components/SignInGate.astro';
 
   let data: ListData | null = null;
   let all: Line[] = []; // every bank line, fetched once
+  let accountCount = 0; // how many distinct bank accounts `all` spans (0 = not counted yet)
   let byId = new Map<string, Line>();
   let lines: Line[] = []; // the ones the chips, search and column conditions leave and that are showing (not inside a closed group), in order
   let counts: Record<Filter, number> = { unallocated: 0, review: 0, noparty: 0, all: 0 };
   let filterErrors: Record<string, string> = {};
   // The address can name the chip to open on (the Overview links to ?filter=review).
   const startFilter = new URLSearchParams(location.search).get('filter');
+  let startLine = new URLSearchParams(location.search).get('line'); // a link from the UPI page opens that payment's sheet once
   let chips: [string, string][] = ['unallocated', 'review', 'noparty'].includes(startFilter ?? '') ? [['status', startFilter!]] : [];
   let words: string[] = []; // word chips kept with Enter
   let query = ''; // what is being typed right now; it filters live
@@ -365,6 +369,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     columns: [
       { id: 'select', header: '', enableSorting: false },
       { id: 'date', header: 'Date', accessorFn: (l: Line) => l.date },
+      { id: 'origin', header: 'Origin', accessorFn: (l: Line) => l.origin ?? '' },
       { id: 'amount', header: 'Amount', accessorFn: (l: Line) => l.amountPaise },
       { id: 'category', header: 'Category', accessorFn: (l: Line) => l.allocation?.categoryId ?? '' },
       { id: 'party', header: 'Paid to / from', accessorFn: (l: Line) => l.allocation?.partyId ?? '' },
@@ -460,6 +465,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       if (status !== 200) throw new Error('load failed');
       data = out as ListData;
       all = data.lines;
+      accountCount = 0;
       unitLabelsCache = null;
       byId = new Map(all.map((l) => [l.id, l]));
       clearState(statusEl);
@@ -469,6 +475,11 @@ import SignInGate from '../../../components/SignInGate.astro';
       applyView();
       offerRestore();
       void loadMonths();
+      if (startLine && byId.has(startLine)) {
+        const id = startLine;
+        startLine = null;
+        void openLine(id);
+      }
     } catch (err) {
       if (err instanceof StaffAuthError) return;
       content.hidden = true;
@@ -485,7 +496,11 @@ import SignInGate from '../../../components/SignInGate.astro';
   type Detail = {
     canAllocate: boolean;
     line: { id: string; date: string; narration: string; direction: 'debit' | 'credit'; amountPaise: number };
-    upi: { counterparty: string | null; remark: string | null; isCircle: boolean } | null;
+    upi: { counterparty: string | null; remark: string | null; isCircle: boolean; app?: string } | null;
+    origin?: string;
+    upiRef?: string | null;
+    noteKey?: string | null;
+    note?: string | null;
     state: string;
     allocations: Alloc[];
     proposal: { categoryId: string | null; partyId: string | null; nature: string; amountPaise: number; period: string; source: string; ruleId: string | null } | null;
@@ -742,6 +757,35 @@ import SignInGate from '../../../components/SignInGate.astro';
     refresh();
   }
 
+  // The note on a payment, beside what the bank said (which never changes). Starts as the app's own wording when there is one
+  // (a Paytm remark) and no note yet; saving stores it as the note. Shared with the UPI table: it is the same payment.
+  function noteEditor(d: Detail): HTMLElement {
+    const given = d.upi?.remark ?? '';
+    const box = h('input', { attrs: { type: 'text', maxlength: '300', 'aria-label': 'Note on this payment', placeholder: 'What was this payment for?' } }) as HTMLInputElement;
+    box.value = d.note ?? given;
+    const msg = h('span', { class: 'hint', text: d.note ? '' : given ? 'From the payment app. Edit it to keep your own wording.' : '' });
+    const save = button('Save note', async () => {
+      const text = box.value.trim() === given && !d.note ? '' : box.value;
+      const { status, data: out } = await call('/api/finance-admin/payment-note', 'POST', { key: d.noteKey, note: text });
+      if (status !== 200) {
+        msg.textContent = out?.error ?? 'Could not save the note.';
+        return;
+      }
+      d.note = out.note ?? null;
+      const l = byId.get(d.line.id);
+      if (l) {
+        l.note = d.note;
+        l.hay = undefined;
+        const el = mounted.get(l.id);
+        if (el) fill(el, l);
+      }
+      msg.textContent = d.note ? 'Saved.' : 'Note removed.';
+    });
+    save.hidden = !d.canAllocate;
+    box.readOnly = !d.canAllocate;
+    return h('div', { class: 'stack-form' }, labelled('Note', box), h('div', { class: 'sheet-actions' }, save, msg));
+  }
+
   async function openLine(id: string) {
     const dlg = $<HTMLDialogElement>('line-sheet');
     present(dlg, closeOnBackdrop, h('p', { class: 'sheet-text', text: 'Opening the line…', attrs: { role: 'status' } }));
@@ -757,7 +801,10 @@ import SignInGate from '../../../components/SignInGate.astro';
     const head = [
       h('h2', { text: `${line.direction === 'debit' ? 'Paid' : 'Received'} ${rupees(line.amountPaise)}`, attrs: { id: 'line-title' } }),
       h('p', { class: 'sheet-text', text: `${niceDate(line.date)} · ${line.narration}` }),
-      upi?.remark || upi?.counterparty ? h('p', { class: 'hint', text: [upi.counterparty ? `Paytm says: ${upi.counterparty}` : '', upi.remark ? `remark "${upi.remark}"` : '', upi.isCircle ? 'a circle payment' : ''].filter(Boolean).join(', ') }) : null,
+      ...(detail.origin ? [h('p', { class: 'hint', text: `Came through: ${originLabel(detail.origin)}` })] : []),
+      ...(detail.upiRef && (detail.origin === 'bhim' || detail.origin === 'paytm') ? [h('a', { class: 'hint', text: 'Open this payment in the UPI table', attrs: { href: `/internal/finance/upi/?ref=${detail.upiRef}` } })] : []),
+      ...(detail.noteKey ? [noteEditor(detail)] : []),
+      upi?.remark || upi?.counterparty ? h('p', { class: 'hint', text: [upi.counterparty ? `${upi.app === 'bhim' ? 'BHIM' : 'Paytm'} says: ${upi.counterparty}` : '', upi.remark ? `remark "${upi.remark}"` : '', upi.isCircle ? 'a circle payment' : ''].filter(Boolean).join(', ') }) : null,
     ];
     const posted = detail.allocations.some((a) => a.posted);
     dlg.addEventListener('close', () => dlg.replaceChildren(), { once: true });
@@ -1090,8 +1137,8 @@ import SignInGate from '../../../components/SignInGate.astro';
   // The chip, the narration search and the column conditions, then the sort, over every line already here (same rules as the server's:
   // scripts/lib/finance-columns.mjs). Nothing is fetched.
   const dateLabel = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
-  const COLUMN_LABELS: Record<string, string> = { date: 'Date', narration: 'Narration', amount: 'Amount', category: 'Category', party: 'Party', nature: 'Wording', status: 'Status' };
-  const PARSERS: Record<string, (raw: string) => any> = { date: parseDate, narration: parseText, amount: parseAmount, category: parseText, party: parseText, nature: parseText };
+  const COLUMN_LABELS: Record<string, string> = { date: 'Date', origin: 'Origin', narration: 'Narration', amount: 'Amount', category: 'Category', party: 'Party', nature: 'Wording', status: 'Status' };
+  const PARSERS: Record<string, (raw: string) => any> = { date: parseDate, origin: parseText, narration: parseText, amount: parseAmount, category: parseText, party: parseText, nature: parseText };
   // What a screen reader hears once a search settles (the progress line itself is not a live region: it changes on every keystroke).
   let announceTimer: ReturnType<typeof setTimeout> | undefined;
   const announce = (message: string) => {
@@ -1105,7 +1152,12 @@ import SignInGate from '../../../components/SignInGate.astro';
     if (!residentsOfLabel.size) for (const x of data?.lookups.households ?? []) residentsOfLabel.set(x.label, (x.people ?? []).join(' '));
     return residentsOfLabel.get(label) ?? '';
   };
-  const hayOf = (l: Line) => [l.narration, l.counterparty, l.remark, l.effective.category, l.effective.party, l.effective.nature, l.allocation?.householdLabel, residentsOf(l.allocation?.householdLabel), l.allocation?.maintenanceYear].join(' ').toLowerCase();
+  const multiAccount = () => {
+    if (!accountCount) accountCount = new Set(all.map((l) => l.account)).size;
+    return accountCount > 1;
+  };
+  const originText = (l: Line) => (l.origin ? originLabel(l.origin) : '');
+  const hayOf = (l: Line) => [l.narration, l.note, l.origin ? originLabel(l.origin) : '', l.account, l.counterparty, l.remark, l.effective.category, l.effective.party, l.effective.nature, l.allocation?.householdLabel, residentsOf(l.allocation?.householdLabel), l.allocation?.maintenanceYear].join(' ').toLowerCase();
   function applyView(toTop = false) {
     if (!data) return;
     const conds: Record<string, any> = {};
@@ -1121,6 +1173,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     const base = all.filter(
       (l) =>
         matchDate(conds.date, l.date, dateLabel(l.date)) &&
+        matchText(conds.origin, originText(l)) &&
         matchText(conds.narration, l.narration) &&
         matchAmount(conds.amount, l.amountPaise) &&
         matchText(conds.category, l.effective.category) &&
@@ -1138,7 +1191,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     const shown = base.filter((l) => passesChips(l, chips, now));
     const sort = sortOf();
     const compare = compareRows(sort.key, sort.dir as 'asc' | 'desc');
-    const row = (l: Line) => ({ id: l.id, date: l.date, narration: l.narration, amount: l.amountPaise, category: l.effective.category, party: l.effective.party, nature: l.effective.nature, status: l.review ? 'review' : l.state });
+    const row = (l: Line) => ({ id: l.id, date: l.date, origin: originText(l), narration: l.narration, amount: l.amountPaise, category: l.effective.category, party: l.effective.party, nature: l.effective.nature, status: l.review ? 'review' : l.state });
     const sorted = shown.map((l) => ({ l, r: row(l) })).sort((a, b) => compare(a.r, b.r)).map((x) => x.l);
     matched = sorted.length;
     const built = buildItems(sorted, groupBy, collapsed, niceMonth);
@@ -1325,7 +1378,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     const errs = Object.entries(filterErrors).map(([col, why]) => `Can't read the ${COLUMN_LABELS[col]} search: ${why}`);
     $('progress').textContent = [`Showing ${matched} of ${all.length}`, `${c.unallocated} left to allocate`, `${c.review} to review`, c.noparty ? `${c.noparty} posted without a party` : '', postedThisSitting ? `${postedThisSitting} posted this sitting` : '', crumbs.length ? `Searching: ${crumbs.join(', ')}` : '', ...errs].filter(Boolean).join(' · ');
   }
-  const SORTABLE = new Set(['date', 'narration', 'amount', 'category', 'party', 'status']);
+  const SORTABLE = new Set(['date', 'origin', 'narration', 'amount', 'category', 'party', 'status']);
   function renderHead() {
     keepFocus($('ghead'), () => renderHeadCells());
   }
@@ -1486,7 +1539,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   });
 
   // ---- rows. Built once when they scroll into view; an edit changes the cells in place (fill), never the row element.
-  type Refs = { catHint: HTMLElement; check: HTMLInputElement; narr: HTMLButtonElement; details: HTMLElement; cat: ComboEl; catTick: HTMLElement; catText: HTMLElement; party: ComboEl; partyTick: HTMLElement; partyText: HTMLElement; nature: HTMLInputElement; natureTick: HTMLElement; natureText: HTMLElement; pillSlot: HTMLElement; catPeek: HTMLButtonElement; partyPeek: HTMLButtonElement; natureCell: HTMLElement; meta: HTMLElement };
+  type Refs = { catHint: HTMLElement; check: HTMLInputElement; narr: HTMLButtonElement; details: HTMLElement; cat: ComboEl; catTick: HTMLElement; catText: HTMLElement; party: ComboEl; partyTick: HTMLElement; partyText: HTMLElement; nature: HTMLInputElement; natureTick: HTMLElement; natureText: HTMLElement; pillSlot: HTMLElement; catPeek: HTMLButtonElement; partyPeek: HTMLButtonElement; natureCell: HTMLElement; meta: HTMLElement; originSlot: HTMLElement };
   const refs = new WeakMap<HTMLElement, Refs>();
   const tick = (label: string, onClick: () => void) => h('button', { class: 'tick', text: '✓', attrs: { type: 'button', 'aria-label': label, title: label }, on: { click: onClick } });
   const cell = (cls: string, label: string, ...kids: (Node | null)[]) => h('span', { class: `gcell gcell--${cls}`, attrs: { role: 'cell', 'data-label': label } }, ...kids);
@@ -1555,6 +1608,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     const natureTick = tick(`Accept the suggested wording for ${who}`, () => edit(l, 'nature', ghostOf(l, 'nature')));
     const natureText = h('span', { class: 'lcell-text' });
     const pillSlot = h('span', { class: 'pillslot' });
+    const originSlot = h('span', { class: 'origin-text' });
     // A line at rest is one quiet row of text. The fields appear when the line is ticked, has something typed in it, or is opened
     // (click its category or party, or Tab to it).
     const peek = () => h('button', { class: 'peek', attrs: { type: 'button' } }) as HTMLButtonElement;
@@ -1567,6 +1621,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       { class: 'lrow', attrs: { role: 'row', 'data-id': l.id } },
       cell('select', '', check),
       cell('date', '', dateBtn),
+      cell('origin', 'Origin', originSlot),
       cell(`amount amount--${l.direction}`, '', document.createTextNode(`${l.direction === 'debit' ? '−' : '+'}${rupees(l.amountPaise)}`)),
       cell('category', 'Category', catPeek, cat, catTick, catText, catHint),
       cell('party', l.direction === 'debit' ? 'Paid to' : 'Received from', partyPeek, party, partyTick, partyText),
@@ -1627,7 +1682,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       if (now.missingParty && now.state === 'allocated' && (e.target as HTMLElement).closest('.gcell--party')) editPartyInline(now, partyText);
       else void openLine(l.id);
     });
-    refs.set(rowEl, { catHint, check, narr, details, cat, catTick, catText, party, partyTick, partyText, nature, natureTick, natureText, pillSlot, catPeek, partyPeek, natureCell, meta });
+    refs.set(rowEl, { catHint, check, narr, details, cat, catTick, catText, party, partyTick, partyText, nature, natureTick, natureText, pillSlot, catPeek, partyPeek, natureCell, meta, originSlot });
     fill(rowEl, l);
     return rowEl;
   }
@@ -1664,13 +1719,30 @@ import SignInGate from '../../../components/SignInGate.astro';
     el.classList.toggle('is-selected', Boolean(tstate.rowSelection[l.id]));
     r.check.disabled = !can;
     r.check.checked = Boolean(tstate.rowSelection[l.id]);
+    // With more than one bank account the account matters as much as the channel, so it sits under it.
+    // The records that vouch for this line, as small badges in the order they were found: its bank, then the app or the
+    // gateway it came through. A badge shows its logo once the badge table has one (fin_source_badges), else its short name.
+    const badgeFor = (key: string): HTMLElement => {
+      const b = data?.badges?.[key];
+      const label = b?.label ?? key;
+      const inner = b?.logoUrl ? h('img', { attrs: { src: b.logoUrl, alt: label, height: '16' } }) : document.createTextNode(b?.short ?? key);
+      const linked = l.upiRef && (key === 'bhim' || key === 'paytm');
+      const node = h(linked ? 'a' : 'span', { class: `badge badge--${b?.kind ?? 'bank'}`, attrs: { title: linked ? `${label}: open this payment in the UPI table` : label, ...(linked ? { href: `/internal/finance/upi/?ref=${l.upiRef}` } : {}) } }, inner);
+      if (linked) node.addEventListener('click', (ev: Event) => ev.stopPropagation());
+      return node;
+    };
+    const originNode = h('span', { class: 'badges', attrs: { 'aria-label': `${originText(l)}: ${(l.sources ?? []).map((k) => data?.badges?.[k]?.label ?? k).join(', ')}` } }, ...(l.sources?.length ? l.sources.map(badgeFor) : [document.createTextNode(originText(l))]));
+    r.originSlot.replaceChildren(originNode, ...(multiAccount() ? [h('span', { class: 'origin-account', text: l.account })] : []));
+    r.originSlot.title = l.origin ? ORIGINS[l.origin as keyof typeof ORIGINS]?.hint ?? '' : '';
     const upiSays = [l.counterparty, l.remark ? `“${l.remark}”` : ''].filter(Boolean).join(' · ');
     const error = rowErrors.get(l.id);
     r.details.replaceChildren(
       ...[
         error ? h('span', { class: 'detail detail--warn', text: error }) : null,
         l.state === 'partly_allocated' ? h('span', { class: 'detail detail--warn detail--wrap', text: `${rupees(l.amountPaise - l.allocatedPaise)} still to allocate: open the line to finish` }) : null,
-        upiSays ? h('span', { class: 'detail detail--upi', text: `Paytm: ${upiSays}`, attrs: { title: 'From the Paytm UPI report' } }) : /\bUPI\b/i.test(l.narration) ? h('span', { class: 'detail detail--dim', text: 'No Paytm record for this payment' }) : null,
+        l.note ? h('span', { class: 'detail detail--note', text: `Note: ${l.note}`, attrs: { title: 'A note added here or on the UPI page' } }) : null,
+        l.origin ? h('span', { class: 'detail detail--origin', text: originLabel(l.origin), attrs: { title: ORIGINS[l.origin as keyof typeof ORIGINS]?.hint ?? '' } }) : null,
+        upiSays ? h('span', { class: 'detail detail--upi', text: `${l.origin ? originLabel(l.origin) : 'UPI app'}: ${upiSays}`, attrs: { title: 'From the UPI app report' } }) : l.origin === 'upi_unknown' ? h('span', { class: 'detail detail--dim', text: 'No BHIM or Paytm record for this payment' }) : null,
       ].filter(Boolean) as Node[],
     );
     // Ticking is for the bar at the bottom (one change to many lines), so a ticked line stays a quiet row; only opening a line (click its category or party) or an error expands it.
@@ -1963,7 +2035,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       const upi = [l.counterparty, l.remark ? `“${l.remark}”` : ''].filter(Boolean).join(' · ');
       tip.replaceChildren(
         h('p', { class: 'ltip-text', text: l.narration }),
-        ...(upi ? [h('p', { class: 'ltip-sub', text: `Paytm: ${upi}` })] : []),
+        ...(upi ? [h('p', { class: 'ltip-sub', text: `${l.origin ? originLabel(l.origin) : 'UPI'}: ${upi}` })] : []),
         ...(l.account ? [h('p', { class: 'ltip-sub', text: l.account })] : []),
       );
       tip.hidden = false;
@@ -2918,7 +2990,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   .ledger .gfilter,
   .ledger .lrow {
     display: grid;
-    grid-template-columns: 34px 76px 112px minmax(170px, 1fr) minmax(170px, 1fr) 124px;
+    grid-template-columns: 34px 76px 120px 112px minmax(170px, 1fr) minmax(170px, 1fr) 124px;
     align-items: center;
     gap: 10px;
     padding: 4px 14px;
@@ -3083,6 +3155,65 @@ import SignInGate from '../../../components/SignInGate.astro';
     font-style: italic;
   }
 
+  /* On a wide screen the Origin column says it; the label under the narration is for the phone cards. */
+  .ledger .detail--origin {
+    display: none;
+    color: var(--tvc-ink);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .ledger .detail--note {
+    color: var(--tvc-ink);
+  }
+
+  .ledger .badges {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .ledger .badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 6px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: var(--radius-sm);
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    line-height: 1.4;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .ledger a.badge:hover {
+    text-decoration: underline;
+  }
+
+  .ledger .badge img {
+    display: block;
+    height: 16px;
+    width: auto;
+  }
+
+  .ledger .origin-account {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: var(--text-xs);
+    color: var(--tvc-ink-soft);
+  }
+
+  .ledger .gcell--origin {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
   .ledger .detail--warn,
   .ledger .noparty {
     color: var(--tvc-error-text);
@@ -3135,7 +3266,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   .ledger.show-narr .ghead,
   .ledger.show-narr .gfilter,
   .ledger.show-narr .lrow {
-    grid-template-columns: 34px 76px 112px minmax(150px, 1fr) minmax(150px, 1fr) 124px minmax(200px, 1.4fr);
+    grid-template-columns: 34px 76px 120px 112px minmax(150px, 1fr) minmax(150px, 1fr) 124px minmax(200px, 1.4fr);
   }
 
   .ledger:not(.show-narr) .gcell--narration {
@@ -3406,6 +3537,14 @@ import SignInGate from '../../../components/SignInGate.astro';
 
   /* A phone: each line is a card (date and amount, the narration, then the three cells with their labels, then its status). */
   @media (max-width: 1240px) {
+    .ledger .gcell--origin {
+      display: none;
+    }
+
+    .ledger .detail--origin {
+      display: inline;
+    }
+
     .ledger .ghead,
     .ledger .gfilter {
       display: none;

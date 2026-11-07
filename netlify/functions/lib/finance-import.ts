@@ -11,7 +11,9 @@ import { readWorkbook } from '../../../scripts/lib/finance-xlsx.mjs';
 import { parseAxisStatement } from '../../../scripts/lib/finance-axis-statement.mjs';
 import { parsePaytmExport } from '../../../scripts/lib/finance-paytm.mjs';
 import { coverageOf, planBankImport } from '../../../scripts/lib/finance-import-plan.mjs';
-import { linkUpiToBank, planUpiImport, reconciliationSummary } from '../../../scripts/lib/finance-upi-plan.mjs';
+import { isBhimText, parseBhimStatement } from '../../../scripts/lib/finance-bhim.mjs';
+import { linkUpiToBank, planBhimImport, planUpiImport, reconciliationSummary } from '../../../scripts/lib/finance-upi-plan.mjs';
+import { extractText, getDocumentProxy } from 'unpdf';
 
 export type Account = { id: string; label: string; last4: string | null; upiLabel: string | null };
 type Held = { batches: { fileHash: string; from: string; to: string; openingPaise: number; closingPaise: number }[]; lines: { tranDate: string; dedupeKey: string }[] };
@@ -38,15 +40,34 @@ export type UploadedFile = { name: string; bytes: Uint8Array };
 
 type Parsed =
   | { kind: 'axis_statement'; statement: ReturnType<typeof parseAxisStatement> }
-  | { kind: 'paytm_upi'; parsed: ReturnType<typeof parsePaytmExport> };
+  | { kind: 'paytm_upi'; parsed: ReturnType<typeof parsePaytmExport> }
+  | { kind: 'bhim_upi'; parsed: ReturnType<typeof parseBhimStatement> };
 
-function classify(bytes: Uint8Array): Parsed {
+// The file types the importer knows. One entry per source: how to tell the file is one of these, and how to read it.
+// Adding a source is one entry here plus its pure parser (scripts/lib/finance-*.mjs) and tests.
+export const FILE_TYPES = [
+  { kind: 'axis_statement', label: 'Axis Bank statement', accepts: ['.xlsx'] },
+  { kind: 'paytm_upi', label: 'Paytm UPI export', accepts: ['.xlsx'] },
+  { kind: 'bhim_upi', label: 'BHIM transaction history', accepts: ['.pdf'] },
+] as const;
+
+const isPdf = (bytes: Uint8Array) => bytes.length > 4 && bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46; // "%PDF"
+
+async function classify(bytes: Uint8Array): Promise<Parsed> {
+  if (isPdf(bytes)) {
+    // pdf.js empties the buffer it is given, and the caller still has to store these bytes, so hand it a copy.
+    const pdf = await getDocumentProxy(bytes.slice());
+    const { text } = await extractText(pdf, { mergePages: true });
+    const joined = Array.isArray(text) ? text.join('\n') : text;
+    if (isBhimText(joined)) return { kind: 'bhim_upi', parsed: parseBhimStatement(joined) };
+    throw new Error('This PDF is not a BHIM transaction history (no Transaction History heading and Payment ID/Reference Number column).');
+  }
   const sheets = readWorkbook(bytes);
   const names = sheets.map((s) => s.name.trim().toLowerCase());
   if (names.includes('summary') && names.some((n) => n.startsWith('passbook'))) return { kind: 'paytm_upi', parsed: parsePaytmExport(sheets) };
   const first = sheets.find((s) => s.rows.some((r) => String(r[0] ?? '').trim().toLowerCase() === 's.no'));
   if (first) return { kind: 'axis_statement', statement: parseAxisStatement(first.rows) };
-  throw new Error('This is neither an Axis statement nor a Paytm UPI export (no S.NO heading row, and no Summary and Passbook sheets).');
+  throw new Error('This is not a file the importer knows: an Axis statement (Excel), a Paytm UPI export (Excel) or a BHIM transaction history (PDF).');
 }
 
 const sha256 = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
@@ -54,7 +75,7 @@ const safeName = (n: string) => n.split(/[\\/]/).pop()!.replace(/[^\w.\- ()']/g,
 
 export type FileResult = {
   name: string;
-  kind: 'axis_statement' | 'paytm_upi' | 'unknown';
+  kind: 'axis_statement' | 'paytm_upi' | 'bhim_upi' | 'unknown';
   status: 'ok' | 'blocked' | 'duplicate_file' | 'unreadable';
   accountLabel?: string;
   message?: string;
@@ -67,6 +88,7 @@ export type FileResult = {
   ignored?: unknown;
   failed?: unknown[];
   wouldLink?: number;
+  unsuccessful?: { count: number; totalPaise: number };
   stored?: boolean;
 };
 
@@ -79,17 +101,19 @@ export async function runImport(args: { store: ImportStore; files: UploadedFile[
   // 1. Parse each file on its own; one bad file never fails the rest.
   const axis: { index: number; id: string; fileHash: string; statement: ReturnType<typeof parseAxisStatement>; account?: Account }[] = [];
   const paytm: { index: number; id: string; fileHash: string; parsed: ReturnType<typeof parsePaytmExport> }[] = [];
-  files.forEach((f, index) => {
+  const bhim: { index: number; id: string; fileHash: string; parsed: ReturnType<typeof parseBhimStatement> }[] = [];
+  for (const [index, f] of files.entries()) {
     try {
-      const p = classify(f.bytes);
+      const p = await classify(f.bytes);
       results[index].kind = p.kind;
       const base = { index, id: String(index), fileHash: sha256(f.bytes) };
       if (p.kind === 'axis_statement') axis.push({ ...base, statement: p.statement });
+      else if (p.kind === 'bhim_upi') bhim.push({ ...base, parsed: p.parsed });
       else paytm.push({ ...base, parsed: p.parsed });
     } catch (err) {
       results[index].message = err instanceof Error ? err.message : 'The file could not be read.';
     }
-  });
+  }
 
   // 2. Bank statements: group by account, plan each group against what that account holds.
   const coverage: { accountId: string; label: string; intervals: { from: string; to: string }[]; gaps: { from: string; to: string }[] }[] = [];
@@ -133,9 +157,9 @@ export async function runImport(args: { store: ImportStore; files: UploadedFile[
 
   // 3. Paytm exports.
   const accountsWithUpi = accounts.filter((a) => a.upiLabel);
-  const storedUpi: { index: number; plan: any; batchId: string }[] = [];
-  const hashHeld = new Set(await store.heldHashes(paytm.map((p) => p.fileHash)));
-  const refsInUpload = [...new Set(paytm.flatMap((p) => p.parsed.lines.map((l: { upiRef: string | null }) => l.upiRef).filter(Boolean) as string[]))];
+  const storedUpi: { index: number; plan: any; batchId: string; source: 'paytm_upi' | 'bhim_upi' }[] = [];
+  const hashHeld = new Set(await store.heldHashes([...paytm, ...bhim].map((p) => p.fileHash)));
+  const refsInUpload = [...new Set([...paytm, ...bhim].flatMap((p) => p.parsed.lines.map((l: { upiRef: string | null }) => l.upiRef).filter(Boolean) as string[]))];
   const heldRefs = new Set(await store.heldUpiRefs(refsInUpload));
   const refsTaken = new Set<string>();
   for (const p of paytm) {
@@ -158,7 +182,32 @@ export async function runImport(args: { store: ImportStore; files: UploadedFile[
     });
     if (plan.status === 'ok') {
       hashHeld.add(p.fileHash);
-      storedUpi.push({ index: p.index, plan, batchId: randomUUID() });
+      storedUpi.push({ index: p.index, plan, batchId: randomUUID(), source: 'paytm_upi' });
+    }
+  }
+
+  // 3b. BHIM histories (PDF). Their rows are UPI rows too; a reference Paytm already holds is counted, not stored twice.
+  for (const b of bhim) {
+    const plan = planBhimImport({
+      file: { id: b.id, fileHash: b.fileHash, parsed: b.parsed },
+      accounts,
+      held: { fileHashes: [...hashHeld], refs: [...heldRefs, ...refsTaken] },
+    });
+    plan.newLines.forEach((l: { upiRef: string }) => refsTaken.add(l.upiRef));
+    Object.assign(results[b.index], {
+      status: plan.status,
+      counts: plan.counts,
+      period: plan.period,
+      firstDate: plan.firstDate,
+      lastDate: plan.lastDate,
+      ignored: plan.ignored,
+      failed: plan.failed,
+      errors: plan.errors,
+      unsuccessful: plan.unsuccessful,
+    });
+    if (plan.status === 'ok') {
+      hashHeld.add(b.fileHash);
+      storedUpi.push({ index: b.index, plan, batchId: randomUUID(), source: 'bhim_upi' });
     }
   }
 
@@ -202,16 +251,16 @@ export async function runImport(args: { store: ImportStore; files: UploadedFile[
     }
   }
   for (const u of storedUpi) {
-    const key = `finance/imports/${u.batchId}.xlsx`;
+    const key = `finance/imports/${u.batchId}.${u.source === 'bhim_upi' ? 'pdf' : 'xlsx'}`;
     await store.putRaw(key, files[u.index].bytes);
     try {
       await store.storeUpi(
         {
-          id: u.batchId, entity_id: entity.id, file_name: results[u.index].name, file_hash: u.plan.fileHash, r2_key: key, period_from: u.plan.period.from, period_to: u.plan.period.to,
+          id: u.batchId, entity_id: entity.id, source: u.source, file_name: results[u.index].name, file_hash: u.plan.fileHash, r2_key: key, period_from: u.plan.period.from, period_to: u.plan.period.to,
           first_line_date: u.plan.firstDate, last_line_date: u.plan.lastDate, inserted_count: u.plan.counts.new, duplicate_count: u.plan.counts.alreadyHeld,
           ignored_count: u.plan.counts.ignored, ignored_total_paise: u.plan.ignored.totalPaise, failed_count: u.plan.counts.failed, failed_rows: u.plan.failed, imported_by: actorId,
         },
-        u.plan.newLines.map((l: any) => ({ bank_account_id: l.accountId, paid_at: l.paidAt, paid_time: l.time, details: l.details, counterparty: l.counterparty, account_label: l.accountLabel, direction: l.direction, amount_paise: l.amountPaise, upi_ref: l.upiRef, order_id: l.orderId, remarks: l.remarks, tag: l.tag, is_circle: l.isCircle, ignored: l.ignored, ignored_reason: l.ignoredReason })),
+        u.plan.newLines.map((l: any) => ({ bank_account_id: l.accountId, paid_at: l.paidAt, paid_time: l.time, details: l.details, counterparty: l.counterparty, account_label: l.accountLabel, direction: l.direction, amount_paise: l.amountPaise, upi_ref: l.upiRef, order_id: l.orderId, remarks: l.remarks, tag: l.tag, is_circle: l.isCircle, ignored: l.ignored, ignored_reason: l.ignoredReason, app: l.app ?? 'paytm' })),
       );
       results[u.index].stored = true;
     } catch (err) {

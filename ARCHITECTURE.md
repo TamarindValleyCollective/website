@@ -109,7 +109,7 @@ flowchart TD
         FUNC_SRC14["netlify/functions/event-payments-admin.mts<br/>Serverless function, Google Sign-In gated —<br/>per-event registrations/cancellations/money<br/>collected from Supabase, issues real Razorpay<br/>refunds (tier-suggested, admin-confirmed)"]
         FUNC_SRC15["netlify/functions/usage-collect.mts<br/>Scheduled function (cron, every 6 hours) — appends<br/>the Supabase database size, open connections + biggest tables, Netlify's plan<br/>credits + billing cycle and Resend's email quota to usage_snapshots for<br/>the free-tier usage dashboard. Optional secrets:<br/>NETLIFY_ACCESS_TOKEN, RESEND_USAGE_API_KEY,<br/>CLOUDFLARE_ANALYTICS_TOKEN"]
         FUNC_SRC16["netlify/functions/usage-admin.mts<br/>Serverless function, Google Sign-In gated (usage module) —<br/>overview of free-tier/credit usage, live domain<br/>expiry lookups, typed-in provider readings and<br/>price/limit settings (admins only, audit-logged)"]
-        FUNC_SRC20["netlify/functions/finance-admin.mts<br/>Serverless function, Google Sign-In gated (finance module) —<br/>session 01: overview (counts, access); session 03: statement import<br/>(Axis yearly Excel files, Paytm UPI export) and bank account setup;<br/>auditor visits and imports are written to fin_audit_log;<br/>session 05: ledger (allocations, review, rules, categories, period close)"]
+        FUNC_SRC20["netlify/functions/finance-admin.mts<br/>Serverless function, Google Sign-In gated (finance module) —<br/>session 01: overview (counts, access); session 03: statement import<br/>(Axis yearly Excel files, Paytm UPI export, BHIM transaction-history PDF read with unpdf), UPI page (`/upi-lines`) and bank account setup;<br/>auditor visits and imports are written to fin_audit_log;<br/>session 05: ledger (allocations, review, rules, categories, period close)"]
         FUNC_SRC17["netlify/functions/usage-alerts.mts<br/>Scheduled function (cron, hourly) — evaluates the<br/>usage rules and emails core-team@tvc.farm one digest<br/>per new or worsened warning; remembers what it sent"]
         SCRIPT_SRC["scripts/build-chat-context.mjs<br/>Strips nav/footer from built HTML →<br/>content corpus for the chatbot"]
     end
@@ -462,6 +462,10 @@ outside both the local machine and Netlify (the member-update-email workflow).
   dedupe, chain, gaps, overlaps, linking by UPI reference) and stored by `fin_store_*` database functions, one
   transaction per file; the raw files go to the private R2 bucket under `finance/imports/`. Tables `fin_import_batches`,
   `fin_bank_lines`, `fin_upi_lines`.
+  **BHIM history, origin and the UPI page (migration `0088`, applied 2026-11-07):** the import also reads the BHIM transaction-history PDF
+  (text via `unpdf`, `finance-bhim.mjs`) into `fin_upi_lines` with an `app` column, kept in R2 as `.pdf`; `finance-admin.mts` serves
+  `/upi-lines` (`lib/finance-upi-view.ts`) for `/internal/finance/upi/`; the ledger derives each line's origin
+  (`finance-origin.mjs`). Payment notes (`/payment-note`, `lib/finance-notes.ts`, table `fin_payment_notes`, migration `0089`, applied 2026-11-07) are shared by the ledger and the UPI page. Source badges (`fin_source_badges`, `fin_bank_accounts.badge_key`, migration `0090`, applied 2026-11-07) are read by the ledger. No new external service.
   Pure rules (expiry, maker-is-not-checker, finance field masking) are in `finance-access.mjs` with tests.
   **Design-review changes (PR #528):** the Overview answers "what needs me?" from `/overview`'s `attention` (counts only,
   `scripts/lib/finance-attention.mjs`); verifying records how the details were checked (migration `0082_finance_verification_evidence.sql`,

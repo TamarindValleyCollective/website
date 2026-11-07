@@ -1,0 +1,518 @@
+---
+// Finance (internal): UPI payments. Every row from the BHIM history and the Paytm export, whether paid directly by an operator
+// of the account or by a delegate (UPI Circle), whether it is joined to a bank line in the ledger, and the delegated spend per
+// calendar month against the allowance. Backed by
+// netlify/functions/finance-admin.mts (/upi-lines, lib/finance-upi-view.ts); the rules are scripts/lib/finance-upi-circle.mjs.
+// Read-only: files are added on the Import page.
+//
+// Same shell as the other internal tools: Google Sign-In gated, unlinked, noindex. Everything the server returns is
+// placed with textContent only, never as HTML.
+import StaffLayout from '../../../layouts/StaffLayout.astro';
+import SignInGate from '../../../components/SignInGate.astro';
+---
+
+<StaffLayout title="UPI" description="UPI payments." current="finance" currentPage="finance-upi">
+  <section class="finance finance-upi section wrapper">
+    <h1>UPI</h1>
+    <p id="intro" class="hint">Sign in to see the UPI payments.</p>
+
+    <SignInGate forbiddenWhat="finance" />
+
+    <div id="status" aria-live="polite" class="hint" hidden></div>
+
+    <div id="content" hidden>
+      <h2 class="list-title">Delegated spend by month</h2>
+      <ul class="list" id="months"></ul>
+      <p class="hint" id="months-note"></p>
+
+      <div id="bank-only" class="card" hidden></div>
+
+      <h2 class="list-title">Payments</h2>
+      <div class="filters">
+        <label class="field" for="q">
+          <span class="visually-hidden">Search payments</span>
+          <input id="q" type="search" placeholder="Search by who, remark or reference" autocomplete="off" />
+        </label>
+        <div class="segmented" id="f-app" role="radiogroup" aria-label="App">
+          <button type="button" role="radio" data-value="all" aria-checked="true">All apps</button>
+          <button type="button" role="radio" data-value="bhim" aria-checked="false">BHIM</button>
+          <button type="button" role="radio" data-value="paytm" aria-checked="false">Paytm</button>
+        </div>
+        <div class="segmented" id="f-kind" role="radiogroup" aria-label="Paid by">
+          <button type="button" role="radio" data-value="all" aria-checked="true">Anyone</button>
+          <button type="button" role="radio" data-value="direct" aria-checked="false">Direct</button>
+          <button type="button" role="radio" data-value="delegate" aria-checked="false">Delegate</button>
+        </div>
+        <div class="segmented" id="f-state" role="radiogroup" aria-label="Against the bank statement">
+          <button type="button" role="radio" data-value="all" aria-checked="true">Any</button>
+          <button type="button" role="radio" data-value="matched" aria-checked="false">In the ledger</button>
+          <button type="button" role="radio" data-value="waiting" aria-checked="false">Waiting</button>
+          <button type="button" role="radio" data-value="unmatched" aria-checked="false">Not found</button>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table class="upi-table">
+          <thead>
+            <tr id="upi-head">
+              <th data-sort="paidAt" aria-sort="descending"><button type="button" class="sorthead">Date</button></th>
+              <th data-sort="counterparty"><button type="button" class="sorthead">Paid to</button></th>
+              <th data-sort="direction"><button type="button" class="sorthead">Debit / credit</button></th>
+              <th data-sort="amountPaise" class="num"><button type="button" class="sorthead">Amount</button></th>
+              <th data-sort="app"><button type="button" class="sorthead">App</button></th>
+              <th data-sort="kind"><button type="button" class="sorthead">Paid by</button></th>
+              <th data-sort="account"><button type="button" class="sorthead">Account</button></th>
+              <th data-sort="note"><button type="button" class="sorthead">Note</button></th>
+              <th data-sort="state"><button type="button" class="sorthead">Bank statement</button></th>
+              <th>Reference</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+      <p class="hint" id="rows-note" aria-live="polite"></p>
+    </div>
+  </section>
+</StaffLayout>
+
+<script>
+  import { StaffAuthError, clearStepUp, clearToken, decodeTokenEmail, getToken, setToken, showToast, staffFetch } from '../../../../scripts/lib/staff-client.mjs';
+  import { clearState, showFailure, showLoading } from '../../../../scripts/lib/staff-states.mjs';
+
+  declare const google: any;
+  const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
+
+  const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+  const gate = $('gate');
+  const gateError = $('gate-error');
+  const forbidden = $('forbidden');
+  const statusEl = $('status');
+  const content = $('content');
+  const intro = $('intro');
+
+  const rupees = (paise: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(paise / 100);
+  const day = (iso: string | null) => (iso ? new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) : '—');
+  const range = (a: string, b: string) => (a === b ? day(a) : `${day(a)} to ${day(b)}`);
+  const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+  const monthName = (m: string) => new Date(`${m}-01T00:00:00Z`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  const APP = { bhim: 'BHIM', paytm: 'Paytm' } as const;
+  const STATE = { matched: { text: 'In the ledger', kind: 'ok' }, waiting: { text: 'Waiting for statement', kind: 'warn' }, unmatched: { text: 'Not in the statement', kind: 'crit' } } as const;
+
+  type Upi = { id: string; paidAt: string; time: string | null; app: 'bhim' | 'paytm'; counterparty: string | null; remark: string | null; amountPaise: number; direction: 'debit' | 'credit'; isCircle: boolean; upiRef: string; note: string | null; bankLineId: string | null; account: string | null; state: 'matched' | 'waiting' | 'unmatched' };
+  let all: Upi[] = [];
+  let canEdit = false;
+  // A link from the ledger arrives as ?ref=<UPI reference>: the table opens filtered to that one payment.
+  const filter = { q: new URLSearchParams(location.search).get('ref')?.replace(/\D/g, '').slice(0, 12) ?? '', app: 'all', kind: 'all', state: 'all' };
+
+  function showGate(message?: string) {
+    gate.hidden = false;
+    forbidden.hidden = true;
+    content.hidden = true;
+    clearState(statusEl);
+    intro.hidden = false;
+    intro.textContent = 'Sign in to see the UPI payments.';
+    gateError.hidden = !message;
+    if (message) gateError.textContent = message;
+    renderSignInButton();
+  }
+
+  function showForbidden() {
+    gate.hidden = true;
+    content.hidden = true;
+    clearState(statusEl);
+    forbidden.hidden = false;
+    $('forbidden-email').textContent = decodeTokenEmail(getToken() ?? '');
+  }
+
+  function fail(err: unknown) {
+    if (err instanceof StaffAuthError) {
+      if (err.kind === 'unauthorized') showGate('Your session expired. Sign in again.');
+      else showForbidden();
+      return true;
+    }
+    return false;
+  }
+
+  function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string): HTMLElementTagNameMap[K] {
+    const e = document.createElement(tag);
+    if (className) e.className = className;
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+
+  function row(title: string, details: string[], pill?: { text: string; kind: 'ok' | 'warn' | 'crit' }): HTMLElement {
+    const li = el('li');
+    const r = el('div', 'row');
+    const grow = el('span', 'grow');
+    grow.append(el('span', 'title', title));
+    for (const d of details) grow.append(el('span', 'detail', d));
+    r.append(grow);
+    if (pill) r.append(el('span', `pill pill--${pill.kind}`, pill.text));
+    li.append(r);
+    return li;
+  }
+
+  function renderMonths(data: any) {
+    const list = $('months');
+    list.replaceChildren(
+      ...data.months.map((m: any) =>
+        row(monthName(m.month), [`${rupees(m.paise)} of ${rupees(m.capPaise)} · ${plural(m.count, 'payment')}`], m.over ? { text: 'Over the allowance', kind: 'crit' } : { text: 'Within', kind: 'ok' }),
+      ),
+    );
+    $('months-note').textContent = data.months.length
+      ? 'A delegated payment is one a delegate made with the spend right given to them (UPI Circle). Paytm marks them with the “Pocket Money” tag; BHIM marks them with no bank named and CR. Every download is in the operator’s name, so the file does not say which delegate paid.'
+      : 'No delegated payments yet.';
+    const b = data.bankWithoutRow;
+    const card = $('bank-only');
+    card.hidden = b.count === 0;
+    card.replaceChildren(el('p', undefined, `${plural(b.count, 'bank UPI payment')} (${rupees(b.totalPaise)}) since the first UPI record ${b.count === 1 ? 'has' : 'have'} no BHIM or Paytm row: paid from another app, or missing from the files imported.`));
+  }
+
+  const sort = { key: 'paidAt', dir: 'desc' as 'asc' | 'desc' };
+  const sortValue = (u: Upi, key: string): string | number => {
+    if (key === 'direction') return u.direction;
+    if (key === 'note') return (u.note ?? u.remark ?? '').toLowerCase();
+    if (key === 'kind') return u.isCircle ? 'Delegate' : 'Direct';
+    if (key === 'app') return APP[u.app];
+    if (key === 'account') return (u.account ?? '').toLowerCase();
+    if (key === 'counterparty') return (u.counterparty ?? '').toLowerCase();
+    if (key === 'state') return u.state;
+    if (key === 'amountPaise') return u.amountPaise;
+    return `${u.paidAt} ${u.time ?? ''}`;
+  };
+
+  function cellOf(text: string, className?: string): HTMLTableCellElement {
+    const td = document.createElement('td');
+    if (className) td.className = className;
+    td.textContent = text;
+    return td;
+  }
+
+  // Like Paid to / from in the ledger: at rest the note is quiet text (the app's own wording, such as a Paytm remark, shows in
+  // italics until a note is written, the way a suggestion does there); click it to edit, Enter or leaving the field saves,
+  // Escape cancels. It is the same note the ledger shows for this payment (keyed on the UPI reference).
+  function noteCell(u: Upi): HTMLTableCellElement {
+    const td = document.createElement('td');
+    td.className = 'note-cell';
+    const given = u.remark ?? '';
+    const paint = () => {
+      const text = u.note ?? given;
+      if (!canEdit) {
+        td.textContent = text;
+        return;
+      }
+      const peek = el('button', `peek${u.note ? '' : ' ghost'}`, text || 'Add a note');
+      peek.type = 'button';
+      peek.title = u.note ? 'Click to edit the note' : given ? 'From the payment app. Click to write your own note' : 'Click to add a note';
+      peek.addEventListener('click', edit);
+      td.replaceChildren(peek);
+    };
+    function edit() {
+      const input = el('input', 'note-input');
+      input.type = 'text';
+      input.maxLength = 300;
+      input.value = u.note ?? given;
+      input.setAttribute('aria-label', `Note on the payment to ${u.counterparty ?? 'an unnamed payee'}`);
+      let done = false;
+      const finish = async (save: boolean) => {
+        if (done) return;
+        done = true;
+        const text = input.value.trim() === given && !u.note ? '' : input.value;
+        if (!save || text.trim() === (u.note ?? '')) return paint();
+        input.disabled = true;
+        try {
+          const { status, data } = await staffFetch('/api/finance-admin/payment-note', { method: 'POST', body: { key: `upi:${u.upiRef}`, note: text } });
+          if (status !== 200) throw new Error(data?.error ?? 'failed');
+          u.note = data.note ?? null;
+          showToast(u.note ? 'Note saved.' : 'Note removed.');
+        } catch (err) {
+          if (!fail(err)) showToast(err instanceof Error && err.message !== 'failed' ? err.message : 'Could not save the note.');
+        }
+        paint();
+      };
+      input.addEventListener('blur', () => void finish(true));
+      input.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter') void finish(true);
+        if (ev.key === 'Escape') void finish(false);
+      });
+      td.replaceChildren(input);
+      input.focus();
+      input.select();
+    }
+    paint();
+    return td;
+  }
+
+  function renderRows() {
+    const q = filter.q.trim().toLowerCase();
+    const shown = all
+      .filter(
+        (u) =>
+          (filter.app === 'all' || u.app === filter.app) &&
+          (filter.kind === 'all' || (filter.kind === 'delegate' ? u.isCircle : !u.isCircle)) &&
+          (filter.state === 'all' || u.state === filter.state) &&
+          (!q || [u.counterparty, u.remark, u.note, u.upiRef, u.account ?? ''].join(' ').toLowerCase().includes(q)),
+      )
+      .sort((a, b) => {
+        const [x, y] = [sortValue(a, sort.key), sortValue(b, sort.key)];
+        const c = x < y ? -1 : x > y ? 1 : 0;
+        return (sort.dir === 'asc' ? c : -c) || (a.id < b.id ? -1 : 1);
+      });
+    const cap = 300;
+    $('rows').replaceChildren(
+      ...shown.slice(0, cap).map((u) => {
+        const tr = document.createElement('tr');
+        tr.id = `upi-${u.upiRef}`;
+        const state = document.createElement('td');
+        state.append(el('span', `pill pill--${STATE[u.state].kind}`, STATE[u.state].text));
+        // The reference is the link: a payment joined to a bank line opens that line in the ledger.
+        const ref = cellOf('', 'ref');
+        if (u.bankLineId) {
+          const link = el('a', 'ref-link', u.upiRef);
+          link.href = `/internal/finance/ledger/?line=${u.bankLineId}`;
+          link.title = 'Open this payment in the ledger';
+          ref.append(link);
+        } else ref.textContent = u.upiRef;
+        tr.append(
+          cellOf(`${day(u.paidAt)}${u.time ? ` ${u.time}` : ''}`, 'nowrap'),
+          cellOf(u.counterparty ?? 'Unnamed payee'),
+          cellOf(u.direction === 'credit' ? 'Credit' : 'Debit'),
+          cellOf(rupees(u.amountPaise), 'num'),
+          cellOf(APP[u.app]),
+          cellOf(u.isCircle ? 'Delegate' : 'Direct'),
+          cellOf(u.account ?? 'Not known yet', u.account ? undefined : 'dim'),
+          noteCell(u),
+          state,
+          ref,
+        );
+        return tr;
+      }),
+    );
+    for (const th of Array.from($('upi-head').querySelectorAll<HTMLElement>('th[data-sort]'))) {
+      th.setAttribute('aria-sort', th.dataset.sort === sort.key ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none');
+    }
+    $('rows-note').textContent = shown.length === 0 ? 'No payments match.' : shown.length > cap ? `Showing the first ${cap} of ${shown.length}. Narrow the filters to see the rest.` : `${plural(shown.length, 'payment')}.`;
+  }
+
+  $('upi-head').addEventListener('click', (ev) => {
+    const th = (ev.target as HTMLElement).closest<HTMLElement>('th[data-sort]');
+    if (!th) return;
+    const key = th.dataset.sort!;
+    sort.dir = sort.key === key ? (sort.dir === 'asc' ? 'desc' : 'asc') : key === 'paidAt' || key === 'amountPaise' ? 'desc' : 'asc';
+    sort.key = key;
+    renderRows();
+  });
+
+  function segmented(id: string, key: 'app' | 'kind' | 'state') {
+    const group = $(id);
+    group.addEventListener('click', (ev) => {
+      const btn = (ev.target as HTMLElement).closest<HTMLButtonElement>('button[data-value]');
+      if (!btn) return;
+      filter[key] = btn.dataset.value ?? 'all';
+      for (const b of Array.from(group.querySelectorAll('button'))) b.setAttribute('aria-checked', String(b === btn));
+      renderRows();
+    });
+  }
+  segmented('f-app', 'app');
+  segmented('f-kind', 'kind');
+  segmented('f-state', 'state');
+  $<HTMLInputElement>('q').addEventListener('input', (ev) => {
+    filter.q = (ev.target as HTMLInputElement).value;
+    renderRows();
+  });
+
+  async function load() {
+    gate.hidden = true;
+    forbidden.hidden = true;
+    showLoading(statusEl);
+    try {
+      const { status, data } = await staffFetch('/api/finance-admin/upi-lines');
+      if (status !== 200) throw new Error('load failed');
+      clearState(statusEl);
+      intro.hidden = false;
+      intro.textContent = data.lines.length
+        ? `${plural(data.lines.length, 'UPI payment')} from the BHIM history and the Paytm export, set against the bank statement${data.lastBankDate ? ` held to ${day(data.lastBankDate)}` : ''}. Add files on the Import page.`
+        : 'No UPI payments yet. Add the BHIM history or the Paytm export on the Import page.';
+      all = data.lines;
+      canEdit = Boolean(data.canEdit);
+      renderMonths(data);
+      $<HTMLInputElement>('q').value = filter.q;
+      renderRows();
+      content.hidden = false;
+    } catch (err) {
+      if (fail(err)) return;
+      content.hidden = true;
+      intro.hidden = true;
+      showFailure(statusEl, { title: "Couldn't load the UPI payments", text: "The server didn't answer. Nothing was changed. Check your connection and try again; if it keeps failing, tell a super admin.", onRetry: load });
+    }
+  }
+
+  function handleCredentialResponse(response: { credential: string }) {
+    setToken(response.credential);
+    load();
+  }
+
+  function renderSignInButton() {
+    if (typeof google === 'undefined') return;
+    google.accounts.id.initialize({ client_id: CLIENT_ID, callback: handleCredentialResponse });
+    google.accounts.id.renderButton(document.getElementById('g_id_signin'), { theme: (window as any).tvcGsiTheme?.() ?? 'outline', size: 'large' });
+  }
+
+  $('use-different-account').addEventListener('click', () => {
+    clearToken();
+    clearStepUp();
+    if (typeof google !== 'undefined') google.accounts.id.disableAutoSelect();
+    showGate();
+  });
+
+  if (getToken()) load();
+  else showGate();
+</script>
+<script is:inline src="https://accounts.google.com/gsi/client"></script>
+
+<style is:global>
+  .finance.section.wrapper {
+    padding-top: 32px;
+    padding-bottom: 48px;
+  }
+
+  .finance .list-title {
+    margin: 26px 0 8px 14px;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--tvc-ink-soft);
+  }
+
+  .finance-upi .card {
+    margin-top: 14px;
+  }
+
+  .finance-upi .filters {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  .finance-upi .segmented {
+    flex-wrap: wrap;
+  }
+
+  .finance-upi .table-scroll {
+    overflow-x: auto;
+    background: var(--tvc-white);
+    border-radius: var(--radius);
+    box-shadow: 0 0 0 1px var(--tvc-line) inset;
+  }
+
+  .finance-upi .upi-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-sm);
+  }
+
+  .finance-upi .upi-table th {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--tvc-line);
+    font-size: var(--text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--tvc-ink-soft);
+    white-space: nowrap;
+  }
+
+  .finance-upi .upi-table .sorthead {
+    all: unset;
+    cursor: pointer;
+  }
+
+  .finance-upi .upi-table .sorthead:focus-visible {
+    outline: 2px solid var(--tvc-ink);
+    outline-offset: 2px;
+  }
+
+  .finance-upi .upi-table th[aria-sort='ascending'] .sorthead::after {
+    content: ' ▲';
+  }
+
+  .finance-upi .upi-table th[aria-sort='descending'] .sorthead::after {
+    content: ' ▼';
+  }
+
+  .finance-upi .upi-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--tvc-line);
+    vertical-align: top;
+  }
+
+  .finance-upi .upi-table .num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .finance-upi .upi-table .nowrap,
+  .finance-upi .upi-table .ref {
+    white-space: nowrap;
+  }
+
+  .finance-upi .upi-table .ref,
+  .finance-upi .upi-table .dim,
+  .finance-upi .upi-table .peek {
+    all: unset;
+    cursor: pointer;
+    box-sizing: border-box;
+    display: block;
+    max-width: 22rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 4px 0;
+  }
+
+  .finance-upi .upi-table .peek.ghost {
+    font-style: italic;
+    color: var(--tvc-ink-soft);
+  }
+
+  .finance-upi .upi-table .peek:hover {
+    text-decoration: underline;
+    text-decoration-color: var(--tvc-line-strong);
+  }
+
+  .finance-upi .upi-table .peek:focus-visible {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 2px;
+  }
+
+  .finance-upi .upi-table .note-input {
+    width: 100%;
+    min-width: 12rem;
+    padding: 6px 8px;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius-sm, 6px);
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+    font: inherit;
+  }
+
+  .finance-upi .upi-table .ref-link {
+    color: var(--tvc-ink);
+    text-decoration: underline;
+    text-decoration-color: var(--tvc-line-strong);
+  }
+
+  .finance-upi .upi-table .ref-link:hover {
+    text-decoration-color: var(--tvc-ink);
+  }
+
+  .finance-upi .upi-table .sub {
+    color: var(--tvc-ink-soft);
+  }
+
+  .finance-upi .upi-table .sub {
+    display: block;
+    font-size: var(--text-xs);
+  }
+</style>
