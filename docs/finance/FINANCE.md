@@ -281,6 +281,8 @@ types the importer knows; each batch stores its `source`: `axis_statement`, `pay
   logo is swapped, or a bank added, by editing a row, with no code change. There is no admin screen for the table yet: change it in
   the database. Each bank account carries its own bank badge (`fin_bank_accounts.badge_key`, chosen when the account is added on the
   Import page), so Bank 2 shows its own logo. BHIM and Paytm badges link to that payment in the UPI table.
+  Logos live in `public/finance-badges/` (Axis, Paytm as SVG; BHIM and Razorpay as PNG; the BHIM one is the icons8 "BHIM UPI" icon (used on an internal admin screen, so no attribution is shown); the Razorpay one is from Razorpay's logo pack) and are pointed at by migration `0091` (applied 2026-11-07, before the PR merged, as the "Migrations applied" check requires; until the deploy carries the files a badge shows its label text instead of the image). Paypro and the
+  generic bank badge have no logo and stay text. Swapping one: add the file and update the row's `logo_url`.
 - **Cross-references: what exists and what each still needs.** *Ledger → UPI* and *UPI → ledger* are built (above). *Paypro:* there is
   no Paypro record to link to (the bank only shows a batch line); it needs the Paypro batch file or the payroll/payment-request
   sessions (08/09) to exist first. *Razorpay settlement:* the payments module already stores `settlement_id`, `settlement_utr` and
