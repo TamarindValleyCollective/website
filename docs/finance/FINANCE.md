@@ -665,8 +665,8 @@ unmatched for 14 days is counted on the Approvals page.
 to match, and the Approvals page has a **Method** column: the method of the payment it is tied to (`fulfilledVia`), else what was asked in grey (the
 tooltip says so), with a small orange "asked for NEFT" when they differ. A UPI row names its app ("UPI, Paytm"); otherwise the bank's narration says,
 read off the real statements from its first two segments: `NEFT/...`, `IMPS/...`, `UPI/...`, and internet banking as `INB/NEFT/...` (most NEFT payments) or `INB/IFT/...` (an internal transfer); card lines are "Card"; the
-rest (GST, charges) are "Bank transfer". The old sheet never recorded a method, so records loaded from it have none (`mode` is null; migration `0093`, **not yet applied**,
-clears the NEFT placeholder the first load wrote; until then the page treats those rows as having none). Old-sheet rows carry a small `*` beside the date and a footnote under the table.
+rest (GST, charges) are "Bank transfer". The old sheet never recorded a method, so records loaded from it have none (`mode` is null; migration `0093`, **applied 2026-11-07**,
+cleared the NEFT placeholder the first load wrote from the 164 requests). Old-sheet rows carry a small `*` beside the date and a footnote under the table.
 
 **Pages.** `/internal/finance-requests/` (the requester's, built for a phone: ask for a payment, record a spend, add a vendor, attach a photo, see their
 own records, cancel) and `/internal/finance/requests/` (nav "Approvals": to approve, to match, to review, all; approve behind the unlock, reject with a reason, accept a suggested match, open the files).
