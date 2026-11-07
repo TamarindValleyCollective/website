@@ -73,7 +73,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
   type Rec = {
     id: string; kind: 'request' | 'log'; status: string; source: 'app' | 'history'; requester: string | null; requesterId: string | null; payee: string | null; amountPaise: number; mode: string; purpose: string;
     neededBy: string | null; reimbursement: boolean; paidOn: string | null; paidVia: string | null; upiRef: string | null; decidedBy: string | null; decisionReason: string | null; reviewFlag: string | null;
-    vouchers: number; createdAt: string; matched: 'reference' | 'accepted' | null; mismatch: boolean; proposals: Proposal[]; ownParty: boolean;
+    vouchers: number; createdAt: string; matched: 'reference' | 'accepted' | null; linked: { upi: boolean; bank: boolean } | null; mismatch: boolean; proposals: Proposal[]; ownParty: boolean;
   };
   let data: { me: { id: string; ready: boolean; hasPasskey: boolean; stepUpValid: boolean }; can: { approve: boolean; allocate: boolean }; records: Rec[]; agingCount: number } | null = null;
   const filter = { chip: 'waiting', q: '' };
@@ -188,7 +188,13 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
     status.append(tags);
     const payment = el('td');
     if (r.mismatch) payment.append(pill('Amount differs', 'crit'));
-    else if (r.matched) payment.append(pill(r.matched === 'reference' ? 'By reference' : 'Matched', 'ok'));
+    else if (r.matched) {
+      const p = pill(r.matched === 'reference' ? 'By reference' : 'Matched', 'ok');
+      // Which sides of the payment it is tied to: one link is enough, the other side is derived.
+      if (r.linked) p.title = r.linked.upi && r.linked.bank ? 'Tied to the UPI payment and its bank line' : r.linked.upi ? 'Tied to the UPI payment (its bank line is not in yet)' : 'Tied to the bank line (no UPI record for it)';
+      payment.append(p);
+      if (r.linked) payment.append(el('span', 'sub', r.linked.upi && r.linked.bank ? 'UPI + bank' : r.linked.upi ? 'UPI' : 'Bank'));
+    }
     else if (r.proposals.length && data?.can.allocate) {
       const open = openIds.has(r.id);
       const t = el('button', 'linklike', `${r.proposals.length} ${r.proposals.length === 1 ? 'suggestion' : 'suggestions'} ${open ? '▴' : '▾'}`);

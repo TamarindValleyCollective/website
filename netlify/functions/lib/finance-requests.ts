@@ -19,7 +19,7 @@ import { deleteFinanceVoucher, getFinanceVoucher, putFinanceVoucher } from './fi
 import { sendEmail } from './booking-notify';
 import { escapeHtml, renderStaffEmail } from './email-layout';
 import { todayIST } from '../../../scripts/lib/finance-parties.mjs';
-import { VOUCHER_MAX_BYTES, decide, exactMatches, planMatch, proposeMatches, purposeIndex, reviewFlag, sniffVoucher, validateRecord, agingUnmatched } from '../../../scripts/lib/finance-requests.mjs';
+import { VOUCHER_MAX_BYTES, decide, exactMatches, planMatch, deriveLinks, proposeMatches, purposeIndex, reviewFlag, sniffVoucher, validateRecord, agingUnmatched } from '../../../scripts/lib/finance-requests.mjs';
 
 type Json = Record<string, any>;
 const PAGE = 1000;
@@ -302,8 +302,10 @@ export async function listRequests(req: Request): Promise<Response> {
     const exact = exactMatches(live.map((r) => ({ id: r.id, status: r.status, amountPaise: Number(r.amount_paise), upiRef: r.upi_ref })), upiLines, bankLines);
     const stored = (r: Json) => Boolean(r.upi_line_id || r.bank_line_id);
     const unmatched = live.filter((r) => !stored(r) && !exact.links.has(r.id) && (r.kind === 'log' || r.status === 'approved' || r.status === 'paid'));
-    const claimedUpi = new Set<string>([...live.map((r) => r.upi_line_id), ...[...exact.links.values()].map((l) => l.upiLineId)].filter(Boolean));
-    const claimedBank = new Set<string>([...live.map((r) => r.bank_line_id), ...[...exact.links.values()].map((l) => l.bankLineId)].filter(Boolean));
+    // One link is enough: whichever side a record is linked on, the other is derived from the UPI row's join to its bank line.
+    const derived = new Map(live.map((r) => [r.id as string, deriveLinks({ upiLineId: r.upi_line_id ?? exact.links.get(r.id)?.upiLineId ?? null, bankLineId: r.bank_line_id ?? exact.links.get(r.id)?.bankLineId ?? null }, upiLines) as { upiLineId: string | null; bankLineId: string | null }]));
+    const claimedUpi = new Set<string>([...derived.values()].map((d) => d.upiLineId).filter(Boolean) as string[]);
+    const claimedBank = new Set<string>([...derived.values()].map((d) => d.bankLineId).filter(Boolean) as string[]);
     const upiById = new Map(upiLines.map((u) => [u.id, u]));
     const bankById = new Map(bankLines.map((b) => [b.id, b]));
     const proposals = proposeMatches(
@@ -323,7 +325,8 @@ export async function listRequests(req: Request): Promise<Response> {
       const r = records[i];
       const link = exact.links.get(r.id);
       const matched = stored(r) ? 'accepted' : link ? 'reference' : null;
-      return { ...s, matched, mismatch: exact.mismatches.includes(r.id), proposals: proposalsBy.get(r.id) ?? [], ownParty: reviewFlag({ partyId: r.party_id }, requesterIds) === 'own_party' };
+      const d = derived.get(r.id as string);
+      return { ...s, matched, linked: d && (d.upiLineId || d.bankLineId) ? { upi: Boolean(d.upiLineId), bank: Boolean(d.bankLineId) } : null, mismatch: exact.mismatches.includes(r.id), proposals: proposalsBy.get(r.id) ?? [], ownParty: reviewFlag({ partyId: r.party_id }, requesterIds) === 'own_party' };
     });
     const aging = agingUnmatched(records.map((r) => ({ id: r.id, kind: r.kind, status: r.status, decidedOn: r.decided_at ? String(r.decided_at).slice(0, 10) : null, bankLineId: r.bank_line_id, upiLineId: r.upi_line_id })), todayIST()) as Json[];
     const mfa = caps.includes('approve') ? await mfaSummary(auth.staff.id) : null;
@@ -356,6 +359,13 @@ export async function matchRecord(req: Request, id: string): Promise<Response> {
       }
     }
     if (!target) return fail('That payment was not found.', 404);
+    // The payment is one payment: if the other side of it (the UPI row's bank line, or the bank line's UPI row) is already another
+    // record's, so is this.
+    const sides = [target.bankLineId && `bank_line_id=eq.${target.bankLineId}`, target.upiLineId && `upi_line_id=eq.${target.upiLineId}`, b.type === 'bank' && `bank_line_id=eq.${target.id}`, b.type === 'upi' && `upi_line_id=eq.${target.id}`].filter(Boolean) as string[];
+    for (const side of sides) {
+      const taken = await rows(`/fin_payment_requests?${side}&status=not.in.(rejected,cancelled)&id=neq.${id}&select=id&limit=1`);
+      if (taken[0]) return fail('Another record is already matched to that payment.', 409);
+    }
     const planned = planMatch({ record: { kind: record.kind, status: record.status, amountPaise: Number(record.amount_paise), bankLineId: record.bank_line_id, upiLineId: record.upi_line_id }, type: b.type, target: target as any, now: new Date().toISOString(), actorId: auth.staff.id });
     if (planned.error || !planned.patch) return fail(planned.error ?? 'Not allowed.');
     await logFinanceAction({ actorId: auth.staff.id, entityId: record.entity_id, action: 'finance.request_matched', target: id, detail: { to: b.type } });

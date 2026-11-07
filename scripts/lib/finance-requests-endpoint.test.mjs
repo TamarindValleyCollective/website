@@ -50,7 +50,14 @@ globalThis.fetch = async (url, init = {}) => {
   if (table === 'fin_entities') return json([{ id: 'ent', requester_party_id: null }]);
   if (table === 'fin_parties') return json([{ id: P1, name: 'Acme Pumps', active: true, merged_into: null }]);
   if (table === 'fin_payment_requests' && method === 'POST') { const b = JSON.parse(init.body); db.records.push(b); db.order.push('record'); return json([{ id: REQ, kind: b.kind, status: b.status }], 201); }
-  if (table === 'fin_payment_requests' && method === 'GET') return json(db.records.map((r) => ({ id: REQ, entity_id: 'ent', ...r })));
+  if (table === 'fin_payment_requests' && method === 'GET') {
+    let list = db.records.map((r) => ({ id: REQ, entity_id: 'ent', ...r }));
+    for (const col of ['upi_line_id', 'bank_line_id']) { const v = u.searchParams.get(col); if (v?.startsWith('eq.')) list = list.filter((r) => r[col] === v.slice(3)); }
+    const not = u.searchParams.get('id'); if (not?.startsWith('neq.')) list = list.filter((r) => r.id !== not.slice(4));
+    return json(list);
+  }
+  if (table === 'fin_bank_lines') return json([{ id: 'bank-1', tran_date: '2026-11-08', amount_paise: 250000, direction: 'debit' }]);
+  if (table === 'fin_upi_lines') return json([{ id: 'upi-1', paid_at: '2026-11-08', amount_paise: 250000, direction: 'debit', bank_line_id: 'bank-1' }]);
   if (table === 'fin_payment_requests' && method === 'PATCH') { db.patched = JSON.parse(init.body); return new Response(null, { status: 204 }); }
   if (table === 'fin_vouchers') return method === 'POST' ? new Response(null, { status: 201 }) : json([]);
   throw new Error(`unexpected fetch ${method} ${url}`);
@@ -149,4 +156,13 @@ test("a requester cannot attach a file to someone else's request", async () => {
   const form = new FormData();
   form.set('file', new File([new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3])], 'bill.jpg'));
   assert.equal((await send(email, 'POST', `/requests/${REQ}/vouchers`, form)).status, 403);
+});
+
+test('a payment is one payment: matching a bank line is refused when its UPI row already belongs to another record', async () => {
+  const email = sign([['finance', 'user']]);
+  db.records.push({ kind: 'request', status: 'approved', requester_id: 'other', amount_paise: 250000, party_id: P1 });
+  db.records.push({ id: '33333333-3333-4333-8333-333333333333', kind: 'log', status: 'paid', requester_id: 'other', amount_paise: 250000, upi_line_id: 'upi-1' });
+  const res = await send(email, 'POST', `/requests/${REQ}/match`, { type: 'bank', targetId: P1 });
+  assert.equal(res.status, 409);
+  assert.equal(db.patched, null);
 });

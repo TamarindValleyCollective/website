@@ -266,3 +266,19 @@ export function sniffVoucher(bytes) {
   return null;
 }
 export const VOUCHER_MAX_BYTES = 4 * 1024 * 1024; // a Netlify Function request is capped near 6 MB
+
+/**
+ * One link is enough: a UPI row is joined to its bank line, so a record linked to either one is linked to both. `link` is
+ * { upiLineId, bankLineId } (either may be null); `upiLines`: { id, bankLineId }; A UPI row's own join to its
+ * bank line is the source of truth, so the other side is only ever derived, never stored twice. -> { upiLineId, bankLineId }.
+ */
+export function deriveLinks(link, upiLines) {
+  const bankOfUpi = new Map(upiLines.map((u) => [u.id, u.bankLineId ?? null]));
+  const upiOfBank = new Map();
+  for (const u of upiLines) if (u.bankLineId && !upiOfBank.has(u.bankLineId)) upiOfBank.set(u.bankLineId, u.id);
+  let upiLineId = link.upiLineId ?? null;
+  let bankLineId = link.bankLineId ?? null;
+  if (upiLineId && !bankLineId) bankLineId = bankOfUpi.get(upiLineId) ?? null;
+  if (bankLineId && !upiLineId) upiLineId = upiOfBank.get(bankLineId) ?? null;
+  return { upiLineId, bankLineId };
+}

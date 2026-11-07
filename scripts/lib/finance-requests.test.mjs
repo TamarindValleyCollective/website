@@ -2,7 +2,7 @@
 // Invented data only.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { agingUnmatched, descriptionWords, matchWords, cleanUpiRef, decide, exactMatches, padUpiRef, planMatch, proposeMatches, purposeIndex, reviewFlag, sniffVoucher, validateRecord } from './finance-requests.mjs';
+import { agingUnmatched, deriveLinks, descriptionWords, matchWords, cleanUpiRef, decide, exactMatches, padUpiRef, planMatch, proposeMatches, purposeIndex, reviewFlag, sniffVoucher, validateRecord } from './finance-requests.mjs';
 
 const P1 = '11111111-1111-4111-8111-111111111111';
 const today = '2026-11-07';
@@ -242,4 +242,14 @@ test('description words skip short and common words; match words add the payee n
   assert.deepEqual(descriptionWords('Payment for the tractor repair'), ['tractor', 'repair']);
   assert.deepEqual(matchWords('Corner Shop', 'Onions for payment'), ['corner', 'shop', 'onions']);
   assert.deepEqual(matchWords(null, null), []);
+});
+
+test('one link is enough: the other side of the same payment is derived from the UPI row\'s join to its bank line', () => {
+  const upi = [{ id: 'u1', bankLineId: 'b1' }, { id: 'u2', bankLineId: null }];
+  assert.deepEqual(deriveLinks({ upiLineId: 'u1' }, upi), { upiLineId: 'u1', bankLineId: 'b1' });
+  assert.deepEqual(deriveLinks({ bankLineId: 'b1' }, upi), { upiLineId: 'u1', bankLineId: 'b1' });
+  assert.deepEqual(deriveLinks({ upiLineId: 'u2' }, upi), { upiLineId: 'u2', bankLineId: null });
+  assert.deepEqual(deriveLinks({ bankLineId: 'b9' }, upi), { upiLineId: null, bankLineId: 'b9' });
+  assert.deepEqual(deriveLinks({}, upi), { upiLineId: null, bankLineId: null });
+  assert.deepEqual(deriveLinks({ upiLineId: 'u1', bankLineId: 'bx' }, upi), { upiLineId: 'u1', bankLineId: 'bx' }, 'a stored pair is left as it is');
 });
