@@ -2,7 +2,7 @@
 // Invented data only.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { agingUnmatched, cleanUpiRef, decide, exactMatches, padUpiRef, planMatch, proposeMatches, purposeIndex, reviewFlag, sniffVoucher, validateRecord } from './finance-requests.mjs';
+import { agingUnmatched, descriptionWords, matchWords, cleanUpiRef, decide, exactMatches, padUpiRef, planMatch, proposeMatches, purposeIndex, reviewFlag, sniffVoucher, validateRecord } from './finance-requests.mjs';
 
 const P1 = '11111111-1111-4111-8111-111111111111';
 const today = '2026-11-07';
@@ -221,4 +221,25 @@ test('a voucher is recognised by its first bytes, not its name', () => {
   assert.equal(sniffVoucher(new TextEncoder().encode('RIFF....WEBPVP8 ')).mime, 'image/webp');
   assert.equal(sniffVoucher(new TextEncoder().encode('<html>')), null);
   assert.equal(sniffVoucher(new Uint8Array([])), null);
+});
+
+test('the description is looked for too: a purpose word in a UPI remark or a narration raises a suggestion and says so', () => {
+  const upi = [
+    { id: 'u1', upiRef: '1', amountPaise: 50_000, direction: 'debit', paidAt: '2026-11-05', counterparty: 'Seed Store', remark: 'Tomato seeds', bankLineId: null },
+    { id: 'u2', upiRef: '2', amountPaise: 50_000, direction: 'debit', paidAt: '2026-11-05', counterparty: 'Seed Store', remark: 'misc', bankLineId: null },
+  ];
+  const r = { id: 'r', mode: 'upi', amountPaise: 50_000, partyName: 'Seed Store', purpose: 'Tomato seeds for the nursery', paidOn: '2026-11-05', createdOn: '2026-11-05' };
+  const out = proposeMatches([r], upi, []);
+  assert.equal(out[0].targetId, 'u1');
+  assert.ok(out[0].reasons.includes('description matches'));
+  assert.ok(!out[1].reasons.includes('description matches'));
+  const bank = [{ id: 'b', direction: 'debit', amountPaise: 90_000, tranDate: '2026-11-10', narration: 'NEFT/DIESEL SUPPLY/ref', upiRrn: null }];
+  const n = proposeMatches([{ id: 'q', mode: 'neft', amountPaise: 90_000, partyName: 'Fuel Corner', purpose: 'Diesel for tractor', decidedOn: '2026-11-07', createdOn: '2026-11-06' }], [], bank);
+  assert.ok(n[0].reasons.includes('description in the narration'));
+});
+
+test('description words skip short and common words; match words add the payee name', () => {
+  assert.deepEqual(descriptionWords('Payment for the tractor repair'), ['tractor', 'repair']);
+  assert.deepEqual(matchWords('Corner Shop', 'Onions for payment'), ['corner', 'shop', 'onions']);
+  assert.deepEqual(matchWords(null, null), []);
 });

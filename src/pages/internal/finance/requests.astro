@@ -55,6 +55,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
 
 <script>
   import { StaffAuthError, clearStepUp, clearToken, decodeTokenEmail, getToken, setToken, showToast, staffFetch } from '../../../../scripts/lib/staff-client.mjs';
+  import { matchWords } from '../../../../scripts/lib/finance-requests.mjs';
   import { initStepUpLock } from '../../../../scripts/lib/staff-stepup-ui.mjs';
   import { clearState, showFailure, showLoading } from '../../../../scripts/lib/staff-states.mjs';
 
@@ -158,8 +159,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
     Array.from(tr.children).forEach((td, i) => ((td as HTMLElement).dataset.label = heads[i] ?? ''));
   };
 
-  // The words of a payee's name (three letters or more), to light up where they appear in a bank narration.
-  const nameWords = (name: string | null) => [...new Set((name ?? '').toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 3))];
+  // Words to light up where they appear in a suggested payment: the payee's name and what the record says it was for.
   function highlighted(text: string, words: string[]): HTMLElement {
     const out = el('span', 'suggest-text');
     if (!words.length) return (out.textContent = text), out;
@@ -226,9 +226,9 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
       const td = el('td');
       td.colSpan = 7;
       const head = el('div', 'suggest-head');
-      head.append(el('strong', undefined, 'Is this the payment for '), el('strong', 'suggest-for', `${r.payee ?? 'this record'}, ${rupees(r.amountPaise)}`), el('strong', undefined, '?'));
+      head.append(el('strong', undefined, 'Is this the payment for '), el('strong', 'suggest-for', `${r.payee ?? 'this record'}, ${rupees(r.amountPaise)}`), el('strong', undefined, '?'), el('span', 'suggest-purpose', ` For: “${r.purpose}”`));
       td.append(head);
-      const words = nameWords(r.payee);
+      const words = matchWords(r.payee, r.purpose) as string[];
       for (const p of r.proposals) {
         const row = el('div', 'suggest-row');
         const info = el('div', 'suggest-info');

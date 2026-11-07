@@ -117,6 +117,12 @@ export function reviewFlag({ partyId }, requesterPartyIds) {
 }
 
 const tokens = (s) => String(s ?? '').toLowerCase().split(/[^a-z0-9]+/).filter((t) => t.length >= 3);
+// Words too common to say anything about a purpose ("payment for the repair" shares "payment" with every narration).
+const STOP = new Set(['for', 'the', 'and', 'with', 'from', 'payment', 'paid', 'pay', 'upi', 'neft', 'imps', 'rtgs', 'bank', 'transfer', 'charges', 'bill', 'ref']);
+/** The words of a description worth looking for in a narration or remark (four letters or more, not a common one). */
+export const descriptionWords = (text) => [...new Set(String(text ?? '').toLowerCase().split(/[^a-z0-9]+/).filter((t) => t.length >= 4 && !STOP.has(t)))];
+/** The words to light up in a suggested payment: the payee's name and what it was for. */
+export const matchWords = (name, purpose) => [...new Set([...tokens(name).filter((t) => !STOP.has(t)), ...descriptionWords(purpose)])];
 function nameScore(name, text) {
   const have = new Set(tokens(text));
   const want = tokens(name);
@@ -161,8 +167,9 @@ export function exactMatches(records, upiLines, bankLines) {
  * Suggested matches for records that have no link yet; a person accepts one, nothing is linked on a guess. A UPI-mode record is
  * offered UPI rows, any record is offered bank debits. A target needs the same amount and to be a debit, and to fall in the
  * date window; one already linked to another record is not offered. A payee name that appears in the row or narration raises the
- * score. -> [{ recordId, type: 'upi'|'bank', targetId, score, reasons[] }] best first per record.
- * `records`: { id, mode, amountPaise, partyName, recipientText, paidOn, decidedOn, createdOn }.
+ * score; so does a word of what it was for (the record's purpose) in the row's remark or the narration.
+ * -> [{ recordId, type: 'upi'|'bank', targetId, score, reasons[] }] best first per record.
+ * `records`: { id, mode, amountPaise, partyName, recipientText, purpose, paidOn, decidedOn, createdOn }; a UPI row may carry its `remark`.
  */
 export function proposeMatches(records, upiLines, bankLines, { claimedUpi = new Set(), claimedBank = new Set() } = {}) {
   const out = [];
@@ -170,6 +177,12 @@ export function proposeMatches(records, upiLines, bankLines, { claimedUpi = new 
     const anchor = anchorOf(r);
     if (!anchor) continue;
     const who = r.partyName ?? r.recipientText ?? '';
+    const about = descriptionWords(r.purpose);
+    const aboutScore = (text) => {
+      if (!about.length) return 0;
+      const have = new Set(tokens(text));
+      return about.filter((w) => have.has(w)).length / about.length;
+    };
     const found = [];
     if (r.mode === 'upi') {
       for (const u of upiLines) {
@@ -177,7 +190,8 @@ export function proposeMatches(records, upiLines, bankLines, { claimedUpi = new 
         const gap = Math.abs(daysBetween(anchor, u.paidAt));
         if (gap > PROPOSAL_DAYS_UPI) continue;
         const nm = nameScore(who, u.counterparty);
-        found.push({ recordId: r.id, type: 'upi', targetId: u.id, score: 10 - gap + nm * 5, reasons: ['same amount', gap === 0 ? 'same day' : `${gap} day${gap === 1 ? '' : 's'} apart`, ...(nm > 0 ? ['payee name matches'] : [])] });
+        const ds = aboutScore(`${u.remark ?? ''} ${u.counterparty ?? ''}`);
+        found.push({ recordId: r.id, type: 'upi', targetId: u.id, score: 10 - gap + nm * 5 + ds * 5, reasons: ['same amount', gap === 0 ? 'same day' : `${gap} day${gap === 1 ? '' : 's'} apart`, ...(nm > 0 ? ['payee name matches'] : []), ...(ds > 0 ? ['description matches'] : [])] });
       }
     }
     for (const b of bankLines) {
@@ -186,7 +200,8 @@ export function proposeMatches(records, upiLines, bankLines, { claimedUpi = new 
       const ok = r.mode === 'upi' ? Math.abs(after) <= PROPOSAL_DAYS_UPI : after >= 0 && after <= PROPOSAL_DAYS_BANK;
       if (!ok) continue;
       const nm = nameScore(who, b.narration);
-      found.push({ recordId: r.id, type: 'bank', targetId: b.id, score: 8 - Math.abs(after) / 3 + nm * 5, reasons: ['same amount', after === 0 ? 'same day' : `${Math.abs(after)} day${Math.abs(after) === 1 ? '' : 's'} apart`, ...(nm > 0 ? ['payee name in the narration'] : [])] });
+      const ds = aboutScore(b.narration);
+      found.push({ recordId: r.id, type: 'bank', targetId: b.id, score: 8 - Math.abs(after) / 3 + nm * 5 + ds * 5, reasons: ['same amount', after === 0 ? 'same day' : `${Math.abs(after)} day${Math.abs(after) === 1 ? '' : 's'} apart`, ...(nm > 0 ? ['payee name in the narration'] : []), ...(ds > 0 ? ['description in the narration'] : [])] });
     }
     found.sort((x, y) => y.score - x.score);
     out.push(...found.slice(0, 5));

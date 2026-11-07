@@ -116,6 +116,11 @@
   color: var(--tvc-ink);
 }
 
+.rq-table .suggest-purpose {
+  color: var(--tvc-ink-soft);
+  font-style: italic;
+}
+
 .rq-table .suggest-for {
   color: var(--tvc-green-dark);
 }

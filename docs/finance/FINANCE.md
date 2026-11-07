@@ -657,7 +657,7 @@ line sheet's note box starts with it) as the default wording until a person writ
 **How a record is matched.** Exactly, by the 12-digit reference (a log typed with it, or loaded from the old sheet), joining the UPI row and the bank
 debit that carry it, only when the amount agrees (a reference with a different amount is flagged, never linked; a reversal credit is not the
 payment). No reference: `proposeMatches` suggests a UPI row (within 3 days) and/or bank debit (a UPI log within 3 days, a NEFT request up to 21 days
-after approval) of the same amount, better when the payee name is in the row; a person accepts one (`POST /requests/:id/match`, which re-reads the
+after approval) of the same amount, better when the payee name is in the row, and when a word of the record's purpose (four letters or more, not a common one) is in the UPI remark or the narration (`description matches`); the Approvals page highlights those words, the amount and the day; a person accepts one (`POST /requests/:id/match`, which re-reads the
 statement row and re-checks amount and direction; accepting marks a request paid on the statement date). Never linked on a guess. An approved request
 unmatched for 14 days is counted on the Approvals page.
 
