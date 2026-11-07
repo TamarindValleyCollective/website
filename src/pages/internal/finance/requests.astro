@@ -60,6 +60,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
   };
   let data: { me: { id: string; ready: boolean; hasPasskey: boolean; stepUpValid: boolean }; can: { approve: boolean; allocate: boolean }; records: Rec[]; agingCount: number } | null = null;
   const filter = { chip: 'waiting', q: '' };
+  let chosenByUser = false;
 
   const rupees = (paise: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(paise / 100);
   const day = (iso: string | null) => (iso ? new Date(`${iso.slice(0, 10)}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) : '');
@@ -73,7 +74,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
   };
   const CHIPS: { id: string; label: string; test: (r: Rec) => boolean }[] = [
     { id: 'waiting', label: 'To approve', test: (r) => r.kind === 'request' && r.status === 'submitted' },
-    { id: 'tomatch', label: 'To match', test: (r) => !r.matched && (r.kind === 'log' || r.status === 'approved') },
+    { id: 'tomatch', label: 'To match', test: (r) => !r.matched && r.status !== 'rejected' && r.status !== 'cancelled' && (r.kind === 'log' || r.status === 'approved' || r.status === 'paid') },
     { id: 'review', label: 'To review', test: (r) => Boolean(r.reviewFlag) },
     { id: 'all', label: 'All', test: () => true },
   ];
@@ -191,6 +192,8 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
 
   function render() {
     if (!data) return;
+    // Open on the first view that has something in it, until the person picks one.
+    if (!chosenByUser) filter.chip = CHIPS.find((c) => data!.records.some(c.test))?.id ?? 'all';
     const chips = $('chips');
     chips.replaceChildren(
       ...CHIPS.map((c) => {
@@ -198,7 +201,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
         const b = el('button', 'chip', c.id === 'all' ? c.label : `${c.label} (${n})`);
         b.type = 'button';
         b.setAttribute('aria-pressed', String(filter.chip === c.id));
-        b.addEventListener('click', () => ((filter.chip = c.id), render()));
+        b.addEventListener('click', () => ((chosenByUser = true), (filter.chip = c.id), render()));
         return b;
       }),
     );
