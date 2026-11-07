@@ -17,7 +17,7 @@ model are in [DESIGN.md](DESIGN.md); how to build it is in [README.md](README.md
 | 05 Ledger & review | **Merged (PR #529).** Posting rules, rules engine, ledger and rules screens, period close. Migration `0083` **applied to TVC ERP on 2026-11-05** (recorded as `finance_ledger`). |
 | 06 History load | **Loaded on 2026-11-05** (PR #530, migration `0084` applied): 1,031 allocations on 783 bank lines. Still open: the 2023-24 tracker tab, party on the history rows with none (the "No party" chip lists them), project details for the Farm Project placeholders (issue #531). |
 | 05/06 follow-up: the new ledger | **Draft PR #532.** The ledger page is rebuilt (TanStack Table and Virtual; every line fetched once, searched and sorted in the browser; cards on phones; saved drafts; undo; a line sheet that can set a maintenance unit and year) and replaces the first version at `/internal/finance/ledger/`; faster list, Paytm line, "No party" chip and flags. Critique 22 → 26 → 30 → 27 / 40 over four rounds (reviewers vary by about 3). No migration. Not yet tried on the real ledger. |
-| 08 Payment requests & bills | First slice built on branch `finance-08-requests` (draft PR). Migration `0092` **not yet applied**. See "Payment requests and spend logs" below. |
+| 08 Payment requests & bills | First slice built on branch `finance-08-requests` (draft PR). Migration `0092` **applied 2026-11-07**. See "Payment requests and spend logs" below. |
 | 02, 07, 09-13 | Not started |
 
 ## Access
@@ -631,7 +631,7 @@ pure rules in `scripts/lib/finance-history.mjs` (tested on invented rows). Count
   "Lookups" tab holds only payment-mode keywords, and the suggestion engine learns from the loaded history instead); the 2023-24 tracker tab and the
   older years (the ledger holds 476 bank lines before April 2024; the same script takes `--tab` and `--since`).
 
-## Payment requests and spend logs (session 08, first slice, migration `0092_finance_payment_requests.sql`, **not yet applied**)
+## Payment requests and spend logs (session 08, first slice, migration `0092_finance_payment_requests.sql`, **applied 2026-11-07**)
 
 One table, `fin_payment_requests`, holds two kinds of record with the same fields (rules in `scripts/lib/finance-requests.mjs`, server in
 `lib/finance-requests.ts`, routes in `finance-admin.mts`):
@@ -673,4 +673,4 @@ Running it again adds nothing. Checked against the real sheet read-only (parse o
 
 **Not built yet (next):** the bill scanner (edge detection, crop, multi-page) and the vision reading of vendor, date, amount and UPI reference off a bill or screenshot (the files are
 attached as plain photos today, and the reference is typed); approver-queue polish; per-delegate spend limits (who paid is recorded: `requester_id` and `paid_via`); a vendor bulk file;
-payment links from the ledger's Paypro/bank lines to a request. **Not verified:** the pages in a browser on a real phone, the upload to R2, the approval email, and the loader's `--apply` (the table is not applied yet).
+payment links from the ledger's Paypro/bank lines to a request. **Not verified:** the pages in a browser on a real phone, the upload to R2, the approval email, and the loader's `--apply`.
