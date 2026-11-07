@@ -71,7 +71,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
   const content = $('content');
   const intro = $('intro');
 
-  type Proposal = { type: 'upi' | 'bank'; targetId: string; reasons: string[]; via: string | null; date: string; who: string | null };
+  type Proposal = { type: 'upi' | 'bank'; targetId: string; reasons: string[]; via: string | null; alsoBank: boolean; date: string; who: string | null };
   type Rec = {
     id: string; kind: 'request' | 'log'; status: string; source: 'app' | 'history'; requester: string | null; requesterId: string | null; payee: string | null; amountPaise: number; mode: string | null; purpose: string;
     neededBy: string | null; reimbursement: boolean; paidOn: string | null; paidVia: string | null; upiRef: string | null; decidedBy: string | null; decisionReason: string | null; reviewFlag: string | null;
@@ -262,7 +262,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
       for (const p of r.proposals) {
         const row = el('div', 'suggest-row');
         const line = el('div', 'suggest-line');
-        line.append(el('span', 'suggest-kind', p.via ?? (p.type === 'upi' ? 'UPI' : 'Bank')));
+        line.append(el('span', 'suggest-kind', `${p.via ?? (p.type === 'upi' ? 'UPI' : 'Bank')}${p.alsoBank ? ' + bank statement' : ''}`));
         const gap = p.reasons.find((x) => /apart|same day/.test(x));
         const when = el('span', 'nowrap', `${day(p.date)}${gap && gap !== 'same day' ? ` (${gap.replace(' apart', ' off')})` : ''}`);
         if (gap === 'same day') when.classList.add('hl');

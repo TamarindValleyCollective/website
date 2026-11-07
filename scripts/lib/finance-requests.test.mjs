@@ -276,3 +276,11 @@ test('how a payment was made: the UPI app, else the method its narration starts 
   assert.equal(fulfilledVia({ narration: 'GST/ACME/INBOUND' }).method, 'bank', 'a method word beyond the second segment is not read');
   assert.equal(fulfilledVia({}), null);
 });
+
+test('a UPI row and the bank line it is joined to are one payment: offered once, not twice', () => {
+  const r = { id: 'r', mode: 'upi', amountPaise: 50_000, partyName: 'Seed Store', purpose: 'Seeds', paidOn: '2026-11-05', createdOn: '2026-11-05' };
+  const upi = [{ id: 'u1', upiRef: '1', amountPaise: 50_000, direction: 'debit', paidAt: '2026-11-05', counterparty: 'Seed Store', remark: null, bankLineId: 'b1' }];
+  const bank = [{ id: 'b1', direction: 'debit', amountPaise: 50_000, tranDate: '2026-11-05', narration: 'UPI/P2A/1/SEED STORE', upiRrn: '1' }, { id: 'b2', direction: 'debit', amountPaise: 50_000, tranDate: '2026-11-06', narration: 'NEFT/OTHER', upiRrn: null }];
+  const out = proposeMatches([r], upi, bank);
+  assert.deepEqual(out.map((p) => [p.type, p.targetId]).sort(), [['bank', 'b2'], ['upi', 'u1']], 'the joined bank line is not offered separately; an unrelated one still is');
+});

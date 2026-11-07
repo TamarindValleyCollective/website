@@ -319,7 +319,7 @@ export async function listRequests(req: Request): Promise<Response> {
       if (!t) continue;
       const via = p.type === 'upi' ? fulfilledVia({ upiApp: (t as any).app }) : fulfilledVia({ narration: (t as any).narration });
       const view = p.type === 'upi' ? { date: (t as any).paidAt, who: [(t as any).counterparty, (t as any).remark ? `“${(t as any).remark}”` : ''].filter(Boolean).join(' · ') } : { date: (t as any).tranDate, who: (t as any).narration };
-      proposalsBy.set(p.recordId, [...(proposalsBy.get(p.recordId) ?? []), { type: p.type, targetId: p.targetId, reasons: p.reasons, via: (via as { label: string } | null)?.label ?? null, ...view }]);
+      proposalsBy.set(p.recordId, [...(proposalsBy.get(p.recordId) ?? []), { type: p.type, targetId: p.targetId, reasons: p.reasons, alsoBank: p.type === 'upi' && Boolean((t as any).bankLineId), via: (via as { label: string } | null)?.label ?? null, ...view }]);
     }
     const requesterIds = ent[0]?.requester_party_id ? [ent[0].requester_party_id as string] : [];
     const caps = capabilitiesForRole('finance', auth.staff.role) as string[];

@@ -205,8 +205,11 @@ export function proposeMatches(records, upiLines, bankLines, { claimedUpi = new 
       const ds = aboutScore(b.narration);
       found.push({ recordId: r.id, type: 'bank', targetId: b.id, score: 8 - Math.abs(after) / 3 + nm * 5 + ds * 5, reasons: ['same amount', after === 0 ? 'same day' : `${Math.abs(after)} day${Math.abs(after) === 1 ? '' : 's'} apart`, ...(nm > 0 ? ['payee name in the narration'] : []), ...(ds > 0 ? ['description in the narration'] : [])] });
     }
-    found.sort((x, y) => y.score - x.score);
-    out.push(...found.slice(0, 5));
+    // A UPI row and the bank line it is joined to are one payment: offer it once, as the UPI row (tying it ties the bank line too).
+    const joined = new Set(found.filter((f) => f.type === 'upi').map((f) => upiLines.find((u) => u.id === f.targetId)?.bankLineId).filter(Boolean));
+    const once = found.filter((f) => !(f.type === 'bank' && joined.has(f.targetId)));
+    once.sort((x, y) => y.score - x.score);
+    out.push(...once.slice(0, 5));
   }
   return out;
 }
