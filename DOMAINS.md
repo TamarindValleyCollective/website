@@ -120,7 +120,7 @@ reaches at the origin). Facts worth knowing:
   **without the `/internal` prefix** (the files still live under `src/pages/internal/`). `/` shows the
   admin home; `/usage/`, `/access/`, `/security/`, `/photo-pool/`, `/whatsapp/`, `/event-payments/`,
   `/accommodation-calendar/`, `/members/`, `/finance/`, `/finance-requests/`, `/units/`, `/preview-features/` and `/test-event/` are each a rewrite to the same path under
-  `/internal/`. `/_astro/*`, `/fonts/*`, `/images/brand/*`, the tab icons and the admin functions
+  `/internal/`. `/_astro/*`, `/fonts/*`, `/images/brand/*`, `/finance-badges/*` (the ledger badge logos), the tab icons and the admin functions
   (`whatsapp-admin`, `whatsapp-suggest`, `stays-day-summary`, `members-admin`, `accommodation-admin`,
   `event-payments-admin`, `usage-admin`, `finance-admin`, `units-admin`, `photo-pool`, `staff-admin`, `staff-mfa`, `staff-me`) pass
   through; anything else redirects to the admin home. **A new admin page, function or asset path must
