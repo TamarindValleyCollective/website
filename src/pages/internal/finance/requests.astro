@@ -41,7 +41,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
               <th data-sort="amountPaise" class="num"><button type="button" class="sorthead">Amount</button></th>
               <th data-sort="method"><button type="button" class="sorthead">Method</button></th>
               <th data-sort="status"><button type="button" class="sorthead">Status</button></th>
-              <th>Payment</th>
+              <th>Match</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -75,7 +75,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
   type Rec = {
     id: string; kind: 'request' | 'log'; status: string; source: 'app' | 'history'; requester: string | null; requesterId: string | null; payee: string | null; amountPaise: number; mode: string | null; purpose: string;
     neededBy: string | null; reimbursement: boolean; paidOn: string | null; paidVia: string | null; upiRef: string | null; decidedBy: string | null; decisionReason: string | null; reviewFlag: string | null;
-    vouchers: number; createdAt: string; fulfilled: { method: string; label: string } | null; matched: 'reference' | 'accepted' | null; linked: { upi: boolean; bank: boolean } | null; mismatch: boolean; proposals: Proposal[]; ownParty: boolean;
+    vouchers: number; createdAt: string; fulfilled: { method: string; label: string } | null; matched: 'reference' | 'accepted' | null; linked: { upi: boolean; bank: boolean; upiRef: string | null; bankLineId: string | null } | null; mismatch: boolean; proposals: Proposal[]; ownParty: boolean;
   };
   let data: { me: { id: string; ready: boolean; hasPasskey: boolean; stepUpValid: boolean }; can: { approve: boolean; allocate: boolean }; records: Rec[]; agingCount: number } | null = null;
   const filter = { chip: 'waiting', q: '' };
@@ -210,11 +210,20 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
     const payment = el('td');
     if (r.mismatch) payment.append(pill('Amount differs', 'crit'));
     else if (r.matched) {
-      const p = pill(r.matched === 'reference' ? 'By reference' : 'Matched', 'ok');
-      // Which sides of the payment it is tied to: one link is enough, the other side is derived.
-      if (r.linked) p.title = r.linked.upi && r.linked.bank ? 'Tied to the UPI payment and its bank line' : r.linked.upi ? 'Tied to the UPI payment (its bank line is not in yet)' : 'Tied to the bank line (no UPI record for it)';
-      payment.append(p);
-      if (r.linked) payment.append(el('span', 'sub', r.linked.upi && r.linked.bank ? 'UPI + bank' : r.linked.upi ? 'UPI' : 'Bank'));
+      // One pill for each place the payment is tied (the UPI payment, the bank line), each a link to it. One link is enough: the
+      // other side is derived. Hover says whether it was matched by reference or by a person.
+      const how = r.matched === 'reference' ? 'Matched by the UPI reference' : 'Matched by a person';
+      const pills = el('div', 'tags');
+      const link = (label: string, href: string, title: string) => {
+        const a = el('a', 'pill pill--ok pill--link', label);
+        a.href = href;
+        a.title = `${title}. ${how}.`;
+        pills.append(a);
+      };
+      if (r.linked?.upi && r.linked.upiRef) link('UPI', `/internal/finance/upi/?ref=${r.linked.upiRef}`, 'Open this payment on the UPI page');
+      if (r.linked?.bank && r.linked.bankLineId) link('Bank', `/internal/finance/ledger/?line=${r.linked.bankLineId}`, 'Open this line in the ledger');
+      if (!pills.children.length) pills.append(pill('Matched', 'ok'));
+      payment.append(pills);
     }
     else if (r.proposals.length && data?.can.allocate) {
       const open = openIds.has(r.id);

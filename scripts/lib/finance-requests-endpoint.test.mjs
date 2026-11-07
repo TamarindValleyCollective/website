@@ -181,5 +181,6 @@ test('the list says how a matched request was actually paid: from the bank narra
   assert.deepEqual(byId[REQ].fulfilled, { method: 'neft', label: 'NEFT' }, 'a bank line alone: read from "INB/NEFT/..."');
   assert.equal(byId[REQ].mode, 'upi', 'what was asked stays what was asked');
   assert.deepEqual(byId[ID2].fulfilled, { method: 'upi', label: 'UPI, Paytm' }, 'matched by reference: the UPI row names its app');
-  assert.deepEqual(byId[ID2].linked, { upi: true, bank: true });
+  assert.deepEqual(byId[ID2].linked, { upi: true, bank: true, upiRef: '600000000001', bankLineId: 'bank-2' }, 'where it is tied, so the page can link to each place');
+  assert.deepEqual(byId[REQ].linked, { upi: false, bank: true, upiRef: null, bankLineId: 'bank-1' });
 });

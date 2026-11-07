@@ -175,6 +175,15 @@
   white-space: nowrap;
 }
 
+.rq-table a.pill--link {
+  text-decoration: none;
+}
+
+.rq-table a.pill--link:hover,
+.rq-table a.pill--link:focus-visible {
+  text-decoration: underline;
+}
+
 .rq-table .pill--ok {
   background: var(--tvc-green-tint);
   color: var(--tvc-green-dark);

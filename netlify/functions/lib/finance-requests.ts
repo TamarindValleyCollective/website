@@ -332,7 +332,7 @@ export async function listRequests(req: Request): Promise<Response> {
       const upiTied = d?.upiLineId ? upiById.get(d.upiLineId) : undefined;
       const bankTied = d?.bankLineId ? bankById.get(d.bankLineId) : undefined;
       const fulfilled = fulfilledVia({ upiApp: upiTied?.app, narration: bankTied?.narration }) as { method: string; label: string } | null;
-      return { ...s, matched, fulfilled, linked: d && (d.upiLineId || d.bankLineId) ? { upi: Boolean(d.upiLineId), bank: Boolean(d.bankLineId) } : null, mismatch: exact.mismatches.includes(r.id), proposals: proposalsBy.get(r.id) ?? [], ownParty: reviewFlag({ partyId: r.party_id }, requesterIds) === 'own_party' };
+      return { ...s, matched, fulfilled, linked: d && (d.upiLineId || d.bankLineId) ? { upi: Boolean(d.upiLineId), bank: Boolean(d.bankLineId), upiRef: (upiTied?.upiRef as string | undefined) ?? null, bankLineId: d.bankLineId } : null, mismatch: exact.mismatches.includes(r.id), proposals: proposalsBy.get(r.id) ?? [], ownParty: reviewFlag({ partyId: r.party_id }, requesterIds) === 'own_party' };
     });
     const aging = agingUnmatched(records.map((r) => ({ id: r.id, kind: r.kind, status: r.status, decidedOn: r.decided_at ? String(r.decided_at).slice(0, 10) : null, bankLineId: r.bank_line_id, upiLineId: r.upi_line_id })), todayIST()) as Json[];
     const mfa = caps.includes('approve') ? await mfaSummary(auth.staff.id) : null;
