@@ -239,6 +239,13 @@
   status = 200
   force = true
 
+# the logos on the ledger's source badges (fin_source_badges.logo_url points at /finance-badges/...)
+[[redirects]]
+  from = "https://admin.tvc.farm/finance-badges/*"
+  to = "/finance-badges/:splat"
+  status = 200
+  force = true
+
 # the admin functions (each checks the signed-in admin itself); the public ones are not listed
 [[redirects]]
   from = "https://admin.tvc.farm/api/whatsapp-admin/*"
