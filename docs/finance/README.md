@@ -73,4 +73,5 @@ run at any time. Run 13 last.
 | 05 | Built 2026-11-05, draft PR #529 (`worktree-finance-05-ledger`) | Posting rules, rules engine and review flags, ledger and rules screens, bulk apply, refunds, period close, category merge. Migration `0083` **applied 2026-11-05**. See [FINANCE.md](FINANCE.md). |
 | 05 follow-up | BHIM import, origin column, UPI page, branch `finance-upi-circle-bhim` | Migrations `0088` **applied 2026-11-07**, `0089` (payment notes) **applied 2026-11-07**, `0090` (source badges) **applied 2026-11-07** (the ledger reads `fin_upi_lines.app`, so it must stay applied before this merges). See [FINANCE.md](FINANCE.md). |
 | 06 | In progress, branch `worktree-finance-06-history` | The tracker is matched to the bank lines (dry run: 95.3% of rows). Mapping and the apply step are next. See [FINANCE.md](FINANCE.md). |
-| 02, 07-13 | Not started | |
+| 08 | Brief updated 2026-11-07, not started | Requests also covers logging a spend already made; purposes are pulled from here into the UPI page and ledger; the old sheet's history is loaded once. See the brief. |
+| 02, 07, 09-13 | Not started | |
