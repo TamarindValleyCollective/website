@@ -56,8 +56,8 @@ globalThis.fetch = async (url, init = {}) => {
     const not = u.searchParams.get('id'); if (not?.startsWith('neq.')) list = list.filter((r) => r.id !== not.slice(4));
     return json(list);
   }
-  if (table === 'fin_bank_lines') return json([{ id: 'bank-1', tran_date: '2026-11-08', amount_paise: 250000, direction: 'debit' }]);
-  if (table === 'fin_upi_lines') return json([{ id: 'upi-1', paid_at: '2026-11-08', amount_paise: 250000, direction: 'debit', bank_line_id: 'bank-1' }]);
+  if (table === 'fin_bank_lines') return json(db.bank ?? [{ id: 'bank-1', tran_date: '2026-11-08', amount_paise: 250000, direction: 'debit', narration: 'x', upi_rrn: null }]);
+  if (table === 'fin_upi_lines') return json(db.upi ?? [{ id: 'upi-1', paid_at: '2026-11-08', amount_paise: 250000, direction: 'debit', bank_line_id: 'bank-1', app: 'paytm', counterparty: 'x', remarks: null, upi_ref: '1' }]);
   if (table === 'fin_payment_requests' && method === 'PATCH') { db.patched = JSON.parse(init.body); return new Response(null, { status: 204 }); }
   if (table === 'fin_vouchers') return method === 'POST' ? new Response(null, { status: 201 }) : json([]);
   throw new Error(`unexpected fetch ${method} ${url}`);
@@ -165,4 +165,21 @@ test('a payment is one payment: matching a bank line is refused when its UPI row
   const res = await send(email, 'POST', `/requests/${REQ}/match`, { type: 'bank', targetId: P1 });
   assert.equal(res.status, 409);
   assert.equal(db.patched, null);
+});
+
+test('the list says how a matched request was actually paid: from the bank narration, or the UPI app', async () => {
+  const email = sign([['finance', 'user']]);
+  const ID2 = '44444444-4444-4444-8444-444444444444';
+  db.bank = [{ id: 'bank-1', tran_date: '2026-11-08', amount_paise: 250000, direction: 'debit', narration: 'INB/NEFT/123/ACME PUMPS', upi_rrn: null }, { id: 'bank-2', tran_date: '2026-11-09', amount_paise: 12000, direction: 'debit', narration: 'UPI/P2A/600000000001/SHOP', upi_rrn: '600000000001' }];
+  db.upi = [{ id: 'upi-2', paid_at: '2026-11-09', amount_paise: 12000, direction: 'debit', bank_line_id: 'bank-2', app: 'paytm', counterparty: 'Shop', remarks: null, upi_ref: '600000000001' }];
+  db.records.push({ id: REQ, kind: 'request', status: 'paid', source: 'app', requester_id: 'u9', party_id: P1, amount_paise: 250000, mode: 'upi', purpose: 'Pump repair', bank_line_id: 'bank-1', created_at: '2026-11-01T00:00:00Z' });
+  db.records.push({ id: ID2, kind: 'log', status: 'paid', source: 'app', requester_id: 'u9', recipient_text: 'Shop', amount_paise: 12000, mode: 'upi', purpose: 'Onions', paid_on: '2026-11-09', upi_ref: '600000000001', created_at: '2026-11-09T00:00:00Z' });
+  const res = await send(email, 'GET', '/requests');
+  assert.equal(res.status, 200);
+  const list = (await res.json()).records;
+  const byId = Object.fromEntries(list.map((r) => [r.id, r]));
+  assert.deepEqual(byId[REQ].fulfilled, { method: 'neft', label: 'NEFT' }, 'a bank line alone: read from "INB/NEFT/..."');
+  assert.equal(byId[REQ].mode, 'upi', 'what was asked stays what was asked');
+  assert.deepEqual(byId[ID2].fulfilled, { method: 'upi', label: 'UPI, Paytm' }, 'matched by reference: the UPI row names its app');
+  assert.deepEqual(byId[ID2].linked, { upi: true, bank: true });
 });

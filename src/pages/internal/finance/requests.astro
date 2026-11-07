@@ -184,7 +184,8 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
       date.append(star);
     } else if (r.requester) date.append(el('span', 'sub', `by ${r.requester}`));
     const payee = cell(r.payee ?? 'Unknown');
-    payee.append(el('span', 'sub', r.kind === 'log' ? `Logged spend${r.paidVia ? `, ${r.paidVia === 'delegate' ? 'by a delegate' : 'from the account'}` : ''}` : 'Request'));
+    // A request is the usual case and says nothing; only a spend already made is marked, since it was never approved.
+    if (r.kind === 'log') payee.append(el('span', 'sub', `Logged spend${r.paidVia ? `, ${r.paidVia === 'delegate' ? 'by a delegate' : 'from the account'}` : ''}`));
     // How it was paid, in its own column: the method of the payment it is tied to; until then what was asked for, in grey.
     const f = r.fulfilled;
     const method = el('td', f ? undefined : 'dim', f ? f.label : r.mode ? MODE[r.mode] ?? r.mode : '—');
