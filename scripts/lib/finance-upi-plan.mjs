@@ -110,3 +110,59 @@ export function reconciliationSummary({ upiLines, bankLines, lastBankDate, first
   }
   return { awaitingBank, unmatchedInStatement, bankWithoutUpi };
 }
+
+// Is a BHIM row a UPI Circle payment? INFERRED, not stated by the file: the export has no tag (Paytm's circle signal).
+// Rows paid through the circle name no bank and are marked CR; rows paid from the account name the bank and are DR.
+// Confirm against the old "UPI Circle Transactions" sheet; this is the one place to change if the reading is wrong.
+export const bhimIsCircle = (l) => l.bankName === null && l.drcr === 'CR';
+
+// Plan a BHIM import (a parsed finance-bhim.mjs statement). Same result shape as planUpiImport, so the import page
+// reads both. A row that names its account ("XXXX000099") is placed on the registered account with those last four
+// digits. A row that names none (a UPI Circle payment) is stored with NO account: a UPI app can pay from any linked bank,
+// so the file cannot say, and the account is read from the bank line the row is joined to by reference (the bank line
+// always carries its account). Only a row naming an account that is not registered blocks the file, so a payment is
+// never put on a wrong account; add the account first.
+export function planBhimImport({ file, accounts, held }) {
+  const { parsed } = file;
+  const result = {
+    id: file.id, fileHash: file.fileHash, status: 'ok', app: 'bhim',
+    period: { from: parsed.from, to: parsed.to },
+    counts: { total: parsed.lines.length + parsed.failed.length + parsed.unsuccessful.count, new: 0, alreadyHeld: 0, ignored: 0, failed: 0, unsuccessful: parsed.unsuccessful.count },
+    unsuccessful: parsed.unsuccessful,
+    ignored: { count: 0, totalPaise: 0, byAccount: [] },
+    failed: [...parsed.failed], errors: [], newLines: [], firstDate: null, lastDate: null,
+  };
+  if (held.fileHashes.includes(file.fileHash)) {
+    result.status = 'duplicate_file';
+    return result;
+  }
+  const byLast4 = new Map(accounts.filter((a) => a.last4).map((a) => [a.last4, a]));
+  const unregistered = [...new Set(parsed.lines.map((l) => l.accountLast4).filter((d) => d && !byLast4.has(d)))];
+  if (unregistered.length) {
+    result.status = 'blocked';
+    result.errors = [{ type: 'account_not_registered', last4: unregistered }];
+    return result;
+  }
+
+  const seen = new Set();
+  const heldRefs = new Set(held.refs);
+  for (const l of parsed.lines) {
+    if (heldRefs.has(l.upiRef) || seen.has(l.upiRef)) {
+      result.counts.alreadyHeld += 1;
+      continue;
+    }
+    seen.add(l.upiRef);
+    const account = l.accountLast4 ? byLast4.get(l.accountLast4) : null;
+    result.newLines.push({
+      row: l.row, paidAt: l.paidAt, time: l.time, details: null, counterparty: l.receiver.name ?? l.receiver.id,
+      accountId: account?.id ?? null, accountLabel: account ? `BHIM · ${account.label}` : 'BHIM', direction: 'debit', amountPaise: l.amountPaise,
+      upiRef: l.upiRef, orderId: null, remarks: null, tag: null, app: 'bhim', ignored: false, ignoredReason: null, isCircle: bhimIsCircle(l),
+    });
+  }
+  result.counts.failed = result.failed.length;
+  result.counts.new = result.newLines.length;
+  const dates = parsed.lines.map((l) => l.paidAt).sort();
+  result.firstDate = dates[0] ?? null;
+  result.lastDate = dates[dates.length - 1] ?? null;
+  return result;
+}

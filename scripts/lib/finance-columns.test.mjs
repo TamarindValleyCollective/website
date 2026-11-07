@@ -79,21 +79,22 @@ test('dates: text matches the ISO date or the day-and-month label; operators and
 });
 
 const rows = [
-  { id: 'a', date: '2026-10-02', narration: 'Beta', amount: 500, category: 'Groceries', party: '', nature: 'Milk', status: 'unallocated' },
-  { id: 'b', date: '2026-10-09', narration: 'alpha', amount: 90000, category: '', party: 'Zed', nature: '', status: 'allocated' },
-  { id: 'c', date: '2026-10-09', narration: 'Gamma', amount: 90000, category: 'Bank charges', party: 'Amit', nature: 'Fees', status: 'review' },
-  { id: 'd', date: '2026-09-30', narration: 'Delta', amount: 12, category: 'Groceries', party: 'Bob', nature: 'Eggs', status: 'partly_allocated' },
+  { id: 'a', date: '2026-10-02', origin: 'Paytm', narration: 'Beta', amount: 500, category: 'Groceries', party: '', nature: 'Milk', status: 'unallocated' },
+  { id: 'b', date: '2026-10-09', origin: 'Axis Bank', narration: 'alpha', amount: 90000, category: '', party: 'Zed', nature: '', status: 'allocated' },
+  { id: 'c', date: '2026-10-09', origin: '', narration: 'Gamma', amount: 90000, category: 'Bank charges', party: 'Amit', nature: 'Fees', status: 'review' },
+  { id: 'd', date: '2026-09-30', origin: 'BHIM', narration: 'Delta', amount: 12, category: 'Groceries', party: 'Bob', nature: 'Eggs', status: 'partly_allocated' },
 ];
 const order = (key, dir) => [...rows].sort(compareRows(key, dir)).map((r) => r.id).join('');
 
 test('sorting by every column, in both directions, ties broken by newest date then id', () => {
-  assert.deepEqual(SORT_KEYS, ['date', 'narration', 'amount', 'category', 'party', 'nature', 'status']);
+  assert.deepEqual(SORT_KEYS, ['date', 'origin', 'narration', 'amount', 'category', 'party', 'nature', 'status']);
   assert.equal(order('date', 'desc'), 'bcad');
   assert.equal(order('date', 'asc'), 'dabc');
   assert.equal(order('amount', 'asc'), 'dabc'); // 12, 500, then the two 90000s in id order
   assert.equal(order('amount', 'desc'), 'bcad');
   assert.equal(order('party', 'asc'), 'cdba'); // Amit, Bob, Zed, then the empty one last
   assert.equal(order('nature', 'desc'), 'acdb'); // Milk, Fees, Eggs, then the empty one last
+  assert.equal(order('origin', 'asc'), 'bdac'); // Axis Bank, BHIM, Paytm, then the empty one last
 });
 
 test('narration sorts without regard to case', () => {

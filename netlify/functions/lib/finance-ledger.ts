@@ -5,6 +5,9 @@
 //
 // What is audited: every save, review decision, rule change, category change and period close, with ids and counts only
 // (never a name, narration or amount). The audit row is written BEFORE the change; if it cannot be written, nothing changes.
+import { originOf, sourcesOf } from '../../../scripts/lib/finance-origin.mjs';
+import { noteKeyOf } from '../../../scripts/lib/finance-notes.mjs';
+import { loadNotes } from './finance-notes';
 import { requireStaff } from './staff-access';
 import { rest } from './staff-mfa-store';
 import { capabilitiesForRole } from './staff-registry';
@@ -111,7 +114,7 @@ async function loadLookups() {
 }
 
 // ---------------------------------------------------------------- list
-type LineRow = { id: string; entity_id: string; bank_account_id: string; tran_date: string; narration: string; direction: string; amount_paise: number };
+type LineRow = { id: string; entity_id: string; bank_account_id: string; tran_date: string; narration: string; direction: string; amount_paise: number; upi_rrn: string | null };
 
 // The whole ledger is a few thousand lines, so state is worked out here instead of in SQL; the page is capped.
 // Kept for a few seconds like the reference data, so typing in a column search or changing the sort does not re-read every line each time.
@@ -119,7 +122,7 @@ const loadLedger = (from: string | null, to: string | null) => cached(`ledger:${
 async function readLedger(from: string | null, to: string | null) {
   const range = `${from ? `&tran_date=gte.${from}` : ''}${to ? `&tran_date=lte.${to}` : ''}`;
   const [lines, allocations] = await Promise.all([
-    rowsAll(`/fin_bank_lines?select=id,entity_id,bank_account_id,tran_date,narration,direction,amount_paise&order=tran_date.desc,created_at.desc,id.asc${range}`) as Promise<LineRow[]>,
+    rowsAll(`/fin_bank_lines?select=id,entity_id,bank_account_id,tran_date,narration,direction,amount_paise,upi_rrn&order=tran_date.desc,created_at.desc,id.asc${range}`) as Promise<LineRow[]>,
     rowsAll('/fin_allocations?select=bank_line_id,amount_paise,review_state,posted_at,party_id,category_id,nature,reverses_allocation_id,household_id,maintenance_year&order=id.asc'),
   ]);
   const byLine = new Map<string, Json[]>();
@@ -192,7 +195,7 @@ export async function listLedger(req: Request): Promise<Response> {
     const needsEffective = Boolean(conds.category || conds.party || conds.nature) || ['category', 'party', 'nature'].includes(sortKey);
     const upiOf = new Map<string, Json>();
     const fetchUpi = async () => {
-      const found = await cached('upi-linked', () => rowsAll('/fin_upi_lines?select=bank_line_id,counterparty,remarks,is_circle&bank_line_id=not.is.null&order=id.asc'));
+      const found = await cached('upi-linked', () => rowsAll('/fin_upi_lines?select=bank_line_id,counterparty,remarks,is_circle,app&bank_line_id=not.is.null&order=id.asc'));
       for (const u of found) upiOf.set(u.bank_line_id as string, u);
     };
     const effective = new Map<string, { category: string; party: string; nature: string }>();
@@ -259,6 +262,7 @@ export async function listLedger(req: Request): Promise<Response> {
         remark: upiOf.get(l.id)?.remarks ?? null,
         counterparty: upiOf.get(l.id)?.counterparty ?? null,
         isCircle: Boolean(upiOf.get(l.id)?.is_circle),
+        origin: originOf({ narration: l.narration, direction: l.direction as 'debit' | 'credit' }, upiOf.get(l.id)?.app as 'bhim' | 'paytm' | undefined),
         allocatedPaise: (byLine.get(l.id) ?? []).reduce((n, a) => n + a.amount_paise, 0),
         ...summarise(l),
         suggestion: summarise(l).state === 'allocated' ? null : compactSuggestion(suggestFor(l, upiOf.get(l.id) ?? null, ctx, sc)),
@@ -282,12 +286,14 @@ export async function ledgerAll(req: Request): Promise<Response> {
   const auth = await requireStaff(req, 'finance', 'view');
   if (!auth.ok) return fail(auth.error, auth.status);
   try {
-    const [{ lines, byLine }, ctx, accounts, households, upis] = await Promise.all([
+    const [{ lines, byLine }, ctx, accounts, households, upis, notes, badges] = await Promise.all([
       loadLedger(null, null),
       lookups(),
-      cached('bank-accounts', () => rows('/fin_bank_accounts?select=id,label')),
+      cached('bank-accounts-badges', () => rows('/fin_bank_accounts?select=id,label,badge_key')),
       cached('households', () => rowsAll('/member_households?select=id,farm_unit,house_no&order=id.asc')),
-      cached('upi-linked', () => rowsAll('/fin_upi_lines?select=bank_line_id,counterparty,remarks,is_circle&bank_line_id=not.is.null&order=id.asc')),
+      cached('upi-linked', () => rowsAll('/fin_upi_lines?select=bank_line_id,counterparty,remarks,is_circle,app,upi_ref&bank_line_id=not.is.null&order=id.asc')),
+      loadNotes(),
+      cached('source-badges', () => rows('/fin_source_badges?select=key,label,short_label,kind,logo_url&active=eq.true&order=sort.asc')),
       reviewRef(), // started now so the suggestion context below does not wait for it
     ]);
     const sc = await suggestionContext(lines, byLine, ctx);
@@ -296,6 +302,7 @@ export async function ledgerAll(req: Request): Promise<Response> {
     const partyName = new Map(ctx.parties.map((x) => [x.id as string, x.name as string]));
     const householdLabel = new Map(households.map((x) => [x.id as string, [x.farm_unit, x.house_no].filter(Boolean).join(' · ')]));
     const accountLabel = new Map(accounts.map((a) => [a.id as string, a.label as string]));
+    const accountBadge = new Map(accounts.map((a) => [a.id as string, (a.badge_key as string | null) ?? null]));
     const capabilities = capabilitiesForRole('finance', auth.staff.role) as string[];
     const out = lines.map((l) => {
       const allocs = byLine.get(l.id) ?? [];
@@ -303,6 +310,8 @@ export async function ledgerAll(req: Request): Promise<Response> {
       const state = posted ? 'allocated' : lineState(l, allocs);
       const missingParty = allocs.some((a) => a.posted_at && !a.reverses_allocation_id && !a.party_id && partyNeeded(categoryById.get(a.category_id)));
       const upi = upiOf.get(l.id) ?? null;
+      const origin = originOf({ narration: l.narration, direction: l.direction as 'debit' | 'credit' }, upi?.app as 'bhim' | 'paytm' | undefined);
+      const noteKey = noteKeyOf({ upiRef: upi?.upi_ref as string | undefined, upiRrn: l.upi_rrn ?? undefined, bankLineId: l.id }) as string;
       const summary = postedSummary(allocs);
       const sg = posted ? null : suggestFor(l, upi, ctx, sc);
       const effective = summary
@@ -318,6 +327,12 @@ export async function ledgerAll(req: Request): Promise<Response> {
         remark: upi?.remarks ?? null,
         counterparty: upi?.counterparty ?? null,
         isCircle: Boolean(upi?.is_circle),
+        origin,
+        // The note on this payment (shared with its UPI row), and the UPI reference that links the ledger to the UPI page.
+        sources: sourcesOf({ bankBadge: accountBadge.get(l.bank_account_id) ?? null, origin }),
+        noteKey,
+        note: notes.get(noteKey) ?? null,
+        upiRef: (upi?.upi_ref as string | undefined) ?? l.upi_rrn ?? null,
         allocatedPaise: allocs.reduce((n, a) => n + a.amount_paise, 0),
         state,
         review: allocs.some((a) => a.review_state !== 'ok'),
@@ -327,7 +342,7 @@ export async function ledgerAll(req: Request): Promise<Response> {
         effective,
       };
     });
-    return jsonResponse({ canAllocate: capabilities.includes('allocate'), canClose: capabilities.includes('close-period'), lines: out, lookups: ctx });
+    return jsonResponse({ canAllocate: capabilities.includes('allocate'), canClose: capabilities.includes('close-period'), lines: out, lookups: ctx, badges: Object.fromEntries(badges.map((b) => [b.key as string, { label: b.label, short: b.short_label, kind: b.kind, logoUrl: b.logo_url ?? null }])) });
   } catch (err) {
     return serverError(err, 'ledger all');
   }
@@ -403,9 +418,9 @@ export async function ledgerLine(req: Request, lineId: string): Promise<Response
   const auth = await requireStaff(req, 'finance', 'view');
   if (!auth.ok) return fail(auth.error, auth.status);
   try {
-    const [line] = await rows(`/fin_bank_lines?id=eq.${lineId}&select=id,bank_account_id,tran_date,narration,direction,amount_paise`);
+    const [line] = await rows(`/fin_bank_lines?id=eq.${lineId}&select=id,bank_account_id,tran_date,narration,direction,amount_paise,upi_rrn`);
     if (!line) return fail('That line does not exist.', 404);
-    const [upi] = await rows(`/fin_upi_lines?bank_line_id=eq.${lineId}&select=counterparty,remarks,is_circle,upi_ref`);
+    const [upi] = await rows(`/fin_upi_lines?bank_line_id=eq.${lineId}&select=counterparty,remarks,is_circle,upi_ref,app`);
     const allocations = await rows(`/fin_allocations?bank_line_id=eq.${lineId}&select=id,party_id,category_id,project_id,amount_paise,period,nature,remarks,source,rule_id,review_state,review_reason,reverses_allocation_id,reversal_reason,household_id,maintenance_year,posted_at&order=created_at.asc`);
     const ctx = await lookups();
     const { lines: everyLine, byLine } = await loadLedger(null, null);
@@ -428,7 +443,11 @@ export async function ledgerLine(req: Request, lineId: string): Promise<Response
     return jsonResponse({
       canAllocate: capabilities.includes('allocate'),
       line: { id: line.id, date: line.tran_date, narration: line.narration, direction: line.direction, amountPaise: line.amount_paise },
-      upi: upi ? { counterparty: upi.counterparty, remark: upi.remarks, isCircle: upi.is_circle } : null,
+      upi: upi ? { counterparty: upi.counterparty, remark: upi.remarks, isCircle: upi.is_circle, app: upi.app } : null,
+      origin: originOf({ narration: String(line.narration), direction: line.direction as 'debit' | 'credit' }, upi?.app as 'bhim' | 'paytm' | undefined),
+      upiRef: (upi?.upi_ref as string | undefined) ?? line.upi_rrn ?? null,
+      noteKey: noteKeyOf({ upiRef: upi?.upi_ref as string | undefined, upiRrn: line.upi_rrn ?? undefined, bankLineId: line.id as string }),
+      note: (await loadNotes()).get(noteKeyOf({ upiRef: upi?.upi_ref as string | undefined, upiRrn: line.upi_rrn ?? undefined, bankLineId: line.id as string }) as string) ?? null,
       state: posted ? 'allocated' : lineState(line, allocations),
       allocations: allocations.map((a) => ({
         id: a.id,
@@ -483,7 +502,7 @@ async function saveLine(staff: { id: string }, capabilities: string[], lineId: s
   const partyIds = new Set(ctx.parties.map((p) => p.id as string));
   const projectIds = new Set(ctx.projects.map((p) => p.id as string));
   const householdIds = new Set(ctx.households.map((x) => x.id as string));
-  const upi = shared ? shared.upiOf.get(lineId) : (await rows(`/fin_upi_lines?bank_line_id=eq.${lineId}&select=counterparty,remarks,is_circle`))[0];
+  const upi = shared ? shared.upiOf.get(lineId) : (await rows(`/fin_upi_lines?bank_line_id=eq.${lineId}&select=counterparty,remarks,is_circle,app`))[0];
   const rc = shared?.rc ?? (await reviewContext(ctx));
   const requesterIds = ctx.requesterPartyId ? [ctx.requesterPartyId] : [];
 
@@ -618,7 +637,7 @@ export async function postBatch(req: Request): Promise<Response> {
     const lineIds = items.map((i) => i.lineId as string);
     const found = await rows(`/fin_bank_lines?id=in.(${lineIds.join(',')})&select=id,entity_id,tran_date,direction,amount_paise`);
     const existing = await rows(`/fin_allocations?bank_line_id=in.(${lineIds.join(',')})&select=bank_line_id,id,posted_at`);
-    const upi = await rows(`/fin_upi_lines?bank_line_id=in.(${lineIds.join(',')})&select=bank_line_id,counterparty,remarks,is_circle`);
+    const upi = await rows(`/fin_upi_lines?bank_line_id=in.(${lineIds.join(',')})&select=bank_line_id,counterparty,remarks,is_circle,app`);
     const byLine = new Map<string, Json[]>();
     for (const a of existing) byLine.set(a.bank_line_id, [...(byLine.get(a.bank_line_id) ?? []), a]);
     const shared: SharedSave = { ctx, rc, lines: new Map(found.map((l) => [l.id as string, l])), byLine, upiOf: new Map(upi.map((u) => [u.bank_line_id as string, u])) };
@@ -711,7 +730,7 @@ export async function missingParties(req: Request): Promise<Response> {
       loadLedger(null, null),
       lookups(),
       cached('households', () => rowsAll('/member_households?select=id,farm_unit,house_no&order=id.asc')),
-      cached('upi-linked', () => rowsAll('/fin_upi_lines?select=bank_line_id,counterparty,remarks,is_circle&bank_line_id=not.is.null&order=id.asc')),
+      cached('upi-linked', () => rowsAll('/fin_upi_lines?select=bank_line_id,counterparty,remarks,is_circle,app&bank_line_id=not.is.null&order=id.asc')),
       rowsAll('/fin_allocations?select=id,bank_line_id,category_id,amount_paise,period,household_id&posted_at=not.is.null&party_id=is.null&reverses_allocation_id=is.null&order=id.asc'),
     ]);
     const lineById = new Map(lines.map((l) => [l.id as string, l]));

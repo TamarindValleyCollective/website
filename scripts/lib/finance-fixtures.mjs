@@ -111,3 +111,34 @@ export function paytmExport({ periodText = "1 Apr'26 - 1 Nov'26", accounts = ['A
   ];
   return buildXlsx([{ name: 'Summary', rows: summary }, { name: 'Passbook Payment History', rows: passbook }], { shared });
 }
+
+// One BHIM "Transaction History" PDF, text only: a heading block then one line per row (the layout unpdf reads back as one
+// text line per transaction). rows: [{ date:'DD/MM/YYYY', time, bank:'N/A'|'AXIS BANK', acct:'N/A'|'XXXX000099', receiver, ref, kind?, amount:'150.00', drcr, status? }]
+export function bhimPdf({ from = '01/07/2026', to = '07/11/2026', rows }) {
+  const sender = 'xxxxx00001@upi(EXAMPLE FARM PRIVATE LIMITED)';
+  const lines = [
+    `Transaction History from ${from} to ${to}`,
+    'Customer Mobile Number: +910000000000',
+    'Transaction History',
+    'Date Time Bank Name Account Number Sender Receiver Payment ID/Reference Number Pay/Collect Amount (in Rs.) DR/CR Status',
+    ...rows.map((r) => `${r.date} ${r.time ?? '10:00:00'} ${r.bank ?? 'N/A'} ${r.acct ?? 'N/A'} ${sender} ${r.receiver ?? 'xxxxx00002@ybl(xxxxxxxxShop)'} ${r.ref} ${r.kind ?? 'PAY'} ${r.amount} ${r.drcr ?? 'CR'} ${r.status ?? 'SUCCESS'}`),
+  ];
+  const esc = (t) => t.replace(/[\\()]/g, (c) => `\\${c}`);
+  const content = lines.map((t, i) => `BT /F1 8 Tf 20 ${760 - i * 14} Td (${esc(t)}) Tj ET`).join('\n');
+  const objs = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 2600 800] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    `<< /Length ${Buffer.byteLength(content)} >>\nstream\n${content}\nendstream`,
+  ];
+  let out = '%PDF-1.4\n';
+  const offsets = [];
+  objs.forEach((o, i) => {
+    offsets.push(Buffer.byteLength(out));
+    out += `${i + 1} 0 obj\n${o}\nendobj\n`;
+  });
+  const xref = Buffer.byteLength(out);
+  out += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n${offsets.map((o) => `${String(o).padStart(10, '0')} 00000 n \n`).join('')}trailer\n<< /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return new Uint8Array(Buffer.from(out));
+}

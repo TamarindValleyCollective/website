@@ -22,9 +22,9 @@ import SignInGate from '../../../components/SignInGate.astro';
     <div id="content" hidden>
       <div id="upload-card">
         <form id="upload-form" class="upload">
-          <input id="files" class="visually-hidden" type="file" accept=".xlsx" multiple />
+          <input id="files" class="visually-hidden" type="file" accept=".xlsx,.pdf" multiple />
           <label class="dropzone" id="dropzone" for="files">
-            <span class="title">Drop the bank's Excel files or the Paytm export here</span>
+            <span class="title">Drop the bank's Excel files, the Paytm export or the BHIM history (PDF) here</span>
             <span class="detail">The bank's statement comes as one file per year: several at once is fine, in any order. Choosing files only checks them; nothing is stored until you confirm.</span>
             <span class="button button--outline dz-button">Choose files</span>
           </label>
@@ -69,6 +69,7 @@ import SignInGate from '../../../components/SignInGate.astro';
         <form id="account-form" class="inline-form">
           <label>Name <input id="acc-label" type="text" maxlength="60" required /></label>
           <label>Last four digits <input id="acc-last4" type="text" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" required /></label>
+          <label>Bank <select id="acc-badge"><option value="">Not listed</option></select></label>
           <label>Paytm label <input id="acc-upi" type="text" maxlength="60" /></label>
           <button class="button" type="submit">Add account</button>
         </form>
@@ -169,6 +170,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       case 'no_registered_rows':
         return `None of the rows in this file is on a registered bank account, so nothing would be kept. The account labels in the file are: ${(e.labelsInFile ?? []).join(', ') || 'none'}. Register the bank account with its Paytm label (spelled exactly like one of these) below, then check the file again.`;
       case 'account_not_registered':
+        if (Array.isArray(e.last4)) return `No bank account is registered ending ${e.last4.join(', ')}. Add it below first.`;
         return e.last4 ? `No bank account is registered ending ${e.last4}. Add it below first.` : 'The statement does not say which account it is for.';
       default:
         return 'This file has a problem and cannot be imported.';
@@ -200,6 +202,14 @@ import SignInGate from '../../../components/SignInGate.astro';
       pill = f.stored ? { text: 'Imported', kind: 'ok' } : c.new === 0 && !c.ignored ? { text: 'Nothing new', kind: 'warn' } : { text: 'Ready', kind: 'ok' };
       if (f.kind === 'axis_statement') {
         details.push(`${f.accountLabel ?? 'Bank statement'}: ${plural(c.new, 'new line')}, ${c.alreadyHeld} already held${f.firstDate ? ` · lines from ${range(f.firstDate, f.lastDate)}` : ''}`);
+      } else if (f.kind === 'bhim_upi') {
+        details.push(`BHIM history: ${plural(c.new, 'new payment')}, ${c.alreadyHeld} already held${f.firstDate ? ` · ${range(f.firstDate, f.lastDate)}` : ''}`);
+        if (f.unsuccessful?.count) details.push(`${plural(f.unsuccessful.count, 'payment')} failed at the bank (${rupees(f.unsuccessful.totalPaise)} in all) and ${f.unsuccessful.count === 1 ? 'is' : 'are'} left out: no money moved.`);
+        if (typeof f.wouldLink === 'number') details.push(`${plural(f.wouldLink, 'payment')} match a bank line already imported.`);
+        if (f.failed?.length) {
+          pill = { text: 'Check rows', kind: 'warn' };
+          details.push(`${plural(f.failed.length, 'row')} could not be used: ${f.failed.slice(0, 5).map((x: any) => `line ${x.row} (${x.reason})`).join('; ')}${f.failed.length > 5 ? '…' : ''}`);
+        }
       } else {
         details.push(`Paytm export: ${plural(c.new, 'new row')}, ${c.alreadyHeld} already held${f.firstDate ? ` · ${range(f.firstDate, f.lastDate)}` : ''}`);
         if (f.ignored?.count) {
@@ -235,7 +245,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   function renderReconciliation(target: HTMLElement, r: any) {
     if (!r) return;
     const rows: HTMLElement[] = [];
-    if (typeof r.linkedNow === 'number' && r.linkedNow > 0) rows.push(row(`${plural(r.linkedNow, 'Paytm row')} matched to bank lines just now`, []));
+    if (typeof r.linkedNow === 'number' && r.linkedNow > 0) rows.push(row(`${plural(r.linkedNow, 'UPI row')} matched to bank lines just now`, []));
     if (r.unmatchedInStatement.count) {
       rows.push(row(`${plural(r.unmatchedInStatement.count, 'payment')} (${rupees(r.unmatchedInStatement.totalPaise)}) ${r.unmatchedInStatement.count === 1 ? 'has' : 'have'} no matching bank line`, ['It falls inside a statement we hold. Worth a look.'], { text: 'Check', kind: 'crit' }));
     }
@@ -243,7 +253,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       rows.push(row(`${plural(r.awaitingBank.count, 'payment')} (${rupees(r.awaitingBank.totalPaise)}) ${r.awaitingBank.count === 1 ? 'is' : 'are'} newer than the last statement`, ['They match themselves when the next statement is imported.']));
     }
     if (r.bankWithoutUpi.inExportPeriod) {
-      rows.push(row(`${plural(r.bankWithoutUpi.inExportPeriod, 'bank UPI payment')} with no Paytm row`, ['Paid from another app, or missing from the Paytm export.']));
+      rows.push(row(`${plural(r.bankWithoutUpi.inExportPeriod, 'bank UPI payment')} with no UPI row`, ['Paid from another app, or missing from the Paytm export or BHIM history.']));
     }
     if (r.bankWithoutUpi.predatesExport) {
       rows.push(row(`${plural(r.bankWithoutUpi.predatesExport, 'older bank UPI payment')}`, ["Before Paytm was used, so only the bank's narration exists. Nothing to do."]));
@@ -260,7 +270,10 @@ import SignInGate from '../../../components/SignInGate.astro';
     $('account-card').hidden = !data.canConfigure;
     const accounts = $('accounts');
     accounts.replaceChildren();
-    for (const a of data.accounts) accounts.append(row(a.label, [`Ends ${a.last4 ?? '—'}`, a.hasUpiLabel ? 'Paytm label set' : 'No Paytm label yet'], a.hasUpiLabel ? undefined : { text: 'Set a Paytm label', kind: 'warn' }));
+    const bankName = (key: string | null) => data.bankBadges?.find((b: any) => b.key === key)?.label ?? 'Bank not set';
+    const pick = $<HTMLSelectElement>('acc-badge');
+    pick.replaceChildren(el('option', undefined, 'Not listed'), ...(data.bankBadges ?? []).filter((b: any) => b.key !== 'bank').map((b: any) => Object.assign(el('option', undefined, b.label), { value: b.key })));
+    for (const a of data.accounts) accounts.append(row(a.label, [`Ends ${a.last4 ?? '—'}`, bankName(a.badgeKey), a.hasUpiLabel ? 'Paytm label set' : 'No Paytm label yet'], a.hasUpiLabel ? undefined : { text: 'Set a Paytm label', kind: 'warn' }));
     if (!data.accounts.length) accounts.append(row('No bank account registered', [data.canConfigure ? 'Add one below before importing a statement.' : 'A director needs to register the account first.']));
     renderCoverage($('coverage'), data.coverage);
     $('coverage-section').hidden = !data.coverage?.length;
@@ -271,7 +284,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     const list = $('batches');
     list.replaceChildren();
     for (const b of data.batches) {
-      const what = b.source === 'axis_statement' ? 'Bank statement' : 'Paytm export';
+      const what = b.source === 'axis_statement' ? 'Bank statement' : b.source === 'bhim_upi' ? 'BHIM history' : 'Paytm export';
       const counts = b.source === 'axis_statement' ? `${b.inserted_count} new, ${b.duplicate_count} already held` : `${b.inserted_count} new, ${b.ignored_count} ignored, ${b.failed_count} failed`;
       list.append(row(b.file_name, [`${what} · ${range(b.period_from, b.period_to)}`, counts, `Imported ${new Date(b.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`]));
     }
@@ -288,7 +301,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       if (status !== 200) throw new Error('load failed');
       clearState(statusEl);
       intro.hidden = false;
-      intro.textContent = 'Bank statements and the Paytm UPI export.';
+      intro.textContent = 'Bank statements, the Paytm UPI export and the BHIM transaction history.';
       renderList(data);
       content.hidden = false;
     } catch (err) {
@@ -420,7 +433,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     try {
       const { status, data } = await staffFetch('/api/finance-admin/bank-accounts', {
         method: 'POST',
-        body: { label: $<HTMLInputElement>('acc-label').value, last4: $<HTMLInputElement>('acc-last4').value, upiLabel: $<HTMLInputElement>('acc-upi').value },
+        body: { label: $<HTMLInputElement>('acc-label').value, last4: $<HTMLInputElement>('acc-last4').value, upiLabel: $<HTMLInputElement>('acc-upi').value, badgeKey: $<HTMLSelectElement>('acc-badge').value },
       });
       if (status !== 201) throw new Error(data.error ?? 'failed');
       ($('account-form') as HTMLFormElement).reset();
