@@ -164,8 +164,12 @@ import SignInGate from '../../../components/SignInGate.astro';
       : 'No delegated payments yet.';
     const b = data.bankWithoutRow;
     const card = $('bank-only');
-    card.hidden = b.count === 0;
-    card.replaceChildren(el('p', undefined, `${plural(b.count, 'bank UPI payment')} (${rupees(b.totalPaise)}) since the first UPI record ${b.count === 1 ? 'has' : 'have'} no BHIM or Paytm row: paid from another app, or missing from the files imported.`));
+    const reversed = data.reversedCount ?? 0;
+    card.hidden = b.count === 0 && reversed === 0;
+    card.replaceChildren(
+      ...(b.count ? [el('p', undefined, `${plural(b.count, 'bank UPI payment')} (${rupees(b.totalPaise)}) since the first UPI record ${b.count === 1 ? 'has' : 'have'} no BHIM or Paytm row: paid from another app, or missing from the files imported.`)] : []),
+      ...(reversed ? [el('p', 'hint', `${plural(reversed, 'failed payment')} the bank reversed (a credit back under the same reference) ${reversed === 1 ? 'is' : 'are'} left out of that count.`)] : []),
+    );
   }
 
   const sort = { key: 'paidAt', dir: 'desc' as 'asc' | 'desc' };

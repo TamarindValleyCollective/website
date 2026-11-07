@@ -104,7 +104,7 @@ export function reconciliationSummary({ upiLines, bankLines, lastBankDate, first
   }
   const bankWithoutUpi = { predatesExport: 0, inExportPeriod: 0 };
   for (const b of bankLines) {
-    if (!b.upiRrn || b.linked) continue;
+    if (!b.upiRrn || b.linked || b.reversed) continue;
     if (!firstUpiDate || b.tranDate < firstUpiDate) bankWithoutUpi.predatesExport += 1;
     else bankWithoutUpi.inExportPeriod += 1;
   }

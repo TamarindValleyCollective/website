@@ -34,13 +34,14 @@ export function circleMonths(upiLines, capPaise = CIRCLE_CAP_PAISE) {
 
 /**
  * Bank UPI debits that no UPI row explains, from the first day we hold any UPI row (before it there is nothing to match).
- * `bankLines`: [{ id, tranDate, direction, amountPaise, upiRrn }]; `linkedIds`: Set of bank line ids that have a UPI row.
+ * `bankLines`: [{ id, tranDate, direction, amountPaise, upiRrn }]; `linkedIds`: Set of bank line ids that have a UPI row;
+ * `reversedIds`: Set of bank line ids that are a payment the bank reversed (a failed payment needs no UPI record).
  */
-export function bankWithoutUpiRow(bankLines, linkedIds, firstUpiDate) {
+export function bankWithoutUpiRow(bankLines, linkedIds, firstUpiDate, reversedIds = new Set()) {
   const out = { count: 0, totalPaise: 0 };
   if (!firstUpiDate) return out;
   for (const b of bankLines) {
-    if (!b.upiRrn || b.direction !== 'debit' || b.tranDate < firstUpiDate || linkedIds.has(b.id)) continue;
+    if (!b.upiRrn || b.direction !== 'debit' || b.tranDate < firstUpiDate || linkedIds.has(b.id) || reversedIds.has(b.id)) continue;
     out.count += 1;
     out.totalPaise += b.amountPaise;
   }

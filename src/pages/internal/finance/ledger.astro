@@ -130,7 +130,7 @@ import SignInGate from '../../../components/SignInGate.astro';
 
   type Suggestion = { categoryId: string | null; partyId: string | null; nature: string; confidence: string; newPartyName: string | null };
   type Line = {
-    id: string; date: string; narration: string; direction: 'debit' | 'credit'; amountPaise: number; account: string; remark: string | null; counterparty: string | null; origin?: string; sources?: string[]; noteKey?: string; note?: string | null; upiRef?: string | null;
+    id: string; date: string; narration: string; direction: 'debit' | 'credit'; amountPaise: number; account: string; remark: string | null; counterparty: string | null; origin?: string; sources?: string[]; reversal?: { role: 'original' | 'reversal'; otherId: string; otherDate: string | null } | null; noteKey?: string; note?: string | null; upiRef?: string | null;
     allocatedPaise: number; state: 'unallocated' | 'partly_allocated' | 'allocated'; review: boolean; missingParty: boolean; suggestion: Suggestion | null;
     allocation: { categoryId: string; partyId: string | null; nature: string; count: number; householdLabel: string | null; maintenanceYear: string | null } | null;
     hay?: string; // lower-case text the search box looks in, worked out once
@@ -802,6 +802,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       h('h2', { text: `${line.direction === 'debit' ? 'Paid' : 'Received'} ${rupees(line.amountPaise)}`, attrs: { id: 'line-title' } }),
       h('p', { class: 'sheet-text', text: `${niceDate(line.date)} · ${line.narration}` }),
       ...(detail.origin ? [h('p', { class: 'hint', text: `Came through: ${originLabel(detail.origin)}` })] : []),
+      ...(byId.get(id)?.reversal ? [h('p', { class: 'hint', text: byId.get(id)!.reversal!.role === 'original' ? 'The bank reversed this payment: a credit for the same amount came back under the same UPI reference.' : 'This credit reverses an earlier payment: same UPI reference, same amount.' })] : []),
       ...(detail.upiRef && (detail.origin === 'bhim' || detail.origin === 'paytm') ? [h('a', { class: 'hint', text: 'Open this payment in the UPI table', attrs: { href: `/internal/finance/upi/?ref=${detail.upiRef}` } })] : []),
       ...(detail.noteKey ? [noteEditor(detail)] : []),
       upi?.remark || upi?.counterparty ? h('p', { class: 'hint', text: [upi.counterparty ? `${upi.app === 'bhim' ? 'BHIM' : 'Paytm'} says: ${upi.counterparty}` : '', upi.remark ? `remark "${upi.remark}"` : '', upi.isCircle ? 'a circle payment' : ''].filter(Boolean).join(', ') }) : null,
@@ -1740,6 +1741,17 @@ import SignInGate from '../../../components/SignInGate.astro';
       ...[
         error ? h('span', { class: 'detail detail--warn', text: error }) : null,
         l.state === 'partly_allocated' ? h('span', { class: 'detail detail--warn detail--wrap', text: `${rupees(l.amountPaise - l.allocatedPaise)} still to allocate: open the line to finish` }) : null,
+        l.reversal
+          ? (() => {
+              const r = l.reversal!;
+              const b = h('button', { class: 'detail detail--reversal', text: r.role === 'original' ? `Reversed by the credit${r.otherDate ? ` of ${niceDate(r.otherDate)}` : ''}` : `Reverses the payment${r.otherDate ? ` of ${niceDate(r.otherDate)}` : ''}`, attrs: { type: 'button', title: 'The bank reversed this payment (same UPI reference, same amount). Open the other line.' } });
+              b.addEventListener('click', (ev: Event) => {
+                ev.stopPropagation();
+                void openLine(r.otherId);
+              });
+              return b;
+            })()
+          : null,
         l.note ? h('span', { class: 'detail detail--note', text: `Note: ${l.note}`, attrs: { title: 'A note added here or on the UPI page' } }) : null,
         l.origin ? h('span', { class: 'detail detail--origin', text: originLabel(l.origin), attrs: { title: ORIGINS[l.origin as keyof typeof ORIGINS]?.hint ?? '' } }) : null,
         upiSays ? h('span', { class: 'detail detail--upi', text: `${l.origin ? originLabel(l.origin) : 'UPI app'}: ${upiSays}`, attrs: { title: 'From the UPI app report' } }) : l.origin === 'upi_unknown' ? h('span', { class: 'detail detail--dim', text: 'No BHIM or Paytm record for this payment' }) : null,
@@ -3165,6 +3177,20 @@ import SignInGate from '../../../components/SignInGate.astro';
 
   .ledger .detail--note {
     color: var(--tvc-ink);
+  }
+
+  .ledger .detail--reversal {
+    all: unset;
+    cursor: pointer;
+    color: var(--tvc-ink);
+    font-weight: 600;
+    text-decoration: underline;
+    text-decoration-color: var(--tvc-line-strong);
+  }
+
+  .ledger .detail--reversal:focus-visible {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 2px;
   }
 
   .ledger .badges {

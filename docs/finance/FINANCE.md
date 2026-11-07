@@ -289,6 +289,15 @@ types the importer knows; each batch stores its `source`: `axis_statement`, `pay
   `settled_at` per payment, so a gateway credit can be matched to a settlement (by the settlement's UTR in the narration if the bank
   prints one, else by net amount and date, and only a unique match is shown); that is designed but **not built or verified**: the
   statement holds only one test credit and no payment is settled yet. Do it with the first real settlement in hand.
+- **Reversed payments** (no migration). A UPI payment that fails after the bank took the money is reversed by a credit for the same
+  amount that carries the **same 12-digit UPI reference** as the debit (seen on a real statement: three failed payments to one payee on
+  one day, each followed by such a credit). `scripts/lib/finance-reversals.mjs` pairs them: same reference, same amount, opposite
+  direction, the credit dated the same day or up to 7 days after, oldest first, each line used once; a refund from the payee arrives under
+  a new reference and is never paired. On the real ledger it finds exactly three pairs among 272 UPI lines, and no others. Both lines of a
+  pair show a "Reversed by the credit of ..." / "Reverses the payment of ..." note in the ledger (click it to open the other line), the line
+  sheet explains it, there is a **Reversal** filter chip, and a reversed payment is left out of "bank UPI payments with no BHIM or Paytm
+  record" on the UPI page and the Import page. The two lines are still allocated separately (the reports net them by direction); linking
+  the credit's allocation to the debit's as a formal reversal (`reverses_allocation_id`) is not done.
 - **Not done:** an Account filter *chip* in the ledger (Group By, search and the line sheet cover it), and the dashboards, period
   close and the Overview's statement-gap check have not been checked for a second bank account.
 

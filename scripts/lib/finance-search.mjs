@@ -26,6 +26,10 @@ export const FILTER_KINDS = {
       out: ['Money out', (l) => l.direction === 'debit'],
     },
   },
+  reversal: {
+    label: 'Reversal',
+    options: { paired: ['Reversed payments', (l) => Boolean(l.reversal)] },
+  },
   origin: {
     label: 'Origin',
     options: Object.fromEntries(Object.entries(ORIGINS).map(([k, o]) => [k, [o.label, (l) => l.origin === k]])),

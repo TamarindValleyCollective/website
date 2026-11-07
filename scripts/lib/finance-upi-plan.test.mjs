@@ -171,3 +171,12 @@ test('BHIM: references already held (from Paytm or an earlier BHIM file) and rep
   assert.equal(plan.counts.alreadyHeld, 2);
   assert.equal(planBhimImport({ file: bhimFile(lines), accounts: [axis], held: { fileHashes: ['h1'], refs: [] } }).status, 'duplicate_file');
 });
+
+test('reconciliation summary: a bank UPI line that was reversed is not "a bank UPI payment with no UPI row"', () => {
+  const bankLines = [
+    { tranDate: '2026-07-01', upiRrn: '1', linked: false, reversed: true },
+    { tranDate: '2026-07-01', upiRrn: '2', linked: false },
+  ];
+  const r = reconciliationSummary({ upiLines: [], bankLines, lastBankDate: '2026-08-01', firstUpiDate: '2026-06-01' });
+  assert.equal(r.bankWithoutUpi.inExportPeriod, 1);
+});
