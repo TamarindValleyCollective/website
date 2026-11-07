@@ -164,3 +164,9 @@ test('a unit is found by the name of someone living in it', () => {
   assert.equal(opts[0].sub, 'Test Person One, Test Person Two');
   assert.equal(opts[2].sub, ''); // a unit nobody lives in is still listed
 });
+
+test('the Reversal chip shows only lines the bank reversed (an original and its reversal)', () => {
+  const lines = [{ id: 'a', date: '2026-07-27', direction: 'debit', reversal: { role: 'original', otherId: 'b' } }, { id: 'b', date: '2026-07-27', direction: 'credit', reversal: { role: 'reversal', otherId: 'a' } }, { id: 'c', date: '2026-07-27', direction: 'debit' }];
+  assert.deepEqual(lines.filter((l) => passesChips(l, [['reversal', 'paired']], '2026-11-07')).map((l) => l.id), ['a', 'b']);
+  assert.equal(optionCounts(lines, '2026-11-07').reversal.paired, 2);
+});

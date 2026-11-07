@@ -3,6 +3,7 @@
 import { rest } from './staff-mfa-store';
 import { logFinanceAction } from './finance-audit';
 import { deleteFinanceImport, putFinanceImport } from './finance-storage';
+import { pairReversals } from '../../../scripts/lib/finance-reversals.mjs';
 import type { Account, ImportStore } from './finance-import';
 
 const PAGE = 1000;
@@ -84,14 +85,16 @@ export function supabaseImportStore(): ImportStore {
     },
     async reconciliationData() {
       const upi = await all<{ paid_at: string; amount_paise: number; bank_line_id: string | null }>('/fin_upi_lines?select=paid_at,amount_paise,bank_line_id&ignored=eq.false&order=paid_at.asc,id.asc');
-      const bank = await all<{ id: string; tran_date: string; upi_rrn: string }>('/fin_bank_lines?select=id,tran_date,upi_rrn&upi_rrn=not.is.null&order=tran_date.asc,id.asc');
+      const bank = await all<{ id: string; tran_date: string; upi_rrn: string; direction: 'debit' | 'credit'; amount_paise: number }>('/fin_bank_lines?select=id,tran_date,upi_rrn,direction,amount_paise&upi_rrn=not.is.null&order=tran_date.asc,id.asc');
+      // A payment the bank reversed (a credit under the same reference) needs no UPI row.
+      const reversed = pairReversals(bank.map((b) => ({ id: b.id, date: b.tran_date, direction: b.direction, amountPaise: Number(b.amount_paise), upiRrn: b.upi_rrn }))).byLine;
       const linked = new Set((await all<{ bank_line_id: string }>('/fin_upi_lines?select=bank_line_id&bank_line_id=not.is.null&order=id.asc')).map((r) => r.bank_line_id));
       const last = (await (await rest('/fin_bank_lines?select=tran_date&order=tran_date.desc&limit=1')).json()) as { tran_date: string }[];
       const first = (await (await rest('/fin_upi_lines?select=paid_at&order=paid_at.asc&limit=1')).json()) as { paid_at: string }[];
       const since = (await (await rest('/fin_entities?select=paytm_since&order=created_at.asc&limit=1')).json()) as { paytm_since: string | null }[];
       return {
         upiLines: upi.map((u) => ({ paidAt: u.paid_at, amountPaise: u.amount_paise, bankLineId: u.bank_line_id })),
-        bankLines: bank.map((b) => ({ tranDate: b.tran_date, upiRrn: b.upi_rrn, linked: linked.has(b.id) })),
+        bankLines: bank.map((b) => ({ tranDate: b.tran_date, upiRrn: b.upi_rrn, linked: linked.has(b.id), reversed: reversed.has(b.id) })),
         lastBankDate: last[0]?.tran_date ?? null,
         // The day Paytm came into use, when known; else the first row held. Earlier bank UPI debits have no Paytm row.
         firstUpiDate: since[0]?.paytm_since ?? first[0]?.paid_at ?? null,

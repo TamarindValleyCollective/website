@@ -31,7 +31,7 @@ export interface ImportStore {
   unlinkedUpi(): Promise<{ id: string; upiRef: string; amountPaise: number; direction: string }[]>;
   bankLinesByRrn(rrns: string[]): Promise<{ id: string; upiRrn: string; amountPaise: number; direction: string }[]>;
   link(links: { upiId: string; bankId: string }[]): Promise<number>;
-  reconciliationData(): Promise<{ upiLines: { paidAt: string; amountPaise: number; bankLineId: string | null }[]; bankLines: { tranDate: string; upiRrn: string | null; linked: boolean }[]; lastBankDate: string | null; firstUpiDate: string | null }>;
+  reconciliationData(): Promise<{ upiLines: { paidAt: string; amountPaise: number; bankLineId: string | null }[]; bankLines: { tranDate: string; upiRrn: string | null; linked: boolean; reversed?: boolean }[]; lastBankDate: string | null; firstUpiDate: string | null }>;
   audit(entry: { actorId: string; action: string; entityId: string; detail: Record<string, unknown> }): Promise<void>;
   heldBatchSpans(): Promise<{ accountId: string; from: string; to: string }[]>;
 }

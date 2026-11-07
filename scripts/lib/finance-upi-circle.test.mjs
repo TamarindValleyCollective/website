@@ -32,3 +32,11 @@ test('bank UPI debits with no UPI row count only from the first UPI row onwards'
   assert.deepEqual(bankWithoutUpiRow(bank, new Set(['c']), '2026-06-15'), { count: 1, totalPaise: 200 });
   assert.deepEqual(bankWithoutUpiRow(bank, new Set(), null), { count: 0, totalPaise: 0 });
 });
+
+test('a bank payment the bank reversed needs no UPI record, so it is left out of the "no row" count', () => {
+  const bank = [
+    { id: 'a', tranDate: '2026-07-01', direction: 'debit', amountPaise: 300, upiRrn: '1' },
+    { id: 'b', tranDate: '2026-07-02', direction: 'debit', amountPaise: 400, upiRrn: '2' },
+  ];
+  assert.deepEqual(bankWithoutUpiRow(bank, new Set(), '2026-06-15', new Set(['a'])), { count: 1, totalPaise: 400 });
+});
