@@ -282,7 +282,7 @@ types the importer knows; each batch stores its `source`: `axis_statement`, `pay
   the database. Each bank account carries its own bank badge (`fin_bank_accounts.badge_key`, chosen when the account is added on the
   Import page), so Bank 2 shows its own logo. BHIM and Paytm badges link to that payment in the UPI table.
   Logos live in `public/finance-badges/` (Axis, Paytm as SVG; BHIM and Razorpay as PNG; the BHIM one is the icons8 "BHIM UPI" icon, whose free licence asks
-  for an attribution link to icons8.com unless a paid licence applies; the Razorpay one is from Razorpay's logo pack) and are pointed at by migration `0091`, which is applied **after** the deploy that carries the files. Paypro and the
+  for an attribution link to icons8.com unless a paid licence applies; the Razorpay one is from Razorpay's logo pack) and are pointed at by migration `0091` (applied 2026-11-07, before the PR merged, as the "Migrations applied" check requires; until the deploy carries the files a badge shows its label text instead of the image). Paypro and the
   generic bank badge have no logo and stay text. Swapping one: add the file and update the row's `logo_url`.
 - **Cross-references: what exists and what each still needs.** *Ledger → UPI* and *UPI → ledger* are built (above). *Paypro:* there is
   no Paypro record to link to (the bank only shows a batch line); it needs the Paypro batch file or the payroll/payment-request
