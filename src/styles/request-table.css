@@ -1,0 +1,206 @@
+/* The records table on the finance request pages (/internal/finance-requests/ and /internal/finance/requests/), laid out like the UPI
+   page's table: sortable headings, a scroll box on narrow screens, quiet rows. */
+.rq-table-scroll {
+  overflow-x: auto;
+  background: var(--tvc-white);
+  border-radius: var(--radius);
+  box-shadow: 0 0 0 1px var(--tvc-line) inset;
+}
+
+.rq-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.rq-table th {
+  text-align: left;
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--tvc-line);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--tvc-ink-soft);
+  white-space: nowrap;
+}
+
+.rq-table .sorthead {
+  all: unset;
+  cursor: pointer;
+}
+
+.rq-table .sorthead:focus-visible {
+  outline: 2px solid var(--tvc-ink);
+  outline-offset: 2px;
+}
+
+.rq-table th[aria-sort='ascending'] .sorthead::after {
+  content: ' ▲';
+}
+
+.rq-table th[aria-sort='descending'] .sorthead::after {
+  content: ' ▼';
+}
+
+.rq-table td {
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--tvc-line);
+  vertical-align: top;
+}
+
+.rq-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.rq-table .nowrap {
+  white-space: nowrap;
+}
+
+.rq-table td:nth-child(2) {
+  min-width: 9rem;
+}
+
+.rq-table .purpose {
+  min-width: 8rem;
+  max-width: 26rem;
+}
+
+.rq-table .dim {
+  color: var(--tvc-ink-soft);
+}
+
+.rq-table .sub {
+  display: block;
+  font-size: var(--text-xs);
+  color: var(--tvc-ink-soft);
+}
+
+.rq-table .tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.rq-table .acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.rq-table .acts .button,
+.rq-table .suggest .button {
+  white-space: nowrap;
+  flex: none;
+}
+
+.rq-table .suggest td {
+  background: var(--tvc-cream);
+}
+
+.rq-table .suggest-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.rq-table .pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  background: var(--tvc-cream);
+  color: var(--tvc-ink);
+  white-space: nowrap;
+}
+
+.rq-table .pill--ok {
+  background: var(--tvc-green-tint);
+  color: var(--tvc-green-dark);
+}
+
+.rq-table .pill--warn,
+.rq-table .pill--crit {
+  background: var(--tvc-orange-tint);
+  color: var(--tvc-orange-text);
+}
+
+.rq-table .linklike {
+  all: unset;
+  cursor: pointer;
+  font-size: var(--text-sm);
+  color: var(--tvc-ink);
+  text-decoration: underline;
+  text-decoration-color: var(--tvc-line-strong);
+}
+
+.rq-table .linklike:focus-visible {
+  outline: 2px solid var(--tvc-orange);
+  outline-offset: 2px;
+}
+
+/* On a narrow screen a row is stacked, each value under the name of its column, so nothing is hidden off to the side. */
+@media (max-width: 40rem) {
+  .rq-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  .rq-table,
+  .rq-table tbody,
+  .rq-table tr,
+  .rq-table td {
+    display: block;
+  }
+
+  .rq-table tr {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--tvc-line);
+  }
+
+  .rq-table td {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 3px 0;
+    border: 0;
+    text-align: right;
+  }
+
+  .rq-table td::before {
+    content: attr(data-label);
+    flex: none;
+    font-size: var(--text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--tvc-ink-soft);
+    text-align: left;
+  }
+
+  .rq-table td.purpose {
+    min-width: 0;
+    max-width: none;
+  }
+
+  .rq-table .suggest td {
+    display: block;
+    text-align: left;
+  }
+
+  .rq-table .suggest td::before {
+    content: none;
+  }
+
+  .rq-table .suggest-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

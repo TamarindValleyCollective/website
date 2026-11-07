@@ -10,6 +10,7 @@
 // Same shell as the other internal tools: Google Sign-In gated, unlinked, noindex. Everything the server returns is
 // placed with textContent only, never as HTML.
 import StaffLayout from '../../../layouts/StaffLayout.astro';
+import '../../../styles/request-table.css';
 import SignInGate from '../../../components/SignInGate.astro';
 import StepUpSheet from '../../../components/StepUpSheet.astro';
 ---
@@ -30,7 +31,22 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
         <div class="segmented" id="chips" role="group" aria-label="Show"></div>
         <label class="field"><span class="visually-hidden">Search</span><input id="q" type="search" placeholder="Search by payee, purpose or reference" autocomplete="off" /></label>
       </div>
-      <ul class="records" id="records"></ul>
+      <div class="rq-table-scroll">
+        <table class="rq-table">
+          <thead>
+            <tr id="head">
+              <th data-sort="date" aria-sort="descending"><button type="button" class="sorthead">Date</button></th>
+              <th data-sort="payee"><button type="button" class="sorthead">Payee</button></th>
+              <th data-sort="purpose"><button type="button" class="sorthead">Purpose</button></th>
+              <th data-sort="amountPaise" class="num"><button type="button" class="sorthead">Amount</button></th>
+              <th data-sort="status"><button type="button" class="sorthead">Status</button></th>
+              <th>Payment</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="records"></tbody>
+        </table>
+      </div>
       <p id="empty" class="hint" hidden>Nothing here.</p>
     </div>
     <StepUpSheet />
@@ -66,7 +82,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
   const day = (iso: string | null) => (iso ? new Date(`${iso.slice(0, 10)}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) : '');
   const MODE: Record<string, string> = { neft: 'NEFT', upi: 'UPI', imps: 'IMPS', rtgs: 'RTGS' };
   const STATUS: Record<string, { text: string; kind: string }> = {
-    submitted: { text: 'Waiting for approval', kind: 'warn' },
+    submitted: { text: 'To approve', kind: 'warn' },
     approved: { text: 'Approved', kind: 'ok' },
     paid: { text: 'Paid', kind: 'ok' },
     rejected: { text: 'Rejected', kind: 'crit' },
@@ -133,30 +149,46 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
     window.open(URL.createObjectURL(await res.blob()), '_blank', 'noopener');
   }
 
-  function card(r: Rec): HTMLElement {
-    const li = el('li', 'record');
-    const top = el('div', 'record-top');
-    top.append(el('span', 'record-payee', r.payee ?? 'Unknown'), el('span', 'record-amount', rupees(r.amountPaise)));
-    li.append(top, el('div', 'record-purpose', r.purpose));
-    const meta = el('div', 'record-meta');
+  const cell = (text: string, cls?: string) => el('td', cls, text);
+  const pill = (text: string, kind = '') => el('span', `pill${kind ? ` pill--${kind}` : ''}`, text);
+
+  // On a narrow screen each row is stacked, and each value carries the name of its column.
+  const labelRow = (tr: HTMLElement) => {
+    const heads = Array.from($('head').querySelectorAll('th')).map((th) => th.textContent ?? '');
+    Array.from(tr.children).forEach((td, i) => ((td as HTMLElement).dataset.label = heads[i] ?? ''));
+  };
+
+  function rowsOf(r: Rec): HTMLElement[] {
+    const tr = el('tr');
     const st = STATUS[r.status] ?? { text: r.status, kind: 'dim' };
-    meta.append(el('span', `pill pill--${st.kind}`, r.kind === 'log' ? 'Logged spend' : st.text));
-    meta.append(el('span', 'dim', [r.kind === 'log' ? `Paid ${day(r.paidOn)}${r.paidVia ? ` by ${r.paidVia === 'delegate' ? 'a delegate' : 'the account'}` : ''}` : `${MODE[r.mode] ?? r.mode}, asked ${day(r.createdAt)}`, r.requester ? `by ${r.requester}` : r.source === 'history' ? 'from the old sheet' : ''].filter(Boolean).join(' · ')));
-    if (r.matched) meta.append(el('span', 'pill pill--ok', r.matched === 'reference' ? 'Matched by reference' : 'Matched'));
-    if (r.mismatch) meta.append(el('span', 'pill pill--crit', 'Reference found with a different amount'));
-    if (r.reviewFlag) meta.append(el('span', 'pill pill--warn', 'Paid to the requester’s own party'));
-    if (r.reimbursement) meta.append(el('span', 'pill', r.vouchers ? 'Reimbursement' : 'Reimbursement, no bill yet'));
-    li.append(meta);
-    if (r.decisionReason) li.append(el('div', 'record-reason', `${r.status === 'rejected' ? 'Rejected' : 'Note'}: ${r.decisionReason}`));
-    const acts = el('div', 'record-actions');
+    const when = r.kind === 'log' ? r.paidOn : r.paidOn ?? r.createdAt;
+    const date = cell(day(when), 'nowrap');
+    if (r.requester || r.source === 'history') date.append(el('span', 'sub', r.requester ? `by ${r.requester}` : 'old sheet'));
+    const payee = cell(r.payee ?? 'Unknown');
+    payee.append(el('span', 'sub', r.kind === 'log' ? `Logged spend${r.paidVia ? `, ${r.paidVia === 'delegate' ? 'by a delegate' : 'from the account'}` : ''}` : `Request, ${MODE[r.mode] ?? r.mode}`));
+    const purpose = cell(r.purpose, 'purpose');
+    if (r.decisionReason) purpose.append(el('span', 'sub', `${r.status === 'rejected' ? 'Rejected' : 'Note'}: ${r.decisionReason}`));
+    const status = el('td');
+    const tags = el('div', 'tags');
+    tags.append(pill(r.kind === 'log' ? 'Paid' : st.text, st.kind));
+    if (r.reviewFlag) tags.append(pill('Own party', 'warn'));
+    if (r.reimbursement) tags.append(pill(r.vouchers ? 'Reimbursement' : 'Reimbursement: no bill', r.vouchers ? '' : 'warn'));
+    status.append(tags);
+    const payment = el('td');
+    if (r.mismatch) payment.append(pill('Amount differs', 'crit'));
+    else if (r.matched) payment.append(pill(r.matched === 'reference' ? 'By reference' : 'Matched', 'ok'));
+    else if (r.proposals.length) payment.append(el('span', 'dim', `${r.proposals.length} suggested`));
+    else payment.append(el('span', 'dim', '—'));
+    const acts = el('td');
+    const box = el('div', 'acts');
     const btn = (label: string, fn: () => void, primary = false) => {
       const b = el('button', `button button--small${primary ? ' button--primary' : ''}`, label);
       b.type = 'button';
       b.addEventListener('click', fn);
-      acts.append(b);
+      box.append(b);
     };
     if (data?.can.approve && r.kind === 'request' && r.status === 'submitted') {
-      if (r.requesterId === data.me.id) acts.append(el('span', 'dim', 'Someone else must approve this.'));
+      if (r.requesterId === data.me.id) box.append(el('span', 'dim', 'Someone else must approve'));
       else {
         btn('Approve', () => act(`/api/finance-admin/requests/${r.id}/decide`, { action: 'approve' }, 'Approved.'), true);
         btn('Reject', () => {
@@ -165,29 +197,54 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
         });
       }
     }
-    if (data?.can.allocate && r.reviewFlag && r.requesterId !== data.me.id) btn('Mark reviewed', () => act(`/api/finance-admin/requests/${r.id}/review`, {}, 'Reviewed.'));
-    if (r.vouchers) btn(`See the file${r.vouchers > 1 ? 's' : ''}`, async () => {
-      // The list does not carry voucher ids (they are fetched by the request): ask the server once.
-      const res = await staffFetch(`/api/finance-admin/requests/${r.id}/files`);
-      for (const f of res.data.files ?? []) await openVoucher(f.id);
-    });
+    if (data?.can.allocate && r.reviewFlag && r.requesterId !== data.me.id) btn('Reviewed', () => act(`/api/finance-admin/requests/${r.id}/review`, {}, 'Reviewed.'));
+    if (r.vouchers)
+      btn(`File${r.vouchers > 1 ? 's' : ''}`, async () => {
+        // The list does not carry voucher ids (they are fetched by the request): ask the server once.
+        const res = await staffFetch(`/api/finance-admin/requests/${r.id}/files`);
+        for (const f of res.data.files ?? []) await openVoucher(f.id);
+      });
     if (data?.can.allocate && r.matched === 'accepted') btn('Unmatch', () => confirm('Remove the match?') && void act(`/api/finance-admin/requests/${r.id}/unmatch`, {}, 'Unmatched.'));
-    li.append(acts);
+    acts.append(box);
+    tr.append(date, payee, purpose, cell(rupees(r.amountPaise), 'num'), status, payment, acts);
+    labelRow(tr);
+    const out = [tr];
     if (data?.can.allocate && !r.matched && r.proposals.length) {
-      const box = el('div', 'proposals');
-      box.append(el('div', 'dim', 'Could this be the payment?'));
+      const sub = el('tr', 'suggest');
+      const td = el('td');
+      td.colSpan = 7;
+      td.append(el('span', 'dim', 'Could this be the payment?'));
       for (const p of r.proposals) {
-        const row = el('div', 'proposal');
-        row.append(el('span', undefined, `${p.type === 'upi' ? 'UPI' : 'Bank'} ${day(p.date)}${p.who ? ` · ${p.who.slice(0, 60)}` : ''} (${p.reasons.join(', ')})`));
+        const row = el('div', 'suggest-row');
+        row.append(el('span', undefined, `${p.type === 'upi' ? 'UPI' : 'Bank'} ${day(p.date)}${p.who ? ` · ${p.who.slice(0, 70)}` : ''} (${p.reasons.join(', ')})`));
         const b = el('button', 'button button--small', 'Yes, match');
         b.type = 'button';
         b.addEventListener('click', () => act(`/api/finance-admin/requests/${r.id}/match`, { type: p.type, targetId: p.targetId }, 'Matched.'));
         row.append(b);
-        box.append(row);
+        td.append(row);
       }
-      li.append(box);
+      sub.append(td);
+      out.push(sub);
     }
-    return li;
+    return out;
+  }
+
+  const sort = { key: 'date', dir: 'desc' as 'asc' | 'desc' };
+  const sortValue = (r: Rec, key: string): string | number => {
+    if (key === 'date') return (r.kind === 'log' ? r.paidOn : r.paidOn ?? r.createdAt)?.slice(0, 10) ?? '';
+    if (key === 'payee') return (r.payee ?? '').toLowerCase();
+    if (key === 'purpose') return r.purpose.toLowerCase();
+    if (key === 'amountPaise') return r.amountPaise;
+    if (key === 'status') return r.status;
+    return r.status;
+  };
+  for (const th of Array.from($('head').querySelectorAll<HTMLElement>('th[data-sort]'))) {
+    th.querySelector('button')!.addEventListener('click', () => {
+      const key = th.dataset.sort!;
+      sort.dir = sort.key === key ? (sort.dir === 'asc' ? 'desc' : 'asc') : key === 'amountPaise' || key === 'date' ? 'desc' : 'asc';
+      sort.key = key;
+      render();
+    });
   }
 
   function render() {
@@ -209,10 +266,16 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
     const q = filter.q.trim().toLowerCase();
     const shown = data.records.filter((r) => test(r) && (!q || [r.payee, r.purpose, r.upiRef, r.requester].join(' ').toLowerCase().includes(q)));
     const cap = 200;
-    $('records').replaceChildren(...shown.slice(0, cap).map(card));
-    $('empty').hidden = shown.length > 0;
-    $('empty').textContent = shown.length > cap ? '' : 'Nothing here.';
-    if (shown.length > cap) $('records').append(el('li', 'hint', `Showing the first ${cap} of ${shown.length}. Search to narrow them.`));
+    shown.sort((a, b) => {
+      const [x, y] = [sortValue(a, sort.key), sortValue(b, sort.key)];
+      const c = x < y ? -1 : x > y ? 1 : 0;
+      return (sort.dir === 'asc' ? c : -c) || (a.id < b.id ? -1 : 1);
+    });
+    $('records').replaceChildren(...shown.slice(0, cap).flatMap(rowsOf));
+    for (const th of Array.from($('head').querySelectorAll<HTMLElement>('th[data-sort]'))) th.setAttribute('aria-sort', th.dataset.sort === sort.key ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none');
+    $('empty').hidden = shown.length > 0 && shown.length <= cap;
+    if (shown.length === 0) $('empty').textContent = 'Nothing here.';
+    if (shown.length > cap) $('empty').textContent = `Showing the first ${cap} of ${shown.length}. Search to narrow them.`;
     lock.render();
   }
   $<HTMLInputElement>('q').addEventListener('input', (ev) => ((filter.q = (ev.target as HTMLInputElement).value), render()));
@@ -269,103 +332,5 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
 
   .finance-appr .segmented {
     flex-wrap: wrap;
-  }
-
-  .finance-appr .records {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: grid;
-    gap: 10px;
-  }
-
-  .finance-appr .record {
-    padding: 14px;
-    background: var(--tvc-white);
-    border-radius: var(--radius);
-    box-shadow: 0 0 0 1px var(--tvc-line) inset;
-  }
-
-  .finance-appr .record-top {
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
-    font-weight: 600;
-  }
-
-  .finance-appr .record-amount {
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-  }
-
-  .finance-appr .record-meta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    align-items: center;
-    margin-top: 8px;
-    font-size: var(--text-sm);
-  }
-
-  .finance-appr .record-reason {
-    margin-top: 6px;
-    font-size: var(--text-sm);
-    color: var(--tvc-ink-soft);
-  }
-
-  .finance-appr .record-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    align-items: center;
-    margin-top: 10px;
-  }
-
-  .finance-appr .proposals {
-    margin-top: 10px;
-    padding-top: 10px;
-    border-top: 1px solid var(--tvc-line);
-    font-size: var(--text-sm);
-  }
-
-  .finance-appr .proposal {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 12px;
-    margin-top: 6px;
-  }
-
-  .finance-appr .proposal .button {
-    white-space: nowrap;
-    flex: none;
-  }
-
-  .finance-appr .dim {
-    color: var(--tvc-ink-soft);
-  }
-
-  .finance-appr .pill {
-    padding: 2px 8px;
-    border-radius: 999px;
-    font-size: var(--text-xs);
-    font-weight: 600;
-    background: var(--tvc-cream);
-    color: var(--tvc-ink);
-  }
-
-  .finance-appr .pill--ok {
-    background: var(--tvc-green-tint);
-    color: var(--tvc-green-dark);
-  }
-
-  .finance-appr .pill--crit {
-    background: var(--tvc-orange-tint);
-    color: var(--tvc-orange-text);
-  }
-
-  .finance-appr .pill--warn {
-    background: var(--tvc-orange-tint);
-    color: var(--tvc-orange-text);
   }
 </style>
