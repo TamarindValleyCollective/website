@@ -168,6 +168,8 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
     return out;
   }
 
+  const openIds = new Set<string>(); // records whose suggested payments are showing
+
   function rowsOf(r: Rec): HTMLElement[] {
     const tr = el('tr');
     const st = STATUS[r.status] ?? { text: r.status, kind: 'dim' };
@@ -187,7 +189,18 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
     const payment = el('td');
     if (r.mismatch) payment.append(pill('Amount differs', 'crit'));
     else if (r.matched) payment.append(pill(r.matched === 'reference' ? 'By reference' : 'Matched', 'ok'));
-    else if (r.proposals.length) payment.append(el('span', 'dim', `${r.proposals.length} suggested`));
+    else if (r.proposals.length && data?.can.allocate) {
+      const open = openIds.has(r.id);
+      const t = el('button', 'linklike', `${r.proposals.length} ${r.proposals.length === 1 ? 'suggestion' : 'suggestions'} ${open ? '▴' : '▾'}`);
+      t.type = 'button';
+      t.setAttribute('aria-expanded', String(open));
+      t.addEventListener('click', () => {
+        if (open) openIds.delete(r.id);
+        else openIds.add(r.id);
+        render();
+      });
+      payment.append(t);
+    }
     else payment.append(el('span', 'dim', '—'));
     const acts = el('td');
     const box = el('div', 'acts');
@@ -219,37 +232,28 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
     tr.append(date, payee, purpose, cell(rupees(r.amountPaise), 'num'), status, payment, acts);
     labelRow(tr);
     const out = [tr];
-    if (data?.can.allocate && !r.matched && r.proposals.length) {
-      // The suggestion is drawn as part of the record above it: a green edge down both rows, and it opens by naming that record.
+    if (data?.can.allocate && !r.matched && r.proposals.length && openIds.has(r.id)) {
+      // Opened from the record's own "suggestions" link, and drawn as part of it: a green edge down both rows.
       tr.classList.add('has-suggest');
       const sub = el('tr', 'suggest');
       const td = el('td');
       td.colSpan = 7;
-      const head = el('div', 'suggest-head');
-      head.append(el('strong', undefined, 'Is this the payment for '), el('strong', 'suggest-for', `${r.payee ?? 'this record'}, ${rupees(r.amountPaise)}`), el('strong', undefined, '?'), el('span', 'suggest-purpose', ` For: “${r.purpose}”`));
-      td.append(head);
+      td.append(el('div', 'suggest-head', `Possible payments for ${r.payee ?? 'this record'}, ${rupees(r.amountPaise)} (the same amount in each)`));
       const words = matchWords(r.payee, r.purpose) as string[];
       for (const p of r.proposals) {
         const row = el('div', 'suggest-row');
-        const info = el('div', 'suggest-info');
         const line = el('div', 'suggest-line');
-        line.append(el('span', 'suggest-kind', p.type === 'upi' ? 'UPI payment' : 'Bank line'));
-        const when = el('span', undefined, day(p.date));
-        if (p.reasons.includes('same day')) when.classList.add('hl');
+        line.append(el('span', 'suggest-kind', p.type === 'upi' ? 'UPI' : 'Bank'));
+        const gap = p.reasons.find((x) => /apart|same day/.test(x));
+        const when = el('span', 'nowrap', `${day(p.date)}${gap && gap !== 'same day' ? ` (${gap.replace(' apart', ' off')})` : ''}`);
+        if (gap === 'same day') when.classList.add('hl');
         line.append(when);
         if (p.who) line.append(highlighted(p.who.slice(0, 80), words));
-        const amount = el('span', 'hl', rupees(r.amountPaise));
-        amount.title = 'Same amount';
-        line.append(amount);
-        info.append(line);
-        const why = el('div', 'suggest-why');
-        for (const reason of p.reasons) why.append(el('span', 'pill pill--ok', reason));
-        info.append(why);
-        const b = el('button', 'button button--small', 'Match to this');
+        const b = el('button', 'button button--small', 'Match');
         b.type = 'button';
         b.setAttribute('aria-label', `Match ${r.payee ?? 'this record'} to the ${p.type === 'upi' ? 'UPI payment' : 'bank line'} of ${day(p.date)}`);
         b.addEventListener('click', () => act(`/api/finance-admin/requests/${r.id}/match`, { type: p.type, targetId: p.targetId }, 'Matched.'));
-        row.append(info, b);
+        row.append(line, b);
         td.append(row);
       }
       sub.append(td);
@@ -319,7 +323,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
       clearState(statusEl);
       data = out;
       intro.hidden = false;
-      intro.textContent = `Requests raised on the Requests page and spends logged there. What a record says it was for shows on the UPI page and in the ledger once it is matched.${out.agingCount ? ` ${out.agingCount} approved ${out.agingCount === 1 ? 'request has' : 'requests have'} been waiting over two weeks for a payment to match.` : ''}`;
+      intro.textContent = out.agingCount ? `${out.agingCount} approved ${out.agingCount === 1 ? 'request has' : 'requests have'} waited over two weeks for a payment to match.` : 'What each record was for shows on the UPI page and in the ledger once it is matched.';
       render();
       content.hidden = false;
     } catch (err) {
