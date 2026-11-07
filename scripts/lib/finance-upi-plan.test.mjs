@@ -171,3 +171,30 @@ test('BHIM: references already held (from Paytm or an earlier BHIM file) and rep
   assert.equal(plan.counts.alreadyHeld, 2);
   assert.equal(planBhimImport({ file: bhimFile(lines), accounts: [axis], held: { fileHashes: ['h1'], refs: [] } }).status, 'duplicate_file');
 });
+
+test('BHIM: a row that names the bank and is marked CR is money coming in; no bank named is a delegated payment out', () => {
+  const plan = planBhimImport({
+    file: bhimFile([
+      bhimLine({ upiRef: '600000000010', bankName: 'AXIS BANK', accountLast4: '0099', drcr: 'CR', amountPaise: 900000 }), // received into the account
+      bhimLine({ upiRef: '600000000011', bankName: 'AXIS BANK', accountLast4: '0099', drcr: 'DR' }), // paid from the account
+      bhimLine({ upiRef: '600000000012' }), // no bank named, CR: a delegate paid out of the account
+    ]),
+    accounts: [axis], held: none,
+  });
+  assert.deepEqual(plan.newLines.map((l) => [l.direction, l.isCircle]), [['credit', false], ['debit', false], ['debit', true]]);
+});
+
+test('BHIM: a payment from a bank that is not registered (a personal account) is left out and counted, not stored; the rest of the file imports', () => {
+  const plan = planBhimImport({
+    file: bhimFile([
+      bhimLine({ upiRef: '600000000020', bankName: 'AXIS BANK', accountLast4: '0099', drcr: 'DR', amountPaise: 20000 }),
+      bhimLine({ upiRef: '600000000021', bankName: 'ICICI Bank', accountLast4: '8505', drcr: 'DR', amountPaise: 169700 }),
+      bhimLine({ upiRef: '600000000022', bankName: 'ICICI Bank', accountLast4: '8505', drcr: 'DR', amountPaise: 3000 }),
+    ]),
+    accounts: [axis], held: none,
+  });
+  assert.equal(plan.status, 'ok');
+  assert.deepEqual(plan.newLines.map((l) => l.upiRef), ['600000000020']);
+  assert.equal(plan.counts.ignored, 2);
+  assert.deepEqual(plan.ignored, { count: 2, totalPaise: 172700, byAccount: [{ label: 'ICICI Bank ••8505', count: 2, totalPaise: 172700 }] });
+});

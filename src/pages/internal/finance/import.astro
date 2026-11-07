@@ -204,6 +204,7 @@ import SignInGate from '../../../components/SignInGate.astro';
         details.push(`${f.accountLabel ?? 'Bank statement'}: ${plural(c.new, 'new line')}, ${c.alreadyHeld} already held${f.firstDate ? ` · lines from ${range(f.firstDate, f.lastDate)}` : ''}`);
       } else if (f.kind === 'bhim_upi') {
         details.push(`BHIM history: ${plural(c.new, 'new payment')}, ${c.alreadyHeld} already held${f.firstDate ? ` · ${range(f.firstDate, f.lastDate)}` : ''}`);
+        if (f.ignored?.count) details.push(`${plural(f.ignored.count, 'payment')} from another bank account left out, not stored (${rupees(f.ignored.totalPaise)} in all): ${f.ignored.byAccount.map((a: any) => `${a.label} ${a.count}`).join(', ')}`);
         if (f.unsuccessful?.count) details.push(`${plural(f.unsuccessful.count, 'payment')} failed at the bank (${rupees(f.unsuccessful.totalPaise)} in all) and ${f.unsuccessful.count === 1 ? 'is' : 'are'} left out: no money moved.`);
         if (typeof f.wouldLink === 'number') details.push(`${plural(f.wouldLink, 'payment')} match a bank line already imported.`);
         if (f.failed?.length) {
