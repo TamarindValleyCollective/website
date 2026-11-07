@@ -28,3 +28,11 @@ test('an SVG logo has no script, event handler or outside reference', () => {
     assert.ok(!/<script|<foreignObject|<image|\son[a-z]+\s*=|(href|src)\s*=\s*["']https?:/i.test(svg), `${p} has active or external content`);
   }
 });
+
+test('the admin host serves the logo folder (admin.tvc.farm sends any unlisted path to the admin home, so the logos would not load)', () => {
+  const toml = readFileSync('netlify.toml', 'utf8');
+  for (const folder of new Set(paths.map((p) => p.split('/').slice(0, 2).join('/')))) {
+    const rule = new RegExp(`from = "https://admin\\.tvc\\.farm${folder}/\\*"\\s+to = "${folder}/:splat"\\s+status = 200\\s+force = true`);
+    assert.match(toml, rule, `netlify.toml has no admin.tvc.farm rule for ${folder}/*`);
+  }
+});

@@ -5,6 +5,7 @@ import { requireStaff } from './staff-access';
 import { rest } from './staff-mfa-store';
 import { capabilitiesForRole } from './staff-registry';
 import { loadNotes } from './finance-notes';
+import { pairReversals } from '../../../scripts/lib/finance-reversals.mjs';
 import { CIRCLE_CAP_PAISE, bankWithoutUpiRow, circleMonths, matchState } from '../../../scripts/lib/finance-upi-circle.mjs';
 
 type Json = Record<string, any>;
@@ -44,15 +45,17 @@ export async function listUpiLines(req: Request): Promise<Response> {
     const withState = lines.map((l) => ({ ...l, state: matchState(l, lastBankDate) as 'matched' | 'waiting' | 'unmatched' }));
     const linkedIds = new Set(lines.map((l) => l.bankLineId).filter(Boolean) as string[]);
     const firstUpiDate = lines.reduce<string | null>((m, l) => (m === null || l.paidAt < m ? l.paidAt : m), null);
+    const bankLines = bank.map((b) => ({ id: b.id as string, tranDate: b.tran_date as string, direction: b.direction as 'debit' | 'credit', amountPaise: Number(b.amount_paise), upiRrn: b.upi_rrn as string }));
+    // A payment the bank reversed (a credit under the same reference) needs no UPI record.
+    const reversed = pairReversals(bankLines.map((b) => ({ id: b.id, date: b.tranDate, direction: b.direction, amountPaise: b.amountPaise, upiRrn: b.upiRrn }))).byLine;
     return json({
       canEdit: (capabilitiesForRole('finance', auth.staff.role) as string[]).includes('allocate'),
       lines: withState,
       months: circleMonths(lines),
       capPaise: CIRCLE_CAP_PAISE,
       lastBankDate,
-      bankWithoutRow: bankWithoutUpiRow(
-        bank.map((b) => ({ id: b.id, tranDate: b.tran_date, direction: b.direction, amountPaise: Number(b.amount_paise), upiRrn: b.upi_rrn })), linkedIds, firstUpiDate,
-      ),
+      bankWithoutRow: bankWithoutUpiRow(bankLines, linkedIds, firstUpiDate, new Set(reversed.keys())),
+      reversedCount: reversed.size / 2,
     });
   } catch (err) {
     console.error('[finance-upi-view] list failed', err instanceof Error ? err.message : err);

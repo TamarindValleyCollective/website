@@ -104,24 +104,29 @@ export function reconciliationSummary({ upiLines, bankLines, lastBankDate, first
   }
   const bankWithoutUpi = { predatesExport: 0, inExportPeriod: 0 };
   for (const b of bankLines) {
-    if (!b.upiRrn || b.linked) continue;
+    if (!b.upiRrn || b.linked || b.reversed) continue;
     if (!firstUpiDate || b.tranDate < firstUpiDate) bankWithoutUpi.predatesExport += 1;
     else bankWithoutUpi.inExportPeriod += 1;
   }
   return { awaitingBank, unmatchedInStatement, bankWithoutUpi };
 }
 
-// Is a BHIM row a UPI Circle payment? INFERRED, not stated by the file: the export has no tag (Paytm's circle signal).
-// Rows paid through the circle name no bank and are marked CR; rows paid from the account name the bank and are DR.
-// Confirm against the old "UPI Circle Transactions" sheet; this is the one place to change if the reading is wrong.
+// Is a BHIM row a UPI Circle (delegated) payment? The export has no tag (Paytm's circle signal), so this is a reading of two
+// columns, checked against the bank statement: a row paid through the circle names no bank and is marked CR, and every such row
+// was a bank DEBIT. A row that names the bank is DR (a payment out, bank debits) or CR (money coming IN, bank credits).
 export const bhimIsCircle = (l) => l.bankName === null && l.drcr === 'CR';
+
+// The direction of the money on the account: a delegated payment (no bank named) is always out; a row that names the bank says so
+// itself, DR out and CR in. DR/CR alone is not the direction: "no bank, CR" is a payment out.
+export const bhimDirection = (l) => (l.bankName !== null && l.drcr === 'CR' ? 'credit' : 'debit');
 
 // Plan a BHIM import (a parsed finance-bhim.mjs statement). Same result shape as planUpiImport, so the import page
 // reads both. A row that names its account ("XXXX000099") is placed on the registered account with those last four
 // digits. A row that names none (a UPI Circle payment) is stored with NO account: a UPI app can pay from any linked bank,
 // so the file cannot say, and the account is read from the bank line the row is joined to by reference (the bank line
-// always carries its account). Only a row naming an account that is not registered blocks the file, so a payment is
-// never put on a wrong account; add the account first.
+// always carries its account). A row naming a bank account that is not registered (a personal account) is left out and
+// counted, never stored; only when the rows that name an account name none that is registered is the file blocked (add the account first), so a
+// payment is never put on a wrong account.
 export function planBhimImport({ file, accounts, held }) {
   const { parsed } = file;
   const result = {
@@ -137,16 +142,29 @@ export function planBhimImport({ file, accounts, held }) {
     return result;
   }
   const byLast4 = new Map(accounts.filter((a) => a.last4).map((a) => [a.last4, a]));
-  const unregistered = [...new Set(parsed.lines.map((l) => l.accountLast4).filter((d) => d && !byLast4.has(d)))];
-  if (unregistered.length) {
+  const isOurs = (l) => !l.accountLast4 || byLast4.has(l.accountLast4);
+  // A file whose rows name accounts, none of them registered, belongs to an account that has not been added yet.
+  const named = parsed.lines.filter((l) => l.accountLast4);
+  if (named.length > 0 && !named.some((l) => byLast4.has(l.accountLast4))) {
     result.status = 'blocked';
-    result.errors = [{ type: 'account_not_registered', last4: unregistered }];
+    result.errors = [{ type: 'account_not_registered', last4: [...new Set(named.map((l) => l.accountLast4))] }];
     return result;
   }
+  const leftOut = new Map();
 
   const seen = new Set();
   const heldRefs = new Set(held.refs);
   for (const l of parsed.lines) {
+    if (!isOurs(l)) {
+      const label = `${l.bankName ?? 'Bank'} ••${l.accountLast4}`;
+      const g = leftOut.get(label) ?? { label, count: 0, totalPaise: 0 };
+      g.count += 1;
+      g.totalPaise += l.amountPaise;
+      leftOut.set(label, g);
+      result.ignored.count += 1;
+      result.ignored.totalPaise += l.amountPaise;
+      continue;
+    }
     if (heldRefs.has(l.upiRef) || seen.has(l.upiRef)) {
       result.counts.alreadyHeld += 1;
       continue;
@@ -155,10 +173,12 @@ export function planBhimImport({ file, accounts, held }) {
     const account = l.accountLast4 ? byLast4.get(l.accountLast4) : null;
     result.newLines.push({
       row: l.row, paidAt: l.paidAt, time: l.time, details: null, counterparty: l.receiver.name ?? l.receiver.id,
-      accountId: account?.id ?? null, accountLabel: account ? `BHIM · ${account.label}` : 'BHIM', direction: 'debit', amountPaise: l.amountPaise,
+      accountId: account?.id ?? null, accountLabel: account ? `BHIM · ${account.label}` : 'BHIM', direction: bhimDirection(l), amountPaise: l.amountPaise,
       upiRef: l.upiRef, orderId: null, remarks: null, tag: null, app: 'bhim', ignored: false, ignoredReason: null, isCircle: bhimIsCircle(l),
     });
   }
+  result.ignored.byAccount = [...leftOut.values()];
+  result.counts.ignored = result.ignored.count;
   result.counts.failed = result.failed.length;
   result.counts.new = result.newLines.length;
   const dates = parsed.lines.map((l) => l.paidAt).sort();

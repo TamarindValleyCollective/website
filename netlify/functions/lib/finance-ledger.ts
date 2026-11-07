@@ -7,6 +7,7 @@
 // (never a name, narration or amount). The audit row is written BEFORE the change; if it cannot be written, nothing changes.
 import { originOf, sourcesOf } from '../../../scripts/lib/finance-origin.mjs';
 import { noteKeyOf } from '../../../scripts/lib/finance-notes.mjs';
+import { pairReversals } from '../../../scripts/lib/finance-reversals.mjs';
 import { loadNotes } from './finance-notes';
 import { requireStaff } from './staff-access';
 import { rest } from './staff-mfa-store';
@@ -297,6 +298,9 @@ export async function ledgerAll(req: Request): Promise<Response> {
       reviewRef(), // started now so the suggestion context below does not wait for it
     ]);
     const sc = await suggestionContext(lines, byLine, ctx);
+    // A payment the bank reversed (a credit under the same UPI reference) and the credit that reversed it, paired.
+    const reversals = pairReversals(lines.map((l) => ({ id: l.id, date: l.tran_date, direction: l.direction as 'debit' | 'credit', amountPaise: Number(l.amount_paise), upiRrn: l.upi_rrn }))).byLine;
+    const dateOf = new Map(lines.map((l) => [l.id, l.tran_date]));
     const upiOf = new Map(upis.map((u) => [u.bank_line_id as string, u]));
     const categoryById = new Map(ctx.categories.map((c) => [c.id as string, c]));
     const partyName = new Map(ctx.parties.map((x) => [x.id as string, x.name as string]));
@@ -329,6 +333,7 @@ export async function ledgerAll(req: Request): Promise<Response> {
         isCircle: Boolean(upi?.is_circle),
         origin,
         // The note on this payment (shared with its UPI row), and the UPI reference that links the ledger to the UPI page.
+        reversal: reversals.has(l.id) ? { ...reversals.get(l.id)!, otherDate: dateOf.get(reversals.get(l.id)!.otherId) ?? null } : null,
         sources: sourcesOf({ bankBadge: accountBadge.get(l.bank_account_id) ?? null, origin }),
         noteKey,
         note: notes.get(noteKey) ?? null,

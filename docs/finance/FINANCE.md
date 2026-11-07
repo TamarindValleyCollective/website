@@ -233,12 +233,15 @@ types the importer knows; each batch stores its `source`: `axis_statement`, `pay
 - **Account.** A UPI app can be linked to several banks and pay from any, so the file cannot always say. A row that names its
   account (`XXXX…0099` → `0099`) is placed on the registered account with those last four digits; a row that names none (a circle
   payment) is stored **with no account**, and its account is read from the bank line it is joined to by reference (the UPI
-  page does this at read time; `fin_upi_lines` is link-only, so the row itself never changes). Only a row naming an account that is
-  not registered **blocks** the file (`account_not_registered`), so a payment is never put on a wrong account. A row with no bank line
-  yet shows "account not known yet".
-- **Circle reading (INFERRED).** `bhimIsCircle` in `finance-upi-plan.mjs`: no bank named and marked `CR` = a UPI Circle payment;
-  bank named and `DR` = paid from the account. All 30 payments in the two sample files are bank debits (29 matched by reference),
-  so DR/CR is *not* the direction of the money. Not yet confirmed against the old "UPI Circle Transactions" sheet.
+  page does this at read time; `fin_upi_lines` is link-only, so the row itself never changes). A row naming a bank account that is not
+  registered (a personal account: some statements include them) is **left out and counted, never stored**, and the rest of the file
+  imports; the file is **blocked** (`account_not_registered`) only when the rows that name an account name none that is registered, so a
+  payment is never put on a wrong account. A row with no bank line yet shows "account not known yet".
+- **Direction and the delegated reading (checked against the bank statement, 2026-11-07).** DR/CR is *not* the direction of the money
+  (`bhimDirection`, `bhimIsCircle` in `finance-upi-plan.mjs`). A row that names **no bank and is marked CR** is a delegated (UPI Circle)
+  payment and is a bank **debit**; a row naming the bank and marked **DR** is a payment out (a debit); a row naming the bank and marked
+  **CR** is money coming **in** (a credit) and is stored as a credit, never as a delegated payment. The first version of the importer
+  stored every row as a debit.
 - **Same table, one more column.** Rows go into `fin_upi_lines` with `app` (`bhim` | `paytm`, existing rows are `paytm`), the same
   unique reference (so a payment in both files is stored once) and the same join to bank lines. Raw PDFs are kept in R2 as `.pdf`.
 - **Channel ("origin") of a bank line** (`scripts/lib/finance-origin.mjs`, derived at read time, not stored). A line has two
@@ -289,6 +292,15 @@ types the importer knows; each batch stores its `source`: `axis_statement`, `pay
   `settled_at` per payment, so a gateway credit can be matched to a settlement (by the settlement's UTR in the narration if the bank
   prints one, else by net amount and date, and only a unique match is shown); that is designed but **not built or verified**: the
   statement holds only one test credit and no payment is settled yet. Do it with the first real settlement in hand.
+- **Reversed payments** (no migration). A UPI payment that fails after the bank took the money is reversed by a credit for the same
+  amount that carries the **same 12-digit UPI reference** as the debit (seen on a real statement: three failed payments to one payee on
+  one day, each followed by such a credit). `scripts/lib/finance-reversals.mjs` pairs them: same reference, same amount, opposite
+  direction, the credit dated the same day or up to 7 days after, oldest first, each line used once; a refund from the payee arrives under
+  a new reference and is never paired. On the real ledger it finds exactly three pairs among 272 UPI lines, and no others. Both lines of a
+  pair show a "Reversed by the credit of ..." / "Reverses the payment of ..." note in the ledger (click it to open the other line), the line
+  sheet explains it, there is a **Reversal** filter chip, and a reversed payment is left out of "bank UPI payments with no BHIM or Paytm
+  record" on the UPI page and the Import page. The two lines are still allocated separately (the reports net them by direction); linking
+  the credit's allocation to the debit's as a formal reversal (`reverses_allocation_id`) is not done.
 - **Not done:** an Account filter *chip* in the ledger (Group By, search and the line sheet cover it), and the dashboards, period
   close and the Overview's statement-gap check have not been checked for a second bank account.
 
