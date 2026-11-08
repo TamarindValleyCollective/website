@@ -123,6 +123,21 @@ for esbuild, and Node 22.18+ or newer, which imports the registry `.ts` directly
   and a new unverified row with the IFSC starts, for **that account only** and with no date, so no retired row is left behind.
   The new row keeps the old row's creator (none for a loaded row), because the number is not new and a verifier may still confirm
   it; who typed the IFSC is in the audit log (`finance.payee_ifsc_added`), and the IFSC is checked against evidence when verifying.
+- **Evidence: screenshots against an account (migration `0094_finance_payee_evidence.sql`, written and tested, NOT yet applied).** Two
+  verify methods keep a screenshot against that one account: **Bank's payee-name check** (the bank's own "Name as per Payee Bank" screen,
+  which proves whose account it is; a transfer success screen shows only the label that was typed) and **Payment made** (the transfer
+  success screen, which proves money reached it). The sheet shows the file beside the details on record; the person ticks that the last four
+  and the IFSC (or the UPI id's last four and its @ part) match, and for the name check types the name the bank showed (`verified_name`,
+  kept on the account next to the party's label and searchable; "This looks like the party label" is a hint from `namesResemble`, never a
+  block). Files: `POST /accounts/:id/evidence` (multipart `file`, `kind` payment | name_check | other; verifier + unlock; JPEG, PNG,
+  WebP or PDF up to 4 MB, at most 6 per account, only before verifying), stored in the private R2 bucket under `finance/vouchers/` with
+  a row in `fin_party_account_files`; `GET /accounts/:id/evidence` lists them and `GET /evidence/:id` shows one (verifier + unlock, each
+  view logged); the list carries only counts. The database refuses to verify by either method without its file (and the name), and never
+  changes the name, the files or the method afterwards. The audit log gets the kind and ids, never the name or the files.
+  **Apply 0094 before using the two new methods**: until then the Parties page and the old methods work as before, and the new ones
+  answer "migration 0094 has not been applied". The migration was tested on the real database inside a transaction that always rolls back.
+  Not built yet: reading the screenshot automatically (extract blind, then compare with what is on record), and confirming a payment
+  against the imported statement (the UPI reference is already on the UPI lines).
 - **Bank and UPI are separate accounts.** A party can hold both: each is its own `fin_party_accounts` row (`method` bank or upi),
   verified, retired and superseded on its own. A new bank account only supersedes the live bank row, never the UPI one.
 - **IFSC lookup.** `GET /ifsc/:code` (any `finance` view role) asks Razorpay's free public IFSC directory

@@ -55,16 +55,16 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
 <script>
   import { combo } from '../../../../scripts/lib/finance-ui.mjs';
   import { matchOptions } from '../../../../scripts/lib/finance-search.mjs';
-  import { StaffAuthError, clearStepUp, clearToken, closeOnBackdrop, decodeTokenEmail, getToken, setToken, showToast, staffFetch } from '../../../../scripts/lib/staff-client.mjs';
+  import { StaffAuthError, clearStepUp, clearToken, closeOnBackdrop, decodeTokenEmail, getStepUp, getToken, setToken, showToast, staffFetch } from '../../../../scripts/lib/staff-client.mjs';
   import { initStepUpLock } from '../../../../scripts/lib/staff-stepup-ui.mjs';
   import { markDiff, groupFromRight } from '../../../../scripts/lib/finance-diff.mjs';
-  import { VERIFY_METHODS } from '../../../../scripts/lib/finance-parties.mjs';
+  import { VERIFY_METHODS, namesResemble } from '../../../../scripts/lib/finance-parties.mjs';
   import { clearState, showEmpty, showFailure, showLoading } from '../../../../scripts/lib/staff-states.mjs';
 
   declare const google: any;
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
 
-  type Account = { id: string; method: 'bank' | 'upi'; shown: string; status: 'unverified' | 'verified'; shared: boolean; validFrom: string | null; retiredOn: string | null; payableNow: boolean; review: string[]; verification: { at: string | null; by: string | null; method: string | null; methodLabel: string; note: string | null } | null };
+  type Account = { id: string; method: 'bank' | 'upi'; shown: string; status: 'unverified' | 'verified'; shared: boolean; validFrom: string | null; retiredOn: string | null; payableNow: boolean; review: string[]; verification: { at: string | null; by: string | null; method: string | null; methodLabel: string; note: string | null; name?: string | null } | null; evidence?: { payment: number; name_check: number; other: number } };
   type Party = { id: string; name: string; kind: string; active: boolean; householdId: string | null; formerSince: string | null; accounts: Account[]; earlierAccounts: number; needsReview: boolean; mergedCount: number };
   type Data = { kinds: string[]; canEdit: boolean; canVerify: boolean; me: { id: string; ready: boolean; hasPasskey: boolean; stepUpValid: boolean } | null; parties: Party[]; needsReviewCount: number };
 
@@ -448,6 +448,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
       const v = a.verification;
       const notes = [
         v ? `Verified${v.by ? ` by ${v.by}` : ''}${v.at ? ` on ${niceDate(v.at.slice(0, 10))}` : ''} · ${v.methodLabel}${v.note ? ` · ${v.note}` : ''}` : null,
+        v?.name ? `Name at the bank: ${v.name}${namesResemble(p.name, v.name) ? '' : ' (differs from the label)'}` : null,
         retired ? `Retired from ${niceDate(a.retiredOn!)}. Do not pay this account.` : a.retiredOn ? `Retires on ${niceDate(a.retiredOn)}; payable until the day before.` : null,
         a.validFrom && a.validFrom > todayIST() ? `Starts on ${niceDate(a.validFrom)}.` : null,
         ...(retired ? [] : a.review.filter((r) => r !== 'multiple_live_accounts').map((r) => REVIEW_TEXT[r] ?? r)),
@@ -455,6 +456,8 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
       const status = retired ? pill('Retired', 'crit') : a.retiredOn ? pill('Retiring', 'warn') : a.status === 'verified' ? pill('Verified', 'ok') : pill('Unverified', 'warn');
       const verify = a.status === 'unverified' && !retired && data?.canVerify ? button('Check details…', () => openVerify(p, a)) : null;
       const retire = !retired && data?.canVerify ? button(a.retiredOn ? 'Move date…' : 'Retire…', () => openRetire(p, a)) : null;
+      const evidenceCount = (a.evidence?.payment ?? 0) + (a.evidence?.name_check ?? 0) + (a.evidence?.other ?? 0);
+      const viewEvidence = evidenceCount > 0 && data?.canVerify ? button(`View evidence (${evidenceCount})`, () => void openEvidence(p, a)) : null;
       const addIfsc = a.status === 'unverified' && !a.retiredOn && data?.canVerify && a.review.includes('missing_ifsc') ? button('Add IFSC…', () => openAddIfsc(p, a)) : null;
       return h(
         'li',
@@ -465,7 +468,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
           h('div', { class: 'acct-head' }, h('span', { class: 'title' }, document.createTextNode(`${a.method === 'bank' ? 'Bank account' : 'UPI'} ending `), ...ending.map(diffSpan)), status),
           full,
           ...notes.map((t) => h('span', { class: 'detail', text: t })),
-          verify || retire || addIfsc ? h('div', { class: 'acct-actions' }, addIfsc, verify, retire) : null,
+          verify || retire || addIfsc || viewEvidence ? h('div', { class: 'acct-actions' }, addIfsc, verify, viewEvidence, retire) : null,
         ),
       );
     });
@@ -716,6 +719,37 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
 
   // The verification screen: shows the full details once, asks how they were checked, records it with who and when, and
   // can carry straight on to the next payee. The details disappear from the page when the sheet closes.
+  const authHeaders = (): Record<string, string> => ({ authorization: `Bearer ${getToken() ?? ''}`, ...(getStepUp() ? { 'x-stepup-token': getStepUp()! } : {}) });
+  const evidenceKindOf = (id: string): 'payment' | 'name_check' | null => (VERIFY_METHODS.find((m: { id: string }) => m.id === id) as { evidence?: 'payment' | 'name_check' } | undefined)?.evidence ?? null;
+  const EVIDENCE_NAMES: Record<string, string> = { name_check: "The bank's payee-name screen", payment: 'The transfer success screen', other: 'Other file' };
+
+  // The screenshots kept against one account. They are fetched with the same unlock as verifying (each view is logged) and shown
+  // from in-memory copies that are released when the sheet closes; nothing is ever linked or cached.
+  async function openEvidence(p: Party, a: Account) {
+    if (!mayVerify()) return;
+    $<HTMLDialogElement>('detail-sheet').close();
+    const dlg = $<HTMLDialogElement>('account-sheet');
+    const { status, data: out } = await call(`/api/finance-admin/accounts/${a.id}/evidence`);
+    if (status !== 200) {
+      if (out?.code === 'STEP_UP_REQUIRED') lock.open();
+      else showToast(out?.error ?? 'Could not open the files.');
+      return;
+    }
+    const urls: string[] = [];
+    const figures: Node[] = [];
+    for (const f of (out.files ?? []) as { id: string; kind: string; mime: string }[]) {
+      const res = await fetch(`/api/finance-admin/evidence/${f.id}`, { headers: authHeaders() });
+      if (!res.ok) continue;
+      const url = URL.createObjectURL(await res.blob());
+      urls.push(url);
+      figures.push(
+        h('figure', { class: 'evidence-figure' }, f.mime === 'application/pdf' ? h('a', { text: 'Open the PDF', attrs: { href: url, target: '_blank', rel: 'noopener' } }) : h('img', { attrs: { src: url, alt: EVIDENCE_NAMES[f.kind] ?? 'Evidence' } }), h('figcaption', { class: 'hint', text: EVIDENCE_NAMES[f.kind] ?? 'File' })),
+      );
+    }
+    dlg.addEventListener('close', () => urls.forEach((u) => URL.revokeObjectURL(u)), { once: true });
+    present(dlg, h('h2', { text: `Evidence: ${p.name}`, attrs: { id: 'account-title' } }), h('p', { class: 'hint', text: `${a.method === 'bank' ? 'Bank account' : 'UPI'} ${a.shown}. Showing these is logged.` }), ...(figures.length ? figures : [h('p', { class: 'hint', text: 'No files could be loaded.' })]), h('div', { class: 'sheet-actions' }, closeBtn(dlg)));
+  }
+
   async function openVerify(p: Party, a: Account) {
     if (!mayVerify()) return;
     const dlg = $<HTMLDialogElement>('verify-sheet');
@@ -743,24 +777,98 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
       return { radio, node: h('label', { class: 'radio' }, radio, h('span', { text: m.label })) };
     });
     const note = input('note', { maxlength: '200', placeholder: 'For example, where the cheque photo is kept' });
+
+    // The two screenshot methods: the file is attached (and kept against this account) before verifying, and the person says they
+    // compared it with the details above. The name the bank showed is compared with the party label as a hint only.
+    const attached: Record<string, number> = { payment: a.evidence?.payment ?? 0, name_check: a.evidence?.name_check ?? 0 };
+    const fileInput = h('input', { attrs: { type: 'file', accept: 'image/jpeg,image/png,image/webp,application/pdf', 'aria-label': 'Choose the screenshot' } }) as HTMLInputElement;
+    const evidenceLabel = h('p', { class: 'field-label' });
+    const attachedNote = h('p', { class: 'hint', attrs: { hidden: '', 'aria-live': 'polite' } });
+    const previews = h('div', { class: 'evidence-previews' });
+    const bankName = input('name', { maxlength: '120', placeholder: 'As the bank shows it' });
+    const nameField = labelled('Name the bank showed', bankName);
+    const nameHint = h('p', { class: 'hint', attrs: { hidden: '', 'aria-live': 'polite' } });
+    const compared = h('input', { attrs: { type: 'checkbox' } }) as HTMLInputElement;
+    const comparedText = h('span');
+    const evidenceBox = h('div', { class: 'stack-form evidence-box', attrs: { hidden: '' } }, evidenceLabel, fileInput, attachedNote, previews, nameField, nameHint, h('label', {}, compared, comparedText));
+    const last4 = last4Of(a);
+    const tail = d.method === 'bank' ? `the account ending ${last4} and IFSC ${d.ifsc ?? ''}` : `the UPI id ending ${last4} and its @ part`;
+    const showEvidence = () => {
+      const kind = evidenceKindOf(chosen());
+      evidenceBox.hidden = kind === null;
+      if (!kind) return;
+      evidenceLabel.textContent = kind === 'name_check' ? "Attach the bank's payee-name screen (\"Name as per Payee Bank\")" : 'Attach the transfer success screen';
+      nameField.hidden = kind !== 'name_check';
+      comparedText.textContent = `I checked that the screenshot shows ${tail}${kind === 'payment' ? ', and that the amount and date are right' : ''}.`;
+      attachedNote.hidden = !attached[kind];
+      attachedNote.textContent = `${attached[kind]} file${attached[kind] === 1 ? '' : 's'} attached to this account.`;
+    };
+    const syncName = () => {
+      const typed = bankName.value.trim();
+      nameHint.hidden = typed.length < 2;
+      if (typed.length < 2) return;
+      const ok = namesResemble(p.name, typed);
+      nameHint.className = ok ? 'hint' : 'note';
+      nameHint.textContent = ok ? 'This looks like the party label.' : `This does not look like "${p.name}". Check it is the right account, or rename the party if its label is wrong.`;
+    };
+    async function attach(file: File) {
+      const kind = evidenceKindOf(chosen());
+      if (!kind) return;
+      msg.hidden = true;
+      const form = new FormData();
+      form.set('file', file);
+      form.set('kind', kind);
+      const res = await fetch(`/api/finance-admin/accounts/${a.id}/evidence`, { method: 'POST', headers: authHeaders(), body: form });
+      const out = (await res.json().catch(() => ({}))) as { error?: string; code?: string };
+      if (res.status === 401) return showGate('Your session expired. Sign in again.');
+      if (out.code === 'STEP_UP_REQUIRED') return lock.open();
+      if (res.status !== 201) {
+        msg.hidden = false;
+        msg.textContent = out.error ?? 'The file could not be saved.';
+        return;
+      }
+      attached[kind] += 1;
+      previews.append(file.type === 'application/pdf' ? h('span', { class: 'hint', text: `PDF attached: ${file.name}` }) : h('img', { attrs: { src: URL.createObjectURL(file), alt: 'The screenshot you attached' } }));
+      showEvidence();
+      sync();
+    }
+    fileInput.addEventListener('change', async () => {
+      const file = fileInput.files?.[0];
+      if (file) await attach(file);
+      fileInput.value = '';
+    });
     const hasNext = queue.length > 1;
     const verifyBtn = h('button', { class: hasNext ? 'button button--outline' : 'button button--primary', text: 'Mark as verified', attrs: { type: 'button' } }) as HTMLButtonElement;
     const nextBtn = h('button', { class: 'button button--primary', text: 'Mark as verified and open next', attrs: { type: 'button' } }) as HTMLButtonElement;
     if (!hasNext) nextBtn.hidden = true;
 
     const chosen = () => radios.find((r) => r.radio.checked)?.radio.value ?? '';
-    const ready = () => !noIfsc && (chosen() === 'other' ? note.value.trim().length >= 3 : chosen() !== '');
+    const evidenceReady = () => {
+      const kind = evidenceKindOf(chosen());
+      return !kind || (attached[kind] > 0 && compared.checked && (kind !== 'name_check' || bankName.value.trim().length >= 2));
+    };
+    const ready = () => !noIfsc && evidenceReady() && (chosen() === 'other' ? note.value.trim().length >= 3 : chosen() !== '');
     const sync = () => {
       verifyBtn.disabled = !ready();
       nextBtn.disabled = !ready();
     };
-    radios.forEach((r) => r.radio.addEventListener('change', sync));
+    radios.forEach((r) =>
+      r.radio.addEventListener('change', () => {
+        showEvidence();
+        sync();
+      }),
+    );
     note.addEventListener('input', sync);
+    compared.addEventListener('change', sync);
+    bankName.addEventListener('input', () => {
+      syncName();
+      sync();
+    });
 
     async function submit(openNext: boolean) {
       verifyBtn.disabled = true;
       nextBtn.disabled = true;
-      const res = await call(`/api/finance-admin/accounts/${a.id}/verify`, 'POST', { method: chosen(), note: note.value });
+      const res = await call(`/api/finance-admin/accounts/${a.id}/verify`, 'POST', { method: chosen(), note: note.value, ...(evidenceKindOf(chosen()) === 'name_check' ? { name: bankName.value } : {}) });
       if (res.status === 200) {
         dlg.close();
         showToast('Verified.');
@@ -800,6 +908,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
       h('p', { class: 'hint', text: 'Marking as verified says these details match what the payee gave you, so they can be paid. This sheet does not pay anyone.' }),
       h('p', { class: 'field-label', text: 'How did you check these details?' }),
       h('div', { class: 'radios', attrs: { role: 'group', 'aria-label': 'How you checked' } }, ...radios.map((r) => r.node)),
+      evidenceBox,
       h('div', { class: 'stack-form' }, labelled('Note (optional)', note)),
       h('p', { class: 'hint', text: 'Showing these is logged. You cannot verify details you entered yourself.' }),
       msg,
@@ -1101,6 +1210,35 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
     border: 1px solid var(--tvc-line);
     border-radius: var(--radius-field);
     cursor: pointer;
+  }
+
+  .parties .evidence-box {
+    padding: 12px;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius-field);
+  }
+
+  .parties .evidence-previews {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .parties .evidence-previews img {
+    max-height: 160px;
+    max-width: 100%;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius-field);
+  }
+
+  .parties .evidence-figure {
+    margin: 0 0 12px;
+  }
+
+  .parties .evidence-figure img {
+    max-width: 100%;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius-field);
   }
 
   .parties .radio:has(input:checked) {

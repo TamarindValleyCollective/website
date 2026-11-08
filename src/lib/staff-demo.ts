@@ -311,12 +311,12 @@ const DEMO_PAYEE_DETAILS: Record<string, { method: string; account?: string; ifs
 };
 let financeParties: any[] | null = null;
 function demoFinanceParties() {
-  const account = (id: string, method: string, shown: string, status: string) => ({ id, method, shown, status, shared: false, validFrom: null, retiredOn: null, payableNow: status === 'verified', review: [], createdAt: '2026-11-01T00:00:00Z', verifiedAt: null, verification: null });
+  const account = (id: string, method: string, shown: string, status: string) => ({ id, method, shown, status, shared: false, validFrom: null, retiredOn: null, payableNow: status === 'verified', review: [], createdAt: '2026-11-01T00:00:00Z', verifiedAt: null, verification: null, evidence: { payment: 0, name_check: 0, other: 0 } });
   const party = (id: string, name: string, accounts: any[]) => ({ id, name, kind: 'vendor', active: true, householdId: null, formerSince: null, accounts, earlierAccounts: 0, needsReview: false, mergedCount: 0 });
   financeParties ??= [
     party('p1', 'Test Traders', [account('a1', 'bank', 'ending 0001', 'unverified')]),
     party('p2', 'Sample Stores', [account('a2', 'upi', 'ending ores', 'unverified')]),
-    party('p3', 'Example Hardware', [account('a3', 'bank', 'ending 0003', 'verified')]),
+    party('p3', 'Example Hardware', [{ ...account('a3', 'bank', 'ending 0003', 'verified'), evidence: { payment: 0, name_check: 1, other: 0 }, verification: { at: '2026-11-03T00:00:00Z', by: 'Demo Admin', method: 'bank_name_check', methodLabel: "Bank's payee-name check (screenshot)", note: null, name: 'EXAMPLE HARDWARE PRIVATE LIMITED' } }]),
     party('p4', 'Imported Stores (Milk)', [{ ...account('a4', 'bank', 'ending 0004', 'unverified'), review: ['missing_ifsc'] }]),
   ];
   return { kinds: ['vendor', 'employee', 'customer', 'other'], canEdit: true, canVerify: true, me: { id: 'demo-1', ready: true, hasPasskey: true, stepUpValid: false }, needsReviewCount: 0, parties: financeParties };
@@ -343,13 +343,25 @@ function demoFinanceIfsc(accountId: string, body: any) {
   DEMO_PAYEE_DETAILS[accountId].ifsc = String(body.ifsc).replace(/\s+/g, '').toUpperCase();
   return { status: 201, data: { ok: true, status: 'unverified' } };
 }
+// The screenshots are counted, not kept: the demo can attach, list and show a stand-in picture.
+const demoAccountRow = (accountId: string) => demoFinanceParties().parties.flatMap((x: any) => x.accounts).find((a: any) => a.id === accountId);
+const DEMO_PIXEL = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='), (c) => c.charCodeAt(0));
+function demoFinanceEvidence(accountId: string, body: any) {
+  const row = demoAccountRow(accountId);
+  const kind = typeof body?.get === 'function' ? String(body.get('kind')) : '';
+  if (!row || !['payment', 'name_check', 'other'].includes(kind)) return { status: 400, data: { error: 'Say what this file shows.' } };
+  row.evidence[kind] += 1;
+  return { status: 201, data: { id: `${accountId}-${kind}-${row.evidence[kind]}`, kind } };
+}
 function demoFinanceVerify(accountId: string, body: any) {
-  const method = VERIFY_METHODS.find((m: { id: string }) => m.id === body?.method);
-  const row = demoFinanceParties().parties.flatMap((x: any) => x.accounts).find((a: any) => a.id === accountId);
+  const method = VERIFY_METHODS.find((m: { id: string }) => m.id === body?.method) as { id: string; label: string; evidence?: string } | undefined;
+  const row = demoAccountRow(accountId);
   if (!row || !method) return { status: 400, data: { error: 'Say how you checked these details.' } };
+  if (method.evidence && !row.evidence[method.evidence]) return { status: 400, data: { error: method.evidence === 'payment' ? 'Attach the transfer screenshot first.' : "Attach the bank's name-check screen first." } };
+  if (method.id === 'bank_name_check' && !String(body?.name ?? '').trim()) return { status: 400, data: { error: 'Type the name the bank showed.' } };
   row.status = 'verified';
   row.payableNow = true;
-  row.verification = { at: new Date().toISOString(), by: 'Demo Admin', method: method.id, methodLabel: method.label, note: body?.note || null };
+  row.verification = { at: new Date().toISOString(), by: 'Demo Admin', method: method.id, methodLabel: method.label, note: body?.note || null, name: String(body?.name ?? '').trim() || null };
   return { status: 200, data: { ok: true } };
 }
 
@@ -396,6 +408,14 @@ export function installStaffDemo(tokenKey: string, kind: string): void {
     const jsonBody = () => { try { return JSON.parse(String(init?.body ?? '{}')); } catch { return {}; } };
     const answer = (done: { status: number; data: unknown }) => Promise.resolve(new Response(JSON.stringify(done.data), { status: done.status, headers: { 'content-type': 'application/json' } }));
     if (financeParty && init?.method === 'PATCH') return answer(demoFinanceRename(financeParty[1], jsonBody()));
+    const evidenceRoute = /^\/api\/finance-admin\/accounts\/([^/]+)\/evidence$/.exec(path);
+    if (evidenceRoute && init?.method === 'POST') return answer(demoFinanceEvidence(evidenceRoute[1], init.body));
+    if (evidenceRoute) {
+      const row = demoAccountRow(evidenceRoute[1]);
+      const files = Object.entries(row?.evidence ?? {}).flatMap(([kind, n]) => Array.from({ length: Number(n) }, (_, i) => ({ id: `${evidenceRoute[1]}-${kind}-${i + 1}`, kind, mime: 'image/png' })));
+      return reply({ files });
+    }
+    if (/^\/api\/finance-admin\/evidence\/[^/]+$/.test(path)) return Promise.resolve(new Response(DEMO_PIXEL as BodyInit, { status: 200, headers: { 'content-type': 'image/png' } }));
     const financeAccount = /^\/api\/finance-admin\/accounts\/([^/]+)\/(reveal|verify|ifsc)$/.exec(path);
     if (financeAccount && DEMO_PAYEE_DETAILS[financeAccount[1]]) {
       if (financeAccount[2] === 'ifsc') return answer(demoFinanceIfsc(financeAccount[1], jsonBody()));

@@ -4,12 +4,14 @@
 // What leaves the server: names, kinds and "ending 0123" to anyone with `finance` view. The full details leave only
 // through `reveal`, which needs `verify-payee` AND the MFA step-up, and is written to fin_audit_log BEFORE the numbers
 // are returned (if the log fails, nothing is returned). Nothing returns the ciphertext or the fingerprint.
+import { randomUUID } from 'node:crypto';
 import { requireStaff } from './staff-access';
 import { stepUpIsValid } from './staff-admin-guard';
 import { decryptFinanceText, encryptFinanceText, fingerprintFinanceText, MfaNotConfiguredError } from './staff-mfa-crypto';
 import { mfaSummary, rest } from './staff-mfa-store';
 import { capabilitiesForRole } from './staff-registry';
 import { logFinanceAction } from './finance-audit';
+import { deleteFinanceVoucher, getFinanceVoucher, putFinanceVoucher } from './finance-storage';
 import {
   PARTY_KINDS,
   auditDetailIsSafe,
@@ -29,6 +31,7 @@ import {
   todayIST,
 } from '../../../scripts/lib/finance-parties.mjs';
 import { fingerprintText } from '../../../scripts/lib/finance-party-import.mjs';
+import { VOUCHER_MAX_BYTES, sniffVoucher } from '../../../scripts/lib/finance-requests.mjs';
 
 type Json = Record<string, any>;
 const ID = /^[\w-]{1,64}$/;
@@ -69,6 +72,25 @@ async function entityId(): Promise<string> {
 }
 
 const ACCOUNT_COLUMNS = 'id,party_id,method,last4,status,fingerprint,created_by,created_at,verified_at,verified_by,verification_method,verification_note,valid_from,retired_on,has_ifsc,reviewed_at';
+
+// verified_name exists once migration 0094 is applied; until then it is simply not read, so the page keeps working.
+const accountRows = (filter: string) =>
+  rows(`/fin_party_accounts?${filter}select=${ACCOUNT_COLUMNS},verified_name&order=created_at.asc`).catch(() => rows(`/fin_party_accounts?${filter}select=${ACCOUNT_COLUMNS}&order=created_at.asc`));
+
+// How many files of each kind are attached to each account (counts only, never the files). Empty until 0094 is applied.
+async function evidenceCounts(): Promise<Map<string, { payment: number; name_check: number; other: number }>> {
+  const counts = new Map<string, { payment: number; name_check: number; other: number }>();
+  try {
+    for (const f of await rows('/fin_party_account_files?select=account_id,kind&limit=10000')) {
+      const c = counts.get(f.account_id) ?? { payment: 0, name_check: 0, other: 0 };
+      c[f.kind as 'payment' | 'name_check' | 'other'] += 1;
+      counts.set(f.account_id, c);
+    }
+  } catch {
+    // table not there yet
+  }
+  return counts;
+}
 
 // Encrypts and stores new details as an unverified row. `existing` are the party's current account rows.
 async function addAccount(partyId: string, entity: string, actorId: string, payee: Json, existing: Json[], effectiveOn: string | null = null) {
@@ -133,7 +155,8 @@ export async function listParties(req: Request): Promise<Response> {
     // Every party is read so that a party merged into another folds into it, whatever the search text matches.
     // former_since exists once migration 0085 is applied; until then it is simply not read.
     const allParties = await rows('/fin_parties?select=id,name,kind,active,household_id,merged_into,former_since&order=name.asc').catch(() => rows('/fin_parties?select=id,name,kind,active,household_id,merged_into&order=name.asc'));
-    const accounts = await rows(`/fin_party_accounts?select=${ACCOUNT_COLUMNS}&order=created_at.asc`);
+    const accounts = await accountRows('');
+    const evidence = await evidenceCounts();
     const { visible, accountsOf, mergedCount, canonicalOf } = foldMerged(allParties, accounts);
     const flags = sharedAccountFlags(accounts, canonicalOf);
     // Who verified what: names for the verifiers' ids (a name, never an email).
@@ -150,8 +173,9 @@ export async function listParties(req: Request): Promise<Response> {
       me = { id: staff.id, ready: mfa.ready, hasPasskey: mfa.passkey, stepUpValid: stepUpIsValid(req, staff.id) };
     }
     const shown = visible
-      .filter((p: Json) => !q || p.name.toLowerCase().includes(q))
-      .map((p: Json) => partyForResponse(p, accountsOf(p.id), flags, todayIST(), mergedCount(p.id), names));
+      // The label, or a name a bank showed for one of the party's accounts ("milk" finds the label, a surname finds the bank's name).
+      .filter((p: Json) => !q || p.name.toLowerCase().includes(q) || accountsOf(p.id).some((a: Json) => String(a.verified_name ?? '').toLowerCase().includes(q)))
+      .map((p: Json) => partyForResponse(p, accountsOf(p.id), flags, todayIST(), mergedCount(p.id), names, evidence));
     return jsonResponse({
       kinds: PARTY_KINDS,
       canEdit: capabilities.includes('allocate'),
@@ -203,7 +227,7 @@ export async function createParty(req: Request): Promise<Response> {
     if (body.payee) added = await addAccount(party.id, entity, staff.id, body.payee, []);
     await audit(staff.id, entity, 'finance.party_created', party.id, { kind: party.kind, linkedHousehold: Boolean(householdId), withPayee: Boolean(body.payee) });
     if (added && 'created' in added && added.created) await audit(staff.id, entity, 'finance.payee_added', added.created.id, { partyId: party.id, method: added.method });
-    const accounts = await rows(`/fin_party_accounts?party_id=eq.${party.id}&select=${ACCOUNT_COLUMNS}`);
+    const accounts = await accountRows(`party_id=eq.${party.id}&`);
     return jsonResponse({ party: partyForResponse(party, accounts, new Map()) }, 201);
   } catch (err) {
     return serverError(err, 'create party');
@@ -351,15 +375,100 @@ export async function verifyPayeeAccount(req: Request, accountId: string): Promi
     // How it was checked is recorded with who and when (the database refuses a verification without it).
     const how = validateVerification((await readBody(req)) ?? {});
     if (how.error || !how.method) return fail(how.error ?? 'Say how you checked these details.');
+    // A screenshot method needs its file attached to THIS account first (the database refuses it too).
+    if (how.evidence) {
+      const attached = await rows(`/fin_party_account_files?account_id=eq.${accountId}&kind=eq.${how.evidence}&select=id&limit=1`).catch(() => null);
+      if (attached === null) return fail('Screenshots cannot be kept yet: migration 0094 has not been applied.', 503);
+      if (!attached[0]) return fail(how.evidence === 'payment' ? 'Attach the transfer screenshot first.' : "Attach the bank's name-check screen first.");
+    }
     await rest(`/fin_party_accounts?id=eq.${accountId}&status=eq.unverified`, {
       method: 'PATCH',
-      body: JSON.stringify({ status: 'verified', verified_by: staff.id, verified_at: new Date().toISOString(), verification_method: how.method, verification_note: how.note }),
+      body: JSON.stringify({ status: 'verified', verified_by: staff.id, verified_at: new Date().toISOString(), verification_method: how.method, verification_note: how.note, ...(how.name ? { verified_name: how.name } : {}) }),
     });
     // The method goes in the audit log; the free-text note stays on the row.
     await audit(staff.id, account.entity_id, 'finance.payee_verified', account.id, { partyId: account.party_id, method: how.method });
     return jsonResponse({ ok: true });
   } catch (err) {
     return serverError(err, 'verify payee account');
+  }
+}
+
+// ---------------------------------------------------------- evidence files
+// A screenshot attached to one account (verify-payee + the unlock, like verifying). The file goes to the private R2 bucket
+// first, then the row, so a row never points at nothing; a failed row removes the orphan file. Files are never changed or
+// removed (the database refuses), and are read back only through getEvidence.
+const EVIDENCE_KINDS = ['payment', 'name_check', 'other'];
+const EVIDENCE_MAX_PER_ACCOUNT = 6;
+export async function addEvidence(req: Request, accountId: string): Promise<Response> {
+  const gate = await requireVerifier(req);
+  if (!gate.staff) return gate.response;
+  const { staff } = gate;
+  let form: FormData;
+  try {
+    form = await req.formData();
+  } catch {
+    return fail('Send the file as a form upload.');
+  }
+  const file = form.get('file');
+  if (!file || typeof file === 'string') return fail('Choose a file.');
+  if (file.size > VOUCHER_MAX_BYTES) return fail('That file is too large. Take the screenshot again at a lower size.', 413);
+  const kind = String(form.get('kind') ?? '');
+  if (!EVIDENCE_KINDS.includes(kind)) return fail('Say what this file shows.');
+  try {
+    const [account] = await rows(`/fin_party_accounts?id=eq.${accountId}&select=id,party_id,status,entity_id`);
+    if (!account) return fail('Not found', 404);
+    if (account.status !== 'unverified') return fail('Files can only be attached before the details are verified.');
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const sniffed = sniffVoucher(bytes) as { mime: string; ext: string } | null;
+    if (!sniffed) return fail('Attach a screenshot or photo (JPEG, PNG or WebP) or a PDF.');
+    const have = await rows(`/fin_party_account_files?account_id=eq.${accountId}&select=id`).catch(() => null);
+    if (have === null) return fail('Screenshots cannot be kept yet: migration 0094 has not been applied.', 503);
+    if (have.length >= EVIDENCE_MAX_PER_ACCOUNT) return fail(`An account can hold ${EVIDENCE_MAX_PER_ACCOUNT} files.`);
+    const fileId = randomUUID();
+    const key = `finance/vouchers/${fileId}.${sniffed.ext}`;
+    await putFinanceVoucher(key, bytes, sniffed.mime);
+    try {
+      await audit(staff.id, account.entity_id, 'finance.payee_evidence_added', account.id, { partyId: account.party_id, kind });
+      await rest('/fin_party_account_files', {
+        method: 'POST',
+        headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify({ id: fileId, entity_id: account.entity_id, account_id: accountId, kind, r2_key: key, mime: sniffed.mime, bytes: bytes.length, uploaded_by: staff.id }),
+      });
+    } catch (err) {
+      await deleteFinanceVoucher(key).catch(() => undefined);
+      throw err;
+    }
+    return jsonResponse({ id: fileId, kind }, 201);
+  } catch (err) {
+    return serverError(err, 'add payee evidence');
+  }
+}
+
+// The ids and kinds of an account's files, then each file through getEvidence (verify-payee + the unlock, logged).
+export async function listEvidence(req: Request, accountId: string): Promise<Response> {
+  const gate = await requireVerifier(req);
+  if (!gate.staff) return gate.response;
+  try {
+    const files = await rows(`/fin_party_account_files?account_id=eq.${accountId}&select=id,kind,mime,created_at&order=created_at.asc`).catch(() => []);
+    return jsonResponse({ files });
+  } catch (err) {
+    return serverError(err, 'list payee evidence');
+  }
+}
+
+export async function getEvidence(req: Request, fileId: string): Promise<Response> {
+  const gate = await requireVerifier(req);
+  if (!gate.staff) return gate.response;
+  const { staff } = gate;
+  try {
+    const [f] = await rows(`/fin_party_account_files?id=eq.${fileId}&select=id,r2_key,mime,account_id,entity_id`);
+    if (!f) return fail('Not found', 404);
+    await audit(staff.id, f.entity_id, 'finance.payee_evidence_viewed', f.account_id, {});
+    const bytes = await getFinanceVoucher(f.r2_key);
+    if (!bytes) return fail('Not found', 404);
+    return new Response(bytes as BodyInit, { headers: { 'content-type': f.mime, 'cache-control': 'private, no-store', 'content-disposition': 'inline', 'x-content-type-options': 'nosniff' } });
+  } catch (err) {
+    return serverError(err, 'get payee evidence');
   }
 }
 

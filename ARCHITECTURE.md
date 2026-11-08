@@ -481,6 +481,7 @@ outside both the local machine and Netlify (the member-update-email workflow).
   existing beneficiary list is loaded by the operator script `scripts/import-fin-parties.mjs`, which reads a Google
   Sheet (shared with the Drive service account) and runs against Supabase; it is not deployed. Rotating
   `FINANCE_PAYEE_KEY` (or the key in use) makes stored payee details unreadable until re-entered; it is separate from `STAFF_MFA_KEY`, so rotating one never breaks the other.
+  Evidence screenshots for a payee account (`/accounts/:id/evidence`, `/evidence/:id`; migration `0094`) go to the private R2 bucket under `finance/vouchers/` through `lib/finance-storage.ts`, with metadata in `fin_party_account_files`, and are read back only through the authenticated function (verifier + MFA step-up, each view logged).
   `GET /api/finance-admin/ifsc/:code` looks an IFSC up in Razorpay's free public directory (`https://ifsc.razorpay.com/`, no key; `scripts/lib/finance-ifsc.mjs`) so the payee form and the verify sheet show the bank and branch; only the IFSC leaves the server, never an account number, and an outage never blocks saving.
   **Ledger (session 05, migration `0083_finance_ledger.sql`, applied 2026-11-05):** `finance-admin.mts` also serves the ledger
   (`/api/finance-admin/ledger/all` (every line at once, which the page searches and sorts in the browser; `/ledger` is the older paged and server-searched list, now unused), `/ledger/post` (up to 15 lines at once), `/allocations/:id/review`, `/rules`, `/categories`, `/periods`; code in `lib/finance-ledger.ts`,

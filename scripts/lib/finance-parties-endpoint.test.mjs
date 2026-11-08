@@ -28,9 +28,24 @@ const stubGoogle = {
     b.onLoad({ filter: /.*/, namespace: 'stub' }, () => ({ contents: 'export async function verifyGoogleIdToken(t){ return { email: t, hd: t.split("@")[1] }; }', loader: 'js' }));
   },
 };
+// Private storage is replaced by a map, so the test sees exactly what would be written to and read from the bucket.
+globalThis.__r2 = new Map();
+const stubStorage = {
+  name: 'stub-storage',
+  setup(b) {
+    b.onResolve({ filter: /finance-storage$/ }, () => ({ path: 'stub-storage', namespace: 'stub-r2' }));
+    b.onLoad({ filter: /.*/, namespace: 'stub-r2' }, () => ({
+      contents: `export async function putFinanceVoucher(k, bytes, mime){ globalThis.__r2.set(k, { bytes, mime }); }
+export async function getFinanceVoucher(k){ return globalThis.__r2.get(k)?.bytes ?? null; }
+export async function deleteFinanceVoucher(k){ globalThis.__r2.delete(k); }
+export async function putFinanceImport(){} export async function deleteFinanceImport(){}`,
+      loader: 'js',
+    }));
+  },
+};
 const dir = mkdtempSync(join(tmpdir(), 'finance-parties-'));
 const out = join(dir, 'finance-admin.mjs');
-await build({ entryPoints: ['netlify/functions/finance-admin.mts'], bundle: true, platform: 'node', format: 'esm', outfile: out, plugins: [stubGoogle], logLevel: 'silent' });
+await build({ entryPoints: ['netlify/functions/finance-admin.mts'], bundle: true, platform: 'node', format: 'esm', outfile: out, plugins: [stubGoogle, stubStorage], logLevel: 'silent' });
 const { default: handler } = await import(pathToFileURL(out).href);
 
 const ACCOUNT = '100000000001';
@@ -81,7 +96,11 @@ globalThis.fetch = async (url, init = {}) => {
   }
   if (table === 'fin_entities') return json([{ id: 'e1', name: 'Test Entity' }]);
   if (table === 'member_households') return json([{ id: 'h1' }]);
-  if (table === 'fin_parties' || table === 'fin_party_accounts') {
+  // Before migration 0094 the column and the table are not there and PostgREST answers 400/404.
+  if (db.preMigration && ((table === 'fin_party_accounts' && String(u.searchParams.get('select')).includes('verified_name')) || table === 'fin_party_account_files')) {
+    return new Response(JSON.stringify({ message: 'does not exist' }), { status: 400, headers: { 'content-type': 'application/json' } });
+  }
+  if (table === 'fin_parties' || table === 'fin_party_accounts' || table === 'fin_party_account_files') {
     const rows = db[table];
     if (method === 'GET') return json(rows.filter((r) => matches(r, u.searchParams)));
     if (method === 'POST') {
@@ -100,7 +119,8 @@ globalThis.fetch = async (url, init = {}) => {
 };
 
 const reset = () => {
-  db = { users: [], roles: [], fin_parties: [], fin_party_accounts: [], audit: [] };
+  db = { users: [], roles: [], fin_parties: [], fin_party_accounts: [], fin_party_account_files: [], audit: [] };
+  globalThis.__r2.clear();
   failAudit = false;
 };
 // requireStaff caches lookups per email for 30s, so each test signs in as someone new.
@@ -654,6 +674,132 @@ test('a missing IFSC is added by a verifier: only that account is replaced, the 
   assert.ok(db.audit.every((a) => auditDetailIsSafe(JSON.stringify(a.detail ?? {}))));
   // Details that already have an IFSC, or are verified, are not rewritten this way.
   assert.equal((await api(director, `/accounts/${fresh.id}/ifsc`, { method: 'POST', body, stepUp: 'u2' })).status, 400);
+});
+
+// ---- screenshots as evidence (migration 0094)
+const PNG = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4, 5]);
+const upload = (email, accountId, { bytes = PNG, kind = 'payment', stepUp = false, name = 'shot.png' } = {}) => {
+  const form = new FormData();
+  form.set('file', new File([bytes], name));
+  if (kind) form.set('kind', kind);
+  return handler(new Request(`https://x.test/api/finance-admin/accounts/${accountId}/evidence`, { method: 'POST', headers: { authorization: `Bearer ${email}`, ...(stepUp ? { 'x-stepup-token': signStepUp(stepUp, 'totp', Date.now()) } : {}) }, body: form }));
+};
+const unverifiedAccount = (over = {}) => seedAccount({ status: 'unverified', created_by: null, verified_by: null, verified_at: null, ...over });
+
+test('a verifier attaches a screenshot to one account: stored privately, counted in the list, audited without content', async () => {
+  reset();
+  seedParty();
+  const acct = unverifiedAccount();
+  const op = sign('u1', 'user');
+  const director = sign('u2', 'admin');
+  assert.equal((await upload(op, acct.id, { stepUp: 'u1' })).status, 403); // no verify-payee
+  assert.equal((await (await upload(director, acct.id)).json()).code, 'STEP_UP_REQUIRED');
+  assert.equal((await upload(director, acct.id, { stepUp: 'u2', bytes: Uint8Array.from([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]) })).status, 400, 'not an image or PDF');
+  assert.equal((await upload(director, acct.id, { stepUp: 'u2', kind: 'selfie' })).status, 400);
+  assert.equal(db.fin_party_account_files.length, 0);
+
+  const res = await upload(director, acct.id, { stepUp: 'u2' });
+  assert.equal(res.status, 201);
+  const [row] = db.fin_party_account_files;
+  assert.equal(row.account_id, acct.id);
+  assert.equal(row.kind, 'payment');
+  assert.equal(row.mime, 'image/png');
+  assert.equal(row.uploaded_by, 'u2');
+  assert.match(row.r2_key, /^finance\/vouchers\/[0-9a-f-]{36}\.png$/);
+  assert.equal(globalThis.__r2.size, 1);
+  assert.ok(db.audit.some((a) => a.action === 'finance.payee_evidence_added' && a.detail.kind === 'payment'));
+  const list = await (await api(director, '/parties')).json();
+  assert.deepEqual(list.parties[0].accounts[0].evidence, { payment: 1, name_check: 0, other: 0 });
+  assert.ok(!JSON.stringify(list).includes(row.r2_key), 'the storage key never leaves the server');
+});
+
+test('an account holds at most six files, and only an unverified account takes one', async () => {
+  reset();
+  seedParty();
+  const acct = unverifiedAccount();
+  const verified = seedAccount({ last4: '0009', fingerprint: 'fp-v' });
+  sign('u1', 'user');
+  const director = sign('u2', 'admin');
+  for (let i = 0; i < 6; i++) assert.equal((await upload(director, acct.id, { stepUp: 'u2' })).status, 201);
+  assert.equal((await upload(director, acct.id, { stepUp: 'u2' })).status, 400);
+  assert.equal((await upload(director, verified.id, { stepUp: 'u2' })).status, 400);
+});
+
+test('"payment made" and "bank name check" need their file; the bank name is kept, searchable and shown', async () => {
+  reset();
+  seedParty();
+  const a = unverifiedAccount();
+  const b = unverifiedAccount({ last4: '0002', fingerprint: 'fp-b' });
+  sign('u1', 'user');
+  const director = sign('u2', 'admin');
+  const verify = (id, body) => api(director, `/accounts/${id}/verify`, { method: 'POST', body, stepUp: 'u2' });
+
+  assert.match((await (await verify(a.id, { method: 'payment_made' })).json()).error, /transfer screenshot/);
+  assert.equal(a.status, 'unverified');
+  assert.equal((await verify(b.id, { method: 'bank_name_check' })).status, 400, 'the name is needed');
+  assert.match((await (await verify(b.id, { method: 'bank_name_check', name: 'Mr. Test Trader' })).json()).error, /name-check/);
+  assert.equal(b.status, 'unverified');
+
+  await upload(director, a.id, { stepUp: 'u2', kind: 'payment' });
+  assert.equal((await verify(a.id, { method: 'payment_made' })).status, 200);
+  assert.equal(a.status, 'verified');
+  assert.equal(a.verification_method, 'payment_made');
+
+  await upload(director, b.id, { stepUp: 'u2', kind: 'payment' });
+  assert.equal((await verify(b.id, { method: 'bank_name_check', name: 'Mr. Test Trader' })).status, 400, 'a payment screenshot is not the name check');
+  await upload(director, b.id, { stepUp: 'u2', kind: 'name_check' });
+  assert.equal((await verify(b.id, { method: 'bank_name_check', name: ' Mr. Test   Trader ' })).status, 200);
+  assert.equal(b.verified_name, 'Mr. Test Trader');
+  assert.equal((await verify(b.id, { method: 'invoice' })).status, 400, 'already verified');
+
+  const body = await (await api(director, '/parties?q=trader')).json();
+  assert.equal(body.parties.length, 1, "the party label is 'Test Traders' and the bank name also matches");
+  const shown = body.parties[0].accounts.find((x) => x.id === b.id);
+  assert.equal(shown.verification.name, 'Mr. Test Trader');
+  assert.equal(shown.verification.method, 'bank_name_check');
+  assert.equal((await (await api(director, '/parties?q=registered')).json()).parties.length, 0);
+  b.verified_name = 'Registered Elsewhere';
+  assert.equal((await (await api(director, '/parties?q=registered')).json()).parties.length, 1, 'a name the bank showed finds the party');
+  assert.ok(db.audit.every((x) => auditDetailIsSafe(JSON.stringify(x.detail ?? {}))));
+  assert.ok(!db.audit.some((x) => JSON.stringify(x.detail ?? {}).includes('Trader')), 'the bank name is on the account, not in the log');
+});
+
+test('before migration 0094 the directory still loads, the old methods still verify, and the new ones say why they cannot', async () => {
+  reset();
+  seedParty();
+  const acct = unverifiedAccount();
+  sign('u1', 'user');
+  const director = sign('u2', 'admin');
+  db.preMigration = true;
+  const list = await api(director, '/parties');
+  assert.equal(list.status, 200);
+  assert.deepEqual((await list.json()).parties[0].accounts[0].evidence, { payment: 0, name_check: 0, other: 0 });
+  const refused = await api(director, `/accounts/${acct.id}/verify`, { method: 'POST', body: { method: 'payment_made' }, stepUp: 'u2' });
+  assert.equal(refused.status, 503);
+  assert.match((await refused.json()).error, /0094/);
+  assert.equal((await upload(director, acct.id, { stepUp: 'u2' })).status, 503);
+  assert.equal((await api(director, `/accounts/${acct.id}/verify`, { method: 'POST', body: { method: 'cancelled_cheque' }, stepUp: 'u2' })).status, 200);
+  db.preMigration = false;
+});
+
+test('evidence is shown only to a verifier behind the unlock, and each view is logged', async () => {
+  reset();
+  seedParty();
+  const acct = unverifiedAccount();
+  const op = sign('u1', 'user');
+  const director = sign('u2', 'admin');
+  const { id } = await (await upload(director, acct.id, { stepUp: 'u2' })).json();
+  assert.equal((await api(op, `/evidence/${id}`, { stepUp: 'u1' })).status, 403);
+  assert.equal((await (await api(director, `/evidence/${id}`)).json()).code, 'STEP_UP_REQUIRED');
+  const res = await api(director, `/evidence/${id}`, { stepUp: 'u2' });
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get('content-type'), 'image/png');
+  assert.equal(res.headers.get('cache-control'), 'private, no-store');
+  assert.deepEqual([...new Uint8Array(await res.arrayBuffer())], [...PNG]);
+  assert.ok(db.audit.some((x) => x.action === 'finance.payee_evidence_viewed'));
+  assert.equal((await api(director, `/evidence/nope`, { stepUp: 'u2' })).status, 404);
+  const listed = await (await api(director, `/accounts/${acct.id}/evidence`, { stepUp: 'u2' })).json();
+  assert.deepEqual(listed.files.map((f) => f.kind), ['payment']);
 });
 
 test('the overview carries a "needs you" summary: payees to verify, those needing review, and no names or numbers', async () => {
