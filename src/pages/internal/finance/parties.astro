@@ -678,7 +678,8 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
       msg.hidden = false;
       msg.textContent = 'These details have no IFSC code yet. Close this, choose "Add or change details", and enter the account again with its IFSC.';
     }
-    dlg.addEventListener('close', () => dlg.replaceChildren(), { once: true });
+    // Only a sheet that is really closed is emptied: the next payee's sheet may already be open when this one's close event lands.
+    dlg.addEventListener('close', () => { if (!dlg.open) dlg.replaceChildren(); }, { once: true });
     present(
       dlg,
       h('div', { class: 'verify-head' }, h('h2', { text: `Check details: ${p.name}`, attrs: { id: 'verify-title' } }), at >= 0 ? h('span', { class: 'small-note', text: `${at + 1} of ${queue.length} to verify` }) : null),

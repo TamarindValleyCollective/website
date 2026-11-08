@@ -10,6 +10,7 @@
 // state (or its own `?demo`, as event-payments does).
 
 import { ACCOMMODATION_UNITS, ACCOMMODATION_TYPES } from '../../scripts/lib/accommodation.mjs';
+import { VERIFY_METHODS } from '../../scripts/lib/finance-parties.mjs';
 
 const TOOLS = [
   { module: 'photo-pool', label: 'Photos', path: '/internal/photo-pool/' },
@@ -300,12 +301,44 @@ function demoChangeRequests() {
   };
 }
 
+// The finance Parties page: three invented payees (two to verify, one verified) so Check details, Mark as verified and the
+// IFSC branch line can be tried. Marking verified sticks until reload; nothing else is kept and nothing leaves the page.
+const DEMO_PAYEE_DETAILS: Record<string, { method: string; account?: string; ifsc?: string; upi?: string }> = {
+  a1: { method: 'bank', account: '100000000001', ifsc: 'ABCD0123456' },
+  a2: { method: 'upi', upi: 'sample.stores@okbank' },
+  a3: { method: 'bank', account: '100000000003', ifsc: 'ZZZZ0000000' },
+};
+let financeParties: any[] | null = null;
+function demoFinanceParties() {
+  const account = (id: string, method: string, shown: string, status: string) => ({ id, method, shown, status, shared: false, validFrom: null, retiredOn: null, payableNow: status === 'verified', review: [], createdAt: '2026-11-01T00:00:00Z', verifiedAt: null, verification: null });
+  const party = (id: string, name: string, accounts: any[]) => ({ id, name, kind: 'vendor', active: true, householdId: null, formerSince: null, accounts, earlierAccounts: 0, needsReview: false, mergedCount: 0 });
+  financeParties ??= [
+    party('p1', 'Test Traders', [account('a1', 'bank', 'ending 0001', 'unverified')]),
+    party('p2', 'Sample Stores', [account('a2', 'upi', 'ending ores', 'unverified')]),
+    party('p3', 'Example Hardware', [account('a3', 'bank', 'ending 0003', 'verified')]),
+  ];
+  return { kinds: ['vendor', 'employee', 'customer', 'other'], canEdit: true, canVerify: true, me: { id: 'demo-1', ready: true, hasPasskey: true, stepUpValid: false }, needsReviewCount: 0, parties: financeParties };
+}
+// Invented branch directory: one code that exists, every other is "no such branch".
+const demoIfsc = (code: string) => (code === 'ABCD0123456' ? { found: true, bank: 'Test Bank', branch: 'Main Road', city: 'Sample City', state: 'Sample State' } : { found: false });
+function demoFinanceVerify(accountId: string, body: any) {
+  const method = VERIFY_METHODS.find((m: { id: string }) => m.id === body?.method);
+  const row = demoFinanceParties().parties.flatMap((x: any) => x.accounts).find((a: any) => a.id === accountId);
+  if (!row || !method) return { status: 400, data: { error: 'Say how you checked these details.' } };
+  row.status = 'verified';
+  row.payableNow = true;
+  row.verification = { at: new Date().toISOString(), by: 'Demo Admin', method: method.id, methodLabel: method.label, note: body?.note || null };
+  return { status: 200, data: { ok: true } };
+}
+
 export function installStaffDemo(tokenKey: string, kind: string): void {
   // A token that only decodeTokenEmail() reads; the server never sees it because /api/staff-me is faked.
   const token = `${b64url({ alg: 'none' })}.${b64url({ email: 'demo@tvc.farm' })}.demo`;
   try {
     sessionStorage.setItem(tokenKey, token);
     sessionStorage.removeItem('tvc-staff-me'); // the menu's cached answer, so the demo kind always applies
+    // The finance pages start unlocked: the second factor is real only on the deployed site, and every demo write is faked.
+    if (location.pathname.startsWith('/internal/finance')) sessionStorage.setItem('tvc-staff-stepup', JSON.stringify({ token: 'demo-step-up', exp: Date.now() + 3600000 }));
   } catch {
     return; // storage blocked: no demo
   }
@@ -328,6 +361,15 @@ export function installStaffDemo(tokenKey: string, kind: string): void {
     if (path === '/api/accommodation-admin/change-requests' && (init?.method ?? 'GET') === 'GET') return reply(demoChangeRequests());
     if (path === '/api/accommodation-admin/change-requests/decide') return reply({ ok: true });
     if (path === '/api/units-admin/overview') return reply(demoUnits());
+    if (path === '/api/finance-admin/parties' && (init?.method ?? 'GET') === 'GET') return reply(demoFinanceParties());
+    const ifscAsked = /^\/api\/finance-admin\/ifsc\/([A-Za-z0-9]+)$/.exec(path);
+    if (ifscAsked) return reply(demoIfsc(ifscAsked[1].toUpperCase()));
+    const financeAccount = /^\/api\/finance-admin\/accounts\/([^/]+)\/(reveal|verify)$/.exec(path);
+    if (financeAccount && DEMO_PAYEE_DETAILS[financeAccount[1]]) {
+      if (financeAccount[2] === 'reveal') return reply({ details: DEMO_PAYEE_DETAILS[financeAccount[1]] });
+      const done = demoFinanceVerify(financeAccount[1], (() => { try { return JSON.parse(String(init?.body ?? '{}')); } catch { return {}; } })());
+      return Promise.resolve(new Response(JSON.stringify(done.data), { status: done.status, headers: { 'content-type': 'application/json' } }));
+    }
     if (path === '/api/staff-admin/activity') return reply({ events: [], nextBefore: null });
     if (path === '/api/staff-mfa/status') {
       const day = 86400000;
