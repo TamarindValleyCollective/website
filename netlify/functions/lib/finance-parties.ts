@@ -253,6 +253,12 @@ export async function updateParty(req: Request, id: string): Promise<Response> {
     const change = validatePartyChange(party, body);
     if (change.error || !change.changed) return fail(change.error ?? 'Nothing to change.');
     if (!change.changed.length) return jsonResponse({ ok: true, changed: [] });
+    // Same warning as adding a party: a name another live party already has, unless the page says "use it anyway". The party's
+    // own other spellings do not count (fixing "TEST traders" to "Test Traders" is fine).
+    if (change.patch.name && body.confirmDuplicate !== true) {
+      const matches = (await similarParties(await entityId(), change.patch.name)).filter((m) => m.id !== id);
+      if (matches.length) return jsonResponse({ error: 'There is already a payee with that name.', code: 'DUPLICATE_NAME', matches }, 409);
+    }
     await rest(`/fin_parties?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify({ ...change.patch, updated_at: new Date().toISOString() }) });
     await audit(staff.id, await entityId(), 'finance.party_updated', id, { changed: change.changed });
     return jsonResponse({ ok: true, changed: change.changed });
@@ -354,6 +360,49 @@ export async function verifyPayeeAccount(req: Request, accountId: string): Promi
     return jsonResponse({ ok: true });
   } catch (err) {
     return serverError(err, 'verify payee account');
+  }
+}
+
+// Completes bank details that were loaded without an IFSC (the operator's lists have no IFSC column). The account number is
+// read here on the server and never sent back; only the IFSC is typed. Details are never edited, so this is the usual
+// change: a new unverified row and the old one superseded (kept), but ONLY that one account, with no date. The new row keeps
+// the old row's creator (none, for a loaded row) because the account number is not new: who typed the IFSC is in the audit
+// log, and the IFSC is checked against evidence when the account is verified. Verifier + step-up, like revealing.
+export async function addMissingIfsc(req: Request, accountId: string): Promise<Response> {
+  const gate = await requireVerifier(req);
+  if (!gate.staff) return gate.response;
+  const { staff } = gate;
+  const body = await readBody(req);
+  try {
+    const [account] = await rows(`/fin_party_accounts?id=eq.${accountId}&select=id,entity_id,party_id,method,status,details_enc,fingerprint,last4,created_by,valid_from,retired_on,has_ifsc`);
+    if (!account) return fail('Not found', 404);
+    if (account.method !== 'bank' || account.has_ifsc !== false) return fail('Only bank details that have no IFSC code yet can be completed.');
+    if (account.status !== 'unverified') return fail('Only details that are not verified yet can be completed.');
+    if (account.retired_on) return fail('These details are retiring. Add new details instead.');
+    const old = JSON.parse(decryptFinanceText(account.details_enc));
+    const checked = validatePayeeDetails({ method: 'bank', account: old.account, ifsc: body?.ifsc });
+    if (checked.error || !checked.details) return fail(checked.error ?? 'Enter the IFSC code.');
+    const details = checked.details;
+    // Superseded first: if the insert then fails the payee is left without this account (safe), never with two.
+    await rest(`/fin_party_accounts?id=eq.${account.id}&status=eq.unverified`, { method: 'PATCH', body: JSON.stringify({ status: 'superseded', superseded_at: new Date().toISOString() }) });
+    await rest('/fin_party_accounts', {
+      method: 'POST',
+      body: JSON.stringify({
+        entity_id: account.entity_id,
+        party_id: account.party_id,
+        method: 'bank',
+        details_enc: encryptFinanceText(JSON.stringify(details)),
+        last4: account.last4,
+        fingerprint: account.fingerprint,
+        has_ifsc: true,
+        valid_from: account.valid_from ?? null,
+        created_by: account.created_by ?? null,
+      }),
+    });
+    await audit(staff.id, account.entity_id, 'finance.payee_ifsc_added', account.id, { partyId: account.party_id });
+    return jsonResponse({ ok: true, status: 'unverified' }, 201);
+  } catch (err) {
+    return serverError(err, 'add missing IFSC');
   }
 }
 

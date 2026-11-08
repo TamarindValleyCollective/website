@@ -455,6 +455,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
       const status = retired ? pill('Retired', 'crit') : a.retiredOn ? pill('Retiring', 'warn') : a.status === 'verified' ? pill('Verified', 'ok') : pill('Unverified', 'warn');
       const verify = a.status === 'unverified' && !retired && data?.canVerify ? button('Check details…', () => openVerify(p, a)) : null;
       const retire = !retired && data?.canVerify ? button(a.retiredOn ? 'Move date…' : 'Retire…', () => openRetire(p, a)) : null;
+      const addIfsc = a.status === 'unverified' && !a.retiredOn && data?.canVerify && a.review.includes('missing_ifsc') ? button('Add IFSC…', () => openAddIfsc(p, a)) : null;
       return h(
         'li',
         {},
@@ -464,7 +465,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
           h('div', { class: 'acct-head' }, h('span', { class: 'title' }, document.createTextNode(`${a.method === 'bank' ? 'Bank account' : 'UPI'} ending `), ...ending.map(diffSpan)), status),
           full,
           ...notes.map((t) => h('span', { class: 'detail', text: t })),
-          verify || retire ? h('div', { class: 'acct-actions' }, verify, retire) : null,
+          verify || retire || addIfsc ? h('div', { class: 'acct-actions' }, addIfsc, verify, retire) : null,
         ),
       );
     });
@@ -475,7 +476,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
     if (data?.canVerify && p.accounts.length > 1) actions.unshift(button('Compare full numbers', () => void showFullNumbers(p, boxes, dlg, fullNote)));
     if (data?.canVerify && p.accounts.some((a) => a.review.includes('multiple_live_accounts'))) actions.unshift(button('Keep both: reviewed', () => keepBoth(p, dlg)));
     if (data?.canEdit) {
-      actions.unshift(button('Add or change details', () => openAccount(p)), button(p.active ? 'Mark inactive' : 'Mark active', () => setActive(p, dlg)));
+      actions.unshift(button('Rename…', () => openRename(p)), button('Add or change details', () => openAccount(p)), button(p.active ? 'Mark inactive' : 'Mark active', () => setActive(p, dlg)));
     }
     present(
       dlg,
@@ -542,12 +543,12 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
 
   // Two parties that are really one payee. Nothing is deleted or moved: this party is hidden and its accounts appear under
   // the one you choose, where the old and new bank accounts are reviewed together. Needs the unlock, like verifying.
-  function openMerge(p: Party) {
+  function openMerge(p: Party, presetId = '') {
     if (!mayVerify()) return;
     $<HTMLDialogElement>('detail-sheet').close();
     const dlg = $<HTMLDialogElement>('account-sheet');
     const others = (data?.parties ?? []).filter((x) => x.id !== p.id);
-    const into = combo({ options: others.map((x) => ({ value: x.id, label: x.name })), blank: 'Choose the main party…', matcher: matchOptions, ariaLabel: 'The main party' }) as any;
+    const into = combo({ options: others.map((x) => ({ value: x.id, label: x.name })), value: others.some((x) => x.id === presetId) ? presetId : '', blank: 'Choose the main party…', matcher: matchOptions, ariaLabel: 'The main party' }) as any;
     const msg = h('p', { class: 'error', attrs: { hidden: '' } });
     const form = h(
       'form',
@@ -572,6 +573,94 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
       }
     });
     present(dlg, h('h2', { text: `Merge ${p.name}`, attrs: { id: 'account-title' } }), form);
+  }
+
+  // Rename: the name is a label (what is typed in the transfer sheet, and what is searched), so it can be fixed any time;
+  // everything that points at the party does so by id. A name another party already has is a warning that offers merging.
+  function openRename(p: Party) {
+    $<HTMLDialogElement>('detail-sheet').close();
+    const dlg = $<HTMLDialogElement>('account-sheet');
+    const name = input('name', { maxlength: '120' });
+    name.value = p.name;
+    const msg = h('p', { class: 'error', attrs: { hidden: '' } });
+    const dupes = h('div', { class: 'note', attrs: { hidden: '', role: 'alert' } });
+    const submitBtn = h('button', { class: 'button button--primary', text: 'Rename', attrs: { type: 'submit' } }) as HTMLButtonElement;
+    let confirmDuplicate = false;
+    name.addEventListener('input', () => {
+      confirmDuplicate = false;
+      dupes.hidden = true;
+      submitBtn.textContent = 'Rename';
+    });
+    const form = h(
+      'form',
+      { class: 'stack-form' },
+      labelled('Name', name),
+      p.kind === 'member' ? h('p', { class: 'hint', text: 'This name is matched to the member records. Change it only to fix a spelling.' }) : null,
+      h('p', { class: 'hint', text: 'Payments, requests and ledger lines stay with this payee; only the name shown changes.' }),
+      dupes,
+      msg,
+      h('div', { class: 'sheet-actions' }, closeBtn(dlg, 'Cancel'), submitBtn),
+    );
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      msg.hidden = true;
+      const { status, data: out } = await call(`/api/finance-admin/parties/${p.id}`, 'PATCH', { name: name.value, ...(confirmDuplicate ? { confirmDuplicate: true } : {}) });
+      if (status === 200) {
+        dlg.close();
+        showToast(out?.changed?.length ? 'Renamed.' : 'Nothing to change.');
+        load();
+      } else if (status === 409 && out?.code === 'DUPLICATE_NAME') {
+        const matches = (out.matches ?? []) as { id: string; name: string; kind: string }[];
+        dupes.replaceChildren(
+          h('p', { text: matches.length === 1 ? 'Another payee already has this name:' : 'Other payees already have this name:' }),
+          h('ul', {}, ...matches.map((m) => h('li', {}, document.createTextNode(`${m.name} (${KIND_LABELS[m.kind] ?? m.kind}) `), data?.canVerify ? button('Merge into this one…', () => openMerge(p, m.id)) : null))),
+          h('p', { text: 'If they are the same payee, merge this one into it. If they are different people, use the name anyway.' }),
+        );
+        dupes.hidden = false;
+        confirmDuplicate = true;
+        submitBtn.textContent = 'Use this name anyway';
+      } else {
+        msg.hidden = false;
+        msg.textContent = out?.error ?? 'Could not rename that.';
+      }
+    });
+    present(dlg, h('h2', { text: `Rename ${p.name}`, attrs: { id: 'account-title' } }), form);
+  }
+
+  // Bank details loaded without an IFSC: the number stays on the server, the IFSC is typed here. The old row is kept as
+  // "earlier details" and the new one starts unverified (the same account, so no date and no retired row).
+  function openAddIfsc(p: Party, a: Account) {
+    if (!mayVerify()) return;
+    $<HTMLDialogElement>('detail-sheet').close();
+    const dlg = $<HTMLDialogElement>('account-sheet');
+    const ifsc = input('ifsc');
+    const branch = h('p', { class: 'hint', attrs: { hidden: '', 'aria-live': 'polite' } });
+    watchIfsc(ifsc, branch);
+    const msg = h('p', { class: 'error', attrs: { hidden: '' } });
+    const form = h(
+      'form',
+      { class: 'stack-form' },
+      h('p', { class: 'sheet-text', text: `This bank account ending ${last4Of(a)} was loaded without an IFSC code, so it cannot be verified yet.` }),
+      labelled('IFSC code', ifsc),
+      branch,
+      h('p', { class: 'hint', text: 'The account number stays as it is. The old entry is kept on record, and the completed one still has to be verified.' }),
+      msg,
+      h('div', { class: 'sheet-actions' }, closeBtn(dlg, 'Cancel'), h('button', { class: 'button button--primary', text: 'Add IFSC', attrs: { type: 'submit' } })),
+    );
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const { status, data: out } = await call(`/api/finance-admin/accounts/${a.id}/ifsc`, 'POST', { ifsc: ifsc.value });
+      if (status === 201) {
+        dlg.close();
+        showToast('IFSC added. Check the details to verify it.');
+        load();
+      } else if (out?.code === 'STEP_UP_REQUIRED') lock.open();
+      else {
+        msg.hidden = false;
+        msg.textContent = out?.error ?? 'Could not add that.';
+      }
+    });
+    present(dlg, h('h2', { text: `Add IFSC for ${p.name}`, attrs: { id: 'account-title' } }), form);
   }
 
   async function keepBoth(p: Party, dlg: HTMLDialogElement) {

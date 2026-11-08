@@ -113,6 +113,16 @@ for esbuild, and Node 22.18+ or newer, which imports the registry `.ts` directly
   offered). It is a warning: the page lists them and the button becomes "Add anyway" (`confirmDuplicate: true`), because two
   real payees can share a name. The farm manager's add-vendor route (`/vendors`) is stricter and refuses outright, with
   `existingId`, since that user cannot merge. The database has no unique rule on names; **Merge into…** cleans up afterwards.
+- **Renaming.** A party's name is a label (what is typed in the transfer sheet and searched), so **Rename…** in the party sheet changes
+  it any time (`PATCH /parties/:id {name}`, `allocate`); everything points at the party by id, so nothing else changes. A name another
+  live party has gets the same 409 `DUPLICATE_NAME` warning as adding, with **Merge into this one…** (opens Merge with that party
+  chosen) and "Use this name anyway" (`confirmDuplicate: true`); the party's own other spellings never clash with itself. A member
+  party shows a note that its name is matched to the member records.
+- **Add IFSC.** Bank details loaded without an IFSC (the operator's lists have no IFSC column) show **Add IFSC…** (verifier + the
+  unlock): `POST /accounts/:id/ifsc {ifsc}`. The account number is read on the server and never sent back; the old row is superseded
+  and a new unverified row with the IFSC starts, for **that account only** and with no date, so no retired row is left behind.
+  The new row keeps the old row's creator (none for a loaded row), because the number is not new and a verifier may still confirm
+  it; who typed the IFSC is in the audit log (`finance.payee_ifsc_added`), and the IFSC is checked against evidence when verifying.
 - **Bank and UPI are separate accounts.** A party can hold both: each is its own `fin_party_accounts` row (`method` bank or upi),
   verified, retired and superseded on its own. A new bank account only supersedes the live bank row, never the UPI one.
 - **IFSC lookup.** `GET /ifsc/:code` (any `finance` view role) asks Razorpay's free public IFSC directory

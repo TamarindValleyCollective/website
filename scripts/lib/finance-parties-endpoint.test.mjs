@@ -19,7 +19,7 @@ process.env.SUPABASE_URL = 'https://db.test';
 process.env.PUBLIC_GOOGLE_CLIENT_ID = 'client';
 process.env.SUPABASE_SERVICE_ROLE_KEY = 'service';
 process.env.STAFF_MFA_KEY = randomBytes(32).toString('base64');
-const { signStepUp, encryptFinanceText, fingerprintFinanceText } = await import('../../netlify/functions/lib/staff-mfa-crypto.ts');
+const { signStepUp, encryptFinanceText, decryptFinanceText, fingerprintFinanceText } = await import('../../netlify/functions/lib/staff-mfa-crypto.ts');
 
 const stubGoogle = {
   name: 'stub-google',
@@ -603,6 +603,57 @@ test('a verification records how, with the note kept on the row and only the met
   assert.deepEqual(list.parties[0].accounts[0].verification.method, 'test_transfer');
   assert.equal(list.parties[0].accounts[0].verification.by, 'u2'); // the verifier's name
   assert.equal(list.parties[0].accounts[0].verification.note, 'Rs 1 arrived on 2 Nov');
+});
+
+test('renaming a party warns about another party with that name, ignores its own spelling, and "use it anyway" goes through', async () => {
+  reset();
+  const op = sign('u1', 'user');
+  await api(op, '/parties', { method: 'POST', body: newVendor() });
+  await api(op, '/parties', { method: 'POST', body: newVendor({ name: 'Other Shop', payee: undefined }) });
+  const [first, other] = db.fin_parties;
+  const clash = await api(op, `/parties/${other.id}`, { method: 'PATCH', body: { name: 'TEST TRADERS pvt ltd' } });
+  assert.equal(clash.status, 409);
+  const warned = await clash.json();
+  assert.equal(warned.code, 'DUPLICATE_NAME');
+  assert.deepEqual(warned.matches.map((m) => m.id), [first.id]);
+  assert.equal(other.name, 'Other Shop', 'nothing changes while the warning stands');
+  assert.equal((await api(op, `/parties/${other.id}`, { method: 'PATCH', body: { name: 'TEST TRADERS pvt ltd', confirmDuplicate: true } })).status, 200);
+  assert.equal(other.name, 'TEST TRADERS pvt ltd');
+  // Fixing a party's own spelling is not a clash with itself.
+  assert.equal((await api(op, `/parties/${first.id}`, { method: 'PATCH', body: { name: 'Test  Traders Ltd' } })).status, 409, 'the other party now has that name');
+  assert.equal((await api(op, `/parties/${first.id}`, { method: 'PATCH', body: { name: 'Quite Different' } })).status, 200);
+  assert.equal((await api(op, `/parties/${first.id}`, { method: 'PATCH', body: { name: 'QUITE different' } })).status, 200, 'its own other spelling is fine');
+});
+
+test('a missing IFSC is added by a verifier: only that account is replaced, the creator is kept, nothing leaks, and it needs the step-up', async () => {
+  reset();
+  seedParty();
+  const imported = seedAccount({ status: 'unverified', created_by: null, verified_by: null, verified_at: null, has_ifsc: false, details_enc: encryptFinanceText(JSON.stringify({ method: 'bank', account: ACCOUNT, ifsc: '' })), fingerprint: 'fp-imported' });
+  const sibling = seedAccount({ status: 'unverified', created_by: null, verified_by: null, verified_at: null, last4: '0002', fingerprint: 'fp-sibling' });
+  const op = sign('u1', 'user');
+  const director = sign('u2', 'admin');
+  const body = { ifsc: 'abcd0123456' };
+  assert.equal((await api(op, `/accounts/${imported.id}/ifsc`, { method: 'POST', body, stepUp: 'u1' })).status, 403); // no verify-payee
+  assert.equal((await (await api(director, `/accounts/${imported.id}/ifsc`, { method: 'POST', body })).json()).code, 'STEP_UP_REQUIRED');
+  assert.equal((await api(director, `/accounts/${imported.id}/ifsc`, { method: 'POST', body: { ifsc: 'nope' }, stepUp: 'u2' })).status, 400);
+  assert.equal(imported.status, 'unverified', 'a bad IFSC changes nothing');
+
+  const res = await api(director, `/accounts/${imported.id}/ifsc`, { method: 'POST', body, stepUp: 'u2' });
+  assert.equal(res.status, 201);
+  const text = await res.text();
+  assert.ok(!text.includes(ACCOUNT) && !text.includes('ABCD0123456'));
+  assert.equal(imported.status, 'superseded');
+  assert.equal(sibling.status, 'unverified', "the payee's other account is left alone");
+  const fresh = db.fin_party_accounts.at(-1);
+  assert.equal(fresh.has_ifsc, true);
+  assert.equal(fresh.status, 'unverified');
+  assert.equal(fresh.created_by, null, 'a loaded account stays loaded, so a verifier may confirm it');
+  assert.equal(fresh.last4, '0001');
+  assert.equal(JSON.parse(decryptFinanceText(fresh.details_enc)).ifsc, 'ABCD0123456');
+  assert.ok(db.audit.some((a) => a.action === 'finance.payee_ifsc_added'));
+  assert.ok(db.audit.every((a) => auditDetailIsSafe(JSON.stringify(a.detail ?? {}))));
+  // Details that already have an IFSC, or are verified, are not rewritten this way.
+  assert.equal((await api(director, `/accounts/${fresh.id}/ifsc`, { method: 'POST', body, stepUp: 'u2' })).status, 400);
 });
 
 test('the overview carries a "needs you" summary: payees to verify, those needing review, and no names or numbers', async () => {

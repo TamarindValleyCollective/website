@@ -307,6 +307,7 @@ const DEMO_PAYEE_DETAILS: Record<string, { method: string; account?: string; ifs
   a1: { method: 'bank', account: '100000000001', ifsc: 'ABCD0123456' },
   a2: { method: 'upi', upi: 'sample.stores@okbank' },
   a3: { method: 'bank', account: '100000000003', ifsc: 'ZZZZ0000000' },
+  a4: { method: 'bank', account: '100000000004', ifsc: '' },
 };
 let financeParties: any[] | null = null;
 function demoFinanceParties() {
@@ -316,11 +317,32 @@ function demoFinanceParties() {
     party('p1', 'Test Traders', [account('a1', 'bank', 'ending 0001', 'unverified')]),
     party('p2', 'Sample Stores', [account('a2', 'upi', 'ending ores', 'unverified')]),
     party('p3', 'Example Hardware', [account('a3', 'bank', 'ending 0003', 'verified')]),
+    party('p4', 'Imported Stores (Milk)', [{ ...account('a4', 'bank', 'ending 0004', 'unverified'), review: ['missing_ifsc'] }]),
   ];
   return { kinds: ['vendor', 'employee', 'customer', 'other'], canEdit: true, canVerify: true, me: { id: 'demo-1', ready: true, hasPasskey: true, stepUpValid: false }, needsReviewCount: 0, parties: financeParties };
 }
 // Invented branch directory: one code that exists, every other is "no such branch".
 const demoIfsc = (code: string) => (code === 'ABCD0123456' ? { found: true, bank: 'Test Bank', branch: 'Main Road', city: 'Sample City', state: 'Sample State' } : { found: false });
+function demoFinanceRename(id: string, body: any) {
+  const party = demoFinanceParties().parties.find((x: any) => x.id === id);
+  if (!party) return { status: 404, data: { error: 'Not found' } };
+  if (typeof body?.name === 'string' && body.name.trim() !== party.name) {
+    const matches = body.confirmDuplicate ? [] : findSimilarParties(body.name, demoFinanceParties().parties.filter((x: any) => x.id !== id));
+    if (matches.length) return { status: 409, data: { error: 'There is already a payee with that name.', code: 'DUPLICATE_NAME', matches } };
+    party.name = body.name.trim().replace(/\s+/g, ' ');
+    return { status: 200, data: { ok: true, changed: ['name'] } };
+  }
+  if (typeof body?.kind === 'string') party.kind = body.kind;
+  if (typeof body?.active === 'boolean') party.active = body.active;
+  return { status: 200, data: { ok: true, changed: [] } };
+}
+function demoFinanceIfsc(accountId: string, body: any) {
+  const row = demoFinanceParties().parties.flatMap((x: any) => x.accounts).find((a: any) => a.id === accountId);
+  if (!row || !/^[A-Za-z]{4}0[A-Za-z0-9]{6}$/.test(String(body?.ifsc ?? '').replace(/\s+/g, ''))) return { status: 400, data: { error: 'The IFSC code should look like ABCD0123456.' } };
+  row.review = [];
+  DEMO_PAYEE_DETAILS[accountId].ifsc = String(body.ifsc).replace(/\s+/g, '').toUpperCase();
+  return { status: 201, data: { ok: true, status: 'unverified' } };
+}
 function demoFinanceVerify(accountId: string, body: any) {
   const method = VERIFY_METHODS.find((m: { id: string }) => m.id === body?.method);
   const row = demoFinanceParties().parties.flatMap((x: any) => x.accounts).find((a: any) => a.id === accountId);
@@ -370,8 +392,13 @@ export function installStaffDemo(tokenKey: string, kind: string): void {
     }
     const ifscAsked = /^\/api\/finance-admin\/ifsc\/([A-Za-z0-9]+)$/.exec(path);
     if (ifscAsked) return reply(demoIfsc(ifscAsked[1].toUpperCase()));
-    const financeAccount = /^\/api\/finance-admin\/accounts\/([^/]+)\/(reveal|verify)$/.exec(path);
+    const financeParty = /^\/api\/finance-admin\/parties\/([^/]+)$/.exec(path);
+    const jsonBody = () => { try { return JSON.parse(String(init?.body ?? '{}')); } catch { return {}; } };
+    const answer = (done: { status: number; data: unknown }) => Promise.resolve(new Response(JSON.stringify(done.data), { status: done.status, headers: { 'content-type': 'application/json' } }));
+    if (financeParty && init?.method === 'PATCH') return answer(demoFinanceRename(financeParty[1], jsonBody()));
+    const financeAccount = /^\/api\/finance-admin\/accounts\/([^/]+)\/(reveal|verify|ifsc)$/.exec(path);
     if (financeAccount && DEMO_PAYEE_DETAILS[financeAccount[1]]) {
+      if (financeAccount[2] === 'ifsc') return answer(demoFinanceIfsc(financeAccount[1], jsonBody()));
       if (financeAccount[2] === 'reveal') return reply({ details: DEMO_PAYEE_DETAILS[financeAccount[1]] });
       const done = demoFinanceVerify(financeAccount[1], (() => { try { return JSON.parse(String(init?.body ?? '{}')); } catch { return {}; } })());
       return Promise.resolve(new Response(JSON.stringify(done.data), { status: done.status, headers: { 'content-type': 'application/json' } }));
