@@ -140,6 +140,19 @@ for esbuild, and Node 22.18+ or newer, which imports the registry `.ts` directly
   with a fallback, so a database without 0094 keeps working for the old methods.
   Not built yet: reading the screenshot automatically (extract blind, then compare with what is on record), and confirming a payment
   against the imported statement (the UPI reference is already on the UPI lines).
+- **Loading the old sheet's screenshots (`scripts/import-fin-evidence.mjs`, operator script, run once, not deployed).** The transfer sheet
+  keeps a screenshot per transfer as a picture placed over the row, which the Sheets API cannot return, so the script reads the sheet's
+  **.xlsx export** (held in memory only) and takes each picture from the row it is anchored on (`scripts/lib/finance-evidence-import.mjs`,
+  tested on an invented workbook). The row's account number is matched to a saved account by the same keyed fingerprint the payee import
+  uses (an 8-digit old number is also tried with its padded zero), so a picture lands on the exact account it paid; a picture whose
+  number matches no saved account, or more than one (a shared account), is skipped and counted, never guessed. They are filed as
+  `payment` evidence and **nothing is verified by it**: a director opens an account's evidence and marks it verified as usual. A picture
+  is stored under an id taken from its content (`finance/vouchers/<id>.<ext>`), so re-running adds nothing and the same screenshot is
+  never filed twice. Dry run by default; it prints counts only (never a name, number or picture). `netlify dev:exec -- node
+  scripts/import-fin-evidence.mjs --sheet <spreadsheetId> [--apply]`; it needs the payee key, the service-role key, the Drive
+  service account and, for `--apply`, the R2 keys (the script names whichever is missing). Per-account limits of the app (six files) do
+  not apply to it, so an account paid many times can hold many. Not done by it: attaching each screenshot to its payment request
+  (a separate step), and reading the screenshots.
 - **Bank and UPI are separate accounts.** A party can hold both: each is its own `fin_party_accounts` row (`method` bank or upi),
   verified, retired and superseded on its own. A new bank account only supersedes the live bank row, never the UPI one.
 - **IFSC lookup.** `GET /ifsc/:code` (any `finance` view role) asks Razorpay's free public IFSC directory
