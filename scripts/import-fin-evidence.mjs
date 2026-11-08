@@ -89,6 +89,14 @@ if (!entity) throw new Error('No finance entity found; is migration 0077 applied
 const r2 = new AwsClient({ accessKeyId: process.env.R2_ACCESS_KEY_ID, secretAccessKey: process.env.R2_SECRET_ACCESS_KEY, service: 's3', region: 'auto' });
 const base = `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${process.env.R2_BUCKET}`;
 
+// Before anything is written: a signed request for an object that does not exist answers 404 when the R2 keys are real and 403
+// when they are not (Netlify can pass a sensitive value as a masked placeholder), so a bad key stops the run here.
+const probe = await r2.fetch(`${base}/finance/vouchers/00000000-0000-0000-0000-000000000000.png`, { method: 'HEAD' });
+if (probe.status !== 404 && probe.status !== 200) {
+  console.error(`The R2 keys were not accepted (status ${probe.status}). Nothing was written. The R2 values from Netlify may be masked placeholders: paste the real ones the same way as the payee key.`);
+  process.exit(2);
+}
+
 let written = 0;
 let failed = 0;
 for (const item of items) {
