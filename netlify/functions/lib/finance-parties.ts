@@ -280,7 +280,7 @@ export async function updateParty(req: Request, id: string): Promise<Response> {
     // Same warning as adding a party: a name another live party already has, unless the page says "use it anyway". The party's
     // own other spellings do not count (fixing "TEST traders" to "Test Traders" is fine).
     if (change.patch.name && body.confirmDuplicate !== true) {
-      const matches = (await similarParties(await entityId(), change.patch.name)).filter((m) => m.id !== id);
+      const matches = (await similarParties(await entityId(), change.patch.name)).filter((m: { id: string }) => m.id !== id);
       if (matches.length) return jsonResponse({ error: 'There is already a payee with that name.', code: 'DUPLICATE_NAME', matches }, 409);
     }
     await rest(`/fin_parties?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify({ ...change.patch, updated_at: new Date().toISOString() }) });
