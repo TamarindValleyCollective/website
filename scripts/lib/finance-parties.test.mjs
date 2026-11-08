@@ -13,6 +13,8 @@ import {
   partyForResponse,
   canVerifyAccount,
   auditDetailIsSafe,
+  partyNameKey,
+  findSimilarParties,
 } from './finance-parties.mjs';
 
 const ACCOUNT = '100000000001';
@@ -137,4 +139,27 @@ test('same account number but a different IFSC is a change, not "unchanged"', ()
   const plan = planDetailsChange([row()], 'bank', fp(ACCOUNT), () => false);
   assert.deepEqual(plan, { action: 'replace', supersedeIds: ['a1'] });
   assert.deepEqual(planDetailsChange([row()], 'bank', fp(ACCOUNT), () => true), { action: 'unchanged', accountId: 'a1' });
+});
+
+test('the duplicate key ignores case, spacing, punctuation and company suffixes, but not real differences', () => {
+  assert.equal(partyNameKey('Test Traders Pvt. Ltd.'), partyNameKey('  TEST   traders '));
+  assert.equal(partyNameKey('M/s Test Traders & Sons'), partyNameKey('Test Traders and Sons Private Limited'));
+  assert.equal(partyNameKey('Sample Dairy (Milk)'), 'sampledairymilk');
+  assert.notEqual(partyNameKey('Sample Dairy (Milk)'), partyNameKey('Sample Dairy (Eggs)'));
+  assert.notEqual(partyNameKey('Test B'), partyNameKey('Test'), 'a single letter is part of the name');
+  assert.equal(partyNameKey('Pvt Ltd'), '');
+});
+
+test('findSimilarParties offers live, unmerged parties with the same key and nothing for an empty key', () => {
+  const parties = [
+    { id: '1', name: 'Test Traders', kind: 'vendor', active: true, merged_into: null },
+    { id: '2', name: 'TEST TRADERS PVT LTD', kind: 'customer', active: true, merged_into: null },
+    { id: '3', name: 'Test Traders', kind: 'vendor', active: false, merged_into: null },
+    { id: '4', name: 'Test Traders', kind: 'vendor', active: true, merged_into: '1' },
+    { id: '5', name: 'Other Shop', kind: 'vendor', active: true, merged_into: null },
+  ];
+  assert.deepEqual(findSimilarParties('test  traders.', parties).map((p) => p.id), ['1', '2']);
+  assert.deepEqual(findSimilarParties('Pvt Ltd', parties), []);
+  assert.deepEqual(findSimilarParties('Brand New Shop', parties), []);
+  assert.deepEqual(Object.keys(findSimilarParties('Other Shop', parties)[0]), ['id', 'name', 'kind']);
 });

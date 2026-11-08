@@ -22,6 +22,29 @@ export function validateParty(body) {
   return { party: { name, kind: body.kind } };
 }
 
+// The comparison key for "is this payee already in the directory": case, spacing, punctuation and company suffixes
+// ("Pvt Ltd", "M/s", "and"/"&") are ignored, so "Test Traders Pvt. Ltd." and "TEST  TRADERS" are the same payee. Single
+// letters stay ("Test B" is not "Test"). An empty key (a name of only suffixes) matches nothing.
+const NAME_NOISE = new Set(['pvt', 'private', 'ltd', 'limited', 'llp', 'ms', 'and']);
+export function partyNameKey(name) {
+  return String(name ?? '')
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/\bm\/s\b/g, ' ')
+    .split(/[^a-z0-9]+/)
+    .filter((t) => t && !NAME_NOISE.has(t))
+    .join('');
+}
+
+// The live parties (`{id, name, kind, ...}`) a new name would duplicate. Merged and inactive parties are not offered.
+export function findSimilarParties(name, parties) {
+  const key = partyNameKey(name);
+  if (!key) return [];
+  return parties
+    .filter((p) => p.active !== false && !p.merged_into && partyNameKey(p.name) === key)
+    .map((p) => ({ id: p.id, name: p.name, kind: p.kind }));
+}
+
 // An edit to a party's name, kind or active flag. Returns only what really changes, so the audit log can name the
 // fields. A member linked to a household or a person stays a member (the table's check would refuse it anyway).
 export function validatePartyChange(party, body) {

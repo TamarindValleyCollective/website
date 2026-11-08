@@ -10,7 +10,7 @@
 // state (or its own `?demo`, as event-payments does).
 
 import { ACCOMMODATION_UNITS, ACCOMMODATION_TYPES } from '../../scripts/lib/accommodation.mjs';
-import { VERIFY_METHODS } from '../../scripts/lib/finance-parties.mjs';
+import { VERIFY_METHODS, findSimilarParties } from '../../scripts/lib/finance-parties.mjs';
 
 const TOOLS = [
   { module: 'photo-pool', label: 'Photos', path: '/internal/photo-pool/' },
@@ -362,6 +362,12 @@ export function installStaffDemo(tokenKey: string, kind: string): void {
     if (path === '/api/accommodation-admin/change-requests/decide') return reply({ ok: true });
     if (path === '/api/units-admin/overview') return reply(demoUnits());
     if (path === '/api/finance-admin/parties' && (init?.method ?? 'GET') === 'GET') return reply(demoFinanceParties());
+    if (path === '/api/finance-admin/parties' && init?.method === 'POST') {
+      const body = (() => { try { return JSON.parse(String(init.body ?? '{}')); } catch { return {}; } })();
+      const matches = body.confirmDuplicate ? [] : findSimilarParties(String(body.name ?? ''), demoFinanceParties().parties);
+      const done = matches.length ? { status: 409, data: { error: 'There is already a payee with that name.', code: 'DUPLICATE_NAME', matches } } : { status: 201, data: { party: {} } };
+      return Promise.resolve(new Response(JSON.stringify(done.data), { status: done.status, headers: { 'content-type': 'application/json' } }));
+    }
     const ifscAsked = /^\/api\/finance-admin\/ifsc\/([A-Za-z0-9]+)$/.exec(path);
     if (ifscAsked) return reply(demoIfsc(ifscAsked[1].toUpperCase()));
     const financeAccount = /^\/api\/finance-admin\/accounts\/([^/]+)\/(reveal|verify)$/.exec(path);

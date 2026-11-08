@@ -108,6 +108,11 @@ for esbuild, and Node 22.18+ or newer, which imports the registry `.ts` directly
   `fin_audit_log`. The account then shows "Verified by X on date · method". Details verified before this migration show
   "Method not recorded". The sheet shows "3 of 118 to verify" and **Mark as verified and open next** (the row button is "Check details…", which only opens the sheet; "Mark as verified" in the sheet is the action). **Migration 0082 must be applied
   before the code that sends the method is deployed.**
+- **Duplicate names.** Adding a party whose name is already in the directory answers 409 `DUPLICATE_NAME` with the matches
+  (`findSimilarParties`: case, spacing, punctuation and "Pvt Ltd"/"M/s"/"and" are ignored; inactive and merged parties are not
+  offered). It is a warning: the page lists them and the button becomes "Add anyway" (`confirmDuplicate: true`), because two
+  real payees can share a name. The farm manager's add-vendor route (`/vendors`) is stricter and refuses outright, with
+  `existingId`, since that user cannot merge. The database has no unique rule on names; **Merge into…** cleans up afterwards.
 - **Bank and UPI are separate accounts.** A party can hold both: each is its own `fin_party_accounts` row (`method` bank or upi),
   verified, retired and superseded on its own. A new bank account only supersedes the live bank row, never the UPI one.
 - **IFSC lookup.** `GET /ifsc/:code` (any `finance` view role) asks Razorpay's free public IFSC directory

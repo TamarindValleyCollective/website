@@ -323,6 +323,16 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
     const payeeBox = h('div', { class: 'stack-form', attrs: { hidden: '' } }, ...payee.nodes);
     withPayee.addEventListener('change', () => (payeeBox.hidden = !withPayee.checked));
     const msg = h('p', { class: 'error', attrs: { hidden: '' } });
+    // A name already in the directory: the matches are shown and the button becomes "Add anyway" (two real payees can share a name).
+    const dupes = h('div', { class: 'note', attrs: { hidden: '', role: 'alert' } });
+    const submitBtn = h('button', { class: 'button button--primary', text: 'Add party', attrs: { type: 'submit' } }) as HTMLButtonElement;
+    let confirmDuplicate = false;
+    const resetDuplicate = () => {
+      confirmDuplicate = false;
+      dupes.hidden = true;
+      submitBtn.textContent = 'Add party';
+    };
+    name.addEventListener('input', resetDuplicate);
     const form = h(
       'form',
       { class: 'stack-form' },
@@ -330,16 +340,28 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
       labelled('Kind', kind),
       h('label', {}, withPayee, h('span', { text: 'Add bank or UPI details now (they stay unverified until a director confirms)' })),
       payeeBox,
+      dupes,
       msg,
-      h('div', { class: 'sheet-actions' }, closeBtn(dlg, 'Cancel'), h('button', { class: 'button button--primary', text: 'Add party', attrs: { type: 'submit' } })),
+      h('div', { class: 'sheet-actions' }, closeBtn(dlg, 'Cancel'), submitBtn),
     );
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const { status, data: out } = await call('/api/finance-admin/parties', 'POST', { name: name.value, kind: kind.value, ...(withPayee.checked ? { payee: payee.value() } : {}) });
+      msg.hidden = true;
+      const { status, data: out } = await call('/api/finance-admin/parties', 'POST', { name: name.value, kind: kind.value, ...(withPayee.checked ? { payee: payee.value() } : {}), ...(confirmDuplicate ? { confirmDuplicate: true } : {}) });
       if (status === 201) {
         dlg.close();
         showToast('Party added.');
         load();
+      } else if (status === 409 && out?.code === 'DUPLICATE_NAME') {
+        const matches = (out.matches ?? []) as { name: string; kind: string }[];
+        dupes.replaceChildren(
+          h('p', { text: matches.length === 1 ? 'This payee is already in the directory:' : 'These payees are already in the directory:' }),
+          h('ul', {}, ...matches.map((m) => h('li', { text: `${m.name} (${KIND_LABELS[m.kind] ?? m.kind})` }))),
+          h('p', { text: 'If this is the same payee, cancel and open them from the list (add a new bank or UPI there). If it is a different payee with a similar name, add anyway.' }),
+        );
+        dupes.hidden = false;
+        confirmDuplicate = true;
+        submitBtn.textContent = 'Add anyway';
       } else {
         msg.hidden = false;
         msg.textContent = out?.error ?? 'Could not add that.';

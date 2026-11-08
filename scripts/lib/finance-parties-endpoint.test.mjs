@@ -184,6 +184,36 @@ test('the IFSC lookup names the bank for finance users, says when no branch exis
   assert.equal(nobody.status, 401);
 });
 
+test('adding a party whose name is already there is a warning with the matches; "add anyway" goes through', async () => {
+  reset();
+  const op = sign('u1', 'user');
+  assert.equal((await api(op, '/parties', { method: 'POST', body: newVendor() })).status, 201);
+  // Same payee written differently: case, spacing, punctuation and a company suffix are ignored.
+  const again = await api(op, '/parties', { method: 'POST', body: newVendor({ name: ' TEST  traders Pvt. Ltd. ' }) });
+  assert.equal(again.status, 409);
+  const warned = await again.json();
+  assert.equal(warned.code, 'DUPLICATE_NAME');
+  assert.deepEqual(warned.matches.map((m) => m.name), ['Test Traders']);
+  assert.equal(db.fin_parties.length, 1, 'nothing is written while the warning stands');
+  const anyway = await api(op, '/parties', { method: 'POST', body: newVendor({ name: 'Test Traders', confirmDuplicate: true }) });
+  assert.equal(anyway.status, 201);
+  assert.equal(db.fin_parties.length, 2);
+  // A different name is unaffected, and a deactivated party is not offered.
+  assert.equal((await api(op, '/parties', { method: 'POST', body: newVendor({ name: 'Another Shop' }) })).status, 201);
+  db.fin_parties.forEach((p) => (p.name === 'Another Shop' ? (p.active = false) : null));
+  assert.equal((await api(op, '/parties', { method: 'POST', body: newVendor({ name: 'another shop' }) })).status, 201);
+});
+
+test('adding a vendor from a payment request is still blocked for the same payee, now however the name is written', async () => {
+  reset();
+  const op = sign('u1', 'user');
+  const first = await (await api(op, '/parties', { method: 'POST', body: newVendor() })).json();
+  const blocked = await api(op, '/vendors', { method: 'POST', body: { name: 'test traders (pvt) ltd' } });
+  assert.equal(blocked.status, 409);
+  assert.equal((await blocked.json()).existingId, first.party.id);
+  assert.equal((await api(op, '/vendors', { method: 'POST', body: { name: 'Brand New Vendor' } })).status, 201);
+});
+
 test('even a payee verifier gets only last four from the list', async () => {
   reset();
   const op = sign('u1', 'user');
