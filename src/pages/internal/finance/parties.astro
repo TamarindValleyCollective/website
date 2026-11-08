@@ -431,7 +431,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
         ...(retired ? [] : a.review.filter((r) => r !== 'multiple_live_accounts').map((r) => REVIEW_TEXT[r] ?? r)),
       ].filter((t): t is string => Boolean(t));
       const status = retired ? pill('Retired', 'crit') : a.retiredOn ? pill('Retiring', 'warn') : a.status === 'verified' ? pill('Verified', 'ok') : pill('Unverified', 'warn');
-      const verify = a.status === 'unverified' && !retired && data?.canVerify ? button('Verify…', () => openVerify(p, a)) : null;
+      const verify = a.status === 'unverified' && !retired && data?.canVerify ? button('Check details…', () => openVerify(p, a)) : null;
       const retire = !retired && data?.canVerify ? button(a.retiredOn ? 'Move date…' : 'Retire…', () => openRetire(p, a)) : null;
       return h(
         'li',
@@ -633,8 +633,8 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
     });
     const note = input('note', { maxlength: '200', placeholder: 'For example, where the cheque photo is kept' });
     const hasNext = queue.length > 1;
-    const verifyBtn = h('button', { class: hasNext ? 'button button--outline' : 'button button--primary', text: 'Verify', attrs: { type: 'button' } }) as HTMLButtonElement;
-    const nextBtn = h('button', { class: 'button button--primary', text: 'Verify and open next', attrs: { type: 'button' } }) as HTMLButtonElement;
+    const verifyBtn = h('button', { class: hasNext ? 'button button--outline' : 'button button--primary', text: 'Mark as verified', attrs: { type: 'button' } }) as HTMLButtonElement;
+    const nextBtn = h('button', { class: 'button button--primary', text: 'Mark as verified and open next', attrs: { type: 'button' } }) as HTMLButtonElement;
     if (!hasNext) nextBtn.hidden = true;
 
     const chosen = () => radios.find((r) => r.radio.checked)?.radio.value ?? '';
@@ -681,10 +681,11 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
     dlg.addEventListener('close', () => dlg.replaceChildren(), { once: true });
     present(
       dlg,
-      h('div', { class: 'verify-head' }, h('h2', { text: `Verify ${p.name}`, attrs: { id: 'verify-title' } }), at >= 0 ? h('span', { class: 'small-note', text: `${at + 1} of ${queue.length} to verify` }) : null),
+      h('div', { class: 'verify-head' }, h('h2', { text: `Check details: ${p.name}`, attrs: { id: 'verify-title' } }), at >= 0 ? h('span', { class: 'small-note', text: `${at + 1} of ${queue.length} to verify` }) : null),
       h('ul', { class: 'list' }, ...lines.map(([k, v]) => h('li', {}, h('div', { class: 'row' }, h('span', { class: 'grow' }, h('span', { class: 'detail', text: k }), h('span', { class: 'title', text: v ?? '' })))))),
       branchNote,
       others.length ? h('p', { class: 'note', text: `This payee also has an account ending ${others.map(last4Of).join(' and ')}. Check which one they use now before verifying.` }) : null,
+      h('p', { class: 'hint', text: 'Marking as verified says these details match what the payee gave you, so they can be paid. This sheet does not pay anyone.' }),
       h('p', { class: 'field-label', text: 'How did you check these details?' }),
       h('div', { class: 'radios', attrs: { role: 'group', 'aria-label': 'How you checked' } }, ...radios.map((r) => r.node)),
       h('div', { class: 'stack-form' }, labelled('Note (optional)', note)),
