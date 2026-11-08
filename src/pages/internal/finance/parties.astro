@@ -271,12 +271,37 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
   }
   const input = (name: string, attrs: Record<string, string> = {}) => h('input', { attrs: { name, autocomplete: 'off', ...attrs } }) as HTMLInputElement;
 
+  // Which bank and branch an IFSC names, so a mistyped code shows at once. Only the IFSC is looked up, never the account
+  // number, and a failed lookup never blocks saving. Stale answers (the field moved on) are dropped.
+  async function showBranch(code: string, el: HTMLElement) {
+    const ifsc = code.replace(/\s+/g, '').toUpperCase();
+    el.hidden = true;
+    el.classList.remove('error');
+    if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc)) return;
+    const { status, data: found } = await call(`/api/finance-admin/ifsc/${ifsc}`);
+    if (code !== el.dataset.asked) return;
+    if (status !== 200 || found?.unavailable) return;
+    el.hidden = false;
+    if (found?.found) el.textContent = [found.bank, found.branch, found.city].filter(Boolean).join(' · ');
+    else {
+      el.classList.add('error');
+      el.textContent = 'No bank branch has this IFSC code. Check it against the cheque or letter.';
+    }
+  }
+  const watchIfsc = (field: HTMLInputElement, el: HTMLElement) =>
+    field.addEventListener('input', () => {
+      el.dataset.asked = field.value;
+      void showBranch(field.value, el);
+    });
+
   function payeeFields() {
     const method = h('select', { attrs: { name: 'method' } }, h('option', { text: 'Bank transfer', attrs: { value: 'bank' } }), h('option', { text: 'UPI', attrs: { value: 'upi' } })) as HTMLSelectElement;
     const account = input('account', { inputmode: 'numeric' });
     const ifsc = input('ifsc');
     const upi = input('upi', { placeholder: 'name@bank' });
-    const bank = h('div', { class: 'stack-form' }, labelled('Account number', account), labelled('IFSC code', ifsc));
+    const branch = h('p', { class: 'hint', attrs: { hidden: '', 'aria-live': 'polite' } });
+    watchIfsc(ifsc, branch);
+    const bank = h('div', { class: 'stack-form' }, labelled('Account number', account), labelled('IFSC code', ifsc), branch);
     const upiBox = h('div', { class: 'stack-form', attrs: { hidden: '' } }, labelled('UPI id', upi));
     method.addEventListener('change', () => {
       bank.hidden = method.value !== 'bank';
@@ -298,6 +323,16 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
     const payeeBox = h('div', { class: 'stack-form', attrs: { hidden: '' } }, ...payee.nodes);
     withPayee.addEventListener('change', () => (payeeBox.hidden = !withPayee.checked));
     const msg = h('p', { class: 'error', attrs: { hidden: '' } });
+    // A name already in the directory: the matches are shown and the button becomes "Add anyway" (two real payees can share a name).
+    const dupes = h('div', { class: 'note', attrs: { hidden: '', role: 'alert' } });
+    const submitBtn = h('button', { class: 'button button--primary', text: 'Add party', attrs: { type: 'submit' } }) as HTMLButtonElement;
+    let confirmDuplicate = false;
+    const resetDuplicate = () => {
+      confirmDuplicate = false;
+      dupes.hidden = true;
+      submitBtn.textContent = 'Add party';
+    };
+    name.addEventListener('input', resetDuplicate);
     const form = h(
       'form',
       { class: 'stack-form' },
@@ -305,16 +340,28 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
       labelled('Kind', kind),
       h('label', {}, withPayee, h('span', { text: 'Add bank or UPI details now (they stay unverified until a director confirms)' })),
       payeeBox,
+      dupes,
       msg,
-      h('div', { class: 'sheet-actions' }, closeBtn(dlg, 'Cancel'), h('button', { class: 'button button--primary', text: 'Add party', attrs: { type: 'submit' } })),
+      h('div', { class: 'sheet-actions' }, closeBtn(dlg, 'Cancel'), submitBtn),
     );
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const { status, data: out } = await call('/api/finance-admin/parties', 'POST', { name: name.value, kind: kind.value, ...(withPayee.checked ? { payee: payee.value() } : {}) });
+      msg.hidden = true;
+      const { status, data: out } = await call('/api/finance-admin/parties', 'POST', { name: name.value, kind: kind.value, ...(withPayee.checked ? { payee: payee.value() } : {}), ...(confirmDuplicate ? { confirmDuplicate: true } : {}) });
       if (status === 201) {
         dlg.close();
         showToast('Party added.');
         load();
+      } else if (status === 409 && out?.code === 'DUPLICATE_NAME') {
+        const matches = (out.matches ?? []) as { name: string; kind: string }[];
+        dupes.replaceChildren(
+          h('p', { text: matches.length === 1 ? 'This payee is already in the directory:' : 'These payees are already in the directory:' }),
+          h('ul', {}, ...matches.map((m) => h('li', { text: `${m.name} (${KIND_LABELS[m.kind] ?? m.kind})` }))),
+          h('p', { text: 'If this is the same payee, cancel and open them from the list (add a new bank or UPI there). If it is a different payee with a similar name, add anyway.' }),
+        );
+        dupes.hidden = false;
+        confirmDuplicate = true;
+        submitBtn.textContent = 'Add anyway';
       } else {
         msg.hidden = false;
         msg.textContent = out?.error ?? 'Could not add that.';
@@ -406,7 +453,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
         ...(retired ? [] : a.review.filter((r) => r !== 'multiple_live_accounts').map((r) => REVIEW_TEXT[r] ?? r)),
       ].filter((t): t is string => Boolean(t));
       const status = retired ? pill('Retired', 'crit') : a.retiredOn ? pill('Retiring', 'warn') : a.status === 'verified' ? pill('Verified', 'ok') : pill('Unverified', 'warn');
-      const verify = a.status === 'unverified' && !retired && data?.canVerify ? button('Verify…', () => openVerify(p, a)) : null;
+      const verify = a.status === 'unverified' && !retired && data?.canVerify ? button('Check details…', () => openVerify(p, a)) : null;
       const retire = !retired && data?.canVerify ? button(a.retiredOn ? 'Move date…' : 'Retire…', () => openRetire(p, a)) : null;
       return h(
         'li',
@@ -596,6 +643,11 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
     const at = queue.findIndex((x) => x.p.id === p.id);
     const others = p.accounts.filter((x) => x.id !== a.id && x.method === a.method && !isRetired(x));
     const msg = h('p', { class: 'error', attrs: { hidden: '' } });
+    const branchNote = h('p', { class: 'hint', attrs: { hidden: '', 'aria-live': 'polite' } });
+    if (d.ifsc) {
+      branchNote.dataset.asked = d.ifsc;
+      void showBranch(d.ifsc, branchNote);
+    }
 
     const radios = VERIFY_METHODS.map((m: { id: string; label: string }) => {
       const radio = h('input', { attrs: { type: 'radio', name: 'how', value: m.id } }) as HTMLInputElement;
@@ -603,8 +655,8 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
     });
     const note = input('note', { maxlength: '200', placeholder: 'For example, where the cheque photo is kept' });
     const hasNext = queue.length > 1;
-    const verifyBtn = h('button', { class: hasNext ? 'button button--outline' : 'button button--primary', text: 'Verify', attrs: { type: 'button' } }) as HTMLButtonElement;
-    const nextBtn = h('button', { class: 'button button--primary', text: 'Verify and open next', attrs: { type: 'button' } }) as HTMLButtonElement;
+    const verifyBtn = h('button', { class: hasNext ? 'button button--outline' : 'button button--primary', text: 'Mark as verified', attrs: { type: 'button' } }) as HTMLButtonElement;
+    const nextBtn = h('button', { class: 'button button--primary', text: 'Mark as verified and open next', attrs: { type: 'button' } }) as HTMLButtonElement;
     if (!hasNext) nextBtn.hidden = true;
 
     const chosen = () => radios.find((r) => r.radio.checked)?.radio.value ?? '';
@@ -648,12 +700,15 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
       msg.hidden = false;
       msg.textContent = 'These details have no IFSC code yet. Close this, choose "Add or change details", and enter the account again with its IFSC.';
     }
-    dlg.addEventListener('close', () => dlg.replaceChildren(), { once: true });
+    // Only a sheet that is really closed is emptied: the next payee's sheet may already be open when this one's close event lands.
+    dlg.addEventListener('close', () => { if (!dlg.open) dlg.replaceChildren(); }, { once: true });
     present(
       dlg,
-      h('div', { class: 'verify-head' }, h('h2', { text: `Verify ${p.name}`, attrs: { id: 'verify-title' } }), at >= 0 ? h('span', { class: 'small-note', text: `${at + 1} of ${queue.length} to verify` }) : null),
+      h('div', { class: 'verify-head' }, h('h2', { text: `Check details: ${p.name}`, attrs: { id: 'verify-title' } }), at >= 0 ? h('span', { class: 'small-note', text: `${at + 1} of ${queue.length} to verify` }) : null),
       h('ul', { class: 'list' }, ...lines.map(([k, v]) => h('li', {}, h('div', { class: 'row' }, h('span', { class: 'grow' }, h('span', { class: 'detail', text: k }), h('span', { class: 'title', text: v ?? '' })))))),
+      branchNote,
       others.length ? h('p', { class: 'note', text: `This payee also has an account ending ${others.map(last4Of).join(' and ')}. Check which one they use now before verifying.` }) : null,
+      h('p', { class: 'hint', text: 'Marking as verified says these details match what the payee gave you, so they can be paid. This sheet does not pay anyone.' }),
       h('p', { class: 'field-label', text: 'How did you check these details?' }),
       h('div', { class: 'radios', attrs: { role: 'group', 'aria-label': 'How you checked' } }, ...radios.map((r) => r.node)),
       h('div', { class: 'stack-form' }, labelled('Note (optional)', note)),

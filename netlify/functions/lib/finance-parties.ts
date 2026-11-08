@@ -25,6 +25,7 @@ import {
   validateMerge,
   foldMerged,
   validateEffectiveOn,
+  findSimilarParties,
   todayIST,
 } from '../../../scripts/lib/finance-parties.mjs';
 import { fingerprintText } from '../../../scripts/lib/finance-party-import.mjs';
@@ -44,6 +45,13 @@ async function readBody(req: Request): Promise<Json | null> {
   } catch {
     return null;
   }
+}
+
+// The live parties whose name would duplicate `name` (same name ignoring case, spacing, punctuation and "Pvt Ltd").
+// The whole directory is a few hundred rows, so it is compared here rather than in SQL; 1000 is PostgREST's page cap.
+async function similarParties(entity: string, name: string) {
+  const all = await rows(`/fin_parties?entity_id=eq.${entity}&active=eq.true&select=id,name,kind,active,merged_into&limit=1000`);
+  return findSimilarParties(name, all);
 }
 
 const rows = async (path: string): Promise<Json[]> => (await (await rest(path)).json()) as Json[];
@@ -180,6 +188,11 @@ export async function createParty(req: Request): Promise<Response> {
       householdId = body.householdId;
     }
     const entity = await entityId();
+    // A warning, not a wall: two real people can share a name, so the page offers the existing payee and "Add anyway".
+    if (body.confirmDuplicate !== true) {
+      const matches = await similarParties(entity, checked.party.name);
+      if (matches.length) return jsonResponse({ error: 'There is already a payee with that name.', code: 'DUPLICATE_NAME', matches }, 409);
+    }
     const res = await rest('/fin_parties', {
       method: 'POST',
       headers: { Prefer: 'return=representation' },
@@ -213,7 +226,7 @@ export async function addVendor(req: Request): Promise<Response> {
   }
   try {
     const entity = await entityId();
-    const same = await rows(`/fin_parties?entity_id=eq.${entity}&active=eq.true&name=ilike.${encodeURIComponent(checked.party.name.replace(/[*%,()]/g, ' ').trim())}&select=id&limit=1`);
+    const same = await similarParties(entity, checked.party.name);
     if (same[0]) return jsonResponse({ error: 'There is already a payee with that name. Choose them from the list.', existingId: same[0].id }, 409);
     const res = await rest('/fin_parties', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ entity_id: entity, ...checked.party, created_by: auth.staff.id }) });
     const [party] = (await res.json()) as Json[];
