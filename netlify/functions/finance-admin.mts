@@ -19,7 +19,7 @@ import { payeeFieldVisibility } from '../../scripts/lib/finance-access.mjs';
 import { todayIST } from '../../scripts/lib/finance-parties.mjs';
 import { attentionOf } from '../../scripts/lib/finance-attention.mjs';
 import { lookupIfsc } from '../../scripts/lib/finance-ifsc.mjs';
-import { PARTY_ID, addVendor, addPayeeAccount, createParty, listParties, mergeParty, retirePayeeAccount, revealPayeeAccount, reviewParty, unmergeParty, updateParty, verifyPayeeAccount } from './lib/finance-parties';
+import { PARTY_ID, addEvidence, addMissingIfsc, getEvidence, listEvidence, addVendor, addPayeeAccount, createParty, listParties, mergeParty, retirePayeeAccount, revealPayeeAccount, reviewParty, unmergeParty, updateParty, verifyPayeeAccount } from './lib/finance-parties';
 import { REQUEST_ID, addVoucher, cancelOrDecide, listFiles, createRecord, getVoucher, listMine, listRequests, matchRecord, reviewRecord, unmatchRecord } from './lib/finance-requests';
 import { listUpiLines } from './lib/finance-upi-view';
 import { setPaymentNote } from './lib/finance-notes';
@@ -216,10 +216,18 @@ const dispatch = async (req: Request): Promise<Response> => {
     if (party[2] === '/merge' && req.method === 'POST') return mergeParty(req, party[1]);
     if (party[2] === '/unmerge' && req.method === 'POST') return unmergeParty(req, party[1]);
   }
-  const account = /^\/accounts\/([^/]+)\/(reveal|verify|retire)$/.exec(route);
+  const evidenceOf = /^\/accounts\/([^/]+)\/evidence$/.exec(route);
+  if (evidenceOf && PARTY_ID.test(evidenceOf[1])) {
+    if (req.method === 'POST') return addEvidence(req, evidenceOf[1]);
+    if (req.method === 'GET') return listEvidence(req, evidenceOf[1]);
+  }
+  const evidenceFile = /^\/evidence\/([^/]+)$/.exec(route);
+  if (evidenceFile && PARTY_ID.test(evidenceFile[1]) && req.method === 'GET') return getEvidence(req, evidenceFile[1]);
+  const account = /^\/accounts\/([^/]+)\/(reveal|verify|retire|ifsc)$/.exec(route);
   if (account && PARTY_ID.test(account[1]) && req.method === 'POST') {
     if (account[2] === 'reveal') return revealPayeeAccount(req, account[1]);
     if (account[2] === 'retire') return retirePayeeAccount(req, account[1]);
+    if (account[2] === 'ifsc') return addMissingIfsc(req, account[1]);
     return verifyPayeeAccount(req, account[1]);
   }
   // Payment requests and spend logs (session 08)
@@ -285,6 +293,7 @@ export const config = {
     '/api/finance-admin/parties',
     '/api/finance-admin/parties/*',
     '/api/finance-admin/accounts/*',
+    '/api/finance-admin/evidence/*',
     '/api/finance-admin/upi-lines',
     '/api/finance-admin/requests',
     '/api/finance-admin/requests/*',

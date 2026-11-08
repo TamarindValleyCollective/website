@@ -15,6 +15,8 @@ import {
   auditDetailIsSafe,
   partyNameKey,
   findSimilarParties,
+  namesResemble,
+  validateVerification,
 } from './finance-parties.mjs';
 
 const ACCOUNT = '100000000001';
@@ -162,4 +164,24 @@ test('findSimilarParties offers live, unmerged parties with the same key and not
   assert.deepEqual(findSimilarParties('Pvt Ltd', parties), []);
   assert.deepEqual(findSimilarParties('Brand New Shop', parties), []);
   assert.deepEqual(Object.keys(findSimilarParties('Other Shop', parties)[0]), ['id', 'name', 'kind']);
+});
+
+test('the bank name check needs the name; the name may not be a number; the two screenshot methods say which file they need', () => {
+  assert.ok(validateVerification({ method: 'bank_name_check' }).error);
+  assert.ok(validateVerification({ method: 'bank_name_check', name: '100000000001' }).error);
+  assert.deepEqual(validateVerification({ method: 'bank_name_check', name: '  Mr.  TEST  TRADER ' }), { method: 'bank_name_check', note: null, name: 'Mr. TEST TRADER', evidence: 'name_check' });
+  assert.deepEqual(validateVerification({ method: 'payment_made' }), { method: 'payment_made', note: null, name: null, evidence: 'payment' });
+  assert.equal(validateVerification({ method: 'invoice', name: 'Test Traders' }).name, 'Test Traders', 'any method may record the bank name');
+  assert.equal(validateVerification({ method: 'invoice' }).evidence, null);
+});
+
+test('a label and the bank name resemble when the words left after honorifics, suffixes and the bracketed label fit one inside the other', () => {
+  assert.equal(namesResemble('TEST TRADER (Milk)', 'Mr. TEST TRADER'), true);
+  assert.equal(namesResemble('Test Traders Private Limit', 'TEST TRADERS PRIVATE LIMITED'), true, 'a name cut short still fits');
+  assert.equal(namesResemble('Sample Consulting Services Private limit', 'SAMPLE CONSULTING SERVICES PRIVATE LIMITED'), true);
+  assert.equal(namesResemble('Test Trader', 'Other Person'), false);
+  assert.equal(namesResemble('Test Trader (Milk)', 'Test Trader Kumar'), true, 'the bank may carry a longer name');
+  assert.equal(namesResemble('Test Trader', 'Sample Trader'), false, 'one shared word is not enough when the others differ');
+  assert.equal(namesResemble('', 'Test'), false);
+  assert.equal(namesResemble('Pvt Ltd', 'Pvt Ltd'), false);
 });

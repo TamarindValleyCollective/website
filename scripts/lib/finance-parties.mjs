@@ -208,10 +208,11 @@ export function accountForResponse(row, sharedWith = [], extra = {}) {
     createdAt: row.created_at ?? null,
     verifiedAt: row.verified_at ?? null,
     verification: verificationForResponse(row, extra.names ?? new Map()),
+    evidence: extra.evidence ?? { payment: 0, name_check: 0, other: 0 },
   };
 }
 
-export function partyForResponse(party, accounts, flags, today = todayIST(), mergedCount = 0, names = new Map()) {
+export function partyForResponse(party, accounts, flags, today = todayIST(), mergedCount = 0, names = new Map(), evidence = new Map()) {
   const live = accounts.filter((a) => a.status !== 'superseded');
   const review = reviewFlags(accounts, flags, today);
   return {
@@ -221,7 +222,7 @@ export function partyForResponse(party, accounts, flags, today = todayIST(), mer
     active: party.active,
     householdId: party.household_id ?? null,
     formerSince: party.former_since ?? null,
-    accounts: live.map((a) => accountForResponse(a, flags.get(a.id) ?? [], { today, review: review.get(a.id) ?? [], names })),
+    accounts: live.map((a) => accountForResponse(a, flags.get(a.id) ?? [], { today, review: review.get(a.id) ?? [], names, evidence: evidence.get(a.id) })),
     earlierAccounts: accounts.length - live.length,
     needsReview: [...review.values()].some((r) => r.length > 0),
     mergedCount,
@@ -261,6 +262,11 @@ export function foldMerged(parties, accounts) {
 // How a verifier checked the details. Recorded with who and when, so an auditor can see what "verified" rests on. The
 // note is free text, so it may not carry the very thing this module keeps out of logs: no account number, UPI id or IFSC.
 export const VERIFY_METHODS = [
+  // The two with a screenshot: the bank's own "name as per payee bank" screen proves whose account it is; the success screen
+  // of a transfer proves money reached that account. Each needs its file attached (and the bank's name, for the first); the
+  // database refuses the verification without it (migration 0094).
+  { id: 'bank_name_check', label: "Bank's payee-name check (screenshot)", evidence: 'name_check' },
+  { id: 'payment_made', label: 'Payment made (transfer screenshot)', evidence: 'payment' },
   { id: 'cancelled_cheque', label: 'Cancelled cheque or bank letter' },
   { id: 'test_transfer', label: 'Small test transfer that arrived' },
   { id: 'invoice', label: 'Invoice or bill from the payee' },
@@ -270,18 +276,44 @@ export const VERIFY_METHODS = [
 export function validateVerification(body) {
   const method = VERIFY_METHODS.find((m) => m.id === body?.method);
   if (!method) return { error: 'Say how you checked these details.' };
+  // The name the bank showed for the account ("Name as per Payee Bank"). Kept on the account next to the party's label.
+  const name = typeof body?.name === 'string' ? body.name.trim().replace(/\s+/g, ' ') : '';
+  if (name && (name.length < 2 || name.length > 120)) return { error: 'The bank name should be 2 to 120 characters.' };
+  if (name && !auditDetailIsSafe(name)) return { error: "Don't type an account number, UPI id or IFSC code as the name." };
+  if (method.id === 'bank_name_check' && !name) return { error: 'Type the name the bank showed.' };
   const note = typeof body?.note === 'string' ? body.note.trim().replace(/\s+/g, ' ') : '';
   if (note.length > 200) return { error: 'Keep the note under 200 characters.' };
   if (note && !auditDetailIsSafe(note)) return { error: "Don't type an account number, UPI id or IFSC code in the note." };
   if (method.id === 'other' && note.length < 3) return { error: 'Say what you did to check them.' };
-  return { method: method.id, note: note || null };
+  return { method: method.id, note: note || null, name: name || null, evidence: method.evidence ?? null };
+}
+
+// Whether the name a bank shows for an account is the payee the party label is about. Labels are typed to tell people apart
+// ("KRISHNAIAH G (Milk)") and banks print the registered name ("Mr. KRISHNAIAH G"), so what is compared is the words left
+// once honorifics, company suffixes and the bracketed part of the label are dropped: one set must fit inside the other.
+// A hint for the person verifying, never a decision.
+const NAME_FILLER = new Set(['mr', 'mrs', 'ms', 'miss', 'shri', 'sri', 'smt', 'dr', 'late', 'pvt', 'private', 'ltd', 'limited', 'llp', 'and', 'of', 'm']);
+const coreWords = (name) =>
+  String(name ?? '')
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/&/g, ' and ')
+    .replace(/\bm\/s\b/g, ' ')
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w && !NAME_FILLER.has(w));
+export function namesResemble(label, bankName) {
+  const a = coreWords(label);
+  const b = coreWords(bankName);
+  if (!a.length || !b.length) return false;
+  const inside = (small, big) => small.every((w) => big.some((x) => x === w));
+  return inside(a, b) || inside(b, a);
 }
 
 // What is shown of a verification: who, when, how, and the note. `names` maps staff ids to names.
 export function verificationForResponse(row, names) {
   if (row.status !== 'verified') return null;
   const m = VERIFY_METHODS.find((x) => x.id === row.verification_method);
-  return { at: row.verified_at ?? null, by: names.get(row.verified_by) ?? null, method: m?.id ?? null, methodLabel: m?.label ?? 'Method not recorded', note: row.verification_note ?? null };
+  return { at: row.verified_at ?? null, by: names.get(row.verified_by) ?? null, method: m?.id ?? null, methodLabel: m?.label ?? 'Method not recorded', note: row.verification_note ?? null, name: row.verified_name ?? null };
 }
 
 // Verification rules the server enforces: only unverified details, and not by whoever entered them. A row entered by

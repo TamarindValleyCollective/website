@@ -8,8 +8,8 @@ import { attentionOf } from './finance-attention.mjs';
 
 // ---- how it was checked
 test('a verification names how the details were checked, from a short fixed list', () => {
-  assert.deepEqual(VERIFY_METHODS.map((m) => m.id), ['cancelled_cheque', 'test_transfer', 'invoice', 'other']);
-  assert.deepEqual(validateVerification({ method: 'cancelled_cheque' }), { method: 'cancelled_cheque', note: null });
+  assert.deepEqual(VERIFY_METHODS.map((m) => m.id), ['bank_name_check', 'payment_made', 'cancelled_cheque', 'test_transfer', 'invoice', 'other']);
+  assert.deepEqual(validateVerification({ method: 'cancelled_cheque' }), { method: 'cancelled_cheque', note: null, name: null, evidence: null });
   assert.ok(validateVerification({}).error);
   assert.ok(validateVerification({ method: 'ask-the-vendor' }).error);
 });
@@ -17,8 +17,8 @@ test('a verification names how the details were checked, from a short fixed list
 test('"Other" needs a note saying what was done; the other methods may have one', () => {
   assert.ok(validateVerification({ method: 'other' }).error);
   assert.ok(validateVerification({ method: 'other', note: 'ok' }).error); // too short to mean anything
-  assert.deepEqual(validateVerification({ method: 'other', note: ' Called the vendor  back ' }), { method: 'other', note: 'Called the vendor back' });
-  assert.deepEqual(validateVerification({ method: 'test_transfer', note: 'Rs 1, arrived' }), { method: 'test_transfer', note: 'Rs 1, arrived' });
+  assert.deepEqual(validateVerification({ method: 'other', note: ' Called the vendor  back ' }), { method: 'other', note: 'Called the vendor back', name: null, evidence: null });
+  assert.deepEqual(validateVerification({ method: 'test_transfer', note: 'Rs 1, arrived' }), { method: 'test_transfer', note: 'Rs 1, arrived', name: null, evidence: null });
 });
 
 test('the note is kept short and may not carry an account number, a UPI id or an IFSC', () => {
@@ -29,8 +29,8 @@ test('the note is kept short and may not carry an account number, a UPI id or an
 });
 
 test('what is shown of a verification: who, when, how, and the note; nothing for unverified details', () => {
-  const row = { status: 'verified', verified_at: '2026-11-02T10:00:00Z', verified_by: 'u1', verification_method: 'cancelled_cheque', verification_note: 'photo in Drive' };
-  assert.deepEqual(verificationForResponse(row, new Map([['u1', 'Test Director']])), { at: '2026-11-02T10:00:00Z', by: 'Test Director', method: 'cancelled_cheque', methodLabel: 'Cancelled cheque or bank letter', note: 'photo in Drive' });
+  const row = { status: 'verified', verified_at: '2026-11-02T10:00:00Z', verified_by: 'u1', verification_method: 'cancelled_cheque', verification_note: 'photo in Drive', verified_name: 'Test Traders' };
+  assert.deepEqual(verificationForResponse(row, new Map([['u1', 'Test Director']])), { at: '2026-11-02T10:00:00Z', by: 'Test Director', method: 'cancelled_cheque', methodLabel: 'Cancelled cheque or bank letter', note: 'photo in Drive', name: 'Test Traders' });
   assert.equal(verificationForResponse({ status: 'unverified' }, new Map()), null);
 });
 

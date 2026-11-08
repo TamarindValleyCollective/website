@@ -113,6 +113,46 @@ for esbuild, and Node 22.18+ or newer, which imports the registry `.ts` directly
   offered). It is a warning: the page lists them and the button becomes "Add anyway" (`confirmDuplicate: true`), because two
   real payees can share a name. The farm manager's add-vendor route (`/vendors`) is stricter and refuses outright, with
   `existingId`, since that user cannot merge. The database has no unique rule on names; **Merge into…** cleans up afterwards.
+- **Renaming.** A party's name is a label (what is typed in the transfer sheet and searched), so **Rename…** in the party sheet changes
+  it any time (`PATCH /parties/:id {name}`, `allocate`); everything points at the party by id, so nothing else changes. A name another
+  live party has gets the same 409 `DUPLICATE_NAME` warning as adding, with **Merge into this one…** (opens Merge with that party
+  chosen) and "Use this name anyway" (`confirmDuplicate: true`); the party's own other spellings never clash with itself. A member
+  party shows a note that its name is matched to the member records.
+- **Add IFSC.** Bank details loaded without an IFSC (the operator's lists have no IFSC column) show **Add IFSC…** (verifier + the
+  unlock): `POST /accounts/:id/ifsc {ifsc}`. The account number is read on the server and never sent back; the old row is superseded
+  and a new unverified row with the IFSC starts, for **that account only** and with no date, so no retired row is left behind.
+  The new row keeps the old row's creator (none for a loaded row), because the number is not new and a verifier may still confirm
+  it; who typed the IFSC is in the audit log (`finance.payee_ifsc_added`), and the IFSC is checked against evidence when verifying.
+- **Evidence: screenshots against an account (migration `0094_finance_payee_evidence.sql`, **applied to TVC ERP on 2026-11-08**, recorded as `finance_payee_evidence`).** Two
+  verify methods keep a screenshot against that one account: **Bank's payee-name check** (the bank's own "Name as per Payee Bank" screen,
+  which proves whose account it is; a transfer success screen shows only the label that was typed) and **Payment made** (the transfer
+  success screen, which proves money reached it). The sheet shows the file beside the details on record; the person ticks that the last four
+  and the IFSC (or the UPI id's last four and its @ part) match, and for the name check types the name the bank showed (`verified_name`,
+  kept on the account next to the party's label and searchable; "This looks like the party label" is a hint from `namesResemble`, never a
+  block). Files: `POST /accounts/:id/evidence` (multipart `file`, `kind` payment | name_check | other; verifier + unlock; JPEG, PNG,
+  WebP or PDF up to 4 MB, at most 6 per account, only before verifying), stored in the private R2 bucket under `finance/vouchers/` with
+  a row in `fin_party_account_files`; `GET /accounts/:id/evidence` lists them and `GET /evidence/:id` shows one (verifier + unlock, each
+  view logged); the list carries only counts. The database refuses to verify by either method without its file (and the name), and never
+  changes the name, the files or the method afterwards. The audit log gets the kind and ids, never the name or the files.
+  The migration was tested on the real database inside a transaction that always rolls back, then applied; checked afterwards: the
+  table and column exist, the method check lists the two new methods, RLS is on with no anon/authenticated grants, both guard
+  triggers are present, and the 128 existing accounts (2 verified) were untouched. The code still reads the new column and table
+  with a fallback, so a database without 0094 keeps working for the old methods.
+  Not built yet: reading the screenshot automatically (extract blind, then compare with what is on record), and confirming a payment
+  against the imported statement (the UPI reference is already on the UPI lines).
+- **Loading the old sheet's screenshots (`scripts/import-fin-evidence.mjs`, operator script, run once, not deployed).** The transfer sheet
+  keeps a screenshot per transfer as a picture placed over the row, which the Sheets API cannot return, so the script reads the sheet's
+  **.xlsx export** (held in memory only) and takes each picture from the row it is anchored on (`scripts/lib/finance-evidence-import.mjs`,
+  tested on an invented workbook). The row's account number is matched to a saved account by the same keyed fingerprint the payee import
+  uses (an 8-digit old number is also tried with its padded zero), so a picture lands on the exact account it paid; a picture whose
+  number matches no saved account, or more than one (a shared account), is skipped and counted, never guessed. They are filed as
+  `payment` evidence and **nothing is verified by it**: a director opens an account's evidence and marks it verified as usual. A picture
+  is stored under an id taken from its content (`finance/vouchers/<id>.<ext>`), so re-running adds nothing and the same screenshot is
+  never filed twice. Dry run by default; it prints counts only (never a name, number or picture). `netlify dev:exec -- node
+  scripts/import-fin-evidence.mjs --sheet <spreadsheetId> [--apply]`; it needs the payee key, the service-role key, the Drive
+  service account and, for `--apply`, the R2 keys (the script names whichever is missing). Per-account limits of the app (six files) do
+  not apply to it, so an account paid many times can hold many. Not done by it: attaching each screenshot to its payment request
+  (a separate step), and reading the screenshots.
 - **Bank and UPI are separate accounts.** A party can hold both: each is its own `fin_party_accounts` row (`method` bank or upi),
   verified, retired and superseded on its own. A new bank account only supersedes the live bank row, never the UPI one.
 - **IFSC lookup.** `GET /ifsc/:code` (any `finance` view role) asks Razorpay's free public IFSC directory

@@ -165,6 +165,15 @@ export async function downloadFile(fileId) {
   return res;
 }
 
+// The whole spreadsheet as an .xlsx, which is the one way to get the pictures placed over its cells (the Sheets API does not
+// expose them). Drive's files.export is capped at 10 MB; this export link is not, and takes the same token. Returns the bytes.
+export async function exportSpreadsheetXlsx(spreadsheetId) {
+  const token = await getAccessToken();
+  const res = await fetch(`https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=xlsx`, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) throw new Error(`Spreadsheet export failed: ${res.status}`);
+  return new Uint8Array(await res.arrayBuffer());
+}
+
 // Generic Sheets read, returning the raw 2D array of cell values (rows of
 // columns) for a range — used directly by rainfall.mts (which needs the
 // full grid, not just a single column) and by getAllowedEmails() below.
