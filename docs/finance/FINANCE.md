@@ -123,7 +123,7 @@ for esbuild, and Node 22.18+ or newer, which imports the registry `.ts` directly
   and a new unverified row with the IFSC starts, for **that account only** and with no date, so no retired row is left behind.
   The new row keeps the old row's creator (none for a loaded row), because the number is not new and a verifier may still confirm
   it; who typed the IFSC is in the audit log (`finance.payee_ifsc_added`), and the IFSC is checked against evidence when verifying.
-- **Evidence: screenshots against an account (migration `0094_finance_payee_evidence.sql`, written and tested, NOT yet applied).** Two
+- **Evidence: screenshots against an account (migration `0094_finance_payee_evidence.sql`, **applied to TVC ERP on 2026-11-08**, recorded as `finance_payee_evidence`).** Two
   verify methods keep a screenshot against that one account: **Bank's payee-name check** (the bank's own "Name as per Payee Bank" screen,
   which proves whose account it is; a transfer success screen shows only the label that was typed) and **Payment made** (the transfer
   success screen, which proves money reached it). The sheet shows the file beside the details on record; the person ticks that the last four
@@ -134,8 +134,10 @@ for esbuild, and Node 22.18+ or newer, which imports the registry `.ts` directly
   a row in `fin_party_account_files`; `GET /accounts/:id/evidence` lists them and `GET /evidence/:id` shows one (verifier + unlock, each
   view logged); the list carries only counts. The database refuses to verify by either method without its file (and the name), and never
   changes the name, the files or the method afterwards. The audit log gets the kind and ids, never the name or the files.
-  **Apply 0094 before using the two new methods**: until then the Parties page and the old methods work as before, and the new ones
-  answer "migration 0094 has not been applied". The migration was tested on the real database inside a transaction that always rolls back.
+  The migration was tested on the real database inside a transaction that always rolls back, then applied; checked afterwards: the
+  table and column exist, the method check lists the two new methods, RLS is on with no anon/authenticated grants, both guard
+  triggers are present, and the 128 existing accounts (2 verified) were untouched. The code still reads the new column and table
+  with a fallback, so a database without 0094 keeps working for the old methods.
   Not built yet: reading the screenshot automatically (extract blind, then compare with what is on record), and confirming a payment
   against the imported statement (the UPI reference is already on the UPI lines).
 - **Bank and UPI are separate accounts.** A party can hold both: each is its own `fin_party_accounts` row (`method` bank or upi),
