@@ -25,8 +25,7 @@ test('adding or removing a household: chosen from the member list, a known featu
 });
 
 test('every feature names its flag', () => {
-  assert.deepEqual(featureIds(), ['rental', 'site_map']);
+  assert.deepEqual(featureIds(), ['rental']);
   assert.equal(FEATURES.rental.env, 'MEMBER_RENTAL_ENABLED');
-  assert.equal(FEATURES.site_map.env, 'MEMBER_SITE_MAP_ENABLED');
-  assert.equal(validateAccess({ householdId: ID, feature: 'site_map', enabled: true }).access.feature, 'site_map');
+  assert.match(validateAccess({ householdId: ID, feature: 'site_map', enabled: true }).error, /feature/);
 });

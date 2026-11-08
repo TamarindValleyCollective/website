@@ -4491,7 +4491,6 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     p.setAttribute('title', 'You are among the first to try this. Tell the core team what works and what does not.');
     return p;
   };
-  const previewNote = () => h('p', 'rent-note', 'You are among the first to try this. Tell the core team what works and what does not.');
   const NAV: NavItem[] = [
     { id: 'dashboard', label: 'Home', icon: IC.dash },
     { id: 'unit', label: 'My unit', icon: IC.unit },
@@ -4502,7 +4501,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     { id: 'directory', label: 'Directory', icon: IC.book },
     // Owners only, and only once the feature is switched on (MEMBER_RENTAL_ENABLED): probeRental() shows it.
     { id: 'rental', label: 'Rent out', icon: IC.stay, hidden: true },
-    // Early access (MEMBER_SITE_MAP_ENABLED, or a household on Preview): probeSiteMap() shows it.
+    // probeSiteMap() shows it once the map has loaded.
     { id: 'sitemap', label: 'Map', icon: IC.map, hidden: true },
     // Not built yet: kept out of the menu (they would only lead to a "coming soon" page) and listed
     // once, quietly, at the foot of the Home page. The routes stay so an old bookmark still lands somewhere.
@@ -7043,7 +7042,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
   type DirGroup = { people: { name: string; isYou: boolean }[]; bio: string; family: string; quotes: { name: string | null; why: string }[]; links: { name: string; url: string }[]; onPublicSite: boolean };
   type DirHousehold = { farmUnit: string; houseNo: string | null; cluster: string | null; unitType: string | null; people: DirPerson[]; groups: DirGroup[]; withoutStory: { name: string; isYou: boolean }[]; familyMembers: { name: string; isYou: boolean }[]; hasStory: boolean };
 
-  // ---- Site map (early access) ----
+  // ---- Site map ----
   // Every home on the site plan: who it belongs to and what type it is. Read-only; the layout is changed by admins.
   // What each home shows follows the directory (netlify/functions/members-sitemap.mts, scripts/lib/site-map.mjs).
   type MapUnit = {
@@ -7051,7 +7050,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     status: 'named' | 'private' | 'vacant'; names: string[]; unitType: string | null; bhk: string; detail: string; farmUnit: string | null; isYours: boolean;
   };
   type MapCluster = { id: string; baseSize: number; viewBox: number[]; plot: string };
-  let siteMap: { preview?: boolean; clusters: MapCluster[]; units: MapUnit[] } | null = null;
+  let siteMap: { clusters: MapCluster[]; units: MapUnit[] } | null = null;
 
   function setSiteMapVisible(on: boolean) {
     const item = NAV.find((n) => n.id === 'sitemap');
@@ -7066,8 +7065,6 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       const { status, data } = await memberFetch('/api/members-me/site-map');
       if (status === 200 && data.enabled) {
         siteMap = data;
-        const item = NAV.find((n) => n.id === 'sitemap');
-        if (item) item.preview = !!data.preview;
         setSiteMapVisible(true);
       } else setSiteMapVisible(false);
     } catch {
@@ -7088,7 +7085,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
 
   function viewSiteMap(): HTMLElement {
     const root = h('div');
-    root.append(h('h1', 'page-title', 'Map', h('small', '', 'Every home'), ...(siteMap?.preview ? [previewPill()] : [])), h('p', 'lede', 'Tap a home to see who it belongs to and what type it is.'), ...(siteMap?.preview ? [previewNote()] : []));
+    root.append(h('h1', 'page-title', 'Map', h('small', '', 'Every home')), h('p', 'lede', 'Tap a home to see who it belongs to and what type it is.'));
     const data = siteMap;
     if (!data || !data.units.length) {
       root.append(h('p', 'lede', 'The site map is not available right now.'));

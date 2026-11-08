@@ -4,13 +4,11 @@
 //   GET /api/members-me/site-map    the clusters (plot lines, view box, base size) and every home with what this member may see
 //
 // What a member may see of each home follows the directory exactly (scripts/lib/site-map.mjs, tested there): names only for
-// people who are active and have not opted out, never an email, phone or land record. The whole feature is dark until
-// MEMBER_SITE_MAP_ENABLED=true (everyone), or for the households a super admin lists under Preview
-// (member_feature_access, feature 'site_map'): anyone else gets "Not found", so the page is not even revealed.
+// people who are active and have not opted out, never an email, phone or land record. Open to every signed-in member who has
+// read the privacy notice.
 import { requireMember } from './lib/member-access';
 import { privacyNoticeRequired } from '../../scripts/lib/member-privacy.mjs';
 import { restHeaders } from '../../scripts/lib/supabase.mjs';
-import { featureOn } from '../../scripts/lib/member-features.mjs';
 import { buildSiteMap, shapeClusters } from '../../scripts/lib/site-map.mjs';
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -29,20 +27,11 @@ async function select(table: string, query: string): Promise<any[]> {
   return res.json();
 }
 
-// On for everyone when MEMBER_SITE_MAP_ENABLED is "true"; otherwise only for a household a super admin has listed.
-async function siteMapOn(householdId: string | undefined): Promise<boolean> {
-  if (featureOn(process.env.MEMBER_SITE_MAP_ENABLED, false)) return true;
-  if (!householdId) return false;
-  const rows = await select('member_feature_access', `household_id=eq.${householdId}&feature=eq.site_map&select=feature`);
-  return featureOn(process.env.MEMBER_SITE_MAP_ENABLED, rows.length > 0);
-}
-
 async function handleGet(req: Request): Promise<Response> {
   const auth = await requireMember(req);
   if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
   if (privacyNoticeRequired(auth.member.privacyVersion)) return jsonResponse({ error: 'Please read the privacy notice first.' }, 403);
   const householdId = auth.member.householdIds[0];
-  if (!(await siteMapOn(householdId))) return jsonResponse({ error: 'Not found' }, 404);
 
   // Only the columns the page may show: ids and names, no email, phone or land fields.
   const [clusters, units, households, people, memberships] = await Promise.all([
@@ -52,8 +41,7 @@ async function handleGet(req: Request): Promise<Response> {
     select('member_people', 'select=id,full_name,active,directory_visible'),
     select('member_household_members', 'select=household_id,person_id,role'),
   ]);
-  // `preview`: the flag is not on for everyone yet, so this household is among the first to see it.
-  return jsonResponse({ enabled: true, preview: process.env.MEMBER_SITE_MAP_ENABLED !== 'true', clusters: shapeClusters(clusters), units: buildSiteMap({ units, households, people, memberships }, householdId ?? null) });
+  return jsonResponse({ enabled: true, clusters: shapeClusters(clusters), units: buildSiteMap({ units, households, people, memberships }, householdId ?? null) });
 }
 
 export default async (req: Request): Promise<Response> => {

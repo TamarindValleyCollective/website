@@ -999,8 +999,9 @@ outside both the local machine and Netlify (the member-update-email workflow).
   flag is `true` (My rental: `MEMBER_RENTAL_ENABLED`), and otherwise only for the households a super admin lists on
   **Preview** (`src/pages/internal/preview-features.astro`, Admin menu: a grid of the homes that have a preview, by feature, with a switch each, first names only, an Add homes picker and Undo; it reads the `access` part of the same `overview` and posts one home at a time to `/api/units-admin/access`; step-up, audited as `units.access_granted` / `units.access_removed`). The feature's GET also returns `preview: true` while its flag is not `true`, and the member portal then shows a small Preview mark beside the menu item and the page title. A household
   not listed gets the same 404 as when the feature does not exist. The rule is in `scripts/lib/member-features.mjs`;
-  a later feature adds its name there and to the table's check constraint, with no new table. The second feature is
-  **Site map** (`site_map`, flag `MEMBER_SITE_MAP_ENABLED`; migration `0074` widens the check constraint).
+  a later feature adds its name there and to the table's check constraint, with no new table. The Site map was the second
+  preview feature (`site_map`, migration `0074`) and is now open to every signed-in member: it is no longer in
+  `FEATURES`, `MEMBER_SITE_MAP_ENABLED` is unused, and old `site_map` grants are ignored.
 - **`netlify/functions/members-sitemap.mts`** — the member portal's **Site map** tab (`GET /api/members-me/site-map`,
   read-only): every home drawn on the 2023 site plan, with its owner, unit type and a link to their directory profile
   (`#/directory?unit=F-xx` opens that household's popup). Tables (migration `0074`, service role only, RLS on, no
