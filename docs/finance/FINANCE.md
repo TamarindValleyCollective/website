@@ -108,6 +108,15 @@ for esbuild, and Node 22.18+ or newer, which imports the registry `.ts` directly
   `fin_audit_log`. The account then shows "Verified by X on date · method". Details verified before this migration show
   "Method not recorded". The sheet shows "3 of 118 to verify" and **Verify and open next**. **Migration 0082 must be applied
   before the code that sends the method is deployed.**
+- **Bank and UPI are separate accounts.** A party can hold both: each is its own `fin_party_accounts` row (`method` bank or upi),
+  verified, retired and superseded on its own. A new bank account only supersedes the live bank row, never the UPI one.
+- **IFSC lookup.** `GET /ifsc/:code` (any `finance` view role) asks Razorpay's free public IFSC directory
+  (`ifsc.razorpay.com`) and returns the bank, branch and city. The payee form shows it under the IFSC field as it is typed
+  ("No bank branch has this IFSC code" if none), and the verify sheet shows it beside the revealed code. It proves the branch
+  exists, not that the account does or whose it is. Only the IFSC is sent; a failed lookup shows nothing and never blocks saving.
+  **Checking the account holder's name has no free service**: a penny-drop (a paid API such as RazorpayX validation) is the
+  only automated way. Free options stay manual: the name a UPI app shows for a UPI id, the beneficiary name in net banking,
+  or the "small test transfer" verify method.
 - **The Overview ("Needs you").** `GET /overview` returns `attention`: payees to verify (parties with an unverified live account),
   payees needing review, statement gaps, Paytm payments with no bank line and Paytm payments waiting, the last import date and
   counts of parties and bank accounts. Counts and labels only: no names, numbers or fingerprints. Each row links into the

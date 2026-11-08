@@ -271,12 +271,37 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
   }
   const input = (name: string, attrs: Record<string, string> = {}) => h('input', { attrs: { name, autocomplete: 'off', ...attrs } }) as HTMLInputElement;
 
+  // Which bank and branch an IFSC names, so a mistyped code shows at once. Only the IFSC is looked up, never the account
+  // number, and a failed lookup never blocks saving. Stale answers (the field moved on) are dropped.
+  async function showBranch(code: string, el: HTMLElement) {
+    const ifsc = code.replace(/\s+/g, '').toUpperCase();
+    el.hidden = true;
+    el.classList.remove('error');
+    if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc)) return;
+    const { status, data: found } = await call(`/api/finance-admin/ifsc/${ifsc}`);
+    if (code !== el.dataset.asked) return;
+    if (status !== 200 || found?.unavailable) return;
+    el.hidden = false;
+    if (found?.found) el.textContent = [found.bank, found.branch, found.city].filter(Boolean).join(' · ');
+    else {
+      el.classList.add('error');
+      el.textContent = 'No bank branch has this IFSC code. Check it against the cheque or letter.';
+    }
+  }
+  const watchIfsc = (field: HTMLInputElement, el: HTMLElement) =>
+    field.addEventListener('input', () => {
+      el.dataset.asked = field.value;
+      void showBranch(field.value, el);
+    });
+
   function payeeFields() {
     const method = h('select', { attrs: { name: 'method' } }, h('option', { text: 'Bank transfer', attrs: { value: 'bank' } }), h('option', { text: 'UPI', attrs: { value: 'upi' } })) as HTMLSelectElement;
     const account = input('account', { inputmode: 'numeric' });
     const ifsc = input('ifsc');
     const upi = input('upi', { placeholder: 'name@bank' });
-    const bank = h('div', { class: 'stack-form' }, labelled('Account number', account), labelled('IFSC code', ifsc));
+    const branch = h('p', { class: 'hint', attrs: { hidden: '', 'aria-live': 'polite' } });
+    watchIfsc(ifsc, branch);
+    const bank = h('div', { class: 'stack-form' }, labelled('Account number', account), labelled('IFSC code', ifsc), branch);
     const upiBox = h('div', { class: 'stack-form', attrs: { hidden: '' } }, labelled('UPI id', upi));
     method.addEventListener('change', () => {
       bank.hidden = method.value !== 'bank';
@@ -596,6 +621,11 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
     const at = queue.findIndex((x) => x.p.id === p.id);
     const others = p.accounts.filter((x) => x.id !== a.id && x.method === a.method && !isRetired(x));
     const msg = h('p', { class: 'error', attrs: { hidden: '' } });
+    const branchNote = h('p', { class: 'hint', attrs: { hidden: '', 'aria-live': 'polite' } });
+    if (d.ifsc) {
+      branchNote.dataset.asked = d.ifsc;
+      void showBranch(d.ifsc, branchNote);
+    }
 
     const radios = VERIFY_METHODS.map((m: { id: string; label: string }) => {
       const radio = h('input', { attrs: { type: 'radio', name: 'how', value: m.id } }) as HTMLInputElement;
@@ -653,6 +683,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
       dlg,
       h('div', { class: 'verify-head' }, h('h2', { text: `Verify ${p.name}`, attrs: { id: 'verify-title' } }), at >= 0 ? h('span', { class: 'small-note', text: `${at + 1} of ${queue.length} to verify` }) : null),
       h('ul', { class: 'list' }, ...lines.map(([k, v]) => h('li', {}, h('div', { class: 'row' }, h('span', { class: 'grow' }, h('span', { class: 'detail', text: k }), h('span', { class: 'title', text: v ?? '' })))))),
+      branchNote,
       others.length ? h('p', { class: 'note', text: `This payee also has an account ending ${others.map(last4Of).join(' and ')}. Check which one they use now before verifying.` }) : null,
       h('p', { class: 'field-label', text: 'How did you check these details?' }),
       h('div', { class: 'radios', attrs: { role: 'group', 'aria-label': 'How you checked' } }, ...radios.map((r) => r.node)),

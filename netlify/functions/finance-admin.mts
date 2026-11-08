@@ -18,6 +18,7 @@ import { restHeaders } from '../../scripts/lib/supabase.mjs';
 import { payeeFieldVisibility } from '../../scripts/lib/finance-access.mjs';
 import { todayIST } from '../../scripts/lib/finance-parties.mjs';
 import { attentionOf } from '../../scripts/lib/finance-attention.mjs';
+import { lookupIfsc } from '../../scripts/lib/finance-ifsc.mjs';
 import { PARTY_ID, addVendor, addPayeeAccount, createParty, listParties, mergeParty, retirePayeeAccount, revealPayeeAccount, reviewParty, unmergeParty, updateParty, verifyPayeeAccount } from './lib/finance-parties';
 import { REQUEST_ID, addVoucher, cancelOrDecide, listFiles, createRecord, getVoucher, listMine, listRequests, matchRecord, reviewRecord, unmatchRecord } from './lib/finance-requests';
 import { listUpiLines } from './lib/finance-upi-view';
@@ -35,6 +36,13 @@ async function countRows(table: string, filter = ''): Promise<number> {
   const res = await rest(`/${table}?select=id${filter}&limit=1`, { headers: { Prefer: 'count=exact' } });
   const total = res.headers.get('content-range')?.split('/')[1];
   return total && /^\d+$/.test(total) ? Number(total) : 0;
+}
+
+// Which bank and branch an IFSC names (free Razorpay directory; only the IFSC is sent, never an account number).
+async function handleIfsc(req: Request, code: string): Promise<Response> {
+  const auth = await requireStaff(req, 'finance', 'view');
+  if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
+  return jsonResponse(await lookupIfsc(code));
 }
 
 async function handleOverview(req: Request): Promise<Response> {
@@ -196,6 +204,8 @@ const dispatch = async (req: Request): Promise<Response> => {
   if (route === '/imports/commit' && req.method === 'POST') return handleImport(req, true);
   if (route === '/bank-accounts' && req.method === 'POST') return handleAddBankAccount(req);
   // Parties and payee accounts (session 04)
+  const ifsc = /^\/ifsc\/([A-Za-z0-9]{1,11})$/.exec(route);
+  if (ifsc && req.method === 'GET') return handleIfsc(req, ifsc[1]);
   if (route === '/parties' && req.method === 'GET') return listParties(req);
   if (route === '/parties' && req.method === 'POST') return createParty(req);
   const party = /^\/parties\/([^/]+)(\/accounts|\/review|\/merge|\/unmerge)?$/.exec(route);
@@ -271,6 +281,7 @@ export const config = {
     '/api/finance-admin/imports/preview',
     '/api/finance-admin/imports/commit',
     '/api/finance-admin/bank-accounts',
+    '/api/finance-admin/ifsc/*',
     '/api/finance-admin/parties',
     '/api/finance-admin/parties/*',
     '/api/finance-admin/accounts/*',
