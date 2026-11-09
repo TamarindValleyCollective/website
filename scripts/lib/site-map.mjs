@@ -76,11 +76,11 @@ export function shapeClusters(rows) {
 // (the pages share an orientation, so no rotation). The database keeps each home in its own page's coordinates, so the
 // admin layout editor is untouched; only what is sent to the member portal is combined. The scale is the page's base size
 // over the first page's (the same house is drawn at 1.63 on H1-A and 1.8 on H1-B, so H1-B is drawn at 1.63 / 1.8).
-// The offsets were set against the key plan; change them here if the two blocks ever need to move against each other.
+// The offsets were set by laying the plan over a satellite image (the plan is about 8.5 degrees clockwise of north-up); change them here if the two blocks ever need to move against each other.
 export const SHEETS = {
   H1: [
     { page: 'H1-A', scale: 1, dx: 0, dy: 0 },
-    { page: 'H1-B', scale: 1.63 / 1.8, dx: -630, dy: -285 },
+    { page: 'H1-B', scale: 1.63 / 1.8, dx: -778, dy: -509 },
   ],
 };
 /** The sheet a plan page belongs to ("H1" for H1-A and H1-B); a page on no sheet is its own. */

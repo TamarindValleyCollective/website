@@ -9,4 +9,4 @@ The layout of the 52 homes on the 2023 site plan, fixed by hand on 2026-10-29 wi
 - `scripts/gen-site-map-migration.py` regenerates the seed part of the migration from these two files. After 0074 is applied
   the database is the source of truth (admins change the layout in the admin portal); these files are history.
 - The member map shows H1-A and H1-B as one H1 sheet (`SHEETS` in `scripts/lib/site-map.mjs`): H1-B is moved into H1-A's
-  coordinates by a scale (1.63 / 1.8) and an offset set against the key plan. The stored coordinates stay per page.
+  coordinates by a scale (1.63 / 1.8) and an offset set by laying the plan over a satellite image (the plan is about 8.5 degrees clockwise of north-up). The stored coordinates stay per page.
