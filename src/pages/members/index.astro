@@ -7413,17 +7413,20 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       world.setAttribute('transform', `matrix(${a} ${b} ${c} ${d} ${p0[0] - a * x0 - c * y0} ${p0[1] - b * x0 - d * y0})`);
       satScale = Math.hypot(a, b) || 1;
     }
+    // The script is loaded once, whoever asks first (a press of the switch, or the quiet preload below); asking again returns the same load,
+    // so an impatient second press can never add another copy of Google's script.
+    let mapsScript: Promise<void> | null = null;
     function loadGoogleMaps(): Promise<void> {
       if ((window as any).google?.maps?.Map) return Promise.resolve();
-      return new Promise((res, rej) => {
+      return (mapsScript ??= new Promise<void>((res, rej) => {
         (window as any).__tvcMapsReady = () => res();
         (window as any).gm_authFailure = () => { satFailed = true; void setSat(false); toast('The satellite map is not available right now. The plan is shown without it.'); };
         const el = document.createElement('script');
         el.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(MAPS_KEY)}&v=weekly&callback=__tvcMapsReady`;
         el.async = true;
-        el.onerror = () => rej(new Error('maps'));
+        el.onerror = () => { mapsScript = null; rej(new Error('maps')); };
         document.head.append(el);
-      });
+      }));
     }
     function tapMap(lat: number, lng: number) {
       const g = groundOf(clusterId);
@@ -7444,15 +7447,36 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       const near = inside ?? here.map((u) => ({ u, d: Math.hypot(u.x - x, u.y - y) })).sort((p, q) => p.d - q.d).filter((p) => p.d <= 4 * Math.hypot(g.a, g.b))[0]?.u;
       if (near) pick(near); else if (selected) pick(null);
     }
+    let satBusy = false;
     async function setSat(on: boolean) {
+      if (satBusy) return; // the map is still being brought up: another press changes nothing
       if (on && (satFailed || !(MAPS_KEY && groundOf(clusterId)))) return;
       if (on && !gmap) {
-        try { await loadGoogleMaps(); } catch { satFailed = true; toast('The satellite map could not be loaded.'); paint(); return; }
+        // Show at once that the press was taken; the first load can take a couple of seconds.
+        satBusy = true;
+        satBtn.textContent = 'Loading…';
+        satBtn.setAttribute('aria-busy', 'true');
+        satBtn.setAttribute('aria-pressed', 'true');
+        try { await loadGoogleMaps(); } catch {
+          satFailed = true;
+          satBusy = false;
+          satBtn.textContent = 'Satellite';
+          satBtn.removeAttribute('aria-busy');
+          toast('The satellite map could not be loaded.');
+          paint();
+          return;
+        }
         gdiv.hidden = false;
-        gmap = new (window as any).google.maps.Map(gdiv, { mapTypeId: 'satellite', tilt: 0, center: { lat: 20, lng: 78 }, zoom: 3, disableDefaultUI: true, gestureHandling: 'greedy', clickableIcons: false, maxZoom: 21, keyboardShortcuts: false });
+        // Born where the plan is on the ground (not the world and then a fly-in), so the first picture is the right one.
+        const g = groundOf(clusterId);
+        const [clat, clng] = g ? geoOf(g, vb[0] + vb[2] / 2, vb[1] + vb[3] / 2) : [20, 78];
+        gmap = new (window as any).google.maps.Map(gdiv, { mapTypeId: 'satellite', tilt: 0, center: { lat: clat, lng: clng }, zoom: g ? 17 : 3, disableDefaultUI: true, gestureHandling: 'greedy', clickableIcons: false, maxZoom: 21, keyboardShortcuts: false });
         gmap.addListener('bounds_changed', () => syncSat());
         gmap.addListener('click', (e: any) => tapMap(e.latLng.lat(), e.latLng.lng()));
         gmap.addListener('idle', () => { if (!satOn) return; const v = mapViewAsSheet(); if (v) { fromMap = true; vb = v; paint(); fromMap = false; } });
+        satBusy = false;
+        satBtn.textContent = 'Satellite';
+        satBtn.removeAttribute('aria-busy');
       }
       satOn = on;
       stage.classList.toggle('is-sat', on);
@@ -7461,6 +7485,9 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       if (!on) world.removeAttribute('transform');
       paint();
     }
+    // Quietly fetch Google's script a moment after the map is shown (only where the layer is on offer), so the first press is quick.
+    // Loading the script is not a map load (nothing is drawn or counted until the map is made on the first press).
+    if (MAPS_KEY && data.ground && Object.keys(data.ground).length) window.setTimeout(() => void loadGoogleMaps().catch(() => { /* the press will say so */ }), 1200);
     satBtn.addEventListener('click', () => void setSat(!satOn));
     const unitsPerPx = () => { if (satOn) return 1 / satScale; const r = svg.getBoundingClientRect(); return Math.max(vb[2] / (r.width || 1), vb[3] / (r.height || 1)); };
     const toUser = (e: { clientX: number; clientY: number }) => {
