@@ -60,6 +60,24 @@ import '../../styles/site-map.css';
             <button type="button" class="button button--outline" id="overlay" aria-pressed="true">Show the plan on the map</button>
             <label class="line">Plan strength <input type="range" id="strength" min="10" max="100" value="90" /></label>
           </div>
+          <section class="tune" id="tune" hidden aria-label="Fine-tune the plan on the map">
+            <h3>Fine-tune</h3>
+            <p class="hint">Nudge the plan on the map by hand. Turning and resizing pivot on the middle of your pairs. Pairs stay as they are, so Reset goes back to the fit from them.</p>
+            <div class="tune-row">
+              <span class="k">Move</span>
+              <div class="dpad" id="tune-move" role="group" aria-label="Move the plan"></div>
+              <span class="k">Turn</span>
+              <div class="pair" id="tune-turn" role="group" aria-label="Turn the plan"></div>
+              <span class="k">Size</span>
+              <div class="pair" id="tune-size" role="group" aria-label="Resize the plan"></div>
+            </div>
+            <div class="tune-row">
+              <span class="k">Step</span>
+              <div class="segmented" id="tune-step" role="group" aria-label="Size of each nudge"></div>
+              <button type="button" class="button button--outline" id="tune-reset">Reset fine-tune</button>
+            </div>
+            <p class="hint" id="tune-readout" role="status"></p>
+          </section>
         </div>
       </div>
 
@@ -115,6 +133,14 @@ import '../../styles/site-map.css';
   .align .pairs .what { flex: 1; min-width: 0; }
   .align .pairs .off { color: var(--tvc-ink-soft); }
   .align .pairs .is-off .off { color: var(--tvc-error-text); font-weight: 600; }
+  .align .tune { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--tvc-line); }
+  .align .tune h3 { margin: 0 0 4px; font-size: var(--text-md); }
+  .align .tune-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 8px; }
+  .align .tune .k { color: var(--tvc-ink-soft); font-size: var(--text-sm); }
+  .align .tune .button { min-width: 36px; padding: 0 10px; }
+  .align .tune .dpad { display: grid; grid-template-columns: repeat(3, 36px); grid-auto-rows: 36px; gap: 4px; }
+  .align .tune .dpad .button { width: 36px; min-width: 0; padding: 0; }
+  .align .tune .pair { display: flex; gap: 4px; }
   .align .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
   .align .dirty { color: var(--tvc-orange-text); font-size: var(--text-sm); margin: 8px 0 0; }
 </style>
@@ -122,7 +148,7 @@ import '../../styles/site-map.css';
 <script>
   import { StaffAuthError, clearStepUp, clearToken, decodeTokenEmail, getToken, setToken, showToast, staffFetch } from '../../../scripts/lib/staff-client.mjs';
   import { busyForPress } from '../../../scripts/lib/busy.mjs';
-  import { MAX_PAIRS, MIN_PAIRS, fitSimilarity, geoToLocal, localToGeo, originOf, planToLocal } from '../../../scripts/lib/site-map-align.mjs';
+  import { MAX_PAIRS, MIN_PAIRS, NO_TUNE, applyTune, fitSimilarity, geoToLocal, isTuned, localToGeo, originOf, pivotOf, planToLocal, tuneBetween } from '../../../scripts/lib/site-map-align.mjs';
   import { SVG_NS } from '../../../scripts/lib/site-map-draw.mjs';
 
   declare const google: any;
@@ -173,6 +199,10 @@ import '../../styles/site-map.css';
   let dirty = false;
   // The plan is drawn on the map as soon as two pairs place it (two points fix scale, rotation and shift); more pairs refine it.
   let showOverlay = true;
+  // The hand fine-tune on top of the fit from the pairs (east/north in metres, rotate in degrees clockwise, scale a factor).
+  type Tune = { east: number; north: number; rotate: number; scale: number };
+  let tune: Tune = { ...NO_TUNE };
+  let savedTune: Tune = { ...NO_TUNE };
   const clusterOf = (id: string) => clusters.find((c) => c.id === id) ?? clusters[0];
 
   // ---- the plan page: pan by dragging, zoom with the wheel or two fingers; a touch that does not move is a tap ----
@@ -268,8 +298,11 @@ import '../../styles/site-map.css';
   function fit() {
     const f0 = frame();
     if (!f0 || pairs.length < 2) return null;
-    const f = fitSimilarity(pairs.map((p) => ({ plan: p.plan, image: geoToLocal(f0, p.geo as [number, number]) })));
-    return f ? { ...f, frame: f0, residualsM: f.residuals.map((r: number) => r / f.scale), rmsM: f.rms / f.scale } : null;
+    const base = fitSimilarity(pairs.map((p) => ({ plan: p.plan, image: geoToLocal(f0, p.geo as [number, number]) })));
+    if (!base) return null;
+    // `a, b, tx, ty` are the fit the plan is drawn and saved with (fine-tuned); the pairs' distances stay those from the pairs' own fit.
+    const eff = isTuned(tune) ? applyTune(base, tune, pivotOf(pairs, f0)) : base;
+    return { ...base, ...eff, scale: Math.hypot(eff.a, eff.b), rotation: (Math.atan2(eff.b, eff.a) * 180) / Math.PI, frame: f0, residualsM: base.residuals.map((r: number) => r / base.scale), rmsM: base.rms / base.scale };
   }
   type Fit = NonNullable<ReturnType<typeof fit>>;
 
@@ -390,7 +423,7 @@ import '../../styles/site-map.css';
       const undo = h('button', 'button button--outline', 'Discard changes') as HTMLButtonElement;
       undo.setAttribute('type', 'button');
       undo.disabled = !dirty;
-      undo.addEventListener('click', () => { pairs = (saved.find((s) => s.cluster === clusterId)?.pairs ?? []).map((p) => ({ ...p })); pending = null; dirty = false; paint(); });
+      undo.addEventListener('click', () => { pairs = (saved.find((s) => s.cluster === clusterId)?.pairs ?? []).map((p) => ({ ...p })); tune = { ...savedTune }; pending = null; dirty = false; paint(); });
       const clear = h('button', 'button button--danger-outline', 'Remove this alignment');
       clear.setAttribute('type', 'button');
       clear.hidden = !old;
@@ -410,6 +443,8 @@ import '../../styles/site-map.css';
     paintCard(f, off);
     ($('overlay') as HTMLButtonElement).setAttribute('aria-pressed', String(showOverlay));
     $('overlaybar').hidden = !(map && f);
+    $('tune').hidden = !(map && f && canEdit);
+    paintTune();
     if (!map) setHint(MAPS_KEY ? 'Loading the map…' : 'The map needs a Google Maps key.');
     else if (pending) setHint('Now tap the same spot on the satellite map.', true);
     else if (pairs.length === 1) setHint('Pair a second point, far from the first: the plan then appears on the map.');
@@ -423,7 +458,7 @@ import '../../styles/site-map.css';
   async function saveAlignment() {
     const done = busyForPress('Saving…');
     try {
-      const { status, data: out } = await staffFetch('/api/site-map-admin/alignment', { method: 'POST', body: { cluster: clusterId, pairs } });
+      const { status, data: out } = await staffFetch('/api/site-map-admin/alignment', { method: 'POST', body: { cluster: clusterId, pairs, tune: isTuned(tune) ? tune : undefined } });
       if (status !== 200) { showToast(out?.error ?? 'Could not save. Try again.'); return; }
       showToast(`Saved the alignment of ${clusterId}.`);
       await loadAlignments();
@@ -442,13 +477,64 @@ import '../../styles/site-map.css';
       selectCluster(clusterId);
     } catch (err) { errToast(err); } finally { done(); }
   }
+  // ---- fine-tune controls ----
+  const STEPS: Record<string, { label: string; m: number; deg: number; pct: number }> = {
+    fine: { label: 'Fine', m: 0.25, deg: 0.1, pct: 0.25 },
+    medium: { label: 'Medium', m: 1, deg: 0.5, pct: 1 },
+    coarse: { label: 'Coarse', m: 4, deg: 2, pct: 4 },
+  };
+  let step = 'medium';
+  const clampTune = (t: Tune): Tune => ({ east: Math.max(-300, Math.min(300, t.east)), north: Math.max(-300, Math.min(300, t.north)), rotate: Math.max(-30, Math.min(30, t.rotate)), scale: Math.max(0.8, Math.min(1.25, t.scale)) });
+  const r3 = (n: number) => Math.round(n * 1000) / 1000;
+  function nudge(change: Partial<Tune>) {
+    tune = clampTune({ east: r3(tune.east + (change.east ?? 0)), north: r3(tune.north + (change.north ?? 0)), rotate: r3(tune.rotate + (change.rotate ?? 0)), scale: Math.round(tune.scale * (change.scale ?? 1) * 1e5) / 1e5 });
+    dirty = dirty || isTuned(tune) !== isTuned(savedTune) || JSON.stringify(tune) !== JSON.stringify(savedTune);
+    paint();
+  }
+  function tuneButton(label: string, text: string, onClick: () => void): HTMLElement {
+    const b = h('button', 'button button--outline', text);
+    b.setAttribute('type', 'button');
+    b.setAttribute('aria-label', label);
+    b.addEventListener('click', onClick);
+    return b;
+  }
+  {
+    const s = () => STEPS[step];
+    const blank = () => h('span');
+    $('tune-move').replaceChildren(blank(), tuneButton('Move the plan north', '↑', () => nudge({ north: s().m })), blank(),
+      tuneButton('Move the plan west', '←', () => nudge({ east: -s().m })), blank(), tuneButton('Move the plan east', '→', () => nudge({ east: s().m })),
+      blank(), tuneButton('Move the plan south', '↓', () => nudge({ north: -s().m })), blank());
+    $('tune-turn').replaceChildren(tuneButton('Turn the plan anticlockwise', '↺', () => nudge({ rotate: -s().deg })), tuneButton('Turn the plan clockwise', '↻', () => nudge({ rotate: s().deg })));
+    $('tune-size').replaceChildren(tuneButton('Make the plan smaller', '−', () => nudge({ scale: 1 - s().pct / 100 })), tuneButton('Make the plan larger', '+', () => nudge({ scale: 1 + s().pct / 100 })));
+    $('tune-step').replaceChildren(...Object.entries(STEPS).map(([id, v]) => { const b = h('button', '', v.label); b.setAttribute('type', 'button'); b.setAttribute('data-step', id); b.addEventListener('click', () => { step = id; paintTune(); }); return b; }));
+    $('tune-reset').addEventListener('click', () => { tune = { ...NO_TUNE }; dirty = dirty || isTuned(savedTune); paint(); });
+  }
+  function paintTune() {
+    $('tune-step').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.getAttribute('data-step') === step)));
+    const bits: string[] = [];
+    if (Math.abs(tune.east) >= 0.01) bits.push(`${nf.format(Math.abs(tune.east))} m ${tune.east > 0 ? 'east' : 'west'}`);
+    if (Math.abs(tune.north) >= 0.01) bits.push(`${nf.format(Math.abs(tune.north))} m ${tune.north > 0 ? 'north' : 'south'}`);
+    if (Math.abs(tune.rotate) >= 0.005) bits.push(`turned ${tune.rotate > 0 ? 'clockwise' : 'anticlockwise'} ${nf.format(Math.abs(tune.rotate))}°`);
+    if (Math.abs(tune.scale - 1) >= 1e-4) bits.push(`${tune.scale > 1 ? 'larger' : 'smaller'} by ${nf.format(Math.abs(tune.scale - 1) * 100)}%`);
+    $('tune-readout').textContent = bits.length ? `Fine-tuned: ${bits.join(', ')}.` : 'Not fine-tuned: the plan sits where your pairs put it.';
+    ($('tune-reset') as HTMLButtonElement).disabled = !isTuned(tune);
+  }
   $('overlay').addEventListener('click', () => { showOverlay = !showOverlay; paint(); });
   $('strength').addEventListener('input', paint);
 
   // ---- loading ----
+  // The fine-tune a saved page carries: how its stored fit differs from the fit its own pairs give.
+  function tuneOf(s: Saved | undefined): Tune {
+    if (!s || s.pairs.length < 2) return { ...NO_TUNE };
+    const f0 = { lat: s.originLat, lng: s.originLng };
+    const base = fitSimilarity(s.pairs.map((p) => ({ plan: p.plan, image: geoToLocal(f0, p.geo as [number, number]) })));
+    return base ? { ...tuneBetween(base, s, pivotOf(s.pairs, f0)) } : { ...NO_TUNE };
+  }
   function selectCluster(id: string) {
     clusterId = id;
     pairs = (saved.find((s) => s.cluster === id)?.pairs ?? []).map((p) => ({ ...p }));
+    savedTune = tuneOf(saved.find((s) => s.cluster === id));
+    tune = { ...savedTune };
     pending = null;
     dirty = false;
     vb = [...clusterOf(id).viewBox];

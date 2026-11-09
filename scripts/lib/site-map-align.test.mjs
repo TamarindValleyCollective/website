@@ -92,3 +92,42 @@ test('sheetsFromAlignments uses the map when every page of a sheet is aligned, a
   assert.ok(Math.abs(same.H1[1].scale - 2) < 1e-9);
   for (const k of ['scale', 'rotate', 'dx', 'dy']) assert.ok(Math.abs(same.H1[1][k] - other.H1[1][k]) < 5e-3, k);
 });
+
+test('fine-tune moves the plan on the ground by what was asked, about the pairs\' middle', async () => {
+  const { applyTune, tuneBetween, pivotOf, isTuned, NO_TUNE, planToLocal } = await import('./site-map-align.mjs');
+  const base = { ...truth };
+  const pivot = [200, 150];
+  // No adjustment changes nothing.
+  const same = applyTune(base, NO_TUNE, pivot);
+  assert.ok(Math.abs(same.a - base.a) < 1e-12 && Math.abs(same.tx - base.tx) < 1e-9);
+  // 10 m east, 4 m north: every plan point lands 10 m east and 4 m north of where it was (local y points south).
+  const moved = applyTune(base, { east: 10, north: 4, rotate: 0, scale: 1 }, pivot);
+  const plan = [321, -77];
+  const before = planToLocal(base, plan), after = planToLocal(moved, plan);
+  assert.ok(Math.abs(after[0] - before[0] - 10) < 1e-9 && Math.abs(after[1] - before[1] + 4) < 1e-9);
+  // A turn leaves the pivot where it is, and turns every other point clockwise about it.
+  const turnPlan = imageToPlan(base, pivot);
+  const turned = applyTune(base, { east: 0, north: 0, rotate: 10, scale: 1 }, pivot);
+  const pivotAfter = planToLocal(turned, turnPlan);
+  assert.ok(Math.abs(pivotAfter[0] - pivot[0]) < 1e-9 && Math.abs(pivotAfter[1] - pivot[1]) < 1e-9);
+  assert.ok(Math.abs(turned.a === undefined ? 1 : Math.atan2(turned.b, turned.a) * 180 / Math.PI - (30 - 10)) < 1e-9); // the plan turns clockwise, the fit's angle falls
+  // Resizing 5% about the pivot, then asking what the adjustment was, gives the same adjustment back.
+  const tune = { east: 3.5, north: -2, rotate: 1.25, scale: 1.05 };
+  const back = tuneBetween(base, applyTune(base, tune, pivot), pivot);
+  for (const k of Object.keys(tune)) assert.ok(Math.abs(back[k] - tune[k]) < 1e-9, k);
+  assert.ok(!isTuned(NO_TUNE) && isTuned(tune));
+  assert.deepEqual(tuneBetween(base, base, pivot), { ...NO_TUNE });
+  assert.ok(Array.isArray(pivotOf([{ geo: [29.7, 79.6] }, { geo: [29.7002, 79.6002] }], ORIGIN)));
+});
+
+test('validateAlignment applies a fine-tune, rejects an absurd one, and keeps the pairs\' distances from the tuned fit', () => {
+  const body = (tune) => ({ cluster: 'H1-B', pairs: pairsFor(truth), tune });
+  const plain = validateAlignment(body(undefined), ORIGIN);
+  const tuned = validateAlignment(body({ east: 5, north: 0, rotate: 0, scale: 1 }), ORIGIN);
+  assert.ok(!('error' in tuned));
+  assert.deepEqual(tuned.tune, { east: 5, north: 0, rotate: 0, scale: 1 });
+  assert.ok(plain.fit.rms < 0.05); // coordinates are kept to 7 decimals (about a centimetre)
+  // Moving the plan 5 m puts every pair 5 m (10 plan units at 2 per metre) from the fit.
+  assert.ok(Math.abs(tuned.fit.rms - 10) < 0.05, String(tuned.fit.rms));
+  for (const bad of [{ east: 400 }, { rotate: 40 }, { scale: 2 }, { scale: 0.5 }, { east: 'x' }, 7]) assert.ok('error' in validateAlignment(body(bad), ORIGIN), JSON.stringify(bad));
+});

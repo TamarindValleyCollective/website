@@ -60,6 +60,64 @@ export function geoToLocal(origin, [lat, lng]) {
 export function localToGeo(origin, [x, y]) {
   return [origin.lat - y / M_PER_DEG_LAT, origin.lng + x / (M_PER_DEG_LNG_AT_EQUATOR * Math.cos((origin.lat * Math.PI) / 180))];
 }
+// ---- Fine-tuning -------------------------------------------------------------------------------------------------
+// After the fit from the pairs, an admin can move, turn and resize the plan on the ground by hand. That is a change of the
+// plan's position on the ground (G) about a pivot P (the middle of the pairs): ground' = P + scale * R(rotate) * (ground - P) +
+// (east, north). Applied to the fit it gives another similarity, so nothing else has to know about it: the stored a, b, tx, ty
+// are the fine-tuned fit, and tuneBetween works the adjustment back out of a stored fit and its pairs when a page is reopened.
+// East is metres east and north metres north on the map; rotate is degrees clockwise; scale is a factor (1.01 is 1% larger).
+export const NO_TUNE = Object.freeze({ east: 0, north: 0, rotate: 0, scale: 1 });
+export const TUNE_LIMITS = { move: 300, rotate: 30, scaleMin: 0.8, scaleMax: 1.25 };
+const cmul = (p, q) => [p[0] * q[0] - p[1] * q[1], p[0] * q[1] + p[1] * q[0]];
+const cdiv = (p, q) => { const k = q[0] * q[0] + q[1] * q[1]; return [(p[0] * q[0] + p[1] * q[1]) / k, (p[1] * q[0] - p[0] * q[1]) / k]; };
+
+/** True when the adjustment is more than rounding noise. */
+export const isTuned = (t) => !!t && (Math.abs(t.east) >= 0.01 || Math.abs(t.north) >= 0.01 || Math.abs(t.rotate) >= 0.005 || Math.abs(t.scale - 1) >= 1e-4);
+
+/** The pivot (local metres) of a page's pairs: where a turn or a resize leaves the plan in place. */
+export function pivotOf(pairs, origin) {
+  const pts = pairs.map((p) => geoToLocal(origin, p.geo));
+  return [pts.reduce((sum, q) => sum + q[0], 0) / pts.length, pts.reduce((sum, q) => sum + q[1], 0) / pts.length];
+}
+
+/** The fit with an adjustment applied: { a, b, tx, ty } only (the caller recomputes how far the pairs are from it). */
+export function applyTune(fit, tune, pivot) {
+  const r = (tune.rotate * Math.PI) / 180;
+  const m = [tune.scale * Math.cos(r), tune.scale * Math.sin(r)];
+  const v = [tune.east, -tune.north]; // local y points south
+  const c = [fit.a, fit.b];
+  const cFin = cdiv(c, m);
+  const t = cmul(c, [pivot[0] - cdiv([pivot[0] + v[0], pivot[1] + v[1]], m)[0], pivot[1] - cdiv([pivot[0] + v[0], pivot[1] + v[1]], m)[1]]);
+  return { a: cFin[0], b: cFin[1], tx: t[0] + fit.tx, ty: t[1] + fit.ty };
+}
+
+/** The adjustment that turns `base` (the fit from the pairs) into `fine` (the stored fit): the inverse of applyTune. */
+export function tuneBetween(base, fine, pivot) {
+  const c = [base.a, base.b];
+  const m = cdiv(c, [fine.a, fine.b]);
+  const q = cdiv([fine.tx - base.tx, fine.ty - base.ty], c);
+  const mv = cmul(m, [pivot[0] - q[0], pivot[1] - q[1]]);
+  const out = { east: mv[0] - pivot[0], north: -(mv[1] - pivot[1]), rotate: (Math.atan2(m[1], m[0]) * 180) / Math.PI, scale: Math.hypot(m[0], m[1]) };
+  return isTuned(out) ? out : { ...NO_TUNE };
+}
+
+function parseTune(raw) {
+  if (raw == null) return { ...NO_TUNE };
+  if (typeof raw !== 'object') return { error: 'The fine-tune is not valid.' };
+  const t = { east: raw.east ?? 0, north: raw.north ?? 0, rotate: raw.rotate ?? 0, scale: raw.scale ?? 1 };
+  if (![t.east, t.north, t.rotate, t.scale].every(isNum)) return { error: 'The fine-tune is not valid.' };
+  if (Math.abs(t.east) > TUNE_LIMITS.move || Math.abs(t.north) > TUNE_LIMITS.move) return { error: `Fine-tune can move the plan by at most ${TUNE_LIMITS.move} m.` };
+  if (Math.abs(t.rotate) > TUNE_LIMITS.rotate) return { error: `Fine-tune can turn the plan by at most ${TUNE_LIMITS.rotate} degrees.` };
+  if (t.scale < TUNE_LIMITS.scaleMin || t.scale > TUNE_LIMITS.scaleMax) return { error: 'Fine-tune can only resize the plan by a little.' };
+  return { east: round(t.east, 3), north: round(t.north, 3), rotate: round(t.rotate, 4), scale: round(t.scale, 5) };
+}
+
+/** How far each pair is (plan units) from a fit { a, b, tx, ty }, and the root-mean-square. */
+export function residualsFor(t, pairs) {
+  const residuals = pairs.map((p) => Math.hypot(t.a * p.image[0] - t.b * p.image[1] + t.tx - p.plan[0], t.b * p.image[0] + t.a * p.image[1] + t.ty - p.plan[1]));
+  return { residuals, rms: Math.sqrt(residuals.reduce((sum, r) => sum + r * r, 0) / residuals.length) };
+}
+
 /** A plan point for a local point. */
 export const imageToPlan = (t, [x, y]) => [t.a * x - t.b * y + t.tx, t.b * x + t.a * y + t.ty];
 /** The local point for a plan point (the inverse of the fit): where a spot of the plan is on the ground. */
@@ -84,7 +142,8 @@ export function originOf(pairs) {
  * origin is the one the other saved pages use (so all pages share one frame), or, for the first page, the pairs' average.
  * @param {unknown} body
  * @param {{ lat: number, lng: number } | null} [origin]
- * @returns {{ error: string } | { cluster: string, pairs: object[], origin: { lat: number, lng: number }, fit: NonNullable<ReturnType<typeof fitSimilarity>> }}
+ * `body.tune` (optional) is the hand fine-tune; the fit that comes back is the fine-tuned one, with the pairs' distances from it.
+ * @returns {{ error: string } | { cluster: string, pairs: object[], origin: { lat: number, lng: number }, tune: typeof NO_TUNE, fit: NonNullable<ReturnType<typeof fitSimilarity>> }}
  */
 export function validateAlignment(body, origin = null) {
   if (!body || typeof body !== 'object') return { error: 'Nothing to save.' };
@@ -98,14 +157,27 @@ export function validateAlignment(body, origin = null) {
     pairs.push({ house, plan: p.plan.map((n) => round(n, 2)), geo: p.geo.map((n) => round(n, 7)) });
   }
   const frame = origin ?? originOf(pairs);
-  const fit = fitSimilarity(pairs.map((p) => ({ plan: p.plan, image: geoToLocal(frame, p.geo) })));
+  const tune = parseTune(body.tune);
+  if ('error' in tune) return { error: tune.error };
+  const local = pairs.map((p) => ({ plan: p.plan, image: geoToLocal(frame, p.geo) }));
+  let fit = fitSimilarity(local);
   if (!fit) return { error: 'These points cannot be fitted. Pick points that are apart from each other.' };
+  if (isTuned(tune)) {
+    const t = applyTune(fit, tune, pivotOf(pairs, frame));
+    const scale = Math.hypot(t.a, t.b);
+    fit = { ...t, scale, rotation: (Math.atan2(t.b, t.a) * 180) / Math.PI, ...residualsFor(t, local) };
+  }
   if (fit.scale < 0.05 || fit.scale > 20) return { error: 'These points give an unlikely scale. Check that each pair is the same spot.' };
-  return { cluster: body.cluster, pairs, origin: frame, fit };
+  return { cluster: body.cluster, pairs, origin: frame, tune, fit };
 }
 
-/** The audit detail for a saved alignment: the cluster and the result, never anything personal. */
-export const auditAlignment = (cluster, fit, count) => `${cluster}: ${count} pairs, ${round(fit.scale, 3)} plan units per metre, rotation ${round(fit.rotation, 2)} deg, error ${round(fit.rms / fit.scale, 1)} m`;
+/** The audit detail for a saved alignment: the cluster and the result, never anything personal.
+ * @param {string} cluster
+ * @param {{ scale: number, rotation: number, rms: number }} fit
+ * @param {number} count
+ * @param {{ east: number, north: number, rotate: number, scale: number } | null} [tune]
+ */
+export const auditAlignment = (cluster, fit, count, tune) => `${cluster}: ${count} pairs, ${round(fit.scale, 3)} plan units per metre, rotation ${round(fit.rotation, 2)} deg, error ${round(fit.rms / fit.scale, 1)} m${isTuned(tune) ? `, fine-tuned (${round(tune.east, 2)} m east, ${round(tune.north, 2)} m north, ${round(tune.rotate, 2)} deg, x${round(tune.scale, 4)})` : ''}`;
 
 /** A stored row as the pages and the merge use it. */
 export const shapeAlignment = (row) => ({

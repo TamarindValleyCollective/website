@@ -141,9 +141,9 @@ async function handleAlignmentWrite(req: Request): Promise<Response> {
   const origin = others[0] ? { lat: Number(others[0].origin_lat), lng: Number(others[0].origin_lng) } : null;
   const checked = validateAlignment(body, origin);
   if ('error' in checked) return jsonResponse({ error: checked.error }, 400);
-  const { cluster, pairs, fit } = checked;
+  const { cluster, pairs, fit, tune } = checked;
   try {
-    await logStaffAction({ actorId: auth.staff.id, action: 'site-map.alignment', module: 'site-map', detail: { cluster, pairs: pairs.length, summary: auditAlignment(cluster, fit, pairs.length) } });
+    await logStaffAction({ actorId: auth.staff.id, action: 'site-map.alignment', module: 'site-map', detail: { cluster, pairs: pairs.length, summary: auditAlignment(cluster, fit, pairs.length, tune) } });
   } catch (err) {
     console.error('[site-map-admin] audit log write failed; edit refused', err);
     return jsonResponse({ error: 'Could not record the change, so nothing was changed. Try again.' }, 500);
