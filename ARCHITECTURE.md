@@ -1025,7 +1025,7 @@ outside both the local machine and Netlify (the member-update-email workflow).
   page can align each such group on its own (`scripts/lib/site-map-groups.mjs` detects the groups from the layout; migration
   `0096` adds `site_map_group_alignment`, one row per group, with the size held to the other homes' so only the group's turn and
   position are fitted). `mergeSheets` then moves each home and its plot outline with its group's placement (`groupPlacements`),
-  while the plan's own lines (roads, boundaries) stay with the page's alignment. **Satellite layer:** `members-sitemap.mts` also
+  while the plan's own lines that are not plot boundaries (roads, site boundaries) stay with the page's alignment (a plot-boundary line follows its home, so a plot is drawn once). On the Align page a group can also be placed without pairs: it starts from its page's placement and is dragged (Shift-drag turns) on the live map, saved as a direct fit (checked on the server to stay near the page's placement), and a group can be snapped to an aligned neighbour whose plots touch its own on the plan (`snapShift`, `scripts/lib/site-map-align.mjs`). **Satellite layer:** `members-sitemap.mts` also
   sends each sheet's fit to the ground (`ground`: numbers only), and the Directory Map has an optional Satellite switch that
   draws Google's live map under the plan and carries the plan's drawing onto it with one transform (the same browser key,
   `PUBLIC_GOOGLE_MAPS_API_KEY`; its referrers must include `https://members.tvc.farm/*`); a tap on the map is turned back into a place

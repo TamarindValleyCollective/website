@@ -166,3 +166,33 @@ test('groupPlacements moves a group into its sheet\'s first page the way a page 
   for (const k of ['scale', 'rotate', 'dx', 'dy']) assert.ok(Math.abs(out['H-33'][k] - direct[k]) < 1e-9, k);
   assert.deepEqual(groupPlacements(sheets, [], rows, detected), {}); // no frame page alignment yet
 });
+
+test('a group dragged into place is saved as a direct fit, only for a group and only once the page has a frame', () => {
+  const direct = { a: 4, b: 0.5, tx: 10, ty: -20 };
+  const body = { cluster: 'H1-B', group: { houses: ['H-33', 'H-34'] }, direct, pairs: [] };
+  const ok = validateAlignment(body, ORIGIN);
+  assert.ok(!('error' in ok));
+  assert.equal(ok.direct, true);
+  assert.deepEqual([ok.fit.a, ok.fit.b, ok.fit.tx, ok.fit.ty], [4, 0.5, 10, -20]);
+  assert.equal(ok.pairs.length, 0);
+  assert.ok('error' in validateAlignment({ ...body, group: undefined }, ORIGIN)); // a whole page cannot be dragged
+  assert.ok('error' in validateAlignment(body, null)); // no frame yet
+  assert.ok('error' in validateAlignment({ ...body, direct: { ...direct, a: 'x' } }, ORIGIN));
+});
+
+test('snapShift brings a group\'s wall onto the neighbour\'s, in metres', async () => {
+  const { snapShift, sharedWalls } = await import('./site-map-align.mjs');
+  // Two plots that touch on the plan along x = 100 (mine on the left, theirs on the right), 20 plan units apart on the y axis.
+  const mine = [[[0, 0], [100, 0], [100, 60], [0, 60]]];
+  const theirs = [[[100, 0], [200, 0], [200, 60], [100, 60]]];
+  assert.equal(sharedWalls(mine, theirs).length, 1);
+  // Both drawn at 2 plan units per metre with no turn; mine sits 3 m too far east, past the neighbour's wall.
+  const fitTheirs = { a: 2, b: 0, tx: 0, ty: 0 };
+  const fitMine = { a: 2, b: 0, tx: -6, ty: 0 }; // its plan points land 3 m further east on the ground than theirs
+  // (planToLocal: local = (plan - t) / c, so tx = -6 moves everything +3 m east)
+  const s = snapShift({ mine, theirs, fitMine, fitTheirs });
+  assert.ok(Math.abs(s.east + 3) < 1e-3 && Math.abs(s.north) < 1e-3, JSON.stringify(s)); // move 3 m west
+  assert.ok(Math.abs(s.before - 3) < 1e-3);
+  // Groups that do not touch have nothing to snap to.
+  assert.equal(snapShift({ mine, theirs: [[[300, 0], [400, 0], [400, 60], [300, 60]]], fitMine, fitTheirs }), null);
+});

@@ -61,11 +61,12 @@ import '../../styles/site-map.css';
           </div>
           <div class="line" id="overlaybar" hidden>
             <button type="button" class="button button--outline" id="overlay" aria-pressed="true">Show the plan on the map</button>
+            <button type="button" class="button button--outline" id="adjust" aria-pressed="true" title="Drag the plan on the map to move it; hold Shift and drag to turn it">Drag to adjust</button>
             <label class="line">Plan strength <input type="range" id="strength" min="10" max="100" value="90" /></label>
           </div>
           <section class="tune" id="tune" hidden aria-label="Fine-tune the plan on the map">
             <h3>Fine-tune</h3>
-            <p class="hint">Nudge the plan on the map by hand. Turning and resizing pivot on the middle of your pairs. Pairs stay as they are, so Reset goes back to the fit from them.</p>
+            <p class="hint">Drag the plan on the map to move it, or hold Shift and drag to turn it. The buttons nudge it a step at a time. Turning and resizing pivot on the middle of the plan's homes. Reset goes back to where the pairs (or the page) put it.</p>
             <div class="tune-row">
               <span class="k">Move</span>
               <div class="dpad" id="tune-move" role="group" aria-label="Move the plan"></div>
@@ -78,6 +79,10 @@ import '../../styles/site-map.css';
               <span class="k">Step</span>
               <div class="segmented" id="tune-step" role="group" aria-label="Size of each nudge"></div>
               <button type="button" class="button button--outline" id="tune-reset">Reset fine-tune</button>
+            </div>
+            <div class="tune-row" id="tune-snap" hidden>
+              <span class="k">Snap</span>
+              <div class="pair" id="tune-snap-buttons" role="group" aria-label="Snap to a neighbouring group"></div>
             </div>
             <p class="hint" id="tune-readout" role="status"></p>
           </section>
@@ -153,7 +158,7 @@ import '../../styles/site-map.css';
 <script>
   import { StaffAuthError, clearStepUp, clearToken, decodeTokenEmail, getToken, setToken, showToast, staffFetch } from '../../../scripts/lib/staff-client.mjs';
   import { busyForPress } from '../../../scripts/lib/busy.mjs';
-  import { MAX_PAIRS, MIN_PAIRS, NO_TUNE, applyTune, fitSimilarity, geoToLocal, isTuned, localToGeo, originOf, pivotOf, planToLocal, tuneBetween } from '../../../scripts/lib/site-map-align.mjs';
+  import { MAX_PAIRS, MIN_PAIRS, NO_TUNE, applyTune, fitSimilarity, geoToLocal, imageToPlan, isTuned, localToGeo, originOf, pivotOf, planToLocal, sharedWalls, snapShift, tuneBetween } from '../../../scripts/lib/site-map-align.mjs';
   import { SVG_NS } from '../../../scripts/lib/site-map-draw.mjs';
   import { plotOutline } from '../../../scripts/lib/site-map.mjs';
   import { detectGroups, savedFor } from '../../../scripts/lib/site-map-groups.mjs';
@@ -332,16 +337,33 @@ import '../../styles/site-map.css';
     const other = saved.find((s) => s !== savedTarget());
     return other ? { lat: other.originLat, lng: other.originLng } : pairs.length ? originOf(pairs) : null;
   };
-  function fit() {
-    const f0 = frame();
-    if (!f0 || pairs.length < 2) return null;
-    const base = fitSimilarity(pairs.map((p) => ({ plan: p.plan, image: geoToLocal(f0, p.geo as [number, number]) })), lockedScale() ?? undefined);
-    if (!base) return null;
-    // `a, b, tx, ty` are the fit the plan is drawn and saved with (fine-tuned); the pairs' distances stay those from the pairs' own fit.
-    const eff = isTuned(tune) ? applyTune(base, tune, pivotOf(pairs, f0)) : base;
-    return { ...base, ...eff, scale: Math.hypot(eff.a, eff.b), rotation: (Math.atan2(eff.b, eff.a) * 180) / Math.PI, frame: f0, residualsM: base.residuals.map((r: number) => r / base.scale), rmsM: base.rms / base.scale };
+  type Fit = { a: number; b: number; tx: number; ty: number; scale: number; rotation: number; frame: { lat: number; lng: number }; pivot: [number, number]; residualsM: number[]; rmsM: number; direct?: boolean };
+  // A group with no pairs of its own starts where its page puts it (and is then moved by dragging): the page's fit, with the group's
+  // homes' middle as the pivot for turning.
+  function pageBase() {
+    if (!groupKey) return null;
+    const pg = saved.find((r) => r.key === clusterId && !r.houses);
+    const mine = targetUnits();
+    if (!pg || !mine.length) return null;
+    const pts = mine.map((u) => planToLocal(pg, [u.x, u.y]));
+    const pivot: [number, number] = [pts.reduce((sum, q) => sum + q[0], 0) / pts.length, pts.reduce((sum, q) => sum + q[1], 0) / pts.length];
+    return { a: pg.a, b: pg.b, tx: pg.tx, ty: pg.ty, frame: { lat: pg.originLat, lng: pg.originLng }, pivot };
   }
-  type Fit = NonNullable<ReturnType<typeof fit>>;
+  function fit(): Fit | null {
+    const f0 = frame();
+    if (f0 && pairs.length >= 2) {
+      const base = fitSimilarity(pairs.map((p) => ({ plan: p.plan, image: geoToLocal(f0, p.geo as [number, number]) })), lockedScale() ?? undefined);
+      if (!base) return null;
+      // `a, b, tx, ty` are the fit the plan is drawn and saved with (fine-tuned); the pairs' distances stay those from the pairs' own fit.
+      const pivot = pivotOf(pairs, f0) as [number, number];
+      const eff = isTuned(tune) ? applyTune(base, tune, pivot) : base;
+      return { ...base, ...eff, scale: Math.hypot(eff.a, eff.b), rotation: (Math.atan2(eff.b, eff.a) * 180) / Math.PI, frame: f0, pivot, residualsM: base.residuals.map((r: number) => r / base.scale), rmsM: base.rms / base.scale };
+    }
+    const pb = pageBase();
+    if (!pb) return null;
+    const eff = isTuned(tune) ? applyTune(pb, tune, pb.pivot) : pb;
+    return { a: eff.a, b: eff.b, tx: eff.tx, ty: eff.ty, scale: Math.hypot(eff.a, eff.b), rotation: (Math.atan2(eff.b, eff.a) * 180) / Math.PI, frame: pb.frame, pivot: pb.pivot, residualsM: [], rmsM: 0, direct: true };
+  }
 
   // ---- the plan page drawing ----
   function pin(x: number, y: number, n: number, r: number, off: boolean) {
@@ -388,6 +410,89 @@ import '../../styles/site-map.css';
       document.head.append(s);
     });
   }
+  function adjustHint(f: Fit | null): string {
+    if (f?.direct) return 'This group starts where its page puts it. Drag it on the map to where its buildings are (hold Shift and drag to turn it), snap it to a neighbour if it has one, then save.';
+    if (f) return 'Drag the plan on the map to adjust it (Shift and drag turns it), or tap another home or spot on the plan to add a pair.';
+    return pairs.length ? 'Tap another home or spot on the plan to add a pair.' : 'Tap a home on the plan to start.';
+  }
+
+  // ---- adjusting by dragging the plan on the map ----
+  // Press on the plan's homes and drag to move the plan; Shift and drag to turn it about its pivot. A press anywhere else pans the map
+  // as usual, and the map is left alone while a pair is waiting for its partner. Moves and turns are the same fine-tune the buttons make.
+  let adjustOn = true;
+  let raf = 0;
+  const schedulePaint = () => { if (raf) return; raf = requestAnimationFrame(() => { raf = 0; paint(); }); };
+  const mercatorOf = (lat: number, lng: number, zoom: number): [number, number] => {
+    const size = 256 * 2 ** zoom;
+    const sin = Math.min(Math.max(Math.sin((lat * Math.PI) / 180), -0.9999), 0.9999);
+    return [(lng / 360 + 0.5) * size, (0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI)) * size];
+  };
+  const unMercatorOf = (px: number, py: number, zoom: number): [number, number] => {
+    const size = 256 * 2 ** zoom;
+    const n = Math.PI - (2 * Math.PI * py) / size;
+    return [(180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n))), (px / size - 0.5) * 360];
+  };
+  const latLngAt = (clientX: number, clientY: number): [number, number] => {
+    const r = $('gmap').getBoundingClientRect(), c = map.getCenter(), z = map.getZoom();
+    const [cx, cy] = mercatorOf(c.lat(), c.lng(), z);
+    return unMercatorOf(cx + clientX - r.left - r.width / 2, cy + clientY - r.top - r.height / 2, z);
+  };
+  const clientOf = (lat: number, lng: number): [number, number] => {
+    const r = $('gmap').getBoundingClientRect(), c = map.getCenter(), z = map.getZoom();
+    const [cx, cy] = mercatorOf(c.lat(), c.lng(), z), [px, py] = mercatorOf(lat, lng, z);
+    return [px - cx + r.width / 2 + r.left, py - cy + r.height / 2 + r.top];
+  };
+  const metresPerPixel = () => (156543.03392 * Math.cos((map.getCenter().lat() * Math.PI) / 180)) / 2 ** map.getZoom();
+  const polyOf = (d: string): [number, number][] => { const n = (d.match(/-?\d+(?:\.\d+)?/g) ?? []).map(Number); const q: [number, number][] = []; for (let i = 0; i + 1 < n.length; i += 2) q.push([n[i], n[i + 1]]); return q; };
+  const inside = (pts: [number, number][], x: number, y: number) => { let hit = false; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) { const [xi, yi] = pts[i], [xj, yj] = pts[j]; if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) hit = !hit; } return hit; };
+  // Is a press on the plan's homes (their plots, or within a few metres of a home's centre)?
+  function overlayHit(clientX: number, clientY: number, f: Fit): boolean {
+    const [lat, lng] = latLngAt(clientX, clientY);
+    const [x, y] = imageToPlan(f, geoToLocal(f.frame, [lat, lng]) as [number, number]);
+    const plot = clusterOf(clusterId).plot;
+    return targetUnits().some((u) => {
+      const d = plotOutline(plot, u.x, u.y);
+      return d ? inside(polyOf(d), x, y) : Math.hypot(u.x - x, u.y - y) <= 4 * f.scale;
+    });
+  }
+  function wireDrag() {
+    const el = $('gmap');
+    let drag: { x0: number; y0: number; t0: Tune; turn: boolean; px: number; py: number; a0: number } | null = null;
+    el.addEventListener('pointerdown', (e) => {
+      if (!adjustOn || !canEdit || pending || e.button !== 0) return;
+      const f = fit();
+      if (!f || !showOverlay || !overlayHit(e.clientX, e.clientY, f)) return;
+      e.stopPropagation();
+      e.preventDefault();
+      el.setPointerCapture(e.pointerId);
+      map.setOptions({ draggable: false });
+      const [pl, pg] = localToGeo(f.frame, f.pivot);
+      const [px, py] = clientOf(pl, pg);
+      drag = { x0: e.clientX, y0: e.clientY, t0: { ...tune }, turn: e.shiftKey, px, py, a0: Math.atan2(e.clientY - py, e.clientX - px) };
+    }, true);
+    el.addEventListener('pointermove', (e) => {
+      if (!drag) return;
+      if (drag.turn) {
+        let deg = ((Math.atan2(e.clientY - drag.py, e.clientX - drag.px) - drag.a0) * 180) / Math.PI;
+        deg = ((((deg + 180) % 360) + 360) % 360) - 180;
+        tune = clampTune({ ...drag.t0, rotate: drag.t0.rotate + deg });
+      } else {
+        const k = metresPerPixel();
+        tune = clampTune({ ...drag.t0, east: drag.t0.east + (e.clientX - drag.x0) * k, north: drag.t0.north - (e.clientY - drag.y0) * k });
+      }
+      dirty = true;
+      schedulePaint();
+    });
+    const end = (e: PointerEvent) => {
+      if (!drag) return;
+      drag = null;
+      try { el.releasePointerCapture(e.pointerId); } catch { /* already released */ }
+      map.setOptions({ draggable: true });
+      schedulePaint();
+    };
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', end);
+  }
   async function startMap() {
     if (map) return;
     if (!MAPS_KEY) { $('nokey').hidden = false; $('gmap').hidden = true; return; }
@@ -401,6 +506,7 @@ import '../../styles/site-map.css';
       gestureHandling: 'greedy', clickableIcons: false, draggableCursor: 'crosshair', maxZoom: 21,
     });
     map.addListener('click', (e: any) => tapMap(e.latLng.lat(), e.latLng.lng()));
+    wireDrag();
     map.addListener('idle', () => { const c = map.getCenter(); try { localStorage.setItem(CENTER_KEY, JSON.stringify({ lat: c.lat(), lng: c.lng(), zoom: map.getZoom() })); } catch { /* not remembered */ } });
   }
   function paintMap(f: Fit | null, off: boolean[]) {
@@ -443,7 +549,7 @@ import '../../styles/site-map.css';
   function paintCard(f: Fit | null, off: boolean[]) {
     const card = $('fit-card');
     const old = savedTarget();
-    const fitOk = !!f && pairs.length >= minPairs();
+    const fitOk = !!f && (pairs.length >= minPairs() || !!f.direct);
     const rows = pairs.map((p, i) => {
       const li = h('li', off[i] ? 'is-off' : '', undefined, h('span', 'n', String(i + 1)), h('span', 'what', p.house ? `Home ${p.house}` : `Plan spot ${nf.format(p.plan[0])}, ${nf.format(p.plan[1])}`));
       if (fitOk) li.append(h('span', 'off', `off by ${nf.format(f!.residualsM[i])} m${off[i] ? ' (check this one)' : ''}`));
@@ -454,9 +560,9 @@ import '../../styles/site-map.css';
       ? h('dl', 'fit-grid', undefined,
         h('dt', '', 'Scale'), h('dd', '', `${nf.format(f!.scale)} plan units per metre`),
         h('dt', '', 'Rotation'), h('dd', '', `North points ${nf.format(f!.rotation)}° clockwise from the top of the plan page`),
-        h('dt', '', 'Typical error'), h('dd', '', `${nf.format(f!.rmsM)} m`))
+        ...(f!.direct ? [] : [h('dt', '', 'Typical error'), h('dd', '', `${nf.format(f!.rmsM)} m`)]))
       : h('p', 'hint', pairs.length ? `Add ${Math.max(0, minPairs() - pairs.length)} more pair${minPairs() - pairs.length === 1 ? '' : 's'} to fit this ${groupKey ? 'group' : 'page'}.` : 'No pairs yet for this page.');
-    const kids: Kid[] = [h('h2', '', groupKey ? `Group ${clusterId} · ${rangeLabel(targetGroup()?.houses ?? [])}` : `Page ${clusterId}`), old && !dirty ? h('p', 'hint', `Saved: ${old.pairs.length} pairs, typical error ${old.rms == null ? '–' : nf.format(old.rms / old.scale)} m.`) : null, fitLines, rows.length ? h('ul', 'pairs', undefined, ...rows) : null];
+    const kids: Kid[] = [h('h2', '', groupKey ? `Group ${clusterId} · ${rangeLabel(targetGroup()?.houses ?? [])}` : `Page ${clusterId}`), old && !dirty ? h('p', 'hint', old.pairs.length ? `Saved: ${old.pairs.length} pairs, typical error ${old.rms == null ? '–' : nf.format(old.rms / old.scale)} m.` : 'Saved: placed by dragging it on the map.') : null, fitLines, rows.length ? h('ul', 'pairs', undefined, ...rows) : null];
     if (dirty) kids.push(h('p', 'dirty', 'Not saved yet.'));
     if (canEdit) {
       const save = h('button', 'button button--primary', groupKey ? 'Save this group' : 'Save this page') as HTMLButtonElement;
@@ -492,17 +598,23 @@ import '../../styles/site-map.css';
     if (!map) setHint(MAPS_KEY ? 'Loading the map…' : 'The map needs a Google Maps key.');
     else if (pending) setHint('Now tap the same spot on the satellite map.', true);
     else if (pairs.length === 1) setHint('Pair a second point, far from the first: the plan then appears on the map.');
-    else setHint(pairs.length ? 'Tap another home or spot on the plan to add a pair. Where the plan sits off the map, pair that spot.' : 'Tap a home on the plan to start.');
+    else setHint(adjustHint(f));
   }
 
   // ---- saving ----
   const errToast = (err: unknown) => {
     if (err instanceof StaffAuthError) { if (err.kind === 'unauthorized') showGate('Your session expired. Sign in again.'); else showForbidden(); } else showToast('Could not save. Try again.');
   };
+  // A group with pairs is saved as its pairs (and the fine-tune); one placed by dragging, as the placement itself.
+  function saveBody() {
+    const f = fit();
+    if (groupKey && f?.direct) return { cluster: clusterId, group: { houses: targetGroup()?.houses ?? [] }, direct: { a: f.a, b: f.b, tx: f.tx, ty: f.ty } };
+    return { cluster: clusterId, ...(groupKey ? { group: { houses: targetGroup()?.houses ?? [] }, scale: lockedScale() ?? undefined } : {}), pairs, tune: isTuned(tune) ? tune : undefined };
+  }
   async function saveAlignment() {
     const done = busyForPress('Saving…');
     try {
-      const { status, data: out } = await staffFetch('/api/site-map-admin/alignment', { method: 'POST', body: { cluster: clusterId, ...(groupKey ? { group: { houses: targetGroup()?.houses ?? [] }, scale: lockedScale() ?? undefined } : {}), pairs, tune: isTuned(tune) ? tune : undefined } });
+      const { status, data: out } = await staffFetch('/api/site-map-admin/alignment', { method: 'POST', body: saveBody() });
       if (status !== 200) { showToast(out?.error ?? 'Could not save. Try again.'); return; }
       showToast(`Saved the alignment of ${groupKey ? `homes ${rangeLabel(targetGroup()?.houses ?? [])}` : clusterId}.`);
       await loadAlignments();
@@ -553,23 +665,53 @@ import '../../styles/site-map.css';
     $('tune-step').replaceChildren(...Object.entries(STEPS).map(([id, v]) => { const b = h('button', '', v.label); b.setAttribute('type', 'button'); b.setAttribute('data-step', id); b.addEventListener('click', () => { step = id; paintTune(); }); return b; }));
     $('tune-reset').addEventListener('click', () => { tune = { ...NO_TUNE }; dirty = dirty || isTuned(savedTune); paint(); });
   }
+  // Snap: for each neighbouring group (on this page, already aligned, whose plots touch this group's on the plan), a button that moves
+  // this group so its walls meet that group's walls on the ground.
+  const outlinesOf = (us: Unit[]) => us.map((u) => plotOutline(clusterOf(clusterId).plot, u.x, u.y)).filter((d): d is string => !!d).map(polyOf);
+  function paintSnap() {
+    const box = $('tune-snap');
+    const f = fit();
+    const g = targetGroup();
+    if (!g || !f || !canEdit) { box.hidden = true; return; }
+    const mine = outlinesOf(targetUnits());
+    const buttons: HTMLElement[] = [];
+    for (const other of groups.filter((o) => o.cluster === clusterId && o.key !== g.key)) {
+      const row = savedFit(other);
+      if (!row) continue;
+      const theirs = outlinesOf(units.filter((u) => u.cluster === clusterId && other.houses.includes(u.houseNo)));
+      if (!sharedWalls(mine, theirs).length) continue;
+      buttons.push(tuneButton(`Snap to the neighbouring homes ${rangeLabel(other.houses)}`, `↔ ${rangeLabel(other.houses)}`, () => {
+        const cur = fit();
+        const out = cur && snapShift({ mine, theirs, fitMine: cur, fitTheirs: row });
+        if (!out) { showToast('Those homes do not share a wall on the plan.'); return; }
+        if (Math.hypot(out.east, out.north) > 15) { showToast(`Their walls are ${nf.format(Math.hypot(out.east, out.north))} m apart: too far to snap. Move the group closer first.`); return; }
+        nudge({ east: out.east, north: out.north });
+        showToast(`Snapped to ${rangeLabel(other.houses)}: moved ${nf.format(Math.abs(out.east))} m ${out.east >= 0 ? 'east' : 'west'}, ${nf.format(Math.abs(out.north))} m ${out.north >= 0 ? 'north' : 'south'}.`);
+      }));
+    }
+    box.hidden = !buttons.length;
+    $('tune-snap-buttons').replaceChildren(...buttons);
+  }
   function paintTune() {
+    paintSnap();
     $('tune-step').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.getAttribute('data-step') === step)));
     const bits: string[] = [];
     if (Math.abs(tune.east) >= 0.01) bits.push(`${nf.format(Math.abs(tune.east))} m ${tune.east > 0 ? 'east' : 'west'}`);
     if (Math.abs(tune.north) >= 0.01) bits.push(`${nf.format(Math.abs(tune.north))} m ${tune.north > 0 ? 'north' : 'south'}`);
     if (Math.abs(tune.rotate) >= 0.005) bits.push(`turned ${tune.rotate > 0 ? 'clockwise' : 'anticlockwise'} ${nf.format(Math.abs(tune.rotate))}°`);
     if (Math.abs(tune.scale - 1) >= 1e-4) bits.push(`${tune.scale > 1 ? 'larger' : 'smaller'} by ${nf.format(Math.abs(tune.scale - 1) * 100)}%`);
-    $('tune-readout').textContent = bits.length ? `Fine-tuned: ${bits.join(', ')}.` : 'Not fine-tuned: the plan sits where your pairs put it.';
+    $('tune-readout').textContent = bits.length ? `${fit()?.direct ? 'Moved from where its page puts it' : 'Fine-tuned'}: ${bits.join(', ')}.` : fit()?.direct ? 'Not moved: the group sits where its page puts it.' : 'Not fine-tuned: the plan sits where your pairs put it.';
     ($('tune-reset') as HTMLButtonElement).disabled = !isTuned(tune);
   }
   $('overlay').addEventListener('click', () => { showOverlay = !showOverlay; paint(); });
+  $('adjust').addEventListener('click', () => { adjustOn = !adjustOn; $('adjust').setAttribute('aria-pressed', String(adjustOn)); });
   $('strength').addEventListener('input', paint);
 
   // ---- loading ----
   // The fine-tune a saved page carries: how its stored fit differs from the fit its own pairs give.
   function tuneOf(s: Saved | undefined): Tune {
-    if (!s || s.pairs.length < 2) return { ...NO_TUNE };
+    if (!s) return { ...NO_TUNE };
+    if (s.pairs.length < 2) { const pb = s.houses ? pageBase() : null; return pb ? { ...tuneBetween(pb, s, pb.pivot) } : { ...NO_TUNE }; }
     const f0 = { lat: s.originLat, lng: s.originLng };
     const base = fitSimilarity(s.pairs.map((p) => ({ plan: p.plan, image: geoToLocal(f0, p.geo as [number, number]) })), s.lockedScale ?? undefined);
     return base ? { ...tuneBetween(base, s, pivotOf(s.pairs, f0)) } : { ...NO_TUNE };

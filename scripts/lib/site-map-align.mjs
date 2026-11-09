@@ -153,23 +153,33 @@ export function originOf(pairs) {
  * @param {{ lat: number, lng: number } | null} [origin]
  * `body.group` (optional, { houses }) makes it the alignment of a group of homes rather than a whole page; `body.scale` (optional)
  * locks the size (plan units per metre) so only the turn and position are fitted. `body.tune` (optional) is the hand fine-tune; the fit that comes back is the fine-tuned one, with the pairs' distances from it.
- * @returns {{ error: string } | { cluster: string, group: { key: string, houses: string[] } | null, lockedScale: number | null, pairs: object[], origin: { lat: number, lng: number }, tune: typeof NO_TUNE, fit: NonNullable<ReturnType<typeof fitSimilarity>> }}
+ * @returns {{ error: string } | { cluster: string, group: { key: string, houses: string[] } | null, direct: boolean, lockedScale: number | null, pairs: object[], origin: { lat: number, lng: number }, tune: typeof NO_TUNE, fit: NonNullable<ReturnType<typeof fitSimilarity>> }}
  */
 export function validateAlignment(body, origin = null) {
   if (!body || typeof body !== 'object') return { error: 'Nothing to save.' };
   if (!CLUSTER_IDS.includes(body.cluster)) return { error: 'Pick a cluster.' };
   const lockedScale = body.scale == null ? undefined : body.scale;
   if (lockedScale !== undefined && !(isNum(lockedScale) && lockedScale >= 0.05 && lockedScale <= 20)) return { error: 'The locked size is not valid.' };
-  const needed = lockedScale === undefined ? MIN_PAIRS : 2;
-  if (!Array.isArray(body.pairs) || body.pairs.length < needed) return { error: `Pair at least ${needed} points.` };
-  if (body.pairs.length > MAX_PAIRS) return { error: `Use at most ${MAX_PAIRS} pairs.` };
+  const direct = body.direct ?? null;
+  const needed = direct ? 0 : lockedScale === undefined ? MIN_PAIRS : 2;
+  if (!direct && (!Array.isArray(body.pairs) || body.pairs.length < needed)) return { error: `Pair at least ${needed} points.` };
+  if (Array.isArray(body.pairs) && body.pairs.length > MAX_PAIRS) return { error: `Use at most ${MAX_PAIRS} pairs.` };
   const pairs = [];
-  for (const p of body.pairs) {
+  for (const p of direct ? [] : body.pairs) {
     if (!p || !isPoint(p.plan) || !Array.isArray(p.geo) || p.geo.length !== 2 || !isLat(p.geo[0]) || !isLng(p.geo[1])) return { error: 'Every pair needs a point on the plan and a point on the map.' };
     const house = typeof p.house === 'string' && /^H-\d{2}$/.test(p.house) ? p.house : null;
     pairs.push({ house, plan: p.plan.map((n) => round(n, 2)), geo: p.geo.map((n) => round(n, 7)) });
   }
-  const frame = origin ?? originOf(pairs);
+  const frame = origin ?? (pairs.length ? originOf(pairs) : null);
+  if (!frame) return { error: 'These points cannot be fitted. Pick points that are apart from each other.' };
+  if (direct) {
+    // A group placed by dragging it on the map: no pairs, the fit itself (a turn, a position and the size) is what is stored. It has to
+    // be a group of homes, and the page it is on must already have a frame to be measured against (the caller checks how far from the
+    // page's own placement it is).
+    if (body.group == null) return { error: 'Only a group of homes can be placed by dragging.' };
+    if (!origin) return { error: 'Align the whole plan page first: a group starts from its page.' };
+    if (typeof direct !== 'object' || ![direct.a, direct.b, direct.tx, direct.ty].every(isNum) || Math.abs(direct.tx) > 1e6 || Math.abs(direct.ty) > 1e6) return { error: 'That placement is not valid.' };
+  }
   const tune = parseTune(body.tune);
   if ('error' in tune) return { error: tune.error };
   let group = null;
@@ -180,15 +190,17 @@ export function validateAlignment(body, origin = null) {
     group = { key: `${body.cluster}:${sorted[0]}`, houses: sorted };
   }
   const local = pairs.map((p) => ({ plan: p.plan, image: geoToLocal(frame, p.geo) }));
-  let fit = fitSimilarity(local, lockedScale);
+  let fit = direct
+    ? { a: direct.a, b: direct.b, tx: direct.tx, ty: direct.ty, scale: Math.hypot(direct.a, direct.b), rotation: (Math.atan2(direct.b, direct.a) * 180) / Math.PI, residuals: [], rms: 0 }
+    : fitSimilarity(local, lockedScale);
   if (!fit) return { error: 'These points cannot be fitted. Pick points that are apart from each other.' };
-  if (isTuned(tune)) {
+  if (isTuned(tune) && !direct) {
     const t = applyTune(fit, tune, pivotOf(pairs, frame));
     const scale = Math.hypot(t.a, t.b);
     fit = { ...t, scale, rotation: (Math.atan2(t.b, t.a) * 180) / Math.PI, ...residualsFor(t, local) };
   }
   if (fit.scale < 0.05 || fit.scale > 20) return { error: 'These points give an unlikely scale. Check that each pair is the same spot.' };
-  return { cluster: body.cluster, group, lockedScale: lockedScale ?? null, pairs, origin: frame, tune, fit };
+  return { cluster: body.cluster, group, direct: !!direct, lockedScale: lockedScale ?? null, pairs, origin: frame, tune, fit };
 }
 
 /** The audit detail for a saved alignment: the cluster and the result, never anything personal.
@@ -284,4 +296,63 @@ export function groupPlacements(sheets, pageAlignments, groupRows, detected) {
     }
   }
   return out;
+}
+
+// ---- Snapping a group to the group beside it -------------------------------------------------------------------------
+// Homes that adjoin on the plan have plots that touch. When two groups are aligned on their own they can end up a little apart
+// or overlapping on the ground where they meet. `snapShift` finds the walls of one group's plot outlines that lie along the
+// other's on the plan, then works out the move (on the ground, in metres) that brings the first group's walls onto the second's.
+// The move is only a shift: it is added to the group's fine-tune.
+
+const PLAN_PARALLEL = Math.sin((5 * Math.PI) / 180);
+const edgeList = (pts) => pts.map((a, i) => [a, pts[(i + 1) % pts.length]]);
+const dotp = (a, b) => a[0] * b[0] + a[1] * b[1];
+
+/** The pairs of walls (one of each group's plot outlines, plan coordinates) that lie along each other on the plan. */
+export function sharedWalls(mine, theirs, tolerance = 3, overlap = 6) {
+  const out = [];
+  for (const pm of mine) for (const em of edgeList(pm)) {
+    const dx = em[1][0] - em[0][0], dy = em[1][1] - em[0][1], len = Math.hypot(dx, dy);
+    if (len < 8) continue;
+    const d = [dx / len, dy / len], n = [-d[1], d[0]];
+    const lo = Math.min(dotp(em[0], d), dotp(em[1], d)), hi = Math.max(dotp(em[0], d), dotp(em[1], d));
+    for (const pt of theirs) for (const et of edgeList(pt)) {
+      const tx = et[1][0] - et[0][0], ty = et[1][1] - et[0][1], tl = Math.hypot(tx, ty);
+      if (tl < 8 || Math.abs((d[0] * ty - d[1] * tx) / tl) > PLAN_PARALLEL) continue;
+      if (Math.abs(dotp([et[0][0] - em[0][0], et[0][1] - em[0][1]], n)) > tolerance) continue;
+      const a = Math.min(dotp(et[0], d), dotp(et[1], d)), b = Math.max(dotp(et[0], d), dotp(et[1], d));
+      if (Math.min(hi, b) - Math.max(lo, a) >= overlap) out.push({ mine: em, theirs: et });
+    }
+  }
+  return out;
+}
+
+/**
+ * The shift that snaps `mine` (plot outlines of the group being placed) onto `theirs` (the neighbour's), each drawn with its own
+ * fit. Returns { east, north, walls, before } (metres; `before` is how far apart the walls were, on average) or null when the
+ * groups do not touch on the plan.
+ * @param {{ mine: number[][][], theirs: number[][][], fitMine: { a: number, b: number, tx: number, ty: number }, fitTheirs: { a: number, b: number, tx: number, ty: number } }} input
+ */
+export function snapShift({ mine, theirs, fitMine, fitTheirs }) {
+  const walls = sharedWalls(mine, theirs);
+  if (!walls.length) return null;
+  // The unknown is a shift v (ground, y south). For each wall the two ends of mine, on the ground, should lie on the neighbour's wall
+  // line: n . (p + v - a) = 0, n the neighbour wall's unit normal. Least squares over every end of every shared wall.
+  let m11 = 0, m12 = 0, m22 = 0, r1 = 0, r2 = 0, sum = 0, count = 0;
+  for (const w of walls) {
+    const a = planToLocal(fitTheirs, w.theirs[0]), b = planToLocal(fitTheirs, w.theirs[1]);
+    const dx = b[0] - a[0], dy = b[1] - a[1], len = Math.hypot(dx, dy) || 1;
+    const n = [-dy / len, dx / len];
+    for (const end of w.mine) {
+      const p = planToLocal(fitMine, end);
+      const dist = n[0] * (p[0] - a[0]) + n[1] * (p[1] - a[1]);
+      m11 += n[0] * n[0]; m12 += n[0] * n[1]; m22 += n[1] * n[1];
+      r1 -= dist * n[0]; r2 -= dist * n[1];
+      sum += Math.abs(dist); count += 1;
+    }
+  }
+  const eps = 1e-6; // when every wall runs the same way only the part across them is fixed: the least shift that does it
+  const det = (m11 + eps) * (m22 + eps) - m12 * m12;
+  const vx = ((m22 + eps) * r1 - m12 * r2) / det, vy = ((m11 + eps) * r2 - m12 * r1) / det;
+  return { east: vx, north: -vy, walls: walls.length, before: sum / count };
 }
