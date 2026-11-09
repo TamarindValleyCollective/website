@@ -19,7 +19,11 @@ The layout of the 52 homes on the 2023 site plan, fixed by hand on 2026-10-29 wi
   held to the other homes' (`site_map_group_alignment`, migration 0096). A home and its plot outline then move with its group; the
   plan's own lines that are not plot boundaries stay with the page's alignment. A group can be placed without pairs: it starts from its
   page's placement and is dragged (Shift-drag turns) on the live map, and can be snapped to an aligned neighbour whose plots touch its own.
+  The page's lines are groups as well (`assignLines`): the boundary stretches along each group's plots, and the other lines (roads, site
+  boundary). Each can be picked on the Align page (a chip or a click on the map), dragged, turned, resized, saved and removed on its own
+  (`site_map_line_group_alignment`, migration 0097, not auto-applied); unplaced, it follows its homes' group or its page. A group of homes can
+  be snapped onto the white boundary lines. The Align page is a single satellite view; the "Whole page" target moves everything on the page.
   While one page or group is adjusted, the other aligned layouts (other groups, other pages' lines, homes that follow their page) are
-  drawn on the map in white for context (a switch hides them).
+  drawn on the map in white for context (a switch hides them). Homes are drawn as their real footprints (with house numbers for the one being adjusted), on the map and in the plan pane.
 - The member map's optional Satellite layer draws Google's live map under the plan using the sheet's fit to the ground (add
   `https://members.tvc.farm/*` to the key's referrers).

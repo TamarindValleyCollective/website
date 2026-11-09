@@ -289,3 +289,26 @@ test('the plan\'s own plot-boundary lines follow their home\'s group, so a plot 
   // With no group placements nothing is split: the page's lines move as one.
   assert.match(mergeSheets(clusters, units, sheets).clusters[0].plot, /M100 0 L120 0/);
 });
+
+test('a group\'s lines can have a placement of their own; otherwise they follow their homes, and the other lines follow the page', async () => {
+  const { mergeSheets, assignLines } = await import('./site-map.mjs');
+  const sheets = { H1: [{ page: 'H1-A', scale: 1, rotate: 0, dx: 0, dy: 0 }, { page: 'H1-B', scale: 1, rotate: 0, dx: 100, dy: 0 }] };
+  const plot = 'M0 50 L200 50 M0 0 L20 0 M40 0 L60 0 M0 0 L20 0 L20 20 L0 20 Z M40 0 L60 0 L60 20 L40 20 Z';
+  const clusters = [{ id: 'H1-A', baseSize: 1.63, viewBox: [0, 0, 10, 10], plot: 'M0 0 L1 1' }, { id: 'H1-B', baseSize: 1.8, viewBox: [0, 0, 200, 100], plot }];
+  const units = [{ houseNo: 'H-40', cluster: 'H1-B', x: 10, y: 10, rotation: 0 }, { houseNo: 'H-41', cluster: 'H1-B', x: 50, y: 10, rotation: 0 }];
+  // The lines split into the group of the home they run along, and the rest.
+  const groups = assignLines(plot, units.filter((u) => u.cluster === 'H1-B'), { 'H-40': 'G1', 'H-41': 'G2' });
+  assert.deepEqual([...groups.keys()].sort(), ['G1', 'G2', 'other']);
+  const homes = { 'H-40': { scale: 1, rotate: 90, dx: 0, dy: 300 } };
+  // With nothing placed on its own: G1's line follows H-40's group, G2's follows the page, the road follows the page.
+  const follow = mergeSheets(clusters, units, sheets, { homes, groupOfHome: { 'H-40': 'G1', 'H-41': 'G2' } }).clusters[0].plot;
+  assert.match(follow, /M0 300 L0 320/);
+  assert.match(follow, /M140 0 L160 0/);
+  assert.match(follow, /M100 50 L300 50/);
+  // With G1's lines and the other lines placed on their own, those placements are used instead.
+  const own = mergeSheets(clusters, units, sheets, { homes, groupOfHome: { 'H-40': 'G1', 'H-41': 'G2' }, lineGroups: { 'H1-B': { G1: { scale: 1, rotate: 0, dx: 7, dy: 9 }, other: { scale: 1, rotate: 0, dx: -4, dy: 2 } } } }).clusters[0].plot;
+  assert.match(own, /M7 9 L27 9/); // G1's line, with its own placement
+  assert.match(own, /M-4 52 L196 52/); // the road, with the 'other' lines' placement
+  assert.match(own, /M140 0 L160 0/); // G2 still follows its home (the page)
+  assert.match(own, /M0 300 L0 320 L-20 320 L-20 300 Z/); // the plot outline still moves with its home's group
+});

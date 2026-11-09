@@ -151,7 +151,7 @@ export function originOf(pairs) {
  * origin is the one the other saved pages use (so all pages share one frame), or, for the first page, the pairs' average.
  * @param {unknown} body
  * @param {{ lat: number, lng: number } | null} [origin]
- * `body.group` (optional, { houses }) makes it the alignment of a group of homes rather than a whole page; `body.scale` (optional)
+ * `body.group` (optional, { houses }) makes it the alignment of a group of homes rather than a whole page; `body.direct` ({ a, b, tx, ty }) is a placement made by dragging on the map instead of by pairs; `body.scale` (optional)
  * locks the size (plan units per metre) so only the turn and position are fitted. `body.tune` (optional) is the hand fine-tune; the fit that comes back is the fine-tuned one, with the pairs' distances from it.
  * @returns {{ error: string } | { cluster: string, group: { key: string, houses: string[] } | null, direct: boolean, lockedScale: number | null, pairs: object[], origin: { lat: number, lng: number }, tune: typeof NO_TUNE, fit: NonNullable<ReturnType<typeof fitSimilarity>> }}
  */
@@ -173,11 +173,10 @@ export function validateAlignment(body, origin = null) {
   const frame = origin ?? (pairs.length ? originOf(pairs) : null);
   if (!frame) return { error: 'These points cannot be fitted. Pick points that are apart from each other.' };
   if (direct) {
-    // A group placed by dragging it on the map: no pairs, the fit itself (a turn, a position and the size) is what is stored. It has to
-    // be a group of homes, and the page it is on must already have a frame to be measured against (the caller checks how far from the
-    // page's own placement it is).
-    if (body.group == null) return { error: 'Only a group of homes can be placed by dragging.' };
-    if (!origin) return { error: 'Align the whole plan page first: a group starts from its page.' };
+    // A page or a group placed by dragging it on the map: no pairs, the fit itself (a turn, a position and the size) is what is stored.
+    // It is fitted around the shared reference point (the caller supplies it; for the very first placement, the map's own centre), and
+    // the caller checks how far it is from what is already saved.
+    if (!origin) return { error: 'There is no reference point yet. Place the plan on the map first.' };
     if (typeof direct !== 'object' || ![direct.a, direct.b, direct.tx, direct.ty].every(isNum) || Math.abs(direct.tx) > 1e6 || Math.abs(direct.ty) > 1e6) return { error: 'That placement is not valid.' };
   }
   const tune = parseTune(body.tune);
@@ -304,6 +303,30 @@ export function groupPlacements(sheets, pageAlignments, groupRows, detected) {
 // other's on the plan, then works out the move (on the ground, in metres) that brings the first group's walls onto the second's.
 // The move is only a shift: it is added to the group's fine-tune.
 
+/**
+ * The shift v (x, y) that best satisfies a set of "n . v = -d" constraints, given M = sum(n n^T) and r = -sum(d n). Walls that run nearly the
+ * same way but sit at different offsets barely constrain the direction across them: dividing by that tiny eigenvalue would throw the group
+ * across the farm. So only the directions the walls pin down (an eigenvalue of at least a tenth of the total) are solved; the rest stay put.
+ */
+function solveShift(m11, m12, m22, r1, r2) {
+  const trace = m11 + m22;
+  if (trace < 1e-9) return [0, 0];
+  const root = Math.sqrt(((m11 - m22) / 2) ** 2 + m12 * m12);
+  let vx = 0, vy = 0;
+  for (const lambda of [trace / 2 + root, trace / 2 - root]) {
+    if (lambda < 0.1 * trace) continue;
+    // eigenvector of [[m11, m12], [m12, m22]] for lambda
+    let ex = m12, ey = lambda - m11;
+    if (Math.hypot(ex, ey) < 1e-12) { ex = lambda - m22; ey = m12; }
+    if (Math.hypot(ex, ey) < 1e-12) { ex = 1; ey = 0; }
+    const len = Math.hypot(ex, ey);
+    ex /= len; ey /= len;
+    const k = (ex * r1 + ey * r2) / lambda;
+    vx += k * ex; vy += k * ey;
+  }
+  return [vx, vy];
+}
+
 const PLAN_PARALLEL = Math.sin((5 * Math.PI) / 180);
 const edgeList = (pts) => pts.map((a, i) => [a, pts[(i + 1) % pts.length]]);
 const dotp = (a, b) => a[0] * b[0] + a[1] * b[1];
@@ -351,8 +374,89 @@ export function snapShift({ mine, theirs, fitMine, fitTheirs }) {
       sum += Math.abs(dist); count += 1;
     }
   }
-  const eps = 1e-6; // when every wall runs the same way only the part across them is fixed: the least shift that does it
-  const det = (m11 + eps) * (m22 + eps) - m12 * m12;
-  const vx = ((m22 + eps) * r1 - m12 * r2) / det, vy = ((m11 + eps) * r2 - m12 * r1) / det;
+  const [vx, vy] = solveShift(m11, m12, m22, r1, r2);
   return { east: vx, north: -vy, walls: walls.length, before: sum / count };
+}
+
+/**
+ * The placement each group of lines gets from its own alignment, for mergeSheets (the same move into the sheet's first page that a group of homes
+ * gets). A group of lines is the boundary lines along a group of homes' plots (keyed by that group of homes, matched like a group's own alignment)
+ * or the "other" lines of a page (roads, the site boundary). Anything not placed on its own is left out and follows its homes, or its page.
+ * @param {Record<string, { page: string }[]>} sheets
+ * @param {ReturnType<typeof shapeAlignment>[]} pageAlignments
+ * @param {ReturnType<typeof shapeAlignment>[]} lineRows saved line-group alignments (`houses` null for a page's "other" lines)
+ * @param {{ key: string, cluster: string, houses: string[] }[]} detected the groups of homes as they are now (detectGroups)
+ * @returns {Record<string, Record<string, { scale: number, rotate: number, dx: number, dy: number }>>} page -> group key (or "other") -> placement
+ */
+export function lineGroupPlacements(sheets, pageAlignments, lineRows, detected) {
+  /** @type {Record<string, Record<string, { scale: number, rotate: number, dx: number, dy: number }>>} */
+  const out = {};
+  const pages = new Map(pageAlignments.map((a) => [a.cluster, a]));
+  for (const list of Object.values(sheets)) {
+    const frame = pages.get(list[0].page);
+    if (!frame) continue;
+    const origin = { lat: frame.originLat, lng: frame.originLng };
+    for (const p of list) {
+      const mine = lineRows.filter((r) => r.cluster === p.page);
+      const other = mine.find((r) => !r.houses);
+      if (other) (out[p.page] ??= {}).other = relativePlacement(frame, withOrigin(other, origin));
+      for (const g of detected.filter((d) => d.cluster === p.page)) {
+        const row = savedFor(g, mine.filter((r) => r.houses));
+        if (row) (out[p.page] ??= {})[g.key] = relativePlacement(frame, withOrigin(row, origin));
+      }
+    }
+  }
+  return out;
+}
+
+// ---- Snapping a group to the plan's lines ------------------------------------------------------------------------------
+// The plan's lines (the white boundaries) say where plots end. `snapToLines` finds the walls of a group's plot outlines that run along one
+// of the lines, on the ground (each drawn with its own placement), and works out the shift, in metres, that lays them on those lines. Only
+// a nearby, parallel line counts (within `reach` metres and 8 degrees), so the group is never pulled onto a line that is not its boundary.
+
+const ground = (fit, pts) => pts.map((p) => planToLocal(fit, p));
+/**
+ * @param {{ mine: number[][][], lines: { polys: number[][][], fit: { a: number, b: number, tx: number, ty: number } }[], fitMine: { a: number, b: number, tx: number, ty: number }, reach?: number }} input
+ *   `mine` are plot outlines in plan-page coordinates; `lines` are sets of polylines (in plan-page coordinates), each set with the placement it is
+ *   drawn with (groups of lines can sit differently on the ground).
+ * @returns {{ east: number, north: number, walls: number, before: number } | null}
+ */
+export function snapToLines({ mine, lines, fitMine, reach = 6 }) {
+  const segs = [];
+  for (const set of lines) for (const line of set.polys) { const g = ground(set.fit, line); for (let i = 0; i + 1 < g.length; i++) segs.push([g[i], g[i + 1]]); }
+  const PARALLEL = Math.sin((8 * Math.PI) / 180);
+  let m11 = 0, m12 = 0, m22 = 0, r1 = 0, r2 = 0, sum = 0, count = 0, walls = 0;
+  for (const poly of mine) {
+    const g = ground(fitMine, poly);
+    for (let i = 0; i < g.length; i++) {
+      const a = g[i], b = g[(i + 1) % g.length];
+      const dx = b[0] - a[0], dy = b[1] - a[1], len = Math.hypot(dx, dy);
+      if (len < 3) continue;
+      const d = [dx / len, dy / len];
+      let best = null;
+      for (const [s1, s2] of segs) {
+        const sx = s2[0] - s1[0], sy = s2[1] - s1[1], sl = Math.hypot(sx, sy);
+        if (sl < 2 || Math.abs((d[0] * sy - d[1] * sx) / sl) > PARALLEL) continue;
+        const n = [-sy / sl, sx / sl];
+        const dist = n[0] * ((a[0] + b[0]) / 2 - s1[0]) + n[1] * ((a[1] + b[1]) / 2 - s1[1]);
+        if (Math.abs(dist) > reach) continue;
+        // along the wall, how much of it the line covers
+        const t = (p) => ((p[0] - s1[0]) * sx + (p[1] - s1[1]) * sy) / sl;
+        const lo = Math.max(Math.min(t(a), t(b)), 0), hi = Math.min(Math.max(t(a), t(b)), sl);
+        if (hi - lo < Math.min(len * 0.4, 4)) continue;
+        if (!best || Math.abs(dist) < Math.abs(best.dist)) best = { n, dist };
+      }
+      if (!best) continue;
+      walls += 1;
+      for (const p of [a, b]) {
+        const dist = best.n[0] * (p[0] - ((a[0] + b[0]) / 2 - best.n[0] * best.dist)) + best.n[1] * (p[1] - ((a[1] + b[1]) / 2 - best.n[1] * best.dist));
+        m11 += best.n[0] * best.n[0]; m12 += best.n[0] * best.n[1]; m22 += best.n[1] * best.n[1];
+        r1 -= dist * best.n[0]; r2 -= dist * best.n[1];
+        sum += Math.abs(dist); count += 1;
+      }
+    }
+  }
+  if (!walls) return null;
+  const [vx, vy] = solveShift(m11, m12, m22, r1, r2);
+  return { east: vx, north: -vy, walls, before: sum / count };
 }

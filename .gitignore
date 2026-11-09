@@ -34,3 +34,6 @@ deno.lock
 # Member photos downloaded at build time by scripts/export-member-stories.mjs (and their generated variants)
 public/images/members/up-*
 
+
+# Local preview data for the admin Align page (real saved placements; the farm's location): never committed
+/public/dev-only/
