@@ -1012,8 +1012,8 @@ outside both the local machine and Netlify (the member-update-email workflow).
   base-foundation centre, rotation, mirrors) and `site_map_clusters` (base size per cluster, view box, plot lines: the
   site plan's raw lines plus, from migration `0075`, the closed outline of every home's plot),
   seeded from the layout fixed by hand on 2026-10-29 (`docs/site-map/`). The plan is drawn on one page per cluster, but
-  the member map shows H1-A and H1-B as one "H1" sheet: `mergeSheets` in `scripts/lib/site-map.mjs` moves H1-B into
-  H1-A's coordinates (its own scale, rotation and offset; every home keeps the one base size) before the response is sent,
+  the member map shows all three pages (H1-A, H1-B, H2) as one sheet, "All" (no cluster tabs; a home still knows its page, so cards say H1 or H2): `mergeSheets` in `scripts/lib/site-map.mjs` moves H1-B and H2 into
+  H1-A's coordinates (their own scale, rotation and offset; every home keeps the one base size) before the response is sent,
   while the database and the admin layout editor keep each home in its own page's coordinates. The placement comes from
   `site_map_alignment` (migration `0095`, one row per plan page: the fit of the page onto the ground, made on the admin
   page **Align to satellite**, `/internal/site-map-align/`, by pairing points on the plan and on Google's live satellite map
