@@ -63,18 +63,29 @@ for (const file of htmlFiles) {
 // l.clarity.ms another time from the same code, seemingly load-balanced.
 // Wildcarding *.clarity.ms instead of enumerating subdomains one at a time
 // as they surface.
+//
+// Google Maps (2026-11-09): the admin page /internal/site-map-align/ draws Google's live satellite map with the Maps
+// JavaScript API (browser key PUBLIC_GOOGLE_MAPS_API_KEY). It loads its script from maps.googleapis.com and more of itself
+// from maps.gstatic.com (script-src); fetches satellite tiles and UI images from the *.googleapis.com tile hosts
+// (khms0.googleapis.com and similar) and *.gstatic.com (img-src); and calls maps.googleapis.com from the page (connect-src);
+// its widgets use Google's stylesheet and font (style-src, font-src). Verified against the live admin page with this exact
+// policy: the map renders and the only violation left is Cloudflare's analytics beacon, which was already blocked. No
+// worker-src was needed (a raster satellite map does not use workers). The same policy serves members.tvc.farm, so a
+// future member Satellite layer needs no further change here.
 const scriptSrc = [
   "'self'",
   'https://accounts.google.com',
   'https://www.googletagmanager.com',
   'https://*.clarity.ms',
+  'https://maps.googleapis.com',
+  'https://maps.gstatic.com',
   ...hashes,
 ].join(' ');
 
 const csp = [
   "default-src 'self'",
   `script-src ${scriptSrc}`,
-  "style-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   // blob: is needed for /internal/photo-pool: it fetches each Drive
   // thumbnail through the authenticated Netlify Function (Drive's
   // thumbnailLink can't be hit directly from the browser) and renders it via
@@ -85,8 +96,8 @@ const csp = [
   // admin member register (/internal/members) shows each member's Google picture
   // on their household card, falling back to an initial when the image fails - so
   // without these the cards silently showed only initials.
-  "img-src 'self' data: blob: https://media.tvc.farm https://*.inaturalist.org https://inaturalist-open-data.s3.amazonaws.com https://*.tile.openstreetmap.org https://*.googleusercontent.com https://*.ggpht.com",
-  "font-src 'self'",
+  "img-src 'self' data: blob: https://media.tvc.farm https://*.inaturalist.org https://inaturalist-open-data.s3.amazonaws.com https://*.tile.openstreetmap.org https://*.googleusercontent.com https://*.ggpht.com https://maps.googleapis.com https://maps.gstatic.com https://*.googleapis.com https://*.gstatic.com",
+  "font-src 'self' https://fonts.gstatic.com",
   // GA4's actual runtime hit lands on analytics.google.com (a fallback to
   // stats.g.doubleclick.net too) - not www.google-analytics.com, that's a
   // Universal Analytics-era domain gtag.js doesn't send hits to anymore.
@@ -106,7 +117,7 @@ const csp = [
   // alongside the wildcard, same lesson applied to the google-analytics.com
   // and g.doubleclick.net entries in case a future hit lands on their apex
   // too.
-  "connect-src 'self' https://google-analytics.com https://*.google-analytics.com https://analytics.google.com https://*.analytics.google.com https://g.doubleclick.net https://*.g.doubleclick.net https://www.googletagmanager.com https://accounts.google.com https://api.inaturalist.org https://api.open-meteo.com https://*.clarity.ms",
+  "connect-src 'self' https://google-analytics.com https://*.google-analytics.com https://analytics.google.com https://*.analytics.google.com https://g.doubleclick.net https://*.g.doubleclick.net https://www.googletagmanager.com https://accounts.google.com https://api.inaturalist.org https://api.open-meteo.com https://*.clarity.ms https://maps.googleapis.com",
   'frame-src https://www.google.com https://www.youtube.com https://accounts.google.com',
   "object-src 'none'",
   "base-uri 'self'",
