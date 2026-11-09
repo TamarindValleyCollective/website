@@ -24,7 +24,7 @@ import '../../styles/site-map.css';
       <p class="hint"><a href="/internal/site-map/">&larr; Back to the Map</a></p>
       <ol class="steps">
         <li>Find the farm on the map: in Google Maps, right-click the farm and copy its position, then paste it in the box below. Zoom in until the buildings are clear.</li>
-        <li>Pick a plan page. Tap a home on the plan (or any spot, such as a plot corner), then tap the <em>same</em> spot on the map.</li>
+        <li>Pick a plan page. Tap a home on the plan (or any spot, such as a plot corner), then tap the <em>same</em> spot on the map. After the second pair the plan appears on the map; each further pair refines it.</li>
         <li>Three or more pairs, spread apart, fit the page. The list shows how far each pair is from the fit in metres; remove or redo the ones that are off, then Save.</li>
       </ol>
 
@@ -57,7 +57,7 @@ import '../../styles/site-map.css';
             <div id="gmap" class="al-gmap" aria-label="Satellite map: tap the same spot"></div>
           </div>
           <div class="line" id="overlaybar" hidden>
-            <button type="button" class="button button--outline" id="overlay" aria-pressed="false">Show the plan on the map</button>
+            <button type="button" class="button button--outline" id="overlay" aria-pressed="true">Show the plan on the map</button>
             <label class="line">Plan strength <input type="range" id="strength" min="10" max="100" value="90" /></label>
           </div>
         </div>
@@ -171,7 +171,8 @@ import '../../styles/site-map.css';
   let pairs: Pair[] = [];
   let pending: { house: string | null; plan: number[] } | null = null;
   let dirty = false;
-  let showOverlay = false;
+  // The plan is drawn on the map as soon as two pairs place it (two points fix scale, rotation and shift); more pairs refine it.
+  let showOverlay = true;
   const clusterOf = (id: string) => clusters.find((c) => c.id === id) ?? clusters[0];
 
   // ---- the plan page: pan by dragging, zoom with the wheel or two fingers; a touch that does not move is a tap ----
@@ -341,7 +342,7 @@ import '../../styles/site-map.css';
       icon: { path: google.maps.SymbolPath.CIRCLE, scale: 11, fillColor: tok(off[i] ? '--tvc-error-text' : '--tvc-green-dark'), fillOpacity: 1, strokeColor: tok('--tvc-white'), strokeWeight: 2 },
       label: { text: String(i + 1), color: tok('--tvc-white'), fontSize: '12px', fontWeight: '700' },
     })));
-    if (!showOverlay || !f || pairs.length < MIN_PAIRS) return;
+    if (!showOverlay || !f) return;
     // The plan drawn on the ground: every plan point goes through the fit's inverse to a position on the map.
     const toLatLng = ([x, y]: number[]) => { const [lat, lng] = localToGeo(f.frame, planToLocal(f, [x, y] as [number, number]) as [number, number]); return { lat, lng }; };
     const opacity = Number(($('strength') as HTMLInputElement).value) / 100;
@@ -408,10 +409,11 @@ import '../../styles/site-map.css';
     paintMap(f, off);
     paintCard(f, off);
     ($('overlay') as HTMLButtonElement).setAttribute('aria-pressed', String(showOverlay));
-    $('overlaybar').hidden = !(map && f && pairs.length >= MIN_PAIRS);
+    $('overlaybar').hidden = !(map && f);
     if (!map) setHint(MAPS_KEY ? 'Loading the map…' : 'The map needs a Google Maps key.');
     else if (pending) setHint('Now tap the same spot on the satellite map.', true);
-    else setHint(pairs.length ? 'Tap another home or spot on the plan to add a pair.' : 'Tap a home on the plan to start.');
+    else if (pairs.length === 1) setHint('Pair a second point, far from the first: the plan then appears on the map.');
+    else setHint(pairs.length ? 'Tap another home or spot on the plan to add a pair. Where the plan sits off the map, pair that spot.' : 'Tap a home on the plan to start.');
   }
 
   // ---- saving ----
