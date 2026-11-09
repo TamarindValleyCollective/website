@@ -3895,6 +3895,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .dir-row .title {
     font-weight: 600;
+    overflow-wrap: anywhere;
   }
 
   .dir-row .detail {
@@ -3903,9 +3904,13 @@ import SignInGate from '../../components/SignInGate.astro';
     white-space: nowrap;
   }
 
+  /* The farm and house badges stack, so a long name keeps the width and is not run over by them. */
   .dir-row .dir-pills {
-    margin: 0;
     flex: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    margin: 0;
   }
 
   /* Your own unit's row: the row opens the profile; the story's state and the way into the editor sit beside it. */
