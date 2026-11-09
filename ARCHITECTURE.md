@@ -1011,7 +1011,17 @@ outside both the local machine and Netlify (the member-update-email workflow).
   anon/authenticated grants): `site_map_units` (one row per home: cluster, standard shape S/DG/DF/DO/TO, x/y of the
   base-foundation centre, rotation, mirrors) and `site_map_clusters` (base size per cluster, view box, plot lines: the
   site plan's raw lines plus, from migration `0075`, the closed outline of every home's plot),
-  seeded from the layout fixed by hand on 2026-10-29 (`docs/site-map/`). The function selects only ids, names and unit
+  seeded from the layout fixed by hand on 2026-10-29 (`docs/site-map/`). The plan is drawn on one page per cluster, but
+  the member map shows H1-A and H1-B as one "H1" sheet: `mergeSheets` in `scripts/lib/site-map.mjs` moves H1-B into
+  H1-A's coordinates (its own scale, rotation and offset; every home keeps the one base size) before the response is sent,
+  while the database and the admin layout editor keep each home in its own page's coordinates. The placement comes from
+  `site_map_alignment` (migration `0095`, one row per plan page: the fit of the page onto the ground, made on the admin
+  page **Align to satellite**, `/internal/site-map-align/`, by pairing points on the plan and on Google's live satellite map
+  (Maps JavaScript API, browser key `PUBLIC_GOOGLE_MAPS_API_KEY`, restricted to the admin site); a pair is a plan point and
+  its latitude and longitude, fitted in metres around one shared reference point; the maths and rules are in
+  `scripts/lib/site-map-align.mjs`; an admin can then fine-tune the plan on the map by hand, moving it in metres, turning it in degrees and resizing it in percent about the pairs' middle: that is folded into the stored fit, and the page works it back out of the stored fit and its pairs when it is reopened, so no extra column) once both H1 pages are aligned, and from `SHEETS` until then. No map imagery is stored
+  anywhere: the page draws our plan over Google's live map. Alignment saves go through `site-map-admin.mts`
+  (`GET/POST /api/site-map-admin/alignment`, `site-map` / `edit`, audited first, fitted on the server). The function selects only ids, names and unit
   fields, and `scripts/lib/site-map.mjs` (tested) applies the directory's privacy rule: a person is named only when
   active and not opted out of the directory, a household with nobody listed shows as "Private member" with no profile
   link, a home with no household as "No member yet". The plan is drawn client-side in `members/index.astro`

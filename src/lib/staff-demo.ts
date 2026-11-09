@@ -11,6 +11,10 @@
 
 import { ACCOMMODATION_UNITS, ACCOMMODATION_TYPES } from '../../scripts/lib/accommodation.mjs';
 import { VERIFY_METHODS, findSimilarParties } from '../../scripts/lib/finance-parties.mjs';
+import { shapeAlignment, validateAlignment } from '../../scripts/lib/site-map-align.mjs';
+import planLines from '../../docs/site-map/plan-plot-lines.json';
+import plotOutlines from '../../docs/site-map/plot-outlines.json';
+import frozenLayout from '../../docs/site-map/layout-frozen-2026-10-29.json';
 
 const TOOLS = [
   { module: 'photo-pool', label: 'Photos', path: '/internal/photo-pool/' },
@@ -365,6 +369,31 @@ function demoFinanceVerify(accountId: string, body: any) {
   return { status: 200, data: { ok: true } };
 }
 
+// The Map pages (/internal/site-map/, /internal/site-map-align/): the real plan lines (plus each home's plot outline, as
+// migration 0075 appended them) and the frozen layout, with no households. An alignment you save lives only until the page is reloaded. (The satellite map itself is Google's and needs the
+// PUBLIC_GOOGLE_MAPS_API_KEY browser key; the demo fakes nothing of it.)
+const DEMO_PAGES: Record<string, string> = { H1A: 'H1-A', H1B: 'H1-B', H2: 'H2' };
+const demoMapState: { alignments: any[] } = { alignments: [] };
+function demoSiteMap(path: string, method: string, body: any): { status: number; data: unknown } | null {
+  if (path === '/api/site-map-admin/overview') {
+    const lines = planLines as Record<string, { vb: number[]; plot: string }>;
+    const homes = (frozenLayout as { baseSize: Record<string, number>; homes: Record<string, any> });
+    const units = Object.entries(homes.homes).map(([houseNo, h]) => ({ houseNo, cluster: DEMO_PAGES[h.cluster], shape: h.type, x: h.x, y: h.y, rotation: h.rotation, mirrorX: h.mirrorX, mirrorY: h.mirrorY, status: 'vacant', farmUnit: null, owners: [], otherMembers: 0, recordType: null, bhk: '', detail: '', plotSqFt: null, gaps: [], version: 'demo', people: [] }));
+    return { status: 200, data: { clusters: Object.keys(DEMO_PAGES).map((k) => ({ id: DEMO_PAGES[k], baseSize: homes.baseSize[k], viewBox: lines[k].vb, plot: `${lines[k].plot} ${Object.values((plotOutlines as Record<string, Record<string, string>>)[k] ?? {}).join(' ')}` })), units, notOnMap: [], summary: { homes: units.length, assigned: 0, vacant: units.length, mismatch: 0, noPlotSize: 0 }, namesMasked: false, canEdit: true } };
+  }
+  if (path === '/api/site-map-admin/alignment' && method === 'GET') return { status: 200, data: { alignments: demoMapState.alignments, canEdit: true } };
+  if (path === '/api/site-map-admin/alignment' && method === 'POST') {
+    if (body?.clear) { demoMapState.alignments = demoMapState.alignments.filter((a) => a.cluster !== body.cluster); return { status: 200, data: { ok: true } }; }
+    const other = demoMapState.alignments.find((a) => a.cluster !== body?.cluster);
+    const checked = validateAlignment(body, other ? { lat: other.originLat, lng: other.originLng } : null);
+    if ('error' in checked) return { status: 400, data: { error: checked.error } };
+    const { cluster, pairs, fit, origin } = checked;
+    demoMapState.alignments = [...demoMapState.alignments.filter((a) => a.cluster !== cluster), shapeAlignment({ cluster, a: fit.a, b: fit.b, tx: fit.tx, ty: fit.ty, origin_lat: origin.lat, origin_lng: origin.lng, rms: fit.rms, pairs })];
+    return { status: 200, data: { ok: true } };
+  }
+  return null;
+}
+
 export function installStaffDemo(tokenKey: string, kind: string): void {
   // A token that only decodeTokenEmail() reads; the server never sees it because /api/staff-me is faked.
   const token = `${b64url({ alg: 'none' })}.${b64url({ email: 'demo@tvc.farm' })}.demo`;
@@ -394,6 +423,12 @@ export function installStaffDemo(tokenKey: string, kind: string): void {
     }
     if (path === '/api/accommodation-admin/change-requests' && (init?.method ?? 'GET') === 'GET') return reply(demoChangeRequests());
     if (path === '/api/accommodation-admin/change-requests/decide') return reply({ ok: true });
+    if (path.startsWith('/api/site-map-admin/')) {
+      const method = (init?.method ?? 'GET').toUpperCase();
+      const body = (() => { try { return JSON.parse(String(init?.body ?? '{}')); } catch { return {}; } })();
+      const done = demoSiteMap(path, method, body);
+      if (done) return Promise.resolve(new Response(JSON.stringify(done.data), { status: done.status, headers: { 'content-type': 'application/json' } }));
+    }
     if (path === '/api/units-admin/overview') return reply(demoUnits());
     if (path === '/api/finance-admin/parties' && (init?.method ?? 'GET') === 'GET') return reply(demoFinanceParties());
     if (path === '/api/finance-admin/parties' && init?.method === 'POST') {

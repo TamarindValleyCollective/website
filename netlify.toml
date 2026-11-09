@@ -185,6 +185,12 @@
   force = true
 
 [[redirects]]
+  from = "https://admin.tvc.farm/site-map-align/*"
+  to = "/internal/site-map-align/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "https://admin.tvc.farm/finance/*"
   to = "/internal/finance/:splat"
   status = 200

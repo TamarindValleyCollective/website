@@ -3848,13 +3848,17 @@ import SignInGate from '../../components/SignInGate.astro';
   .dir-card-foot {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     justify-content: flex-end;
-    gap: 8px;
+    gap: 6px 8px;
     margin-top: auto;
   }
 
   .dir-card-foot .dir-pills {
     margin: 0;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
   }
 
   .dir-card-text {
@@ -3891,6 +3895,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .dir-row .title {
     font-weight: 600;
+    overflow-wrap: anywhere;
   }
 
   .dir-row .detail {
@@ -3899,9 +3904,13 @@ import SignInGate from '../../components/SignInGate.astro';
     white-space: nowrap;
   }
 
+  /* The farm and house badges stack, so a long name keeps the width and is not run over by them. */
   .dir-row .dir-pills {
-    margin: 0;
     flex: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    margin: 0;
   }
 
   /* Your own unit's row: the row opens the profile; the story's state and the way into the editor sit beside it. */
@@ -3924,31 +3933,63 @@ import SignInGate from '../../components/SignInGate.astro';
     padding-right: 14px;
   }
 
-  /* The story's state, in words (the full sentence is the tooltip and the screen-reader label). */
+  /* The story's state as a dot: grey while a draft, orange in review, red when changes are needed. Approved
+     shows nothing. The words are the tooltip and the screen-reader label. */
   .dir-state {
-    padding: 1px 9px;
-    border-radius: 999px;
-    background: var(--tvc-white);
-    color: var(--tvc-ink-soft);
-    font-size: var(--text-xs);
-    font-weight: 600;
-    white-space: nowrap;
+    flex: none;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--tvc-ink-soft);
   }
 
-  .dir-state--review,
+  .dir-state--review {
+    background: var(--tvc-orange);
+  }
+
   .dir-state--changes {
-    background: var(--tvc-orange-tint);
-    color: var(--tvc-orange-text);
-  }
-
-  .dir-state--live {
-    color: var(--tvc-green-dark);
+    background: var(--tvc-error-text);
   }
 
   @media (pointer: coarse) {
     .dir-edit {
       width: 44px;
       height: 44px;
+    }
+  }
+
+  /* In a narrow card or row the pictures give width back to the names, so a long name keeps whole words. */
+  @media (max-width: 480px) {
+    .dir-card .dir-photo--card,
+    .dir-card .dir-initial--card {
+      width: 72px;
+      height: 72px;
+    }
+
+    .dir-card .dir-initial--card {
+      font-size: 1.6rem;
+    }
+
+    .dir-card .dir-faces--2 .dir-photo--card,
+    .dir-card .dir-faces--2 .dir-initial--card {
+      width: 60px;
+      height: 60px;
+    }
+
+    .dir-card .dir-faces--2 > * + * {
+      margin-left: -24px;
+    }
+
+    .dir-row {
+      gap: 10px;
+    }
+
+    .dir-row .dir-faces > * + * {
+      margin-left: -18px;
+    }
+
+    .dir-row .chev {
+      display: none;
     }
   }
 
@@ -4427,6 +4468,10 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
   type LandDoc = { id: string; householdId: string; landType: string; fileName: string | null; uploadedAt: string; status: string; summary: string };
   type Hh = { id: string; farmUnit: string; houseNo: string | null; cluster: string | null; unitType: string | null; people: Person[]; plots: Plot[]; housePattas: House[]; farmAcres: number; farmHectares: number; houseSqFt: number; flags: { severity: string; text: string }[] };
   type Me = { personId: string; name: string; email: string | null; phone: string | null; directoryVisible: boolean; role: string; familyRequestsPending: number; tourSeenThrough?: number | null };
+
+  // H1-A and H1-B are one block on the ground and on the site map, so members see them as "H1".
+  const clusterName = (c: string | null): string | null => (c === 'H1-A' || c === 'H1-B' ? 'H1' : c);
+  const withClusterName = <T extends { cluster: string | null }>(rows: T[]): T[] => rows.map((r) => ({ ...r, cluster: clusterName(r.cluster) }));
 
   type Kid = Node | string | null | undefined | false;
   function h(tag: string, cls = '', text?: string, ...kids: Kid[]): HTMLElement {
@@ -5392,7 +5437,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         const { status, data } = await memberFetch('/api/members-me/home');
         if (status === 200 && data.households) {
           const before = JSON.stringify(all);
-          all = data.households;
+          all = withClusterName(data.households);
           if (JSON.stringify(all) !== before) onRoute();
         }
       } catch {
@@ -7650,8 +7695,13 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     const STATE_WORD = { draft: 'Draft', review: 'In review', changes: 'Changes needed', live: 'Approved' };
     function storyState(): HTMLElement | null {
       if (!mine || !mine.written) return null;
-      const state = h('span', `dir-state dir-state--${mine.tone}`, STATE_WORD[mine.tone]);
+      // Approved is the settled state and shows nothing. The others are a coloured dot; the words are the
+      // tooltip and the screen-reader label.
+      if (mine.tone === 'live') return null;
+      const state = h('span', `dir-state dir-state--${mine.tone}`);
       state.title = mine.label;
+      state.setAttribute('role', 'img');
+      state.setAttribute('aria-label', `${STATE_WORD[mine.tone]}: ${mine.label}`);
       return state;
     }
     function ownTools(primaryCount: number, cls: string, withState = true): HTMLElement {
@@ -7783,7 +7833,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       };
       const kinds = [...new Set(list.map((x) => kindOf(x.unitType)).filter((t): t is string => !!t))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
       return h('div', 'dir-filters', undefined,
-        row('Cluster', cluster, (v) => { cluster = v; }, ['H1-A', 'H1-B', 'H2']),
+        row('Cluster', cluster, (v) => { cluster = v; }, ['H1', 'H2']),
         kinds.length ? row('Bedrooms', unitType, (v) => { unitType = v; }, kinds) : null);
     }
 
@@ -7972,7 +8022,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       try {
         const [{ status, data }] = await Promise.all([memberFetch('/api/members-me/directory'), siteMapReady()]);
         if (status !== 200) throw new Error(data.error || 'Could not load the directory.');
-        list = data.households as DirHousehold[];
+        list = withClusterName(data.households as DirHousehold[]);
         // The first choice is the Map (when there is one); a #/sitemap link or bookmark asks for it by name.
         mode = siteMap && routeQuery.get('view') === 'map' ? 'map' : saved === 'cards' ? 'cards' : saved === 'list' ? 'list' : siteMap ? 'map' : 'list';
         buildView();
@@ -8083,7 +8133,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
   // Draws the portal from a /home answer: the fresh one, or (fromCache) the last one this browser kept for this member.
   function showHome(data: { me: Me; households: any[] }, fromCache = false) {
     me = data.me;
-    all = data.households;
+    all = withClusterName(data.households);
     current = Math.min(current, all.length - 1);
     $('boot').hidden = true;
     $('gate').hidden = true;

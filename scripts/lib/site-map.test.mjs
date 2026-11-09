@@ -203,3 +203,49 @@ test('plot span: the size of the smallest outline round a point', async () => {
   assert.deepEqual(plotSpan(path, 60, 20), { w: 40, h: 50 });
   assert.equal(plotSpan(path, 500, 500), null);
 });
+
+test('H1-A and H1-B are combined into one H1 sheet, in H1-A coordinates', async () => {
+  const { mergeSheets, sheetOf, SHEETS } = await import('./site-map.mjs');
+  const [a, b] = SHEETS.H1;
+  const clusters = [
+    { id: 'H1-A', baseSize: 1.63, viewBox: [330, 90, 560, 930], plot: 'M10 20 L30 40 Z' },
+    { id: 'H1-B', baseSize: 1.8, viewBox: [190, 130, 920, 500], plot: 'M100 200 L300 400 Z' },
+    { id: 'H2', baseSize: 1.8, viewBox: [110, 330, 1010, 310], plot: 'M1 2 L3 4' },
+  ];
+  const units = [{ houseNo: 'H-16', cluster: 'H1-A', x: 400, y: 500 }, { houseNo: 'H-40', cluster: 'H1-B', x: 500, y: 300 }, { houseNo: 'H-01', cluster: 'H2', x: 160, y: 530 }];
+  const out = mergeSheets(clusters, units);
+  assert.deepEqual(out.clusters.map((c) => c.id), ['H1', 'H2']);
+  assert.equal(out.clusters[0].baseSize, 1.63);
+  assert.equal(out.clusters[1].plot, 'M1 2 L3 4');
+  assert.deepEqual(out.units.map((u) => u.cluster), ['H1', 'H1', 'H2']);
+  assert.deepEqual([out.units[0].x, out.units[0].y], [400, 500]);
+  assert.equal(out.units[1].x, Math.round((500 * b.scale + b.dx) * 100) / 100);
+  assert.equal(out.units[1].y, Math.round((300 * b.scale + b.dy) * 100) / 100);
+  assert.deepEqual([out.units[2].x, out.units[2].y], [160, 530]);
+  // The plot lines of both pages are in the combined cluster, and the view box covers both.
+  assert.match(out.clusters[0].plot, /^M10 20 L30 40 Z M/);
+  const [x, y, w, h] = out.clusters[0].viewBox;
+  assert.ok(x <= 330 && x <= 190 * b.scale + b.dx + 0.01 && x + w >= 890 && y + h >= 1020);
+  assert.equal(sheetOf('H1-B'), 'H1');
+  assert.equal(sheetOf('H2'), 'H2');
+  assert.equal(a.scale, 1);
+});
+
+test('a cluster is rotated on its own, and homes keep the one base size', async () => {
+  const { mergeSheets } = await import('./site-map.mjs');
+  const sheets = { H1: [{ page: 'H1-A', scale: 1, rotate: 0, dx: 0, dy: 0 }, { page: 'H1-B', scale: 2, rotate: 90, dx: 10, dy: 20 }] };
+  const clusters = [
+    { id: 'H1-A', baseSize: 1.63, viewBox: [0, 0, 100, 50], plot: 'M0 0 L10 0 Z' },
+    { id: 'H1-B', baseSize: 1.8, viewBox: [0, 0, 100, 50], plot: 'M0 0 L10 0 Z' },
+  ];
+  const units = [{ houseNo: 'H-01', cluster: 'H1-A', x: 5, y: 5, rotation: 30 }, { houseNo: 'H-40', cluster: 'H1-B', x: 10, y: 0, rotation: 100 }];
+  const out = mergeSheets(clusters, units, sheets);
+  assert.equal(out.clusters.length, 1);
+  assert.equal(out.clusters[0].baseSize, 1.63); // one size for every home, never rescaled per page
+  const [a, b] = out.units;
+  assert.deepEqual([a.x, a.y, a.rotation], [5, 5, 30]);
+  // (10, 0) turned 90 degrees clockwise is (0, 10); doubled is (0, 20); shifted by (10, 20) is (10, 40).
+  assert.deepEqual([b.x, b.y], [10, 40]);
+  assert.equal(b.rotation, -170); // 100 + 90, kept in (-180, 180]
+  assert.match(out.clusters[0].plot, /M0 0 L10 0 Z M10 20 L10 40 Z/);
+});

@@ -1,0 +1,615 @@
+---
+// Align to satellite (internal): lay each plan page of the Map over Google's live satellite map by pairing points. An admin
+// taps a home (or any spot) on the plan page, then the same spot on the map, three or more times; the page fits the scale,
+// rotation and shift from the pairs, shows how far each pair is from the fit in metres, and draws the plan over the map to
+// check. Saving stores the pairs and the fit for that page (netlify/functions/site-map-admin.mts); the member map joins H1-A
+// and H1-B from them (scripts/lib/site-map-align.mjs). No imagery is stored: the map is Google's, drawn live through the Maps
+// JavaScript API with the browser key PUBLIC_GOOGLE_MAPS_API_KEY (restricted to the admin site). Same shell and sign-in as the
+// Map page. Everything the server returns is placed with textContent only.
+import StaffLayout from '../../layouts/StaffLayout.astro';
+import SignInGate from '../../components/SignInGate.astro';
+import '../../styles/site-map.css';
+---
+
+<StaffLayout title="Align map" description="Lay the plan over the satellite map." current="site-map">
+  <section class="align section wrapper">
+    <h1>Align to satellite</h1>
+    <p id="intro" class="hint">Sign in to lay the plan over the satellite map.</p>
+
+    <SignInGate forbiddenWhat="the Map tool" />
+
+    <p id="status" class="hint" hidden></p>
+
+    <div id="content" hidden>
+      <p class="hint"><a href="/internal/site-map/">&larr; Back to the Map</a></p>
+      <ol class="steps">
+        <li>Find the farm on the map: in Google Maps, right-click the farm and copy its position, then paste it in the box below. Zoom in until the buildings are clear.</li>
+        <li>Pick a plan page. Tap a home on the plan (or any spot, such as a plot corner), then tap the <em>same</em> spot on the map. After the second pair the plan appears on the map; each further pair refines it.</li>
+        <li>Three or more pairs, spread apart, fit the page. The list shows how far each pair is from the fit in metres; remove or redo the ones that are off, then Save.</li>
+      </ol>
+
+      <div class="bar">
+        <div class="segmented" id="clusters" role="group" aria-label="Plan page"></div>
+        <form class="editbar" id="goto-form">
+          <label class="line">Go to <input type="text" id="goto" placeholder="29.12345, 79.12345" autocomplete="off" aria-label="Latitude and longitude" /></label>
+          <button type="submit" class="button button--outline">Go</button>
+        </form>
+      </div>
+
+      <p id="hint" class="hint" role="status"></p>
+      <p id="nokey" class="hint hint--wait" hidden>The Google Maps key is not set. Put it in <code>PUBLIC_GOOGLE_MAPS_API_KEY</code> (a browser key limited to this site) and reload.</p>
+
+      <div class="al-grid">
+        <div class="al-pane">
+          <h2>Plan page <span id="plan-name"></span></h2>
+          <div class="sm-stage">
+            <svg id="plan" class="sm-map" role="group" aria-label="Plan page: tap a home or a spot"></svg>
+            <div class="sm-zoom">
+              <button type="button" class="button button--outline" data-d="in" aria-label="Zoom in the plan">+</button>
+              <button type="button" class="button button--outline" data-d="out" aria-label="Zoom out the plan">&minus;</button>
+              <button type="button" class="button button--outline" data-d="fit" aria-label="Show the whole plan page">Fit</button>
+            </div>
+          </div>
+        </div>
+        <div class="al-pane">
+          <h2>Satellite map</h2>
+          <div class="sm-stage">
+            <div id="gmap" class="al-gmap" aria-label="Satellite map: tap the same spot"></div>
+          </div>
+          <div class="line" id="overlaybar" hidden>
+            <button type="button" class="button button--outline" id="overlay" aria-pressed="true">Show the plan on the map</button>
+            <label class="line">Plan strength <input type="range" id="strength" min="10" max="100" value="90" /></label>
+          </div>
+          <section class="tune" id="tune" hidden aria-label="Fine-tune the plan on the map">
+            <h3>Fine-tune</h3>
+            <p class="hint">Nudge the plan on the map by hand. Turning and resizing pivot on the middle of your pairs. Pairs stay as they are, so Reset goes back to the fit from them.</p>
+            <div class="tune-row">
+              <span class="k">Move</span>
+              <div class="dpad" id="tune-move" role="group" aria-label="Move the plan"></div>
+              <span class="k">Turn</span>
+              <div class="pair" id="tune-turn" role="group" aria-label="Turn the plan"></div>
+              <span class="k">Size</span>
+              <div class="pair" id="tune-size" role="group" aria-label="Resize the plan"></div>
+            </div>
+            <div class="tune-row">
+              <span class="k">Step</span>
+              <div class="segmented" id="tune-step" role="group" aria-label="Size of each nudge"></div>
+              <button type="button" class="button button--outline" id="tune-reset">Reset fine-tune</button>
+            </div>
+            <p class="hint" id="tune-readout" role="status"></p>
+          </section>
+        </div>
+      </div>
+
+      <section class="card" id="fit-card" aria-live="polite"></section>
+    </div>
+  </section>
+</StaffLayout>
+
+<script is:inline src="https://accounts.google.com/gsi/client"></script>
+
+<style is:global>
+  .align .bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 14px;
+    margin: 12px 0;
+  }
+
+  .align .steps { margin: 0 0 8px; padding-left: 20px; font-size: var(--text-sm); color: var(--tvc-ink-soft); }
+  .align .steps li { margin: 2px 0; }
+  .align .editbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .align .editbar input[type='text'] { width: 190px; }
+  .align .al-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-items: start; }
+  .align .al-pane h2 { margin: 0 0 6px; font-size: var(--text-md); }
+  .align .al-pane h2 span { color: var(--tvc-ink-soft); font-weight: 400; }
+  .align .sm-map,
+  .align .al-gmap { display: block; width: 100%; height: min(56vh, 560px); }
+  .align .sm-zoom .button { width: 36px; padding: 0; background: var(--tvc-white); }
+  .align .line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-top: 8px; font-size: var(--text-sm); }
+  .align .editbar .line { margin-top: 0; }
+  .align .hint--wait { color: var(--tvc-orange-text); }
+
+  @media (min-width: 901px) {
+    .align .al-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+
+  /* Marks on the plan page. A pair is the same number on the plan and on the map; the pending point has a ring until its partner is tapped. */
+  .align .al-home { fill: var(--tvc-white); stroke: var(--tvc-green-dark); stroke-width: 1.5; vector-effect: non-scaling-stroke; cursor: pointer; }
+  .align .al-home-label { fill: var(--tvc-ink-soft); text-anchor: middle; pointer-events: none; }
+  .align .al-pin { fill: var(--tvc-green-dark); stroke: var(--tvc-white); stroke-width: 1.5; vector-effect: non-scaling-stroke; pointer-events: none; }
+  .align .al-pin.is-off { fill: var(--tvc-error-text); }
+  .align .al-pin-label { fill: var(--tvc-white); font-weight: 700; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+  .align .al-pending { fill: none; stroke: var(--tvc-orange); stroke-width: 3; vector-effect: non-scaling-stroke; pointer-events: none; }
+
+  .align .fit-grid { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 10px 0 0; font-size: var(--text-sm); }
+  .align .fit-grid dt { color: var(--tvc-ink-soft); }
+  .align .fit-grid dd { margin: 0; }
+  .align .pairs { display: grid; gap: 4px; margin: 10px 0 0; padding: 0; list-style: none; font-size: var(--text-sm); }
+  .align .pairs li { display: flex; align-items: center; gap: 10px; }
+  .align .pairs .n { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--tvc-green-dark); color: var(--tvc-white); font-weight: 700; font-size: var(--text-xs); }
+  .align .pairs .is-off .n { background: var(--tvc-error-text); }
+  .align .pairs .what { flex: 1; min-width: 0; }
+  .align .pairs .off { color: var(--tvc-ink-soft); }
+  .align .pairs .is-off .off { color: var(--tvc-error-text); font-weight: 600; }
+  .align .tune { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--tvc-line); }
+  .align .tune h3 { margin: 0 0 4px; font-size: var(--text-md); }
+  .align .tune-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 8px; }
+  .align .tune .k { color: var(--tvc-ink-soft); font-size: var(--text-sm); }
+  .align .tune .button { min-width: 36px; padding: 0 10px; }
+  .align .tune .dpad { display: grid; grid-template-columns: repeat(3, 36px); grid-auto-rows: 36px; gap: 4px; }
+  .align .tune .dpad .button { width: 36px; min-width: 0; padding: 0; }
+  .align .tune .pair { display: flex; gap: 4px; }
+  .align .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .align .dirty { color: var(--tvc-orange-text); font-size: var(--text-sm); margin: 8px 0 0; }
+</style>
+
+<script>
+  import { StaffAuthError, clearStepUp, clearToken, decodeTokenEmail, getToken, setToken, showToast, staffFetch } from '../../../scripts/lib/staff-client.mjs';
+  import { busyForPress } from '../../../scripts/lib/busy.mjs';
+  import { MAX_PAIRS, MIN_PAIRS, NO_TUNE, applyTune, fitSimilarity, geoToLocal, isTuned, localToGeo, originOf, pivotOf, planToLocal, tuneBetween } from '../../../scripts/lib/site-map-align.mjs';
+  import { SVG_NS } from '../../../scripts/lib/site-map-draw.mjs';
+
+  declare const google: any;
+  const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
+  const MAPS_KEY = import.meta.env.PUBLIC_GOOGLE_MAPS_API_KEY;
+  const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+
+  // text only, never HTML
+  type Kid = Node | string | null | undefined | false;
+  function h(tag: string, cls = '', text?: string, ...kids: Kid[]): HTMLElement {
+    const el = document.createElement(tag);
+    if (cls) el.className = cls;
+    if (text !== undefined) el.textContent = text;
+    for (const k of kids) if (k) el.append(k);
+    return el;
+  }
+  const svgEl = (tag: string, attrs: Record<string, string | number> = {}, cls = '') => {
+    const e = document.createElementNS(SVG_NS, tag);
+    if (cls) e.setAttribute('class', cls);
+    for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, String(v));
+    return e;
+  };
+  // The map's marks take their colours from the TVC tokens, so they follow the design language and the dark appearance.
+  const tok = (name: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+  type Unit = { houseNo: string; cluster: string; x: number; y: number };
+  type Cluster = { id: string; viewBox: number[]; plot: string };
+  type Pair = { house: string | null; plan: number[]; geo: number[] };
+  type Saved = { cluster: string; a: number; b: number; tx: number; ty: number; scale: number; rotation: number; originLat: number; originLng: number; rms: number | null; pairs: Pair[]; updatedAt: string | null };
+
+  const gate = $('gate');
+  const forbidden = $('forbidden');
+  const content = $('content');
+  const statusEl = $('status');
+  const intro = $('intro');
+  const gateError = $('gate-error');
+  const planSvg = $('plan') as unknown as SVGSVGElement;
+  const nf = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 1 });
+
+  let clusters: Cluster[] = [];
+  let units: Unit[] = [];
+  let saved: Saved[] = [];
+  let canEdit = false;
+  let clusterId = '';
+  // What is on screen for the page being aligned: not saved until Save.
+  let pairs: Pair[] = [];
+  let pending: { house: string | null; plan: number[] } | null = null;
+  let dirty = false;
+  // The plan is drawn on the map as soon as two pairs place it (two points fix scale, rotation and shift); more pairs refine it.
+  let showOverlay = true;
+  // The hand fine-tune on top of the fit from the pairs (east/north in metres, rotate in degrees clockwise, scale a factor).
+  type Tune = { east: number; north: number; rotate: number; scale: number };
+  let tune: Tune = { ...NO_TUNE };
+  let savedTune: Tune = { ...NO_TUNE };
+  const clusterOf = (id: string) => clusters.find((c) => c.id === id) ?? clusters[0];
+
+  // ---- the plan page: pan by dragging, zoom with the wheel or two fingers; a touch that does not move is a tap ----
+  let vb: number[] = [0, 0, 1, 1];
+  const unitsPerPx = () => { const r = planSvg.getBoundingClientRect(); return Math.max(vb[2] / (r.width || 1), vb[3] / (r.height || 1)); };
+  const toUser = (e: { clientX: number; clientY: number }) => {
+    const r = planSvg.getBoundingClientRect();
+    const k = Math.max(vb[2] / r.width, vb[3] / r.height);
+    return [vb[0] + (e.clientX - r.left - (r.width - vb[2] / k) / 2) * k, vb[1] + (e.clientY - r.top - (r.height - vb[3] / k) / 2) * k];
+  };
+  function zoomBy(f: number, cx?: number, cy?: number) {
+    const [x, y, w, ht] = vb;
+    const nw = w / f;
+    if (nw < 30 || nw > clusterOf(clusterId).viewBox[2] * 1.6) return;
+    const px = cx ?? x + w / 2, py = cy ?? y + ht / 2;
+    vb = [px - (px - x) / f, py - (py - y) / f, nw, ht / f];
+    paint();
+  }
+  {
+    const ptrs = new Map<number, { x: number; y: number }>();
+    let moved = false;
+    let pinch = 0;
+    // With the pointer captured, pointerup is addressed to the svg itself, so what was tapped is read when it went down.
+    let down: Element | null = null;
+    planSvg.addEventListener('wheel', (e) => { e.preventDefault(); const [ux, uy] = toUser(e); zoomBy(e.deltaY < 0 ? 1.15 : 1 / 1.15, ux, uy); }, { passive: false });
+    planSvg.addEventListener('pointerdown', (e) => {
+      planSvg.setPointerCapture(e.pointerId);
+      ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (ptrs.size === 1) { moved = false; down = e.target as Element; } else pinch = 0;
+    });
+    planSvg.addEventListener('pointermove', (e) => {
+      const p = ptrs.get(e.pointerId);
+      if (!p) return;
+      if (ptrs.size === 2) {
+        ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        const [a, b] = [...ptrs.values()];
+        const d = Math.hypot(a.x - b.x, a.y - b.y);
+        if (pinch) { const [ux, uy] = toUser({ clientX: (a.x + b.x) / 2, clientY: (a.y + b.y) / 2 }); zoomBy(d / pinch, ux, uy); }
+        pinch = d;
+        moved = true;
+        return;
+      }
+      const dx = e.clientX - p.x, dy = e.clientY - p.y;
+      if (!moved && Math.hypot(dx, dy) < 4) return;
+      moved = true;
+      const k = unitsPerPx();
+      vb = [vb[0] - dx * k, vb[1] - dy * k, vb[2], vb[3]];
+      ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      planSvg.setAttribute('viewBox', vb.join(' '));
+    });
+    const end = (e: PointerEvent) => {
+      const had = ptrs.has(e.pointerId);
+      ptrs.delete(e.pointerId);
+      if (had && !moved && ptrs.size === 0 && e.type === 'pointerup') { const [ux, uy] = toUser(e); tapPlan(ux, uy, down ?? (e.target as Element)); }
+      if (moved && ptrs.size === 0) paint();
+    };
+    planSvg.addEventListener('pointerup', end);
+    planSvg.addEventListener('pointercancel', end);
+  }
+  document.querySelectorAll<HTMLElement>('.sm-zoom [data-d]').forEach((b) => b.addEventListener('click', () => {
+    const d = b.getAttribute('data-d');
+    if (d === 'fit') { vb = [...clusterOf(clusterId).viewBox]; paint(); } else zoomBy(d === 'in' ? 1.4 : 1 / 1.4);
+  }));
+  window.addEventListener('resize', paint);
+
+  // ---- tapping ----
+  function tapPlan(ux: number, uy: number, target: Element) {
+    const near = (target.closest('.al-home') as SVGElement | null)?.getAttribute('data-house') ?? null;
+    const home = near ? units.find((x) => x.houseNo === near) : null;
+    pending = home ? { house: home.houseNo, plan: [home.x, home.y] } : { house: null, plan: [Math.round(ux * 100) / 100, Math.round(uy * 100) / 100] };
+    paint();
+  }
+  function tapMap(lat: number, lng: number) {
+    if (!pending) { setHint('Tap a spot on the plan first, then the same spot on the map.', true); return; }
+    if (pairs.length >= MAX_PAIRS) { setHint(`That is ${MAX_PAIRS} pairs, the most one page takes. Remove one first.`, true); return; }
+    pairs = [...pairs, { house: pending.house, plan: pending.plan, geo: [Math.round(lat * 1e7) / 1e7, Math.round(lng * 1e7) / 1e7] }];
+    pending = null;
+    dirty = true;
+    paint();
+  }
+  function setHint(text: string, wait = false) {
+    const el = $('hint');
+    el.textContent = text;
+    el.classList.toggle('hint--wait', wait);
+  }
+
+  // ---- the fit ----
+  // Every page is fitted around one reference point: the one the other saved pages use, or this page's pairs' average.
+  const frame = () => {
+    const other = saved.find((s) => s.cluster !== clusterId);
+    return other ? { lat: other.originLat, lng: other.originLng } : pairs.length ? originOf(pairs) : null;
+  };
+  function fit() {
+    const f0 = frame();
+    if (!f0 || pairs.length < 2) return null;
+    const base = fitSimilarity(pairs.map((p) => ({ plan: p.plan, image: geoToLocal(f0, p.geo as [number, number]) })));
+    if (!base) return null;
+    // `a, b, tx, ty` are the fit the plan is drawn and saved with (fine-tuned); the pairs' distances stay those from the pairs' own fit.
+    const eff = isTuned(tune) ? applyTune(base, tune, pivotOf(pairs, f0)) : base;
+    return { ...base, ...eff, scale: Math.hypot(eff.a, eff.b), rotation: (Math.atan2(eff.b, eff.a) * 180) / Math.PI, frame: f0, residualsM: base.residuals.map((r: number) => r / base.scale), rmsM: base.rms / base.scale };
+  }
+  type Fit = NonNullable<ReturnType<typeof fit>>;
+
+  // ---- the plan page drawing ----
+  function pin(x: number, y: number, n: number, r: number, off: boolean) {
+    const g = svgEl('g');
+    g.append(svgEl('circle', { cx: x, cy: y, r }, `al-pin${off ? ' is-off' : ''}`));
+    const t = svgEl('text', { x, y, 'font-size': r * 1.25 }, 'al-pin-label');
+    t.textContent = String(n);
+    g.append(t);
+    return g;
+  }
+  function paintPlan(off: boolean[]) {
+    planSvg.setAttribute('viewBox', vb.join(' '));
+    const k = unitsPerPx();
+    const c = clusterOf(clusterId);
+    planSvg.replaceChildren();
+    planSvg.append(svgEl('path', { d: c.plot }, 'sm-plot'));
+    const paired = new Set(pairs.map((p) => p.house).filter(Boolean));
+    for (const u of units.filter((x) => x.cluster === clusterId)) {
+      const g = svgEl('g');
+      g.append(svgEl('circle', { cx: u.x, cy: u.y, r: 7 * k, 'data-house': u.houseNo }, 'al-home'));
+      if (!paired.has(u.houseNo)) { const t = svgEl('text', { x: u.x, y: u.y + 16 * k, 'font-size': 10 * k }, 'al-home-label'); t.textContent = u.houseNo.slice(2); g.append(t); }
+      planSvg.append(g);
+    }
+    pairs.forEach((p, i) => planSvg.append(pin(p.plan[0], p.plan[1], i + 1, 9 * k, off[i])));
+    if (pending) planSvg.append(svgEl('circle', { cx: pending.plan[0], cy: pending.plan[1], r: 13 * k }, 'al-pending'));
+  }
+
+  // ---- the live map ----
+  let map: any = null;
+  let mapMarks: any[] = [];
+  let overlayMarks: any[] = [];
+  const CENTER_KEY = 'tvc-site-map-align-view';
+  function loadGoogleMaps(): Promise<void> {
+    if ((window as any).google?.maps) return Promise.resolve();
+    return new Promise((res, rej) => {
+      (window as any).__tvcMapsReady = () => res();
+      (window as any).gm_authFailure = () => { $('nokey').hidden = false; $('nokey').textContent = 'Google refused the map key. Check that the key allows the Maps JavaScript API and this site, then reload.'; };
+      const s = document.createElement('script');
+      s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(MAPS_KEY)}&v=weekly&callback=__tvcMapsReady`;
+      s.async = true;
+      s.onerror = () => rej(new Error('The Google map could not be loaded.'));
+      document.head.append(s);
+    });
+  }
+  async function startMap() {
+    if (map) return;
+    if (!MAPS_KEY) { $('nokey').hidden = false; $('gmap').hidden = true; return; }
+    try { await loadGoogleMaps(); } catch (err) { $('nokey').hidden = false; $('nokey').textContent = err instanceof Error ? err.message : 'The Google map could not be loaded.'; return; }
+    let start = { lat: 20.5937, lng: 78.9629, zoom: 5 }; // India, until the farm has been found
+    try { const kept = JSON.parse(localStorage.getItem(CENTER_KEY) ?? 'null'); if (kept && Number.isFinite(kept.lat) && Number.isFinite(kept.lng)) start = kept; } catch { /* nothing kept */ }
+    const first = saved[0];
+    if (first && start.zoom < 10) start = { lat: first.originLat, lng: first.originLng, zoom: 19 };
+    map = new google.maps.Map($('gmap'), {
+      center: { lat: start.lat, lng: start.lng }, zoom: start.zoom, mapTypeId: 'satellite', tilt: 0, rotateControl: false, streetViewControl: false, mapTypeControl: false,
+      gestureHandling: 'greedy', clickableIcons: false, draggableCursor: 'crosshair', maxZoom: 21,
+    });
+    map.addListener('click', (e: any) => tapMap(e.latLng.lat(), e.latLng.lng()));
+    map.addListener('idle', () => { const c = map.getCenter(); try { localStorage.setItem(CENTER_KEY, JSON.stringify({ lat: c.lat(), lng: c.lng(), zoom: map.getZoom() })); } catch { /* not remembered */ } });
+  }
+  function paintMap(f: Fit | null, off: boolean[]) {
+    if (!map) return;
+    for (const m of mapMarks) m.setMap(null);
+    for (const m of overlayMarks) m.setMap(null);
+    mapMarks = [];
+    overlayMarks = [];
+    pairs.forEach((p, i) => mapMarks.push(new google.maps.Marker({
+      map, position: { lat: p.geo[0], lng: p.geo[1] }, clickable: false,
+      icon: { path: google.maps.SymbolPath.CIRCLE, scale: 11, fillColor: tok(off[i] ? '--tvc-error-text' : '--tvc-green-dark'), fillOpacity: 1, strokeColor: tok('--tvc-white'), strokeWeight: 2 },
+      label: { text: String(i + 1), color: tok('--tvc-white'), fontSize: '12px', fontWeight: '700' },
+    })));
+    if (!showOverlay || !f) return;
+    // The plan drawn on the ground: every plan point goes through the fit's inverse to a position on the map.
+    const toLatLng = ([x, y]: number[]) => { const [lat, lng] = localToGeo(f.frame, planToLocal(f, [x, y] as [number, number]) as [number, number]); return { lat, lng }; };
+    const opacity = Number(($('strength') as HTMLInputElement).value) / 100;
+    const line = tok('--tvc-orange-light');
+    for (const sub of clusterOf(clusterId).plot.split('M').slice(1)) {
+      const n = (sub.match(/-?\d+(?:\.\d+)?/g) ?? []).map(Number);
+      const path: { lat: number; lng: number }[] = [];
+      for (let i = 0; i + 1 < n.length; i += 2) path.push(toLatLng([n[i], n[i + 1]]));
+      if (path.length > 1) overlayMarks.push(new google.maps.Polyline({ map, path, strokeColor: line, strokeOpacity: opacity, strokeWeight: 1.6, clickable: false }));
+    }
+    for (const u of units.filter((x) => x.cluster === clusterId)) overlayMarks.push(new google.maps.Circle({ map, center: toLatLng([u.x, u.y]), radius: 1.6, strokeColor: tok('--tvc-green-dark'), strokeWeight: 1, fillColor: line, fillOpacity: opacity, clickable: false }));
+  }
+  $('goto-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const m = ($('goto') as HTMLInputElement).value.match(/(-?\d+(?:\.\d+)?)\s*[,\s]\s*(-?\d+(?:\.\d+)?)/);
+    if (!m || !map) { showToast('Type or paste a latitude and longitude, like 29.12345, 79.12345.'); return; }
+    map.setCenter({ lat: Number(m[1]), lng: Number(m[2]) });
+    map.setZoom(19);
+  });
+
+  // ---- the card ----
+  function paintCard(f: Fit | null, off: boolean[]) {
+    const card = $('fit-card');
+    const old = saved.find((s) => s.cluster === clusterId);
+    const fitOk = !!f && pairs.length >= MIN_PAIRS;
+    const rows = pairs.map((p, i) => {
+      const li = h('li', off[i] ? 'is-off' : '', undefined, h('span', 'n', String(i + 1)), h('span', 'what', p.house ? `Home ${p.house}` : `Plan spot ${nf.format(p.plan[0])}, ${nf.format(p.plan[1])}`));
+      if (fitOk) li.append(h('span', 'off', `off by ${nf.format(f!.residualsM[i])} m${off[i] ? ' (check this one)' : ''}`));
+      if (canEdit) { const b = h('button', 'button button--outline button--small', 'Remove'); b.setAttribute('type', 'button'); b.addEventListener('click', () => { pairs = pairs.filter((_, j) => j !== i); dirty = true; paint(); }); li.append(b); }
+      return li;
+    });
+    const fitLines = fitOk
+      ? h('dl', 'fit-grid', undefined,
+        h('dt', '', 'Scale'), h('dd', '', `${nf.format(f!.scale)} plan units per metre`),
+        h('dt', '', 'Rotation'), h('dd', '', `North points ${nf.format(f!.rotation)}° clockwise from the top of the plan page`),
+        h('dt', '', 'Typical error'), h('dd', '', `${nf.format(f!.rmsM)} m`))
+      : h('p', 'hint', pairs.length ? `Add ${Math.max(0, MIN_PAIRS - pairs.length)} more pair${MIN_PAIRS - pairs.length === 1 ? '' : 's'} to fit this page.` : 'No pairs yet for this page.');
+    const kids: Kid[] = [h('h2', '', `Page ${clusterId}`), old && !dirty ? h('p', 'hint', `Saved: ${old.pairs.length} pairs, typical error ${old.rms == null ? '–' : nf.format(old.rms / old.scale)} m.`) : null, fitLines, rows.length ? h('ul', 'pairs', undefined, ...rows) : null];
+    if (dirty) kids.push(h('p', 'dirty', 'Not saved yet.'));
+    if (canEdit) {
+      const save = h('button', 'button button--primary', 'Save this page') as HTMLButtonElement;
+      save.setAttribute('type', 'button');
+      save.disabled = !fitOk || !dirty;
+      save.addEventListener('click', () => void saveAlignment());
+      const undo = h('button', 'button button--outline', 'Discard changes') as HTMLButtonElement;
+      undo.setAttribute('type', 'button');
+      undo.disabled = !dirty;
+      undo.addEventListener('click', () => { pairs = (saved.find((s) => s.cluster === clusterId)?.pairs ?? []).map((p) => ({ ...p })); tune = { ...savedTune }; pending = null; dirty = false; paint(); });
+      const clear = h('button', 'button button--danger-outline', 'Remove this alignment');
+      clear.setAttribute('type', 'button');
+      clear.hidden = !old;
+      clear.addEventListener('click', () => void clearAlignment());
+      kids.push(h('div', 'actions', undefined, save, undo, clear));
+    }
+    card.replaceChildren(...(kids.filter(Boolean) as Node[]));
+  }
+  function paint() {
+    const f = fit();
+    // A pair is "off" when it is well beyond the typical error of the others (and at least a couple of metres off).
+    const off = pairs.map((_, i) => !!f && pairs.length > MIN_PAIRS && f.residualsM[i] > Math.max(2 * f.rmsM, 2));
+    $('clusters').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.getAttribute('data-c') === clusterId)));
+    $('plan-name').textContent = clusterId;
+    paintPlan(off);
+    paintMap(f, off);
+    paintCard(f, off);
+    ($('overlay') as HTMLButtonElement).setAttribute('aria-pressed', String(showOverlay));
+    $('overlaybar').hidden = !(map && f);
+    $('tune').hidden = !(map && f && canEdit);
+    paintTune();
+    if (!map) setHint(MAPS_KEY ? 'Loading the map…' : 'The map needs a Google Maps key.');
+    else if (pending) setHint('Now tap the same spot on the satellite map.', true);
+    else if (pairs.length === 1) setHint('Pair a second point, far from the first: the plan then appears on the map.');
+    else setHint(pairs.length ? 'Tap another home or spot on the plan to add a pair. Where the plan sits off the map, pair that spot.' : 'Tap a home on the plan to start.');
+  }
+
+  // ---- saving ----
+  const errToast = (err: unknown) => {
+    if (err instanceof StaffAuthError) { if (err.kind === 'unauthorized') showGate('Your session expired. Sign in again.'); else showForbidden(); } else showToast('Could not save. Try again.');
+  };
+  async function saveAlignment() {
+    const done = busyForPress('Saving…');
+    try {
+      const { status, data: out } = await staffFetch('/api/site-map-admin/alignment', { method: 'POST', body: { cluster: clusterId, pairs, tune: isTuned(tune) ? tune : undefined } });
+      if (status !== 200) { showToast(out?.error ?? 'Could not save. Try again.'); return; }
+      showToast(`Saved the alignment of ${clusterId}.`);
+      await loadAlignments();
+      dirty = false;
+      paint();
+    } catch (err) { errToast(err); } finally { done(); }
+  }
+  async function clearAlignment() {
+    if (!window.confirm(`Remove the satellite alignment of ${clusterId}? The member map goes back to its default placement if a page of its sheet has none.`)) return;
+    const done = busyForPress('Removing…');
+    try {
+      const { status, data: out } = await staffFetch('/api/site-map-admin/alignment', { method: 'POST', body: { cluster: clusterId, clear: true } });
+      if (status !== 200) { showToast(out?.error ?? 'Could not remove it. Try again.'); return; }
+      showToast(`Removed the alignment of ${clusterId}.`);
+      await loadAlignments();
+      selectCluster(clusterId);
+    } catch (err) { errToast(err); } finally { done(); }
+  }
+  // ---- fine-tune controls ----
+  const STEPS: Record<string, { label: string; m: number; deg: number; pct: number }> = {
+    fine: { label: 'Fine', m: 0.25, deg: 0.1, pct: 0.25 },
+    medium: { label: 'Medium', m: 1, deg: 0.5, pct: 1 },
+    coarse: { label: 'Coarse', m: 4, deg: 2, pct: 4 },
+  };
+  let step = 'medium';
+  const clampTune = (t: Tune): Tune => ({ east: Math.max(-300, Math.min(300, t.east)), north: Math.max(-300, Math.min(300, t.north)), rotate: Math.max(-30, Math.min(30, t.rotate)), scale: Math.max(0.8, Math.min(1.25, t.scale)) });
+  const r3 = (n: number) => Math.round(n * 1000) / 1000;
+  function nudge(change: Partial<Tune>) {
+    tune = clampTune({ east: r3(tune.east + (change.east ?? 0)), north: r3(tune.north + (change.north ?? 0)), rotate: r3(tune.rotate + (change.rotate ?? 0)), scale: Math.round(tune.scale * (change.scale ?? 1) * 1e5) / 1e5 });
+    dirty = dirty || isTuned(tune) !== isTuned(savedTune) || JSON.stringify(tune) !== JSON.stringify(savedTune);
+    paint();
+  }
+  function tuneButton(label: string, text: string, onClick: () => void): HTMLElement {
+    const b = h('button', 'button button--outline', text);
+    b.setAttribute('type', 'button');
+    b.setAttribute('aria-label', label);
+    b.addEventListener('click', onClick);
+    return b;
+  }
+  {
+    const s = () => STEPS[step];
+    const blank = () => h('span');
+    $('tune-move').replaceChildren(blank(), tuneButton('Move the plan north', '↑', () => nudge({ north: s().m })), blank(),
+      tuneButton('Move the plan west', '←', () => nudge({ east: -s().m })), blank(), tuneButton('Move the plan east', '→', () => nudge({ east: s().m })),
+      blank(), tuneButton('Move the plan south', '↓', () => nudge({ north: -s().m })), blank());
+    $('tune-turn').replaceChildren(tuneButton('Turn the plan anticlockwise', '↺', () => nudge({ rotate: -s().deg })), tuneButton('Turn the plan clockwise', '↻', () => nudge({ rotate: s().deg })));
+    $('tune-size').replaceChildren(tuneButton('Make the plan smaller', '−', () => nudge({ scale: 1 - s().pct / 100 })), tuneButton('Make the plan larger', '+', () => nudge({ scale: 1 + s().pct / 100 })));
+    $('tune-step').replaceChildren(...Object.entries(STEPS).map(([id, v]) => { const b = h('button', '', v.label); b.setAttribute('type', 'button'); b.setAttribute('data-step', id); b.addEventListener('click', () => { step = id; paintTune(); }); return b; }));
+    $('tune-reset').addEventListener('click', () => { tune = { ...NO_TUNE }; dirty = dirty || isTuned(savedTune); paint(); });
+  }
+  function paintTune() {
+    $('tune-step').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.getAttribute('data-step') === step)));
+    const bits: string[] = [];
+    if (Math.abs(tune.east) >= 0.01) bits.push(`${nf.format(Math.abs(tune.east))} m ${tune.east > 0 ? 'east' : 'west'}`);
+    if (Math.abs(tune.north) >= 0.01) bits.push(`${nf.format(Math.abs(tune.north))} m ${tune.north > 0 ? 'north' : 'south'}`);
+    if (Math.abs(tune.rotate) >= 0.005) bits.push(`turned ${tune.rotate > 0 ? 'clockwise' : 'anticlockwise'} ${nf.format(Math.abs(tune.rotate))}°`);
+    if (Math.abs(tune.scale - 1) >= 1e-4) bits.push(`${tune.scale > 1 ? 'larger' : 'smaller'} by ${nf.format(Math.abs(tune.scale - 1) * 100)}%`);
+    $('tune-readout').textContent = bits.length ? `Fine-tuned: ${bits.join(', ')}.` : 'Not fine-tuned: the plan sits where your pairs put it.';
+    ($('tune-reset') as HTMLButtonElement).disabled = !isTuned(tune);
+  }
+  $('overlay').addEventListener('click', () => { showOverlay = !showOverlay; paint(); });
+  $('strength').addEventListener('input', paint);
+
+  // ---- loading ----
+  // The fine-tune a saved page carries: how its stored fit differs from the fit its own pairs give.
+  function tuneOf(s: Saved | undefined): Tune {
+    if (!s || s.pairs.length < 2) return { ...NO_TUNE };
+    const f0 = { lat: s.originLat, lng: s.originLng };
+    const base = fitSimilarity(s.pairs.map((p) => ({ plan: p.plan, image: geoToLocal(f0, p.geo as [number, number]) })));
+    return base ? { ...tuneBetween(base, s, pivotOf(s.pairs, f0)) } : { ...NO_TUNE };
+  }
+  function selectCluster(id: string) {
+    clusterId = id;
+    pairs = (saved.find((s) => s.cluster === id)?.pairs ?? []).map((p) => ({ ...p }));
+    savedTune = tuneOf(saved.find((s) => s.cluster === id));
+    tune = { ...savedTune };
+    pending = null;
+    dirty = false;
+    vb = [...clusterOf(id).viewBox];
+    paint();
+  }
+  async function loadAlignments() {
+    const { status, data: body } = await staffFetch('/api/site-map-admin/alignment');
+    if (status !== 200) throw new Error(`the server answered ${status}`);
+    saved = body.alignments as Saved[];
+    canEdit = !!body.canEdit;
+  }
+  let firstLoad = true;
+  async function load() {
+    gate.hidden = true;
+    forbidden.hidden = true;
+    if (firstLoad) { statusEl.hidden = false; statusEl.textContent = 'Loading…'; }
+    try {
+      const { status, data: plan } = await staffFetch('/api/site-map-admin/overview');
+      if (status === 403) { showForbidden(); return; }
+      if (status !== 200) throw new Error(`the server answered ${status}`);
+      clusters = plan.clusters as Cluster[];
+      units = (plan.units as Unit[]).map((u) => ({ houseNo: u.houseNo, cluster: u.cluster, x: u.x, y: u.y }));
+      await loadAlignments();
+      statusEl.hidden = true;
+      intro.textContent = 'Lay each plan page over the satellite map by pairing points. The member map uses this to place the pages against each other.';
+      content.hidden = false;
+      $('clusters').replaceChildren(...clusters.map((c) => { const b = h('button', '', c.id); b.setAttribute('type', 'button'); b.setAttribute('data-c', c.id); b.addEventListener('click', () => { if (dirty && !window.confirm('This page has changes that are not saved. Leave them?')) return; selectCluster(c.id); }); return b; }));
+      selectCluster(clusterId && clusters.some((c) => c.id === clusterId) ? clusterId : clusters[0].id);
+      firstLoad = false;
+      void startMap().then(() => paint());
+    } catch (err) {
+      if (err instanceof StaffAuthError) {
+        if (err.kind === 'unauthorized') showGate('Your session expired. Sign in again.');
+        else showForbidden();
+      } else {
+        console.error('[site-map-align] load failed', err);
+        statusEl.hidden = false;
+        statusEl.textContent = `Failed to load (${err instanceof Error ? err.message : 'unknown error'}). Try refreshing.`;
+      }
+    }
+  }
+  function showGate(message?: string) {
+    gate.hidden = false;
+    forbidden.hidden = true;
+    content.hidden = true;
+    statusEl.hidden = true;
+    gateError.hidden = !message;
+    if (message) gateError.textContent = message;
+    renderSignInButton();
+  }
+  function showForbidden() {
+    gate.hidden = true;
+    content.hidden = true;
+    statusEl.hidden = true;
+    forbidden.hidden = false;
+    $('forbidden-email').textContent = decodeTokenEmail(getToken() ?? '');
+  }
+  function handleCredentialResponse(response: { credential: string }) {
+    setToken(response.credential);
+    load();
+  }
+  function renderSignInButton() {
+    if (typeof google === 'undefined' || !google.accounts) return;
+    google.accounts.id.initialize({ client_id: CLIENT_ID, callback: handleCredentialResponse });
+    google.accounts.id.renderButton(document.getElementById('g_id_signin'), { theme: (window as any).tvcGsiTheme?.() ?? 'outline', size: 'large' });
+  }
+  function signOut() {
+    clearToken();
+    clearStepUp();
+    if (typeof google !== 'undefined' && google.accounts) google.accounts.id.disableAutoSelect();
+    firstLoad = true;
+    showGate();
+  }
+  $('use-different-account').addEventListener('click', signOut);
+
+  if (getToken()) load();
+  else showGate();
+</script>

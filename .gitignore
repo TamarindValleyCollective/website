@@ -33,3 +33,4 @@ deno.lock
 
 # Member photos downloaded at build time by scripts/export-member-stories.mjs (and their generated variants)
 public/images/members/up-*
+
