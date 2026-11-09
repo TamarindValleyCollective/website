@@ -127,6 +127,8 @@ import '../../styles/site-map.css';
 
   /* Marks on the plan page. A pair is the same number on the plan and on the map; the pending point has a ring until its partner is tapped. */
   .align .al-home { fill: var(--tvc-white); stroke: var(--tvc-green-dark); stroke-width: 1.5; vector-effect: non-scaling-stroke; cursor: pointer; }
+  .align .al-foot { fill: var(--tvc-green-tint); stroke: var(--tvc-green); stroke-width: 1; vector-effect: non-scaling-stroke; pointer-events: none; }
+  .align .al-foot.is-other { opacity: 0.3; }
   .align .al-home.is-other { opacity: 0.3; pointer-events: none; cursor: default; }
   .align .al-home-label.is-other { opacity: 0.3; }
   .align .al-home-label { fill: var(--tvc-ink-soft); text-anchor: middle; pointer-events: none; }
@@ -163,6 +165,7 @@ import '../../styles/site-map.css';
   import { MAX_PAIRS, MIN_PAIRS, NO_TUNE, applyTune, fitSimilarity, geoToLocal, imageToPlan, isTuned, localToGeo, originOf, pivotOf, planToLocal, sharedWalls, snapShift, tuneBetween } from '../../../scripts/lib/site-map-align.mjs';
   import { SVG_NS } from '../../../scripts/lib/site-map-draw.mjs';
   import { plotOutline } from '../../../scripts/lib/site-map.mjs';
+  import { footprintPoints } from '../../../scripts/lib/site-map-snap.mjs';
   import { detectGroups, savedFor } from '../../../scripts/lib/site-map-groups.mjs';
 
   declare const google: any;
@@ -223,6 +226,8 @@ import '../../styles/site-map.css';
   let tune: Tune = { ...NO_TUNE };
   let savedTune: Tune = { ...NO_TUNE };
   const clusterOf = (id: string) => clusters.find((c) => c.id === id) ?? clusters[0];
+  // The house itself: its footprint (the L, T or block shape of its type) in the plan page's coordinates, turned and mirrored as it is on the plan.
+  const footprintOf = (u: Unit): [number, number][] => footprintPoints({ shape: u.shape, x: u.x, y: u.y, rotation: u.rotation, mirrorX: u.mirrorX, mirrorY: u.mirrorY }, clusterOf(u.cluster).baseSize);
   const targetKey = () => groupKey ?? clusterId;
   const targetGroup = () => (groupKey ? groups.find((g) => g.key === groupKey) ?? null : null);
   // The saved fit of what is on show: the page's, or the saved row of the group (which follows its group if the group's homes changed).
@@ -387,6 +392,7 @@ import '../../styles/site-map.css';
     for (const u of units.filter((x) => x.cluster === clusterId)) {
       const g = svgEl('g');
       const other = !mine.has(u.houseNo);
+      g.append(svgEl('path', { d: `M${footprintOf(u).map(([fx, fy]) => `${fx} ${fy}`).join(' L')} Z` }, other ? 'al-foot is-other' : 'al-foot'));
       g.append(svgEl('circle', other ? { cx: u.x, cy: u.y, r: 5 * k } : { cx: u.x, cy: u.y, r: 7 * k, 'data-house': u.houseNo }, other ? 'al-home is-other' : 'al-home'));
       if (!paired.has(u.houseNo)) { const t = svgEl('text', { x: u.x, y: u.y + 16 * k, 'font-size': 10 * k }, other ? 'al-home-label is-other' : 'al-home-label'); t.textContent = u.houseNo.slice(2); g.append(t); }
       planSvg.append(g);
@@ -535,6 +541,11 @@ import '../../styles/site-map.css';
         if (path.length > 1) othersMarks.push(new google.maps.Polyline({ map, path, strokeColor: white, strokeOpacity: 0.7, strokeWeight: 1.2, clickable: false }));
       }
     };
+    // A house of another layout: its footprint as a white outline with a light fill.
+    const drawHouse = (row: Saved, u: Unit) => {
+      const path = footprintOf(u).map(([x, y]) => { const [lat, lng] = localToGeo({ lat: row.originLat, lng: row.originLng }, planToLocal(row, [x, y]) as [number, number]); return { lat, lng }; });
+      othersMarks.push(new google.maps.Polygon({ map, paths: path, strokeColor: white, strokeOpacity: 0.85, strokeWeight: 1, fillColor: white, fillOpacity: 0.25, clickable: false }));
+    };
     const own = targetGroup();
     // Homes that follow a saved group are drawn with that group; every other home follows its page (if the page is aligned).
     const grouped = new Set<string>();
@@ -545,10 +556,7 @@ import '../../styles/site-map.css';
       const plot = clusterOf(g.cluster).plot;
       const outlines = units.filter((u) => u.cluster === g.cluster && g.houses.includes(u.houseNo)).map((u) => plotOutline(plot, u.x, u.y)).filter((d): d is string => !!d);
       draw(row, outlines);
-      for (const u of units.filter((x) => x.cluster === g.cluster && g.houses.includes(x.houseNo))) {
-        const [lat, lng] = localToGeo({ lat: row.originLat, lng: row.originLng }, planToLocal(row, [u.x, u.y]) as [number, number]);
-        othersMarks.push(new google.maps.Circle({ map, center: { lat, lng }, radius: 1.4, strokeColor: white, strokeOpacity: 0.8, strokeWeight: 1, fillColor: white, fillOpacity: 0.35, clickable: false }));
-      }
+      for (const u of units.filter((x) => x.cluster === g.cluster && g.houses.includes(x.houseNo))) drawHouse(row, u);
     }
     for (const row of saved.filter((r) => !r.houses)) {
       // The page being aligned as a whole is the main overlay; any other page contributes its lines and the homes that follow it.
@@ -558,10 +566,7 @@ import '../../styles/site-map.css';
       draw(row, parts.filter((x) => !/Z\s*$/i.test(x.trim()))); // the plan's lines
       const follow = units.filter((u) => u.cluster === row.cluster && !grouped.has(u.houseNo) && !(own && own.houses.includes(u.houseNo)));
       draw(row, follow.map((u) => plotOutline(plot, u.x, u.y)).filter((d): d is string => !!d));
-      for (const u of follow) {
-        const [lat, lng] = localToGeo({ lat: row.originLat, lng: row.originLng }, planToLocal(row, [u.x, u.y]) as [number, number]);
-        othersMarks.push(new google.maps.Circle({ map, center: { lat, lng }, radius: 1.4, strokeColor: white, strokeOpacity: 0.8, strokeWeight: 1, fillColor: white, fillOpacity: 0.35, clickable: false }));
-      }
+      for (const u of follow) drawHouse(row, u);
     }
   }
   function paintMap(f: Fit | null, off: boolean[]) {
@@ -591,7 +596,11 @@ import '../../styles/site-map.css';
       for (let i = 0; i + 1 < n.length; i += 2) path.push(toLatLng([n[i], n[i + 1]]));
       if (path.length > 1) overlayMarks.push(new google.maps.Polyline({ map, path, strokeColor: line, strokeOpacity: opacity, strokeWeight: 1.6, clickable: false }));
     }
-    for (const u of targetUnits()) overlayMarks.push(new google.maps.Circle({ map, center: toLatLng([u.x, u.y]), radius: 1.6, strokeColor: tok('--tvc-green-dark'), strokeWeight: 1, fillColor: line, fillOpacity: opacity, clickable: false }));
+    // The houses themselves, with their numbers: the shape to put on the building.
+    for (const u of targetUnits()) {
+      overlayMarks.push(new google.maps.Polygon({ map, paths: footprintOf(u).map(toLatLng), strokeColor: tok('--tvc-green-dark'), strokeOpacity: opacity, strokeWeight: 1.5, fillColor: tok('--tvc-green'), fillOpacity: 0.4 * opacity, clickable: false }));
+      overlayMarks.push(new google.maps.Marker({ map, position: toLatLng([u.x, u.y]), clickable: false, icon: { path: google.maps.SymbolPath.CIRCLE, scale: 0 }, label: { text: u.houseNo.slice(2).replace(/^0/, ''), color: tok('--tvc-white'), fontSize: '12px', fontWeight: '700' } }));
+    }
   }
   $('goto-form').addEventListener('submit', (e) => {
     e.preventDefault();
