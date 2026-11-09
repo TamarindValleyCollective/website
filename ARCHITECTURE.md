@@ -1020,7 +1020,16 @@ outside both the local machine and Netlify (the member-update-email workflow).
   (Maps JavaScript API, browser key `PUBLIC_GOOGLE_MAPS_API_KEY`, restricted to the admin site); a pair is a plan point and
   its latitude and longitude, fitted in metres around one shared reference point; the maths and rules are in
   `scripts/lib/site-map-align.mjs`; an admin can then fine-tune the plan on the map by hand, moving it in metres, turning it in degrees and resizing it in percent about the pairs' middle: that is folded into the stored fit, and the page works it back out of the stored fit and its pairs when it is reopened, so no extra column) once both H1 pages are aligned, and from `SHEETS` until then. No map imagery is stored
-  anywhere: the page draws our plan over Google's live map. The site-wide CSP (`scripts/generate-csp.mjs`) allows the Maps
+  anywhere: the page draws our plan over Google's live map.
+  **Sub-clusters:** the plan and the ground differ a little, but homes that share walls were built as one piece, so the same
+  page can align each such group on its own (`scripts/lib/site-map-groups.mjs` detects the groups from the layout; migration
+  `0096` adds `site_map_group_alignment`, one row per group, with the size held to the other homes' so only the group's turn and
+  position are fitted). `mergeSheets` then moves each home and its plot outline with its group's placement (`groupPlacements`),
+  while the plan's own lines (roads, boundaries) stay with the page's alignment. **Satellite layer:** `members-sitemap.mts` also
+  sends each sheet's fit to the ground (`ground`: numbers only), and the Directory Map has an optional Satellite switch that
+  draws Google's live map under the plan and carries the plan's drawing onto it with one transform (the same browser key,
+  `PUBLIC_GOOGLE_MAPS_API_KEY`; its referrers must include `https://members.tvc.farm/*`); a tap on the map is turned back into a place
+  on the sheet to find the home. The visibility rule is unchanged (opted-out members still show as "Private member"). The site-wide CSP (`scripts/generate-csp.mjs`) allows the Maps
   hosts it needs (`maps.googleapis.com`, `maps.gstatic.com`, the `*.googleapis.com` / `*.gstatic.com` tile and image hosts, Google's
   font and stylesheet); without that the browser blocks the Maps script and the page says the map could not be loaded. Alignment saves go through `site-map-admin.mts`
   (`GET/POST /api/site-map-admin/alignment`, `site-map` / `edit`, audited first, fitted on the server). The function selects only ids, names and unit

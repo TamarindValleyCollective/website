@@ -249,3 +249,24 @@ test('a cluster is rotated on its own, and homes keep the one base size', async 
   assert.equal(b.rotation, -170); // 100 + 90, kept in (-180, 180]
   assert.match(out.clusters[0].plot, /M0 0 L10 0 Z M10 20 L10 40 Z/);
 });
+
+test('a group of homes has its own placement, and its plot outlines move with it while the page lines stay', async () => {
+  const { mergeSheets } = await import('./site-map.mjs');
+  const sheets = { H1: [{ page: 'H1-A', scale: 1, rotate: 0, dx: 0, dy: 0 }, { page: 'H1-B', scale: 1, rotate: 0, dx: 100, dy: 0 }] };
+  // Two homes with a plot outline each, and one road line, on page H1-B.
+  const plot = 'M0 50 L200 50 M0 0 L20 0 L20 20 L0 20 Z M40 0 L60 0 L60 20 L40 20 Z';
+  const clusters = [{ id: 'H1-A', baseSize: 1.63, viewBox: [0, 0, 10, 10], plot: 'M0 0 L1 1' }, { id: 'H1-B', baseSize: 1.8, viewBox: [0, 0, 200, 100], plot }];
+  const units = [{ houseNo: 'H-40', cluster: 'H1-B', x: 10, y: 10, rotation: 0 }, { houseNo: 'H-41', cluster: 'H1-B', x: 50, y: 10, rotation: 0 }];
+  // H-40's group is turned 90 degrees clockwise about the origin and shifted by (0, 300); H-41 has no group of its own.
+  const out = mergeSheets(clusters, units, sheets, { homes: { 'H-40': { scale: 1, rotate: 90, dx: 0, dy: 300 } } });
+  const by = Object.fromEntries(out.units.map((u) => [u.houseNo, u]));
+  assert.deepEqual([by['H-40'].x, by['H-40'].y, by['H-40'].rotation], [-10, 310, 90]);
+  assert.deepEqual([by['H-41'].x, by['H-41'].y, by['H-41'].rotation], [150, 10, 0]); // the page's placement
+  const plotOut = out.clusters[0].plot;
+  assert.match(plotOut, /M100 50 L300 50/); // the road line moved with the page
+  assert.match(plotOut, /M140 0 L160 0 L160 20 L140 20 Z/); // H-41's outline moved with the page
+  assert.match(plotOut, /M0 300 L0 320 L-20 320 L-20 300 Z/); // H-40's outline moved with H-40's group (a quarter turn)
+  // The view box covers the group, which sits far from the page's frame.
+  const [, vy, , vh] = out.clusters[0].viewBox;
+  assert.ok(vy + vh >= 320);
+});

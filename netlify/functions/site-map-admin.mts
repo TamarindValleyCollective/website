@@ -6,7 +6,9 @@
 //   POST /api/site-map-admin/units       change the layout: { action: update | add | renumber | remove, houseNo, ... }
 //   GET  /api/site-map-admin/alignment   each plan page's satellite alignment (the pairs and the fit)
 //   POST /api/site-map-admin/alignment   save a page's alignment from its point pairs { cluster, pairs } (or { cluster, clear: true });
-//                                        a pair is a spot on the plan page and its latitude and longitude on Google's satellite map
+//                                        a pair is a spot on the plan page and its latitude and longitude on Google's satellite map.
+//                                        With `group: { houses }` it is the alignment of a group of homes that share walls instead
+//                                        (and `scale` locks its size to the other homes'); { groupKey, clear: true } removes one.
 //
 // Auth: requireStaff on every request. Viewing needs `site-map` / `view` (a super admin gives the module to the admins who
 // should have it, on Access); changing the layout needs `site-map` / `edit` (admin role only), because every member sees
@@ -110,12 +112,25 @@ async function handleUnits(req: Request): Promise<Response> {
 // around one reference point (the first saved page's, or the new pairs' average for the first page), so the pages of a sheet
 // can be compared. No map imagery is stored: the page shows Google's live map.
 const ALIGNMENT_COLUMNS = 'cluster,a,b,tx,ty,origin_lat,origin_lng,rms,pairs,updated_at';
+const GROUP_COLUMNS = `group_key,houses,locked_scale,${ALIGNMENT_COLUMNS}`;
+
+// The reference point every saved page and group is fitted around, so all of them share one frame. `exceptPage` / `exceptGroup`
+// leave out the one being saved (re-aligning it may move it).
+async function sharedOrigin(exceptPage: string | null, exceptGroup: string | null): Promise<{ lat: number; lng: number } | null> {
+  const pages = await select('site_map_alignment', `select=origin_lat,origin_lng${exceptPage ? `&cluster=neq.${encodeURIComponent(exceptPage)}` : ''}&limit=1`);
+  const row = pages[0] ?? (await select('site_map_group_alignment', `select=origin_lat,origin_lng${exceptGroup ? `&group_key=neq.${encodeURIComponent(exceptGroup)}` : ''}&limit=1`).catch(() => []))[0];
+  return row ? { lat: Number(row.origin_lat), lng: Number(row.origin_lng) } : null;
+}
 
 async function handleAlignmentRead(req: Request): Promise<Response> {
   const auth = await requireStaff(req, 'site-map', 'view');
   if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
-  const rows = await select('site_map_alignment', `select=${ALIGNMENT_COLUMNS}&order=cluster.asc`);
-  return jsonResponse({ alignments: rows.map(shapeAlignment), canEdit: roleHasCapability('site-map', auth.staff.role, 'edit') });
+  const [rows, groups] = await Promise.all([
+    select('site_map_alignment', `select=${ALIGNMENT_COLUMNS}&order=cluster.asc`),
+    // Group alignments (migration 0096): none until it is applied.
+    select('site_map_group_alignment', `select=${GROUP_COLUMNS}&order=group_key.asc`).catch(() => []),
+  ]);
+  return jsonResponse({ alignments: rows.map(shapeAlignment), groups: groups.map(shapeAlignment), canEdit: roleHasCapability('site-map', auth.staff.role, 'edit') });
 }
 
 async function handleAlignmentWrite(req: Request): Promise<Response> {
@@ -123,6 +138,18 @@ async function handleAlignmentWrite(req: Request): Promise<Response> {
   if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
   let body: any = null;
   try { body = await req.json(); } catch { /* validateAlignment answers for a missing body */ }
+
+  if (body?.clear === true && typeof body.groupKey === 'string') {
+    if (!/^[A-Z0-9-]+:H-\d{2}$/.test(body.groupKey)) return jsonResponse({ error: 'Pick a group.' }, 400);
+    try {
+      await logStaffAction({ actorId: auth.staff.id, action: 'site-map.group-alignment-clear', module: 'site-map', detail: { group: body.groupKey } });
+    } catch (err) {
+      console.error('[site-map-admin] audit log write failed; edit refused', err);
+      return jsonResponse({ error: 'Could not record the change, so nothing was changed. Try again.' }, 500);
+    }
+    const gone = await write('DELETE', `site_map_group_alignment?group_key=eq.${encodeURIComponent(body.groupKey)}`);
+    return gone.ok ? jsonResponse({ ok: true }) : jsonResponse({ error: 'Server error' }, 500);
+  }
 
   if (body?.clear === true) {
     if (!CLUSTER_IDS.includes(body.cluster)) return jsonResponse({ error: 'Pick a cluster.' }, 400);
@@ -137,19 +164,26 @@ async function handleAlignmentWrite(req: Request): Promise<Response> {
   }
 
   // The reference point of the pages already saved (not this one: re-aligning it may move it), so all pages share one frame.
-  const others = await select('site_map_alignment', `select=origin_lat,origin_lng&cluster=neq.${encodeURIComponent(String(body?.cluster ?? ''))}&limit=1`);
-  const origin = others[0] ? { lat: Number(others[0].origin_lat), lng: Number(others[0].origin_lng) } : null;
+  const isGroup = body?.group != null;
+  const groupKeyOf = isGroup && Array.isArray(body.group?.houses) && typeof body.cluster === 'string' ? `${body.cluster}:${[...body.group.houses].sort()[0]}` : null;
+  const origin = await sharedOrigin(isGroup ? null : String(body?.cluster ?? ''), isGroup ? groupKeyOf : null);
   const checked = validateAlignment(body, origin);
   if ('error' in checked) return jsonResponse({ error: checked.error }, 400);
-  const { cluster, pairs, fit, tune } = checked;
+  const { cluster, pairs, fit, tune, group } = checked;
+  if (group) {
+    // Every home of the group must be on the map, on this plan page.
+    const onPage = await select('site_map_units', `select=house_no&cluster=eq.${encodeURIComponent(cluster)}`);
+    const known = new Set(onPage.map((u: any) => u.house_no));
+    if (!group.houses.every((h: string) => known.has(h))) return jsonResponse({ error: 'A home in that group is not on this plan page. Reload and try again.' }, 400);
+  }
   try {
-    await logStaffAction({ actorId: auth.staff.id, action: 'site-map.alignment', module: 'site-map', detail: { cluster, pairs: pairs.length, summary: auditAlignment(cluster, fit, pairs.length, tune) } });
+    await logStaffAction({ actorId: auth.staff.id, action: 'site-map.alignment', module: 'site-map', detail: { cluster, ...(group ? { group: group.key, homes: group.houses.length } : {}), pairs: pairs.length, summary: auditAlignment(group ? group.key : cluster, fit, pairs.length, tune) } });
   } catch (err) {
     console.error('[site-map-admin] audit log write failed; edit refused', err);
     return jsonResponse({ error: 'Could not record the change, so nothing was changed. Try again.' }, 500);
   }
-  const row = { cluster, a: fit.a, b: fit.b, tx: fit.tx, ty: fit.ty, origin_lat: checked.origin.lat, origin_lng: checked.origin.lng, rms: Math.round(fit.rms * 100) / 100, pairs, updated_at: new Date().toISOString() };
-  const res = await fetch(`${base()}/site_map_alignment?on_conflict=cluster`, { method: 'POST', headers: restHeaders({ Prefer: 'return=representation,resolution=merge-duplicates' }), body: JSON.stringify(row) });
+  const row = { ...(group ? { group_key: group.key, houses: group.houses, locked_scale: checked.lockedScale } : {}), cluster, a: fit.a, b: fit.b, tx: fit.tx, ty: fit.ty, origin_lat: checked.origin.lat, origin_lng: checked.origin.lng, rms: Math.round(fit.rms * 100) / 100, pairs, updated_at: new Date().toISOString() };
+  const res = await fetch(`${base()}/${group ? 'site_map_group_alignment?on_conflict=group_key' : 'site_map_alignment?on_conflict=cluster'}`, { method: 'POST', headers: restHeaders({ Prefer: 'return=representation,resolution=merge-duplicates' }), body: JSON.stringify(row) });
   if (!res.ok) {
     console.error('[site-map-admin] alignment write failed', res.status);
     return jsonResponse({ error: 'Server error' }, 500);

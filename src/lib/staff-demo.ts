@@ -373,7 +373,7 @@ function demoFinanceVerify(accountId: string, body: any) {
 // migration 0075 appended them) and the frozen layout, with no households. An alignment you save lives only until the page is reloaded. (The satellite map itself is Google's and needs the
 // PUBLIC_GOOGLE_MAPS_API_KEY browser key; the demo fakes nothing of it.)
 const DEMO_PAGES: Record<string, string> = { H1A: 'H1-A', H1B: 'H1-B', H2: 'H2' };
-const demoMapState: { alignments: any[] } = { alignments: [] };
+const demoMapState: { alignments: any[]; groups: any[] } = { alignments: [], groups: [] };
 function demoSiteMap(path: string, method: string, body: any): { status: number; data: unknown } | null {
   if (path === '/api/site-map-admin/overview') {
     const lines = planLines as Record<string, { vb: number[]; plot: string }>;
@@ -381,14 +381,17 @@ function demoSiteMap(path: string, method: string, body: any): { status: number;
     const units = Object.entries(homes.homes).map(([houseNo, h]) => ({ houseNo, cluster: DEMO_PAGES[h.cluster], shape: h.type, x: h.x, y: h.y, rotation: h.rotation, mirrorX: h.mirrorX, mirrorY: h.mirrorY, status: 'vacant', farmUnit: null, owners: [], otherMembers: 0, recordType: null, bhk: '', detail: '', plotSqFt: null, gaps: [], version: 'demo', people: [] }));
     return { status: 200, data: { clusters: Object.keys(DEMO_PAGES).map((k) => ({ id: DEMO_PAGES[k], baseSize: homes.baseSize[k], viewBox: lines[k].vb, plot: `${lines[k].plot} ${Object.values((plotOutlines as Record<string, Record<string, string>>)[k] ?? {}).join(' ')}` })), units, notOnMap: [], summary: { homes: units.length, assigned: 0, vacant: units.length, mismatch: 0, noPlotSize: 0 }, namesMasked: false, canEdit: true } };
   }
-  if (path === '/api/site-map-admin/alignment' && method === 'GET') return { status: 200, data: { alignments: demoMapState.alignments, canEdit: true } };
+  if (path === '/api/site-map-admin/alignment' && method === 'GET') return { status: 200, data: { alignments: demoMapState.alignments, groups: demoMapState.groups, canEdit: true } };
   if (path === '/api/site-map-admin/alignment' && method === 'POST') {
+    if (body?.clear && body.groupKey) { demoMapState.groups = demoMapState.groups.filter((a) => a.key !== body.groupKey); return { status: 200, data: { ok: true } }; }
     if (body?.clear) { demoMapState.alignments = demoMapState.alignments.filter((a) => a.cluster !== body.cluster); return { status: 200, data: { ok: true } }; }
-    const other = demoMapState.alignments.find((a) => a.cluster !== body?.cluster);
+    const other = [...demoMapState.alignments, ...demoMapState.groups].find((a) => a.key !== (body?.group ? `${body.cluster}:${[...(body.group.houses ?? [])].sort()[0]}` : body?.cluster));
     const checked = validateAlignment(body, other ? { lat: other.originLat, lng: other.originLng } : null);
     if ('error' in checked) return { status: 400, data: { error: checked.error } };
-    const { cluster, pairs, fit, origin } = checked;
-    demoMapState.alignments = [...demoMapState.alignments.filter((a) => a.cluster !== cluster), shapeAlignment({ cluster, a: fit.a, b: fit.b, tx: fit.tx, ty: fit.ty, origin_lat: origin.lat, origin_lng: origin.lng, rms: fit.rms, pairs })];
+    const { cluster, pairs, fit, origin, group, lockedScale } = checked;
+    const row = shapeAlignment({ cluster, group_key: group?.key, houses: group?.houses, locked_scale: lockedScale, a: fit.a, b: fit.b, tx: fit.tx, ty: fit.ty, origin_lat: origin.lat, origin_lng: origin.lng, rms: fit.rms, pairs });
+    if (group) demoMapState.groups = [...demoMapState.groups.filter((a) => a.key !== group.key), row];
+    else demoMapState.alignments = [...demoMapState.alignments.filter((a) => a.cluster !== cluster), row];
     return { status: 200, data: { ok: true } };
   }
   return null;

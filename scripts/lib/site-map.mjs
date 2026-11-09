@@ -98,18 +98,41 @@ const movePath = (d, t) => String(d ?? '').replace(/(-?\d+(?:\.\d+)?)\s+(-?\d+(?
 const normDeg = (deg) => { const r = ((((deg + 180) % 360) + 360) % 360) - 180; return r2(r === -180 ? 180 : r); };
 const r2 = round2;
 
+// The subpaths of a plot path, apart: the plan's own lines (open) and each home's closed plot outline (ending in Z).
+function splitPlot(plot) {
+  const lines = [], closed = [];
+  for (const sub of String(plot ?? '').split('M').slice(1)) (/Z\s*$/i.test(sub.trim()) ? closed : lines).push(`M${sub.trim()}`);
+  return { lines, closed };
+}
+const pointsOf = (sub) => { const n = (sub.match(/-?\d+(?:\.\d+)?/g) || []).map(Number); const pts = []; for (let i = 0; i + 1 < n.length; i += 2) pts.push([n[i], n[i + 1]]); return pts; };
+const insidePoly = (pts, px, py) => {
+  let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const [xi, yi] = pts[i], [xj, yj] = pts[j];
+    if (yi > py !== yj > py && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+};
+
 /**
  * Combine the pages of each sheet into one cluster: plot lines, view box and homes moved into the first page's coordinates.
+ * A home can also have a placement of its own (`homes`, from the alignment of the group of homes it shares walls with): the
+ * home and its plot outline then move with that placement instead of the page's, so a group can sit differently on the ground
+ * from the plan. The page's other lines (roads, boundaries) stay with the page.
  * @param {{ id: string, baseSize: number, viewBox: number[], plot: string }[]} clusters as from shapeClusters
- * @param {{ cluster: string, x: number, y: number, rotation?: number }[]} units as from buildSiteMap
+ * @param {{ houseNo?: string, cluster: string, x: number, y: number, rotation?: number }[]} units as from buildSiteMap
  * @param {Record<string, { page: string, scale: number, rotate?: number, dx: number, dy: number }[]>} [sheets] the placements to use (the defaults, or those from the satellite alignments)
+ * @param {{ homes?: Record<string, { scale: number, rotate?: number, dx: number, dy: number }> }} [extra]
  */
-export function mergeSheets(clusters, units, sheets = SHEETS) {
-  const placements = Object.values(sheets).flat();
+export function mergeSheets(clusters, units, sheets = SHEETS, extra = {}) {
+  const pageOf = (page) => Object.values(sheets).flat().find((p) => p.page === page);
+  const homePlacement = (u) => extra.homes?.[u.houseNo] ?? pageOf(u.cluster);
+  const moved = {}; // the points placed on each sheet, so its view box can cover them
   const move = (u) => {
-    const t = placements.find((p) => p.page === u.cluster);
+    const t = homePlacement(u);
     if (!t) return u;
     const [x, y] = place(t, u.x, u.y);
+    (moved[sheetOf(u.cluster, sheets)] ??= []).push([x, y]);
     return { ...u, cluster: sheetOf(u.cluster, sheets), x, y, rotation: normDeg((u.rotation ?? 0) + (t.rotate ?? 0)) };
   };
   const out = [];
@@ -121,16 +144,40 @@ export function mergeSheets(clusters, units, sheets = SHEETS) {
     const [x, y, w, h] = c.viewBox;
     const corners = [place(t, x, y), place(t, x + w, y), place(t, x, y + h), place(t, x + w, y + h)];
     const box = [Math.min(...corners.map((p) => p[0])), Math.min(...corners.map((p) => p[1])), Math.max(...corners.map((p) => p[0])), Math.max(...corners.map((p) => p[1]))];
+    // Each home's plot outline goes with the home; everything else in the plot path goes with the page.
+    const here = units.filter((u) => u.cluster === c.id);
+    const { lines, closed } = splitPlot(c.plot);
+    const withPage = [...lines], withHomes = [];
+    for (const sub of closed) {
+      const pts = pointsOf(sub);
+      const cx = pts.reduce((sum, q) => sum + q[0], 0) / pts.length, cy = pts.reduce((sum, q) => sum + q[1], 0) / pts.length;
+      const owner = here.filter((u) => u.houseNo && insidePoly(pts, u.x, u.y)).sort((a, b) => Math.hypot(a.x - cx, a.y - cy) - Math.hypot(b.x - cx, b.y - cy))[0];
+      if (!owner) { withPage.push(sub); continue; }
+      const own = homePlacement(owner);
+      const moveSub = movePath(sub, own);
+      withHomes.push(moveSub);
+      for (const q of pointsOf(moveSub)) (moved[sheet] ??= []).push(q);
+    }
+    const plot = [movePath(withPage.join(' '), t), ...withHomes].filter(Boolean).join(' ');
     const have = out.find((o) => o.id === sheet);
-    if (!have) { out.push({ id: sheet, baseSize: c.baseSize, viewBox: [round2(box[0]), round2(box[1]), round2(box[2] - box[0]), round2(box[3] - box[1])], plot: movePath(c.plot, t) }); continue; }
+    if (!have) { out.push({ id: sheet, baseSize: c.baseSize, viewBox: [round2(box[0]), round2(box[1]), round2(box[2] - box[0]), round2(box[3] - box[1])], plot }); continue; }
     const [hx, hy, hw, hh] = have.viewBox;
     const x1 = Math.min(hx, box[0]), y1 = Math.min(hy, box[1]), x2 = Math.max(hx + hw, box[2]), y2 = Math.max(hy + hh, box[3]);
     have.viewBox = [round2(x1), round2(y1), round2(x2 - x1), round2(y2 - y1)];
-    have.plot = `${have.plot} ${movePath(c.plot, t)}`;
+    have.plot = `${have.plot} ${plot}`;
   }
-  // The pages' own view boxes end on a drawn line; a margin keeps the outermost homes and their labels inside the frame.
-  for (const c of out) if (sheets[c.id]) c.viewBox = [c.viewBox[0] - 30, c.viewBox[1] - 30, c.viewBox[2] + 60, c.viewBox[3] + 60];
-  return { clusters: out, units: units.map(move) };
+  const result = { clusters: out, units: units.map(move) };
+  // A group can sit well away from where its page's frame puts it; the view box has to cover every home and outline too.
+  for (const c of result.clusters) {
+    if (!sheets[c.id]) continue;
+    const pts = [...(moved[c.id] ?? []), ...pointsOf(c.plot)].filter(([px, py]) => Number.isFinite(px) && Number.isFinite(py));
+    const [vx, vy, vw, vh] = c.viewBox;
+    const x1 = Math.min(vx, ...pts.map((q) => q[0])), y1 = Math.min(vy, ...pts.map((q) => q[1]));
+    const x2 = Math.max(vx + vw, ...pts.map((q) => q[0])), y2 = Math.max(vy + vh, ...pts.map((q) => q[1]));
+    // The pages' own view boxes end on a drawn line; a margin keeps the outermost homes and their labels inside the frame.
+    c.viewBox = [round2(x1 - 30), round2(y1 - 30), round2(x2 - x1 + 60), round2(y2 - y1 + 60)];
+  }
+  return result;
 }
 
 // ---- Where a home's house-number label goes ----------------------------------------------------------------------
