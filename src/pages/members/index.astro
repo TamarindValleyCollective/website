@@ -4469,6 +4469,10 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
   type Hh = { id: string; farmUnit: string; houseNo: string | null; cluster: string | null; unitType: string | null; people: Person[]; plots: Plot[]; housePattas: House[]; farmAcres: number; farmHectares: number; houseSqFt: number; flags: { severity: string; text: string }[] };
   type Me = { personId: string; name: string; email: string | null; phone: string | null; directoryVisible: boolean; role: string; familyRequestsPending: number; tourSeenThrough?: number | null };
 
+  // H1-A and H1-B are one block on the ground and on the site map, so members see them as "H1".
+  const clusterName = (c: string | null): string | null => (c === 'H1-A' || c === 'H1-B' ? 'H1' : c);
+  const withClusterName = <T extends { cluster: string | null }>(rows: T[]): T[] => rows.map((r) => ({ ...r, cluster: clusterName(r.cluster) }));
+
   type Kid = Node | string | null | undefined | false;
   function h(tag: string, cls = '', text?: string, ...kids: Kid[]): HTMLElement {
     const el = document.createElement(tag);
@@ -5433,7 +5437,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         const { status, data } = await memberFetch('/api/members-me/home');
         if (status === 200 && data.households) {
           const before = JSON.stringify(all);
-          all = data.households;
+          all = withClusterName(data.households);
           if (JSON.stringify(all) !== before) onRoute();
         }
       } catch {
@@ -7829,7 +7833,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       };
       const kinds = [...new Set(list.map((x) => kindOf(x.unitType)).filter((t): t is string => !!t))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
       return h('div', 'dir-filters', undefined,
-        row('Cluster', cluster, (v) => { cluster = v; }, ['H1-A', 'H1-B', 'H2']),
+        row('Cluster', cluster, (v) => { cluster = v; }, ['H1', 'H2']),
         kinds.length ? row('Bedrooms', unitType, (v) => { unitType = v; }, kinds) : null);
     }
 
@@ -8018,7 +8022,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       try {
         const [{ status, data }] = await Promise.all([memberFetch('/api/members-me/directory'), siteMapReady()]);
         if (status !== 200) throw new Error(data.error || 'Could not load the directory.');
-        list = data.households as DirHousehold[];
+        list = withClusterName(data.households as DirHousehold[]);
         // The first choice is the Map (when there is one); a #/sitemap link or bookmark asks for it by name.
         mode = siteMap && routeQuery.get('view') === 'map' ? 'map' : saved === 'cards' ? 'cards' : saved === 'list' ? 'list' : siteMap ? 'map' : 'list';
         buildView();
@@ -8129,7 +8133,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
   // Draws the portal from a /home answer: the fresh one, or (fromCache) the last one this browser kept for this member.
   function showHome(data: { me: Me; households: any[] }, fromCache = false) {
     me = data.me;
-    all = data.households;
+    all = withClusterName(data.households);
     current = Math.min(current, all.length - 1);
     $('boot').hidden = true;
     $('gate').hidden = true;

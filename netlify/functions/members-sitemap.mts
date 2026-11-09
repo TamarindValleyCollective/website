@@ -9,7 +9,7 @@
 import { requireMember } from './lib/member-access';
 import { privacyNoticeRequired } from '../../scripts/lib/member-privacy.mjs';
 import { restHeaders } from '../../scripts/lib/supabase.mjs';
-import { buildSiteMap, shapeClusters } from '../../scripts/lib/site-map.mjs';
+import { buildSiteMap, mergeSheets, shapeClusters } from '../../scripts/lib/site-map.mjs';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
@@ -41,7 +41,8 @@ async function handleGet(req: Request): Promise<Response> {
     select('member_people', 'select=id,full_name,active,directory_visible'),
     select('member_household_members', 'select=household_id,person_id,role'),
   ]);
-  return jsonResponse({ enabled: true, clusters: shapeClusters(clusters), units: buildSiteMap({ units, households, people, memberships }, householdId ?? null) });
+  const merged = mergeSheets(shapeClusters(clusters), buildSiteMap({ units, households, people, memberships }, householdId ?? null));
+  return jsonResponse({ enabled: true, ...merged });
 }
 
 export default async (req: Request): Promise<Response> => {

@@ -8,3 +8,5 @@ The layout of the 52 homes on the 2023 site plan, fixed by hand on 2026-10-29 wi
 - `plan-plot-lines.json`: view box and plot lines of each cluster's plan page.
 - `scripts/gen-site-map-migration.py` regenerates the seed part of the migration from these two files. After 0074 is applied
   the database is the source of truth (admins change the layout in the admin portal); these files are history.
+- The member map shows H1-A and H1-B as one H1 sheet (`SHEETS` in `scripts/lib/site-map.mjs`): H1-B is moved into H1-A's
+  coordinates by a scale (1.63 / 1.8) and an offset set against the key plan. The stored coordinates stay per page.

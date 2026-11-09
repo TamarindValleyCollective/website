@@ -70,6 +70,54 @@ export function shapeClusters(rows) {
   return rows.map((c) => ({ id: c.cluster, baseSize: Number(c.base_size), viewBox: c.view_box, plot: c.plot_path }));
 }
 
+// ---- One sheet for several plan pages ----------------------------------------------------------------------------
+// The 2023 plan is drawn on one page per cluster (H1-A, H1-B, H2), each with its own coordinates and scale. The member map
+// shows them as one sheet: every page of a sheet is moved into the first page's coordinates with a scale and an offset
+// (the pages share an orientation, so no rotation). The database keeps each home in its own page's coordinates, so the
+// admin layout editor is untouched; only what is sent to the member portal is combined. The scale is the page's base size
+// over the first page's (the same house is drawn at 1.63 on H1-A and 1.8 on H1-B, so H1-B is drawn at 1.63 / 1.8).
+// The offsets were set against the key plan; change them here if the two blocks ever need to move against each other.
+export const SHEETS = {
+  H1: [
+    { page: 'H1-A', scale: 1, dx: 0, dy: 0 },
+    { page: 'H1-B', scale: 1.63 / 1.8, dx: -630, dy: -285 },
+  ],
+};
+/** The sheet a plan page belongs to ("H1" for H1-A and H1-B); a page on no sheet is its own. */
+export const sheetOf = (page) => Object.entries(SHEETS).find(([, pages]) => pages.some((p) => p.page === page))?.[0] ?? page;
+
+const round2 = (n) => Math.round(n * 100) / 100;
+const movePath = (d, t) => String(d ?? '').replace(/(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)/g, (_, x, y) => `${round2(Number(x) * t.scale + t.dx)} ${round2(Number(y) * t.scale + t.dy)}`);
+
+/**
+ * Combine the pages of each sheet into one cluster: plot lines, view box and homes moved into the first page's coordinates.
+ * @param {{ id: string, baseSize: number, viewBox: number[], plot: string }[]} clusters as from shapeClusters
+ * @param {{ cluster: string, x: number, y: number }[]} units as from buildSiteMap
+ */
+export function mergeSheets(clusters, units) {
+  const move = (u) => {
+    const t = Object.values(SHEETS).flat().find((p) => p.page === u.cluster);
+    return t ? { ...u, cluster: sheetOf(u.cluster), x: round2(u.x * t.scale + t.dx), y: round2(u.y * t.scale + t.dy) } : u;
+  };
+  const out = [];
+  for (const c of clusters) {
+    const sheet = sheetOf(c.id);
+    const t = (SHEETS[sheet] ?? []).find((p) => p.page === c.id);
+    if (!t) { out.push(c); continue; }
+    const [x, y, w, h] = c.viewBox;
+    const box = [x * t.scale + t.dx, y * t.scale + t.dy, (x + w) * t.scale + t.dx, (y + h) * t.scale + t.dy];
+    const have = out.find((o) => o.id === sheet);
+    if (!have) { out.push({ id: sheet, baseSize: c.baseSize * t.scale, viewBox: [round2(box[0]), round2(box[1]), round2(box[2] - box[0]), round2(box[3] - box[1])], plot: movePath(c.plot, t) }); continue; }
+    const [hx, hy, hw, hh] = have.viewBox;
+    const x1 = Math.min(hx, box[0]), y1 = Math.min(hy, box[1]), x2 = Math.max(hx + hw, box[2]), y2 = Math.max(hy + hh, box[3]);
+    have.viewBox = [round2(x1), round2(y1), round2(x2 - x1), round2(y2 - y1)];
+    have.plot = `${have.plot} ${movePath(c.plot, t)}`;
+  }
+  // The pages' own view boxes end on a drawn line; a margin keeps the outermost homes and their labels inside the frame.
+  for (const c of out) if (SHEETS[c.id]) c.viewBox = [c.viewBox[0] - 30, c.viewBox[1] - 30, c.viewBox[2] + 60, c.viewBox[3] + 60];
+  return { clusters: out, units: units.map(move) };
+}
+
 // ---- Where a home's house-number label goes ----------------------------------------------------------------------
 // The label sits inside the home's land plot, not on the building. A cluster's plot_path holds the plan's raw lines and,
 // since migration 0075, one closed outline (ending in Z) per plot. The plot a home is in is the smallest closed outline
