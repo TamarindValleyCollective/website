@@ -4452,6 +4452,10 @@ import SignInGate from '../../components/SignInGate.astro';
   import { sizedPicture } from '../../../scripts/lib/member-google-picture.mjs';
   import { baseUnitType, bedroomsOf, facesToShow } from '../../../scripts/lib/member-directory.mjs';
   import { badgeEl, outlineEl, plotFillEl, shapeDefs, unitGroup } from '../../../scripts/lib/site-map-draw.mjs';
+  import { footprintPoints } from '../../../scripts/lib/site-map-snap.mjs';
+  // The browser key for Google's Maps JavaScript API (restricted to our sites; visible in the page by design). Without it there is no Satellite layer.
+  const MAPS_KEY = import.meta.env.PUBLIC_GOOGLE_MAPS_API_KEY;
+  import { geoToLocal, imageToPlan, localToGeo, planToLocal } from '../../../scripts/lib/site-map-align.mjs';
   import { openPhoto, preparePhotoFrom } from '../../../scripts/lib/photo-prepare.mjs';
   import { MAX_ZOOM, cropRect, initialCrop, panBy, zoomTo } from '../../../scripts/lib/photo-crop.mjs';
 import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggleMark, foldProfileLink as foldProfileIntoText } from '../../../scripts/lib/member-markdown.mjs';
@@ -7225,7 +7229,9 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     status: 'named' | 'private' | 'vacant'; names: string[]; unitType: string | null; bhk: string; detail: string; farmUnit: string | null; isYours: boolean;
   };
   type MapCluster = { id: string; baseSize: number; viewBox: number[]; plot: string };
-  let siteMap: { clusters: MapCluster[]; units: MapUnit[] } | null = null;
+  // Where a sheet sits on the ground (its fit to the satellite map, in metres around an origin): the numbers only, for the optional Satellite layer.
+  type Ground = { a: number; b: number; tx: number; ty: number; originLat: number; originLng: number };
+  let siteMap: { clusters: MapCluster[]; units: MapUnit[]; ground?: Record<string, Ground> } | null = null;
 
   // The plan is loaded once (in the background after sign-in, or by the Directory if that is first); the Directory waits
   // for it (siteMapReady) and offers the Map layout only if it came (the page works without it).
@@ -7259,7 +7265,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     count: (clusterId: string) => number | null;
   };
 
-  function siteMapPane(data: { clusters: MapCluster[]; units: MapUnit[] }, hooks: MapHooks): MapPane {
+  function siteMapPane(data: { clusters: MapCluster[]; units: MapUnit[]; ground?: Record<string, Ground> }, hooks: MapHooks): MapPane {
     const mine = data.units.find((u) => u.isYours) ?? null;
     let clusterId = mine?.cluster ?? data.clusters[0].id;
     let selected: MapUnit | null = null;
@@ -7304,7 +7310,10 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     const outlineLayer = document.createElementNS(SVG_NS, 'g');
     // The house numbers sit above the homes, inside each home's plot, and never take a tap or a hover.
     const badgeLayer = document.createElementNS(SVG_NS, 'g');
-    svg.append(fillLayer, plotPath, unitLayer, outlineLayer, badgeLayer);
+    // Everything drawn sits in one group, so the Satellite layer can carry it onto the map with a single transform.
+    const world = document.createElementNS(SVG_NS, 'g');
+    world.append(fillLayer, plotPath, unitLayer, outlineLayer, badgeLayer);
+    svg.append(world);
     const pop = h('div', 'sm-pop');
     pop.id = 'sm-pop';
     pop.setAttribute('role', 'tooltip');
@@ -7319,7 +7328,13 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     const keyItem = (cls: string, text: string) => h('li', '', undefined, h('span', `sm-sw ${cls}`), text);
     const key = h('ul', 'dir-map-key', undefined, ...(mine ? [keyItem('is-yours', 'Yours')] : []), keyItem('sm-named', 'Member'), keyItem('sm-private', 'Private'), keyItem('sm-vacant', 'No member yet'));
     key.setAttribute('aria-label', 'Colours');
-    const stage = h('div', 'sm-stage', undefined, svg, tabs, pop, key, h('div', 'sm-zoom', undefined, zoomBtn('Zoom in', '+', () => zoomBy(1.4)), zoomBtn('Zoom out', '−', () => zoomBy(1 / 1.4)), zoomBtn('Show the whole cluster', 'Fit', () => { fitAll(); paint(); })));
+    const gdiv = h('div', 'sm-gmap');
+    gdiv.hidden = true;
+    const satBtn = h('button', 'btn sm-sat', 'Satellite');
+    satBtn.setAttribute('type', 'button');
+    satBtn.setAttribute('aria-pressed', 'false');
+    satBtn.hidden = true;
+    const stage = h('div', 'sm-stage', undefined, gdiv, svg, tabs, satBtn, pop, key, h('div', 'sm-zoom', undefined, zoomBtn('Zoom in', '+', () => zoomBy(1.4)), zoomBtn('Zoom out', '−', () => zoomBy(1 / 1.4)), zoomBtn('Show the whole cluster', 'Fit', () => { fitAll(); paint(); })));
     if (mine) {
       const find = h('button', 'btn dir-map-find', undefined, h('span', 'dir-map-find-dot'), 'Find my home');
       find.setAttribute('type', 'button');
@@ -7327,7 +7342,121 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       stage.append(find);
     }
 
-    const unitsPerPx = () => { const r = svg.getBoundingClientRect(); return Math.max(vb[2] / (r.width || 1), vb[3] / (r.height || 1)); };
+    // ---- Satellite layer (optional) ----
+    // Google's satellite map under the plan: the plan's drawing is carried onto the map by one affine transform computed from the
+    // sheet's fit to the ground (its placement in metres, from the admin Align to satellite page), so the homes, plots and numbers
+    // sit where they are. The map is north-up with no tilt, so a sheet is a turn, a scale and a shift of it. A tap on the map is
+    // turned back into a place on the sheet to find the home. Only numbers of the fit come from our server; the imagery is Google's,
+    // live, with their attribution. Off by default; the switch shows only where a sheet has a fit and the key is set.
+    let satOn = false;
+    let gmap: any = null;
+    let satScale = 1;
+    let fromMap = false;
+    const groundOf = (id: string): Ground | null => data.ground?.[id] ?? null;
+    const originOf = (g: Ground) => ({ lat: g.originLat, lng: g.originLng });
+    const geoOf = (g: Ground, x: number, y: number): [number, number] => localToGeo(originOf(g), planToLocal(g, [x, y]) as [number, number]) as [number, number];
+    const sheetAt = (g: Ground, lat: number, lng: number): [number, number] => imageToPlan(g, geoToLocal(originOf(g), [lat, lng]) as [number, number]) as [number, number];
+    const mercator = (lat: number, lng: number, zoom: number): [number, number] => {
+      const size = 256 * 2 ** zoom;
+      const sin = Math.min(Math.max(Math.sin((lat * Math.PI) / 180), -0.9999), 0.9999);
+      return [(lng / 360 + 0.5) * size, (0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI)) * size];
+    };
+    const unMercator = (px: number, py: number, zoom: number): [number, number] => {
+      const size = 256 * 2 ** zoom;
+      const n = Math.PI - (2 * Math.PI * py) / size;
+      return [(180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n))), (px / size - 0.5) * 360];
+    };
+    const pixelOf = (lat: number, lng: number): [number, number] => {
+      const r = gdiv.getBoundingClientRect(), c = gmap.getCenter(), z = gmap.getZoom();
+      const [cx, cy] = mercator(c.lat(), c.lng(), z), [px, py] = mercator(lat, lng, z);
+      return [px - cx + r.width / 2, py - cy + r.height / 2];
+    };
+    const geoAtPixel = (x: number, y: number): [number, number] => {
+      const r = gdiv.getBoundingClientRect(), c = gmap.getCenter(), z = gmap.getZoom();
+      const [cx, cy] = mercator(c.lat(), c.lng(), z);
+      return unMercator(cx + x - r.width / 2, cy + y - r.height / 2, z);
+    };
+    // The map's view as a box of the sheet's coordinates (what `vb` means in the plan layout), so Fit, Find my home and the
+    // zoom buttons keep working in both.
+    function mapViewAsSheet(): number[] | null {
+      const g = groundOf(clusterId);
+      if (!g || !gmap || !gmap.getCenter()) return null;
+      const r = gdiv.getBoundingClientRect();
+      const pts = [[0, 0], [r.width, 0], [0, r.height], [r.width, r.height]].map(([x, y]) => sheetAt(g, ...geoAtPixel(x, y)));
+      const xs = pts.map((q) => q[0]), ys = pts.map((q) => q[1]);
+      return [Math.min(...xs), Math.min(...ys), Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)];
+    }
+    function viewToMap() {
+      const g = groundOf(clusterId);
+      if (!g || !gmap) return;
+      const now = mapViewAsSheet();
+      // Already showing this (within a hair): leave the map alone, so a pick does not make it twitch.
+      if (now && Math.abs(now[0] + now[2] / 2 - (vb[0] + vb[2] / 2)) < vb[2] * 0.01 && Math.abs(now[1] + now[3] / 2 - (vb[1] + vb[3] / 2)) < vb[3] * 0.01 && Math.abs(now[2] / vb[2] - 1) < 0.03) return;
+      const pts = [[vb[0], vb[1]], [vb[0] + vb[2], vb[1]], [vb[0], vb[1] + vb[3]], [vb[0] + vb[2], vb[1] + vb[3]]].map(([x, y]) => geoOf(g, x, y));
+      gmap.fitBounds({ north: Math.max(...pts.map((q) => q[0])), south: Math.min(...pts.map((q) => q[0])), east: Math.max(...pts.map((q) => q[1])), west: Math.min(...pts.map((q) => q[1])) }, 0);
+    }
+    function syncSat() {
+      const g = groundOf(clusterId);
+      if (!satOn || !gmap || !g || !gmap.getCenter()) return;
+      const r = gdiv.getBoundingClientRect();
+      svg.setAttribute('viewBox', `0 0 ${r.width} ${r.height}`);
+      // Any three points of the sheet give the transform; the middle of the view and a step along each axis.
+      const x0 = vb[0] + vb[2] / 2, y0 = vb[1] + vb[3] / 2;
+      const at = (x: number, y: number) => pixelOf(...geoOf(g, x, y));
+      const p0 = at(x0, y0), p1 = at(x0 + 100, y0), p2 = at(x0, y0 + 100);
+      const a = (p1[0] - p0[0]) / 100, b = (p1[1] - p0[1]) / 100, c = (p2[0] - p0[0]) / 100, d = (p2[1] - p0[1]) / 100;
+      world.setAttribute('transform', `matrix(${a} ${b} ${c} ${d} ${p0[0] - a * x0 - c * y0} ${p0[1] - b * x0 - d * y0})`);
+      satScale = Math.hypot(a, b) || 1;
+    }
+    function loadGoogleMaps(): Promise<void> {
+      if ((window as any).google?.maps?.Map) return Promise.resolve();
+      return new Promise((res, rej) => {
+        (window as any).__tvcMapsReady = () => res();
+        const el = document.createElement('script');
+        el.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(MAPS_KEY)}&v=weekly&callback=__tvcMapsReady`;
+        el.async = true;
+        el.onerror = () => rej(new Error('maps'));
+        document.head.append(el);
+      });
+    }
+    function tapMap(lat: number, lng: number) {
+      const g = groundOf(clusterId);
+      if (!g) return;
+      const [x, y] = sheetAt(g, lat, lng);
+      const c = clusterOf(clusterId);
+      const here = data.units.filter((u) => u.cluster === clusterId);
+      const inside = here.find((u) => {
+        const pts = footprintPoints(u, c.baseSize);
+        let hit = false;
+        for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+          const [xi, yi] = pts[i], [xj, yj] = pts[j];
+          if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) hit = !hit;
+        }
+        return hit;
+      });
+      // Within a few metres of a home's centre counts too (a tap is not that exact on a phone).
+      const near = inside ?? here.map((u) => ({ u, d: Math.hypot(u.x - x, u.y - y) })).sort((p, q) => p.d - q.d).filter((p) => p.d <= 4 * Math.hypot(g.a, g.b))[0]?.u;
+      if (near) pick(near); else if (selected) pick(null);
+    }
+    async function setSat(on: boolean) {
+      if (on && !(MAPS_KEY && groundOf(clusterId))) return;
+      if (on && !gmap) {
+        try { await loadGoogleMaps(); } catch { toast('The satellite map could not be loaded.'); return; }
+        gdiv.hidden = false;
+        gmap = new (window as any).google.maps.Map(gdiv, { mapTypeId: 'satellite', tilt: 0, center: { lat: 20, lng: 78 }, zoom: 3, disableDefaultUI: true, gestureHandling: 'greedy', clickableIcons: false, maxZoom: 21, keyboardShortcuts: false });
+        gmap.addListener('bounds_changed', () => syncSat());
+        gmap.addListener('click', (e: any) => tapMap(e.latLng.lat(), e.latLng.lng()));
+        gmap.addListener('idle', () => { if (!satOn) return; const v = mapViewAsSheet(); if (v) { fromMap = true; vb = v; paint(); fromMap = false; } });
+      }
+      satOn = on;
+      stage.classList.toggle('is-sat', on);
+      gdiv.hidden = !on;
+      satBtn.setAttribute('aria-pressed', String(on));
+      if (!on) world.removeAttribute('transform');
+      paint();
+    }
+    satBtn.addEventListener('click', () => void setSat(!satOn));
+    const unitsPerPx = () => { if (satOn) return 1 / satScale; const r = svg.getBoundingClientRect(); return Math.max(vb[2] / (r.width || 1), vb[3] / (r.height || 1)); };
     const toUser = (e: { clientX: number; clientY: number }) => {
       const r = svg.getBoundingClientRect();
       const k = Math.max(vb[2] / r.width, vb[3] / r.height);
@@ -7355,7 +7484,12 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     function paint() {
       paintTabs();
       const c = clusterOf(clusterId);
-      svg.setAttribute('viewBox', vb.join(' '));
+      // The Satellite switch is offered where the sheet has a place on the ground (and the browser key is set); a sheet without one
+      // leaves the layer.
+      satBtn.hidden = !(MAPS_KEY && groundOf(clusterId));
+      if (satOn && !groundOf(clusterId)) { satOn = false; stage.classList.remove('is-sat'); gdiv.hidden = true; satBtn.setAttribute('aria-pressed', 'false'); world.removeAttribute('transform'); }
+      if (satOn && gmap && !fromMap) viewToMap();
+      if (satOn) syncSat(); else svg.setAttribute('viewBox', vb.join(' '));
       plotPath.setAttribute('d', c.plot);
       const u = unitsPerPx();
       hidePop();
@@ -7378,6 +7512,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       paint();
     }
     function zoomBy(f: number, cx?: number, cy?: number) {
+      if (satOn && gmap) { gmap.setZoom(Math.min(21, Math.max(3, Math.round(gmap.getZoom() + (f > 1 ? 1 : -1))))); return; }
       const [x, y, w, ht] = vb;
       const nw = w / f;
       if (nw < 40 || nw > clusterOf(clusterId).viewBox[2] * 1.6) return;
@@ -7832,8 +7967,9 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         return h('div', 'dir-filter', undefined, h('span', 'dir-filter-label', label), group);
       };
       const kinds = [...new Set(list.map((x) => kindOf(x.unitType)).filter((t): t is string => !!t))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+      // In the Map layout the plan's own cluster tabs (with their match counts) are the cluster choice, so the row is not repeated.
       return h('div', 'dir-filters', undefined,
-        row('Cluster', cluster, (v) => { cluster = v; }, ['H1', 'H2']),
+        mode === 'map' && siteMap ? null : row('Cluster', cluster, (v) => { cluster = v; }, ['H1', 'H2']),
         kinds.length ? row('Bedrooms', unitType, (v) => { unitType = v; }, kinds) : null);
     }
 
@@ -7960,6 +8096,8 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     let laidOut = '';
 
     function draw() {
+      // The Cluster filter is not offered in the Map layout (the plan's tabs do that), so one left over from another layout is dropped.
+      if (mode === 'map' && siteMap) cluster = null;
       const shown = list.filter((hh) => (!onlyStories || hh.hasStory) && (!cluster || hh.cluster === cluster) && (!unitType || kindOf(hh.unitType) === unitType) && (!query || [hh.farmUnit, hh.houseNo ?? '', hh.cluster ?? '', ...hh.people.map((p) => p.name)].join(' ').toLowerCase().includes(query)));
       // The member's own household first (the sort is stable, so everyone else stays in house-number order).
       shown.sort((a, b) => Number(b.people.some((p) => p.isYou)) - Number(a.people.some((p) => p.isYou)));

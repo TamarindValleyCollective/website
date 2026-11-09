@@ -25,17 +25,20 @@ import '../../styles/site-map.css';
       <ol class="steps">
         <li>Find the farm on the map: in Google Maps, right-click the farm and copy its position, then paste it in the box below. Zoom in until the buildings are clear.</li>
         <li>Pick a plan page. Tap a home on the plan (or any spot, such as a plot corner), then tap the <em>same</em> spot on the map. After the second pair the plan appears on the map; each further pair refines it.</li>
-        <li>Three or more pairs, spread apart, fit the page. The list shows how far each pair is from the fit in metres; remove or redo the ones that are off, then Save.</li>
+        <li>The plan and the ground differ a little. Homes that share walls were built as one piece, so you can align each such <em>group</em> on its own: pick a group beside the page buttons. Its homes (and plots) then move with it; the page's road and boundary lines stay with the whole-page alignment.</li>
+        <li>Three or more pairs, spread apart, fit the page (a group with its size kept needs only two). The list shows how far each pair is from the fit in metres; remove or redo the ones that are off, then Save.</li>
       </ol>
 
       <div class="bar">
         <div class="segmented" id="clusters" role="group" aria-label="Plan page"></div>
+        <div class="segmented" id="groups" role="group" aria-label="Group of homes"></div>
         <form class="editbar" id="goto-form">
           <label class="line">Go to <input type="text" id="goto" placeholder="29.12345, 79.12345" autocomplete="off" aria-label="Latitude and longitude" /></label>
           <button type="submit" class="button button--outline">Go</button>
         </form>
       </div>
 
+      <p class="hint" id="group-note"></p>
       <p id="hint" class="hint" role="status"></p>
       <p id="nokey" class="hint hint--wait" hidden>The Google Maps key is not set. Put it in <code>PUBLIC_GOOGLE_MAPS_API_KEY</code> (a browser key limited to this site) and reload.</p>
 
@@ -117,6 +120,8 @@ import '../../styles/site-map.css';
 
   /* Marks on the plan page. A pair is the same number on the plan and on the map; the pending point has a ring until its partner is tapped. */
   .align .al-home { fill: var(--tvc-white); stroke: var(--tvc-green-dark); stroke-width: 1.5; vector-effect: non-scaling-stroke; cursor: pointer; }
+  .align .al-home.is-other { opacity: 0.3; pointer-events: none; cursor: default; }
+  .align .al-home-label.is-other { opacity: 0.3; }
   .align .al-home-label { fill: var(--tvc-ink-soft); text-anchor: middle; pointer-events: none; }
   .align .al-pin { fill: var(--tvc-green-dark); stroke: var(--tvc-white); stroke-width: 1.5; vector-effect: non-scaling-stroke; pointer-events: none; }
   .align .al-pin.is-off { fill: var(--tvc-error-text); }
@@ -150,6 +155,8 @@ import '../../styles/site-map.css';
   import { busyForPress } from '../../../scripts/lib/busy.mjs';
   import { MAX_PAIRS, MIN_PAIRS, NO_TUNE, applyTune, fitSimilarity, geoToLocal, isTuned, localToGeo, originOf, pivotOf, planToLocal, tuneBetween } from '../../../scripts/lib/site-map-align.mjs';
   import { SVG_NS } from '../../../scripts/lib/site-map-draw.mjs';
+  import { plotOutline } from '../../../scripts/lib/site-map.mjs';
+  import { detectGroups, savedFor } from '../../../scripts/lib/site-map-groups.mjs';
 
   declare const google: any;
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
@@ -174,10 +181,11 @@ import '../../styles/site-map.css';
   // The map's marks take their colours from the TVC tokens, so they follow the design language and the dark appearance.
   const tok = (name: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
-  type Unit = { houseNo: string; cluster: string; x: number; y: number };
-  type Cluster = { id: string; viewBox: number[]; plot: string };
+  type Unit = { houseNo: string; cluster: string; shape: string; x: number; y: number; rotation: number; mirrorX: boolean; mirrorY: boolean };
+  type Cluster = { id: string; baseSize: number; viewBox: number[]; plot: string };
+  type Group = { key: string; cluster: string; houses: string[] };
   type Pair = { house: string | null; plan: number[]; geo: number[] };
-  type Saved = { cluster: string; a: number; b: number; tx: number; ty: number; scale: number; rotation: number; originLat: number; originLng: number; rms: number | null; pairs: Pair[]; updatedAt: string | null };
+  type Saved = { key: string; houses: string[] | null; lockedScale: number | null; cluster: string; a: number; b: number; tx: number; ty: number; scale: number; rotation: number; originLat: number; originLng: number; rms: number | null; pairs: Pair[]; updatedAt: string | null };
 
   const gate = $('gate');
   const forbidden = $('forbidden');
@@ -193,6 +201,10 @@ import '../../styles/site-map.css';
   let saved: Saved[] = [];
   let canEdit = false;
   let clusterId = '';
+  // null = the whole plan page; otherwise the group of homes (sharing walls) being aligned on its own.
+  let groups: Group[] = [];
+  let groupKey: string | null = null;
+  let keepSize = true;
   // What is on screen for the page being aligned: not saved until Save.
   let pairs: Pair[] = [];
   let pending: { house: string | null; plan: number[] } | null = null;
@@ -204,6 +216,31 @@ import '../../styles/site-map.css';
   let tune: Tune = { ...NO_TUNE };
   let savedTune: Tune = { ...NO_TUNE };
   const clusterOf = (id: string) => clusters.find((c) => c.id === id) ?? clusters[0];
+  const targetKey = () => groupKey ?? clusterId;
+  const targetGroup = () => (groupKey ? groups.find((g) => g.key === groupKey) ?? null : null);
+  // The saved fit of what is on show: the page's, or the saved row of the group (which follows its group if the group's homes changed).
+  const savedFit = (g: Group) => (savedFor(g, saved.filter((s) => s.houses && s.cluster === g.cluster) as (Saved & { houses: string[] })[]) as Saved | null) ?? undefined;
+  const savedTarget = (): Saved | undefined => { const g = targetGroup(); return g ? savedFit(g) : saved.find((s) => s.key === clusterId && !s.houses); };
+  // The homes that are tapped and drawn on the map: the group's, or the whole page's.
+  const targetUnits = () => { const g = targetGroup(); return units.filter((u) => u.cluster === clusterId && (!g || g.houses.includes(u.houseNo))); };
+
+  // Every home is the same size on the ground, so a group's fit is held to the size the best other fit gives (scaled by the
+  // page's drawing scale), and only its turn and position are fitted. null = no reference yet, or the group is free.
+  function referenceScale(): number | null {
+    let best: { k: number; m: number } | null = null;
+    for (const s of saved) {
+      if (s === savedTarget() || s.pairs.length < 3 || s.rms == null) continue;
+      const m = s.rms / s.scale;
+      if (!best || m < best.m) best = { k: s.scale / clusterOf(s.cluster).baseSize, m };
+    }
+    return best && best.m <= 2 ? best.k * clusterOf(clusterId).baseSize : null;
+  }
+  const lockedScale = (): number | null => (groupKey && keepSize ? referenceScale() : null);
+  const minPairs = () => (lockedScale() ? 2 : MIN_PAIRS);
+  const rangeLabel = (houses: string[]) => {
+    const n = houses.map((h) => Number(h.slice(2))).sort((a, b) => a - b);
+    return n.length > 1 && n[n.length - 1] - n[0] === n.length - 1 ? `${n[0]}–${n[n.length - 1]}` : n.join(', ');
+  };
 
   // ---- the plan page: pan by dragging, zoom with the wheel or two fingers; a touch that does not move is a tap ----
   let vb: number[] = [0, 0, 1, 1];
@@ -264,7 +301,7 @@ import '../../styles/site-map.css';
   }
   document.querySelectorAll<HTMLElement>('.sm-zoom [data-d]').forEach((b) => b.addEventListener('click', () => {
     const d = b.getAttribute('data-d');
-    if (d === 'fit') { vb = [...clusterOf(clusterId).viewBox]; paint(); } else zoomBy(d === 'in' ? 1.4 : 1 / 1.4);
+    if (d === 'fit') { vb = viewFor(); paint(); } else zoomBy(d === 'in' ? 1.4 : 1 / 1.4);
   }));
   window.addEventListener('resize', paint);
 
@@ -292,13 +329,13 @@ import '../../styles/site-map.css';
   // ---- the fit ----
   // Every page is fitted around one reference point: the one the other saved pages use, or this page's pairs' average.
   const frame = () => {
-    const other = saved.find((s) => s.cluster !== clusterId);
+    const other = saved.find((s) => s !== savedTarget());
     return other ? { lat: other.originLat, lng: other.originLng } : pairs.length ? originOf(pairs) : null;
   };
   function fit() {
     const f0 = frame();
     if (!f0 || pairs.length < 2) return null;
-    const base = fitSimilarity(pairs.map((p) => ({ plan: p.plan, image: geoToLocal(f0, p.geo as [number, number]) })));
+    const base = fitSimilarity(pairs.map((p) => ({ plan: p.plan, image: geoToLocal(f0, p.geo as [number, number]) })), lockedScale() ?? undefined);
     if (!base) return null;
     // `a, b, tx, ty` are the fit the plan is drawn and saved with (fine-tuned); the pairs' distances stay those from the pairs' own fit.
     const eff = isTuned(tune) ? applyTune(base, tune, pivotOf(pairs, f0)) : base;
@@ -322,10 +359,12 @@ import '../../styles/site-map.css';
     planSvg.replaceChildren();
     planSvg.append(svgEl('path', { d: c.plot }, 'sm-plot'));
     const paired = new Set(pairs.map((p) => p.house).filter(Boolean));
+    const mine = new Set(targetUnits().map((u) => u.houseNo));
     for (const u of units.filter((x) => x.cluster === clusterId)) {
       const g = svgEl('g');
-      g.append(svgEl('circle', { cx: u.x, cy: u.y, r: 7 * k, 'data-house': u.houseNo }, 'al-home'));
-      if (!paired.has(u.houseNo)) { const t = svgEl('text', { x: u.x, y: u.y + 16 * k, 'font-size': 10 * k }, 'al-home-label'); t.textContent = u.houseNo.slice(2); g.append(t); }
+      const other = !mine.has(u.houseNo);
+      g.append(svgEl('circle', other ? { cx: u.x, cy: u.y, r: 5 * k } : { cx: u.x, cy: u.y, r: 7 * k, 'data-house': u.houseNo }, other ? 'al-home is-other' : 'al-home'));
+      if (!paired.has(u.houseNo)) { const t = svgEl('text', { x: u.x, y: u.y + 16 * k, 'font-size': 10 * k }, other ? 'al-home-label is-other' : 'al-home-label'); t.textContent = u.houseNo.slice(2); g.append(t); }
       planSvg.append(g);
     }
     pairs.forEach((p, i) => planSvg.append(pin(p.plan[0], p.plan[1], i + 1, 9 * k, off[i])));
@@ -380,13 +419,17 @@ import '../../styles/site-map.css';
     const toLatLng = ([x, y]: number[]) => { const [lat, lng] = localToGeo(f.frame, planToLocal(f, [x, y] as [number, number]) as [number, number]); return { lat, lng }; };
     const opacity = Number(($('strength') as HTMLInputElement).value) / 100;
     const line = tok('--tvc-orange-light');
-    for (const sub of clusterOf(clusterId).plot.split('M').slice(1)) {
+    // A whole page draws all of its plan lines; a group draws only its homes' plot outlines (the page's lines belong to the page).
+    const subpaths = groupKey
+      ? targetUnits().map((u) => plotOutline(clusterOf(clusterId).plot, u.x, u.y)).filter((d): d is string => !!d)
+      : clusterOf(clusterId).plot.split('M').slice(1).map((x) => `M${x}`);
+    for (const sub of subpaths) {
       const n = (sub.match(/-?\d+(?:\.\d+)?/g) ?? []).map(Number);
       const path: { lat: number; lng: number }[] = [];
       for (let i = 0; i + 1 < n.length; i += 2) path.push(toLatLng([n[i], n[i + 1]]));
       if (path.length > 1) overlayMarks.push(new google.maps.Polyline({ map, path, strokeColor: line, strokeOpacity: opacity, strokeWeight: 1.6, clickable: false }));
     }
-    for (const u of units.filter((x) => x.cluster === clusterId)) overlayMarks.push(new google.maps.Circle({ map, center: toLatLng([u.x, u.y]), radius: 1.6, strokeColor: tok('--tvc-green-dark'), strokeWeight: 1, fillColor: line, fillOpacity: opacity, clickable: false }));
+    for (const u of targetUnits()) overlayMarks.push(new google.maps.Circle({ map, center: toLatLng([u.x, u.y]), radius: 1.6, strokeColor: tok('--tvc-green-dark'), strokeWeight: 1, fillColor: line, fillOpacity: opacity, clickable: false }));
   }
   $('goto-form').addEventListener('submit', (e) => {
     e.preventDefault();
@@ -399,8 +442,8 @@ import '../../styles/site-map.css';
   // ---- the card ----
   function paintCard(f: Fit | null, off: boolean[]) {
     const card = $('fit-card');
-    const old = saved.find((s) => s.cluster === clusterId);
-    const fitOk = !!f && pairs.length >= MIN_PAIRS;
+    const old = savedTarget();
+    const fitOk = !!f && pairs.length >= minPairs();
     const rows = pairs.map((p, i) => {
       const li = h('li', off[i] ? 'is-off' : '', undefined, h('span', 'n', String(i + 1)), h('span', 'what', p.house ? `Home ${p.house}` : `Plan spot ${nf.format(p.plan[0])}, ${nf.format(p.plan[1])}`));
       if (fitOk) li.append(h('span', 'off', `off by ${nf.format(f!.residualsM[i])} m${off[i] ? ' (check this one)' : ''}`));
@@ -412,18 +455,18 @@ import '../../styles/site-map.css';
         h('dt', '', 'Scale'), h('dd', '', `${nf.format(f!.scale)} plan units per metre`),
         h('dt', '', 'Rotation'), h('dd', '', `North points ${nf.format(f!.rotation)}° clockwise from the top of the plan page`),
         h('dt', '', 'Typical error'), h('dd', '', `${nf.format(f!.rmsM)} m`))
-      : h('p', 'hint', pairs.length ? `Add ${Math.max(0, MIN_PAIRS - pairs.length)} more pair${MIN_PAIRS - pairs.length === 1 ? '' : 's'} to fit this page.` : 'No pairs yet for this page.');
-    const kids: Kid[] = [h('h2', '', `Page ${clusterId}`), old && !dirty ? h('p', 'hint', `Saved: ${old.pairs.length} pairs, typical error ${old.rms == null ? '–' : nf.format(old.rms / old.scale)} m.`) : null, fitLines, rows.length ? h('ul', 'pairs', undefined, ...rows) : null];
+      : h('p', 'hint', pairs.length ? `Add ${Math.max(0, minPairs() - pairs.length)} more pair${minPairs() - pairs.length === 1 ? '' : 's'} to fit this ${groupKey ? 'group' : 'page'}.` : 'No pairs yet for this page.');
+    const kids: Kid[] = [h('h2', '', groupKey ? `Group ${clusterId} · ${rangeLabel(targetGroup()?.houses ?? [])}` : `Page ${clusterId}`), old && !dirty ? h('p', 'hint', `Saved: ${old.pairs.length} pairs, typical error ${old.rms == null ? '–' : nf.format(old.rms / old.scale)} m.`) : null, fitLines, rows.length ? h('ul', 'pairs', undefined, ...rows) : null];
     if (dirty) kids.push(h('p', 'dirty', 'Not saved yet.'));
     if (canEdit) {
-      const save = h('button', 'button button--primary', 'Save this page') as HTMLButtonElement;
+      const save = h('button', 'button button--primary', groupKey ? 'Save this group' : 'Save this page') as HTMLButtonElement;
       save.setAttribute('type', 'button');
       save.disabled = !fitOk || !dirty;
       save.addEventListener('click', () => void saveAlignment());
       const undo = h('button', 'button button--outline', 'Discard changes') as HTMLButtonElement;
       undo.setAttribute('type', 'button');
       undo.disabled = !dirty;
-      undo.addEventListener('click', () => { pairs = (saved.find((s) => s.cluster === clusterId)?.pairs ?? []).map((p) => ({ ...p })); tune = { ...savedTune }; pending = null; dirty = false; paint(); });
+      undo.addEventListener('click', () => { pairs = (savedTarget()?.pairs ?? []).map((p) => ({ ...p })); tune = { ...savedTune }; pending = null; dirty = false; paint(); });
       const clear = h('button', 'button button--danger-outline', 'Remove this alignment');
       clear.setAttribute('type', 'button');
       clear.hidden = !old;
@@ -435,9 +478,10 @@ import '../../styles/site-map.css';
   function paint() {
     const f = fit();
     // A pair is "off" when it is well beyond the typical error of the others (and at least a couple of metres off).
-    const off = pairs.map((_, i) => !!f && pairs.length > MIN_PAIRS && f.residualsM[i] > Math.max(2 * f.rmsM, 2));
+    const off = pairs.map((_, i) => !!f && pairs.length > minPairs() && f.residualsM[i] > Math.max(2 * f.rmsM, 2));
     $('clusters').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.getAttribute('data-c') === clusterId)));
-    $('plan-name').textContent = clusterId;
+    $('plan-name').textContent = groupKey ? `${clusterId} · homes ${rangeLabel(targetGroup()?.houses ?? [])}` : clusterId;
+    paintGroups();
     paintPlan(off);
     paintMap(f, off);
     paintCard(f, off);
@@ -458,23 +502,23 @@ import '../../styles/site-map.css';
   async function saveAlignment() {
     const done = busyForPress('Saving…');
     try {
-      const { status, data: out } = await staffFetch('/api/site-map-admin/alignment', { method: 'POST', body: { cluster: clusterId, pairs, tune: isTuned(tune) ? tune : undefined } });
+      const { status, data: out } = await staffFetch('/api/site-map-admin/alignment', { method: 'POST', body: { cluster: clusterId, ...(groupKey ? { group: { houses: targetGroup()?.houses ?? [] }, scale: lockedScale() ?? undefined } : {}), pairs, tune: isTuned(tune) ? tune : undefined } });
       if (status !== 200) { showToast(out?.error ?? 'Could not save. Try again.'); return; }
-      showToast(`Saved the alignment of ${clusterId}.`);
+      showToast(`Saved the alignment of ${groupKey ? `homes ${rangeLabel(targetGroup()?.houses ?? [])}` : clusterId}.`);
       await loadAlignments();
       dirty = false;
       paint();
     } catch (err) { errToast(err); } finally { done(); }
   }
   async function clearAlignment() {
-    if (!window.confirm(`Remove the satellite alignment of ${clusterId}? The member map goes back to its default placement if a page of its sheet has none.`)) return;
+    if (!window.confirm(groupKey ? `Remove the alignment of homes ${rangeLabel(targetGroup()?.houses ?? [])}? Those homes go back to their page's placement on the member map.` : `Remove the satellite alignment of ${clusterId}? The member map goes back to its default placement if a page of its sheet has none.`)) return;
     const done = busyForPress('Removing…');
     try {
-      const { status, data: out } = await staffFetch('/api/site-map-admin/alignment', { method: 'POST', body: { cluster: clusterId, clear: true } });
+      const { status, data: out } = await staffFetch('/api/site-map-admin/alignment', { method: 'POST', body: groupKey ? { groupKey, clear: true } : { cluster: clusterId, clear: true } });
       if (status !== 200) { showToast(out?.error ?? 'Could not remove it. Try again.'); return; }
-      showToast(`Removed the alignment of ${clusterId}.`);
+      showToast(`Removed the alignment of ${groupKey ? `homes ${rangeLabel(targetGroup()?.houses ?? [])}` : clusterId}.`);
       await loadAlignments();
-      selectCluster(clusterId);
+      selectTarget(clusterId, groupKey);
     } catch (err) { errToast(err); } finally { done(); }
   }
   // ---- fine-tune controls ----
@@ -527,23 +571,77 @@ import '../../styles/site-map.css';
   function tuneOf(s: Saved | undefined): Tune {
     if (!s || s.pairs.length < 2) return { ...NO_TUNE };
     const f0 = { lat: s.originLat, lng: s.originLng };
-    const base = fitSimilarity(s.pairs.map((p) => ({ plan: p.plan, image: geoToLocal(f0, p.geo as [number, number]) })));
+    const base = fitSimilarity(s.pairs.map((p) => ({ plan: p.plan, image: geoToLocal(f0, p.geo as [number, number]) })), s.lockedScale ?? undefined);
     return base ? { ...tuneBetween(base, s, pivotOf(s.pairs, f0)) } : { ...NO_TUNE };
   }
-  function selectCluster(id: string) {
+  // The part of the plan page the target covers: the whole page, or the group's homes with a margin.
+  function viewFor(): number[] {
+    const g = targetGroup();
+    if (!g) return [...clusterOf(clusterId).viewBox];
+    const mine = targetUnits();
+    if (!mine.length) return [...clusterOf(clusterId).viewBox];
+    const xs = mine.map((u) => u.x), ys = mine.map((u) => u.y);
+    const pad = 90;
+    const w = Math.max(...xs) - Math.min(...xs) + 2 * pad, h2 = Math.max(...ys) - Math.min(...ys) + 2 * pad;
+    return [Math.min(...xs) - pad, Math.min(...ys) - pad, Math.max(w, 200), Math.max(h2, 200)];
+  }
+  function selectTarget(id: string, gkey: string | null) {
     clusterId = id;
-    pairs = (saved.find((s) => s.cluster === id)?.pairs ?? []).map((p) => ({ ...p }));
-    savedTune = tuneOf(saved.find((s) => s.cluster === id));
+    groupKey = gkey && groups.some((g) => g.key === gkey) ? gkey : null;
+    const row = savedTarget();
+    pairs = (row?.pairs ?? []).map((p) => ({ ...p }));
+    savedTune = tuneOf(row);
     tune = { ...savedTune };
+    // A group saved with its size free stays free.
+    keepSize = !(row && groupKey && row.lockedScale == null);
     pending = null;
     dirty = false;
-    vb = [...clusterOf(id).viewBox];
+    vb = viewFor();
     paint();
+  }
+  // The group chips of the page on show, with a tick on the ones that have an alignment.
+  function paintGroups() {
+    const here = groups.filter((g) => g.cluster === clusterId);
+    const box = $('groups');
+    const chips: HTMLElement[] = [];
+    const whole = h('button', '', 'Whole page');
+    whole.setAttribute('type', 'button');
+    whole.setAttribute('aria-pressed', String(!groupKey));
+    whole.addEventListener('click', () => switchTarget(clusterId, null));
+    chips.push(whole);
+    for (const g of here) {
+      const b = h('button', '', `${rangeLabel(g.houses)}${savedFit(g) ? ' ✓' : ''}`);
+      b.setAttribute('type', 'button');
+      b.setAttribute('aria-pressed', String(groupKey === g.key));
+      b.title = `Homes ${g.houses.map((x) => x.slice(2)).join(', ')}`;
+      b.addEventListener('click', () => switchTarget(clusterId, g.key));
+      chips.push(b);
+    }
+    box.replaceChildren(...chips);
+    const note = $('group-note');
+    note.replaceChildren();
+    if (groupKey) {
+      const lock = referenceScale();
+      note.append(`Aligning homes ${rangeLabel(targetGroup()?.houses ?? [])} on their own: they share walls, so they move together. `);
+      if (lock) {
+        const label = h('label', 'line');
+        const box2 = document.createElement('input');
+        box2.type = 'checkbox';
+        box2.checked = keepSize;
+        box2.addEventListener('change', () => { keepSize = box2.checked; dirty = true; paint(); });
+        label.append(box2, ' Keep every home the same size (then two pairs are enough)');
+        note.append(label);
+      } else note.append('No other alignment is accurate enough yet to set the size from, so this one fits its own size (three pairs).');
+    } else note.textContent = 'Aligning the whole plan page: its lines (roads, boundaries) and the homes not aligned as a group follow this.';
+  }
+  function switchTarget(id: string, gkey: string | null) {
+    if (dirty && !window.confirm('This has changes that are not saved. Leave them?')) return;
+    selectTarget(id, gkey);
   }
   async function loadAlignments() {
     const { status, data: body } = await staffFetch('/api/site-map-admin/alignment');
     if (status !== 200) throw new Error(`the server answered ${status}`);
-    saved = body.alignments as Saved[];
+    saved = [...(body.alignments as Saved[]), ...((body.groups ?? []) as Saved[])];
     canEdit = !!body.canEdit;
   }
   let firstLoad = true;
@@ -556,13 +654,14 @@ import '../../styles/site-map.css';
       if (status === 403) { showForbidden(); return; }
       if (status !== 200) throw new Error(`the server answered ${status}`);
       clusters = plan.clusters as Cluster[];
-      units = (plan.units as Unit[]).map((u) => ({ houseNo: u.houseNo, cluster: u.cluster, x: u.x, y: u.y }));
+      units = (plan.units as Unit[]).map((u) => ({ houseNo: u.houseNo, cluster: u.cluster, shape: u.shape, x: u.x, y: u.y, rotation: u.rotation, mirrorX: u.mirrorX, mirrorY: u.mirrorY }));
+      groups = detectGroups(units, Object.fromEntries(clusters.map((c) => [c.id, c.baseSize])));
       await loadAlignments();
       statusEl.hidden = true;
       intro.textContent = 'Lay each plan page over the satellite map by pairing points. The member map uses this to place the pages against each other.';
       content.hidden = false;
-      $('clusters').replaceChildren(...clusters.map((c) => { const b = h('button', '', c.id); b.setAttribute('type', 'button'); b.setAttribute('data-c', c.id); b.addEventListener('click', () => { if (dirty && !window.confirm('This page has changes that are not saved. Leave them?')) return; selectCluster(c.id); }); return b; }));
-      selectCluster(clusterId && clusters.some((c) => c.id === clusterId) ? clusterId : clusters[0].id);
+      $('clusters').replaceChildren(...clusters.map((c) => { const b = h('button', '', c.id); b.setAttribute('type', 'button'); b.setAttribute('data-c', c.id); b.addEventListener('click', () => switchTarget(c.id, null)); return b; }));
+      selectTarget(clusterId && clusters.some((c) => c.id === clusterId) ? clusterId : clusters[0].id, groupKey);
       firstLoad = false;
       void startMap().then(() => paint());
     } catch (err) {

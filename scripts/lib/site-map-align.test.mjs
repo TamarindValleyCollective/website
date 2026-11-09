@@ -131,3 +131,38 @@ test('validateAlignment applies a fine-tune, rejects an absurd one, and keeps th
   assert.ok(Math.abs(tuned.fit.rms - 10) < 0.05, String(tuned.fit.rms));
   for (const bad of [{ east: 400 }, { rotate: 40 }, { scale: 2 }, { scale: 0.5 }, { east: 'x' }, 7]) assert.ok('error' in validateAlignment(body(bad), ORIGIN), JSON.stringify(bad));
 });
+
+test('a locked size fits only the turn and position, so two pairs are enough and the size stays', () => {
+  const pairs = pairsFor(truth).slice(0, 2).map((p) => ({ plan: p.plan, image: geoToLocal(ORIGIN, p.geo) }));
+  const f = fitSimilarity(pairs, 2);
+  assert.ok(Math.abs(f.scale - 2) < 1e-9 && Math.abs(f.rotation - 30) < 1e-4 && f.rms < 0.05);
+  // Asked for a different size than the pairs imply, the size is kept and the pairs show the difference.
+  const forced = fitSimilarity(pairs, 2.2);
+  assert.ok(Math.abs(forced.scale - 2.2) < 1e-9 && forced.rms > 0.5);
+  assert.equal(fitSimilarity(pairs.slice(0, 1), 2), null);
+});
+
+test('validateAlignment takes a group of homes and a locked size', () => {
+  const ok = validateAlignment({ cluster: 'H1-B', group: { houses: ['H-35', 'H-33', 'H-33'] }, scale: 2, pairs: pairsFor(truth).slice(0, 3) }, ORIGIN);
+  assert.ok(!('error' in ok));
+  assert.deepEqual(ok.group, { key: 'H1-B:H-33', houses: ['H-33', 'H-35'] });
+  assert.ok(Math.abs(ok.fit.scale - 2) < 1e-9);
+  assert.equal(validateAlignment({ cluster: 'H1-B', pairs: pairsFor(truth) }, ORIGIN).group, null);
+  for (const bad of [{ houses: [] }, { houses: ['x'] }, { houses: 'H-33' }]) assert.ok('error' in validateAlignment({ cluster: 'H1-B', group: bad, pairs: pairsFor(truth) }, ORIGIN));
+  assert.ok('error' in validateAlignment({ cluster: 'H1-B', scale: 100, pairs: pairsFor(truth) }, ORIGIN));
+});
+
+test('groupPlacements moves a group into its sheet\'s first page the way a page is moved, and leaves unaligned groups out', async () => {
+  const { groupPlacements } = await import('./site-map-align.mjs');
+  const mk = (cluster, t, extra = {}) => shapeAlignment({ cluster, a: t.a, b: t.b, tx: t.tx, ty: t.ty, origin_lat: ORIGIN.lat, origin_lng: ORIGIN.lng, ...extra });
+  const A = mk('H1-A', truth);
+  const sheets = { H1: [{ page: 'H1-A' }, { page: 'H1-B' }] };
+  const detected = [{ cluster: 'H1-B', houses: ['H-33', 'H-34'] }, { cluster: 'H1-B', houses: ['H-38'] }, { cluster: 'H1-A', houses: ['H-23', 'H-24'] }];
+  const B = { a: 1, b: 0, tx: 5, ty: 6 };
+  const rows = [mk('H1-B', B, { group_key: 'H1-B:H-33', houses: ['H-33', 'H-34'] })];
+  const out = groupPlacements(sheets, [A], rows, detected);
+  assert.deepEqual(Object.keys(out).sort(), ['H-33', 'H-34']);
+  const direct = relativePlacement(A, mk('H1-B', B));
+  for (const k of ['scale', 'rotate', 'dx', 'dy']) assert.ok(Math.abs(out['H-33'][k] - direct[k]) < 1e-9, k);
+  assert.deepEqual(groupPlacements(sheets, [], rows, detected), {}); // no frame page alignment yet
+});

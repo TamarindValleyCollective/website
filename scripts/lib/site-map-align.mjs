@@ -14,6 +14,7 @@
 // how the member map joins H1-A and H1-B into one sheet without anyone guessing the offset (see mergeSheets in site-map.mjs).
 
 import { CLUSTER_IDS } from './site-map-edit.mjs';
+import { savedFor } from './site-map-groups.mjs';
 
 export const MIN_PAIRS = 3;
 const M_PER_DEG_LAT = 110540;
@@ -27,9 +28,11 @@ const isPoint = (p) => Array.isArray(p) && p.length === 2 && p.every((n) => isNu
 /**
  * Least-squares similarity from image points to plan points.
  * @param {{ image: number[], plan: number[] }[]} pairs
+ * @param {number} [lockedScale] plan units per metre to keep (a group of homes is the same size as every other; only its
+ *   turn and position are fitted), so two pairs are enough and a few close pairs cannot skew the size
  * @returns {{ a: number, b: number, tx: number, ty: number, scale: number, rotation: number, residuals: number[], rms: number } | null} null when it cannot be fitted
  */
-export function fitSimilarity(pairs) {
+export function fitSimilarity(pairs, lockedScale) {
   if (!Array.isArray(pairs) || pairs.length < 2) return null;
   const n = pairs.length;
   const mx = pairs.reduce((s, p) => s + p.image[0], 0) / n, my = pairs.reduce((s, p) => s + p.image[1], 0) / n;
@@ -43,7 +46,13 @@ export function fitSimilarity(pairs) {
     den += px * px + py * py;
   }
   if (den < 1e-9) return null; // all the image points are the same point
-  const a = num_re / den, b = num_im / den;
+  let a = num_re / den, b = num_im / den;
+  if (lockedScale !== undefined) {
+    const turn = Math.hypot(num_re, num_im);
+    if (!(lockedScale > 0) || turn < 1e-9) return null;
+    a = (lockedScale * num_re) / turn;
+    b = (lockedScale * num_im) / turn;
+  }
   const scale = Math.hypot(a, b);
   if (scale < 1e-9) return null;
   const tx = nx - (a * mx - b * my), ty = ny - (b * mx + a * my);
@@ -142,13 +151,17 @@ export function originOf(pairs) {
  * origin is the one the other saved pages use (so all pages share one frame), or, for the first page, the pairs' average.
  * @param {unknown} body
  * @param {{ lat: number, lng: number } | null} [origin]
- * `body.tune` (optional) is the hand fine-tune; the fit that comes back is the fine-tuned one, with the pairs' distances from it.
- * @returns {{ error: string } | { cluster: string, pairs: object[], origin: { lat: number, lng: number }, tune: typeof NO_TUNE, fit: NonNullable<ReturnType<typeof fitSimilarity>> }}
+ * `body.group` (optional, { houses }) makes it the alignment of a group of homes rather than a whole page; `body.scale` (optional)
+ * locks the size (plan units per metre) so only the turn and position are fitted. `body.tune` (optional) is the hand fine-tune; the fit that comes back is the fine-tuned one, with the pairs' distances from it.
+ * @returns {{ error: string } | { cluster: string, group: { key: string, houses: string[] } | null, lockedScale: number | null, pairs: object[], origin: { lat: number, lng: number }, tune: typeof NO_TUNE, fit: NonNullable<ReturnType<typeof fitSimilarity>> }}
  */
 export function validateAlignment(body, origin = null) {
   if (!body || typeof body !== 'object') return { error: 'Nothing to save.' };
   if (!CLUSTER_IDS.includes(body.cluster)) return { error: 'Pick a cluster.' };
-  if (!Array.isArray(body.pairs) || body.pairs.length < MIN_PAIRS) return { error: `Pair at least ${MIN_PAIRS} points.` };
+  const lockedScale = body.scale == null ? undefined : body.scale;
+  if (lockedScale !== undefined && !(isNum(lockedScale) && lockedScale >= 0.05 && lockedScale <= 20)) return { error: 'The locked size is not valid.' };
+  const needed = lockedScale === undefined ? MIN_PAIRS : 2;
+  if (!Array.isArray(body.pairs) || body.pairs.length < needed) return { error: `Pair at least ${needed} points.` };
   if (body.pairs.length > MAX_PAIRS) return { error: `Use at most ${MAX_PAIRS} pairs.` };
   const pairs = [];
   for (const p of body.pairs) {
@@ -159,8 +172,15 @@ export function validateAlignment(body, origin = null) {
   const frame = origin ?? originOf(pairs);
   const tune = parseTune(body.tune);
   if ('error' in tune) return { error: tune.error };
+  let group = null;
+  if (body.group != null) {
+    const houses = body.group.houses;
+    if (!Array.isArray(houses) || houses.length < 1 || houses.length > 40 || !houses.every((h) => typeof h === 'string' && /^H-\d{2}$/.test(h))) return { error: 'The group of homes is not valid.' };
+    const sorted = [...new Set(houses)].sort();
+    group = { key: `${body.cluster}:${sorted[0]}`, houses: sorted };
+  }
   const local = pairs.map((p) => ({ plan: p.plan, image: geoToLocal(frame, p.geo) }));
-  let fit = fitSimilarity(local);
+  let fit = fitSimilarity(local, lockedScale);
   if (!fit) return { error: 'These points cannot be fitted. Pick points that are apart from each other.' };
   if (isTuned(tune)) {
     const t = applyTune(fit, tune, pivotOf(pairs, frame));
@@ -168,7 +188,7 @@ export function validateAlignment(body, origin = null) {
     fit = { ...t, scale, rotation: (Math.atan2(t.b, t.a) * 180) / Math.PI, ...residualsFor(t, local) };
   }
   if (fit.scale < 0.05 || fit.scale > 20) return { error: 'These points give an unlikely scale. Check that each pair is the same spot.' };
-  return { cluster: body.cluster, pairs, origin: frame, tune, fit };
+  return { cluster: body.cluster, group, lockedScale: lockedScale ?? null, pairs, origin: frame, tune, fit };
 }
 
 /** The audit detail for a saved alignment: the cluster and the result, never anything personal.
@@ -181,11 +201,14 @@ export const auditAlignment = (cluster, fit, count, tune) => `${cluster}: ${coun
 
 /** A stored row as the pages and the merge use it. */
 export const shapeAlignment = (row) => ({
+  key: row.group_key ?? row.cluster,
   cluster: row.cluster,
+  houses: Array.isArray(row.houses) ? row.houses : null,
   a: Number(row.a), b: Number(row.b), tx: Number(row.tx), ty: Number(row.ty),
   scale: Math.hypot(Number(row.a), Number(row.b)),
   rotation: (Math.atan2(Number(row.b), Number(row.a)) * 180) / Math.PI,
   originLat: Number(row.origin_lat), originLng: Number(row.origin_lng),
+  lockedScale: row.locked_scale == null ? null : Number(row.locked_scale),
   rms: row.rms == null ? null : Number(row.rms),
   pairs: Array.isArray(row.pairs) ? row.pairs : [],
   updatedAt: row.updated_at ?? null,
@@ -230,6 +253,35 @@ export function sheetsFromAlignments(defaults, alignments) {
     if (!base || rest.some((p) => !by.get(p.page))) { out[sheet] = pages; continue; }
     const frame = { lat: base.originLat, lng: base.originLng };
     out[sheet] = [first, ...rest.map((p) => ({ page: p.page, ...relativePlacement(base, withOrigin(by.get(p.page), frame)) }))];
+  }
+  return out;
+}
+
+/**
+ * The placement each home gets from the alignment of its group, for mergeSheets: a group aligned to the same ground as its
+ * sheet's first page is moved into that page's coordinates the same way a whole page is. Homes whose group has no alignment
+ * (or whose sheet's first page has none) are left out, and so keep their page's placement.
+ * @param {Record<string, { page: string }[]>} sheets
+ * @param {ReturnType<typeof shapeAlignment>[]} pageAlignments
+ * @param {ReturnType<typeof shapeAlignment>[]} groupRows saved group alignments (with `houses`)
+ * @param {{ cluster: string, houses: string[] }[]} detected the groups as they are now (detectGroups)
+ * @returns {Record<string, { scale: number, rotate: number, dx: number, dy: number }>}
+ */
+export function groupPlacements(sheets, pageAlignments, groupRows, detected) {
+  /** @type {Record<string, { scale: number, rotate: number, dx: number, dy: number }>} */
+  const out = {};
+  const pages = new Map(pageAlignments.map((a) => [a.cluster, a]));
+  for (const list of Object.values(sheets)) {
+    const frame = pages.get(list[0].page);
+    if (!frame) continue;
+    const origin = { lat: frame.originLat, lng: frame.originLng };
+    const onSheet = new Set(list.map((p) => p.page));
+    for (const g of detected.filter((d) => onSheet.has(d.cluster))) {
+      const row = savedFor(g, groupRows.filter((r) => r.cluster === g.cluster && r.houses));
+      if (!row) continue;
+      const placement = relativePlacement(frame, withOrigin(row, origin));
+      for (const h of g.houses) out[h] = placement;
+    }
   }
   return out;
 }

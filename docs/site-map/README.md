@@ -15,3 +15,8 @@ The layout of the 52 homes on the 2023 site plan, fixed by hand on 2026-10-29 wi
   (migration 0095); the pages of a sheet are placed against each other from their fits to the same ground. Until both H1 pages
   are aligned, `SHEETS` holds the placement (set by laying the plan over a satellite screenshot by eye). No imagery is stored;
   the page needs the browser key `PUBLIC_GOOGLE_MAPS_API_KEY` (see `.env.example`).
+- Sub-clusters: homes that share walls (`scripts/lib/site-map-groups.mjs`) can be aligned on their own on the same page, with the size
+  held to the other homes' (`site_map_group_alignment`, migration 0096). A home and its plot outline then move with its group; the
+  plan's own lines stay with the page's alignment.
+- The member map's optional Satellite layer draws Google's live map under the plan using the sheet's fit to the ground (add
+  `https://members.tvc.farm/*` to the key's referrers).

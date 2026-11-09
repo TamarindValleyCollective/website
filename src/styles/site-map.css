@@ -179,3 +179,38 @@
   border-radius: 4px;
   background: var(--sm-plot);
 }
+
+/* ---- the optional Satellite layer of the member map: Google's live map under the plan ---- */
+.sm-gmap {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.sm-sat {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  z-index: 2;
+  transform: translateX(-50%);
+  background: var(--tvc-white);
+}
+
+.sm-sat[aria-pressed='true'] {
+  background: var(--tvc-green-dark);
+  color: var(--tvc-white);
+}
+
+/* The plan is drawn over the map: clear, with the plots faint and the plan's lines pale so they read on imagery. Taps go to the map
+   (the page finds the home from where the map was tapped). */
+.sm-stage.is-sat .sm-map {
+  position: relative;
+  z-index: 1;
+  background: transparent;
+  pointer-events: none;
+}
+
+.sm-stage.is-sat .sm-map * { pointer-events: none; }
+.sm-stage.is-sat .sm-plotfill { opacity: 0.4; }
+.sm-stage.is-sat .sm-plot { stroke: var(--tvc-orange-light); }
+.sm-stage.is-sat :is(.dir-map-tabs, .dir-map-key, .sm-zoom, .dir-map-find, .sm-pop) { z-index: 2; }
