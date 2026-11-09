@@ -7967,8 +7967,9 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         return h('div', 'dir-filter', undefined, h('span', 'dir-filter-label', label), group);
       };
       const kinds = [...new Set(list.map((x) => kindOf(x.unitType)).filter((t): t is string => !!t))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+      // In the Map layout the plan's own cluster tabs (with their match counts) are the cluster choice, so the row is not repeated.
       return h('div', 'dir-filters', undefined,
-        row('Cluster', cluster, (v) => { cluster = v; }, ['H1', 'H2']),
+        mode === 'map' && siteMap ? null : row('Cluster', cluster, (v) => { cluster = v; }, ['H1', 'H2']),
         kinds.length ? row('Bedrooms', unitType, (v) => { unitType = v; }, kinds) : null);
     }
 
@@ -8095,6 +8096,8 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     let laidOut = '';
 
     function draw() {
+      // The Cluster filter is not offered in the Map layout (the plan's tabs do that), so one left over from another layout is dropped.
+      if (mode === 'map' && siteMap) cluster = null;
       const shown = list.filter((hh) => (!onlyStories || hh.hasStory) && (!cluster || hh.cluster === cluster) && (!unitType || kindOf(hh.unitType) === unitType) && (!query || [hh.farmUnit, hh.houseNo ?? '', hh.cluster ?? '', ...hh.people.map((p) => p.name)].join(' ').toLowerCase().includes(query)));
       // The member's own household first (the sort is stable, so everyone else stays in house-number order).
       shown.sort((a, b) => Number(b.people.some((p) => p.isYou)) - Number(a.people.some((p) => p.isYou)));
