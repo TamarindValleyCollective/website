@@ -373,24 +373,41 @@ function demoFinanceVerify(accountId: string, body: any) {
 // migration 0075 appended them) and the frozen layout, with no households. An alignment you save lives only until the page is reloaded. (The satellite map itself is Google's and needs the
 // PUBLIC_GOOGLE_MAPS_API_KEY browser key; the demo fakes nothing of it.)
 const DEMO_PAGES: Record<string, string> = { H1A: 'H1-A', H1B: 'H1-B', H2: 'H2' };
-const demoMapState: { alignments: any[]; groups: any[] } = { alignments: [], groups: [] };
+const demoMapState: { alignments: any[]; groups: any[]; lines: any[]; units: any[] | null } = { alignments: [], groups: [], lines: [], units: null };
+// Local preview only: if public/dev-only/align-seed.json exists (gitignored: it holds the farm's real placements), the Map pages start
+// from it instead of empty, so the page can be tried on the real farm. Nothing is ever saved to it.
+let seedReady: Promise<void> = Promise.resolve();
+function loadAlignSeed() {
+  seedReady = fetch('/dev-only/align-seed.json').then((r) => (r.ok && (r.headers.get('content-type') ?? '').includes('json') ? r.json() : null)).then((j) => {
+    if (!j) return;
+    demoMapState.alignments = (j.alignments ?? []).map(shapeAlignment);
+    demoMapState.groups = (j.groups ?? []).map(shapeAlignment);
+    demoMapState.lines = (j.lines ?? []).map(shapeAlignment);
+    if (Array.isArray(j.units) && j.units.length) demoMapState.units = j.units; // the live layout (homes added and removed since the frozen file)
+  }).catch(() => { /* no seed: start empty */ });
+}
 function demoSiteMap(path: string, method: string, body: any): { status: number; data: unknown } | null {
   if (path === '/api/site-map-admin/overview') {
     const lines = planLines as Record<string, { vb: number[]; plot: string }>;
     const homes = (frozenLayout as { baseSize: Record<string, number>; homes: Record<string, any> });
-    const units = Object.entries(homes.homes).map(([houseNo, h]) => ({ houseNo, cluster: DEMO_PAGES[h.cluster], shape: h.type, x: h.x, y: h.y, rotation: h.rotation, mirrorX: h.mirrorX, mirrorY: h.mirrorY, status: 'vacant', farmUnit: null, owners: [], otherMembers: 0, recordType: null, bhk: '', detail: '', plotSqFt: null, gaps: [], version: 'demo', people: [] }));
-    return { status: 200, data: { clusters: Object.keys(DEMO_PAGES).map((k) => ({ id: DEMO_PAGES[k], baseSize: homes.baseSize[k], viewBox: lines[k].vb, plot: `${lines[k].plot} ${Object.values((plotOutlines as Record<string, Record<string, string>>)[k] ?? {}).join(' ')}` })), units, notOnMap: [], summary: { homes: units.length, assigned: 0, vacant: units.length, mismatch: 0, noPlotSize: 0 }, namesMasked: false, canEdit: true } };
+    const layout = demoMapState.units ?? Object.entries(homes.homes).map(([houseNo, h]) => ({ house_no: houseNo, cluster: DEMO_PAGES[h.cluster], shape: h.type, x: h.x, y: h.y, rotation: h.rotation, mirror_x: h.mirrorX, mirror_y: h.mirrorY }));
+    const units = layout.map((h: any) => ({ houseNo: h.house_no, cluster: h.cluster, shape: h.shape, x: h.x, y: h.y, rotation: h.rotation, mirrorX: h.mirror_x, mirrorY: h.mirror_y, status: 'vacant', farmUnit: null, owners: [], otherMembers: 0, recordType: null, bhk: '', detail: '', plotSqFt: null, gaps: [], version: 'demo', people: [] }));
+    const clustersOut = Object.keys(DEMO_PAGES).map((k) => ({ id: DEMO_PAGES[k], baseSize: homes.baseSize[k], viewBox: lines[k].vb, plot: `${lines[k].plot} ${Object.values((plotOutlines as Record<string, Record<string, string>>)[k] ?? {}).join(' ')}` }));
+    return { status: 200, data: { clusters: clustersOut, units, notOnMap: [], summary: { homes: units.length, assigned: 0, vacant: units.length, mismatch: 0, noPlotSize: 0 }, namesMasked: false, canEdit: true } };
   }
-  if (path === '/api/site-map-admin/alignment' && method === 'GET') return { status: 200, data: { alignments: demoMapState.alignments, groups: demoMapState.groups, canEdit: true } };
+  if (path === '/api/site-map-admin/alignment' && method === 'GET') return { status: 200, data: { alignments: demoMapState.alignments, groups: demoMapState.groups, lines: demoMapState.lines, canEdit: true } };
   if (path === '/api/site-map-admin/alignment' && method === 'POST') {
+    if (body?.clear && body.lineGroupKey) { demoMapState.lines = demoMapState.lines.filter((a) => a.key !== body.lineGroupKey); return { status: 200, data: { ok: true } }; }
     if (body?.clear && body.groupKey) { demoMapState.groups = demoMapState.groups.filter((a) => a.key !== body.groupKey); return { status: 200, data: { ok: true } }; }
     if (body?.clear) { demoMapState.alignments = demoMapState.alignments.filter((a) => a.cluster !== body.cluster); return { status: 200, data: { ok: true } }; }
-    const other = [...demoMapState.alignments, ...demoMapState.groups].find((a) => a.key !== (body?.group ? `${body.cluster}:${[...(body.group.houses ?? [])].sort()[0]}` : body?.cluster));
-    const checked = validateAlignment(body, other ? { lat: other.originLat, lng: other.originLng } : null);
+    const other = [...demoMapState.alignments, ...demoMapState.groups, ...demoMapState.lines].find((a) => a.key !== (body?.group ? `${body.cluster}:${[...(body.group.houses ?? [])].sort()[0]}` : body?.cluster));
+    const first = !other && body?.direct && typeof body.origin?.lat === 'number' && typeof body.origin?.lng === 'number' ? { lat: body.origin.lat, lng: body.origin.lng } : null;
+    const checked = validateAlignment(body, other ? { lat: other.originLat, lng: other.originLng } : first);
     if ('error' in checked) return { status: 400, data: { error: checked.error } };
     const { cluster, pairs, fit, origin, group, lockedScale } = checked;
-    const row = shapeAlignment({ cluster, group_key: group?.key, houses: group?.houses, locked_scale: lockedScale, a: fit.a, b: fit.b, tx: fit.tx, ty: fit.ty, origin_lat: origin.lat, origin_lng: origin.lng, rms: fit.rms, pairs });
-    if (group) demoMapState.groups = [...demoMapState.groups.filter((a) => a.key !== group.key), row];
+    const row = shapeAlignment({ cluster, group_key: body.lines && !group ? `${cluster}:other` : group?.key, houses: group?.houses, locked_scale: lockedScale, a: fit.a, b: fit.b, tx: fit.tx, ty: fit.ty, origin_lat: origin.lat, origin_lng: origin.lng, rms: fit.rms, pairs });
+    if (body.lines) demoMapState.lines = [...demoMapState.lines.filter((a) => a.key !== row.key), row];
+    else if (group) demoMapState.groups = [...demoMapState.groups.filter((a) => a.key !== group.key), row];
     else demoMapState.alignments = [...demoMapState.alignments.filter((a) => a.cluster !== cluster), row];
     return { status: 200, data: { ok: true } };
   }
@@ -398,6 +415,7 @@ function demoSiteMap(path: string, method: string, body: any): { status: number;
 }
 
 export function installStaffDemo(tokenKey: string, kind: string): void {
+  loadAlignSeed();
   // A token that only decodeTokenEmail() reads; the server never sees it because /api/staff-me is faked.
   const token = `${b64url({ alg: 'none' })}.${b64url({ email: 'demo@tvc.farm' })}.demo`;
   try {
@@ -427,10 +445,13 @@ export function installStaffDemo(tokenKey: string, kind: string): void {
     if (path === '/api/accommodation-admin/change-requests' && (init?.method ?? 'GET') === 'GET') return reply(demoChangeRequests());
     if (path === '/api/accommodation-admin/change-requests/decide') return reply({ ok: true });
     if (path.startsWith('/api/site-map-admin/')) {
+      // (the seed, if any, has to be in before the Map pages read their state)
       const method = (init?.method ?? 'GET').toUpperCase();
       const body = (() => { try { return JSON.parse(String(init?.body ?? '{}')); } catch { return {}; } })();
-      const done = demoSiteMap(path, method, body);
-      if (done) return Promise.resolve(new Response(JSON.stringify(done.data), { status: done.status, headers: { 'content-type': 'application/json' } }));
+      return seedReady.then(() => {
+        const done = demoSiteMap(path, method, body);
+        return done ? new Response(JSON.stringify(done.data), { status: done.status, headers: { 'content-type': 'application/json' } }) : realFetch(input, init);
+      });
     }
     if (path === '/api/units-admin/overview') return reply(demoUnits());
     if (path === '/api/finance-admin/parties' && (init?.method ?? 'GET') === 'GET') return reply(demoFinanceParties());

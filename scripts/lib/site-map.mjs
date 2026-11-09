@@ -129,6 +129,53 @@ const insidePoly = (pts, px, py) => {
 };
 
 /**
+ * A page's open lines, split by what they bound. A stretch that lies along a home's plot outline (within a few plan units, running the
+ * same way) belongs to that home's group (`groupOfHome[house]`, else the home itself, "h:H-40"); every other stretch (roads, the site
+ * boundary) is "other". Lines are cut where the owner changes. Used by the member map and the admin Align page, so both see the same
+ * groups of lines.
+ * @param {string} plotPath
+ * @param {{ houseNo?: string, x: number, y: number }[]} units the homes of this plan page
+ * @param {Record<string, string>} [groupOfHome]
+ * @returns {Map<string, [number, number][][]>} key -> polylines in the plan page's coordinates
+ */
+export function assignLines(plotPath, units, groupOfHome = {}) {
+  const { lines, closed } = splitPlot(plotPath);
+  const owned = [];
+  for (const sub of closed) {
+    const pts = pointsOf(sub);
+    if (pts.length < 3) continue;
+    const cx = pts.reduce((sum, q) => sum + q[0], 0) / pts.length, cy = pts.reduce((sum, q) => sum + q[1], 0) / pts.length;
+    const owner = units.filter((u) => u.houseNo && insidePoly(pts, u.x, u.y)).sort((a, b) => Math.hypot(a.x - cx, a.y - cy) - Math.hypot(b.x - cx, b.y - cy))[0];
+    if (owner) owned.push({ pts, key: groupOfHome[owner.houseNo] ?? `h:${owner.houseNo}` });
+  }
+  const keyOfStretch = (a, b) => {
+    const mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+    for (const o of owned) for (let k = 0; k < o.pts.length; k++) {
+      const e1 = o.pts[k], e2 = o.pts[(k + 1) % o.pts.length];
+      if (distToSegment(mid, e1, e2) <= 3 && parallelSegments(a, b, e1, e2)) return o.key;
+    }
+    return 'other';
+  };
+  const out = new Map();
+  for (const sub of lines) {
+    const pts = pointsOf(sub);
+    let run = null;
+    const flush = () => { if (run && run.pts.length > 1) { if (!out.has(run.key)) out.set(run.key, []); out.get(run.key).push(run.pts); } run = null; };
+    for (let k = 0; k + 1 < pts.length; k++) {
+      const key = keyOfStretch(pts[k], pts[k + 1]);
+      if (!run || run.key !== key) { flush(); run = { key, pts: [pts[k]] }; }
+      run.pts.push(pts[k + 1]);
+    }
+    flush();
+  }
+  return out;
+}
+/** Polylines as path data. */
+export const pathOfLines = (polys) => polys.map((pts) => `M${pts.map(([x, y]) => `${x} ${y}`).join(' L')}`).join(' ');
+
+/** @typedef {{ scale: number, rotate?: number, dx: number, dy: number }} Placement */
+
+/**
  * Combine the pages of each sheet into one cluster: plot lines, view box and homes moved into the first page's coordinates.
  * A home can also have a placement of its own (`homes`, from the alignment of the group of homes it shares walls with): the
  * home and its plot outline then move with that placement instead of the page's, so a group can sit differently on the ground
@@ -136,7 +183,10 @@ const insidePoly = (pts, px, py) => {
  * @param {{ id: string, baseSize: number, viewBox: number[], plot: string }[]} clusters as from shapeClusters
  * @param {{ houseNo?: string, cluster: string, x: number, y: number, rotation?: number }[]} units as from buildSiteMap
  * @param {Record<string, { page: string, scale: number, rotate?: number, dx: number, dy: number }[]>} [sheets] the placements to use (the defaults, or those from the satellite alignments)
- * @param {{ homes?: Record<string, { scale: number, rotate?: number, dx: number, dy: number }> }} [extra]
+ * @param {{ homes?: Record<string, Placement>, groupOfHome?: Record<string, string>, lineGroups?: Record<string, Record<string, Placement>> }} [extra]
+ *   `groupOfHome` says which group of homes each home is in; `lineGroups` gives a group's lines (the boundary lines along its homes' plots, or
+ *   "other" for the roads and site boundary) a placement of their own, per plan page, because the lines can sit differently on the ground from the
+ *   homes. A group's lines without one follow the group's homes (so a plot is drawn once), and "other" follows the page.
  */
 export function mergeSheets(clusters, units, sheets = SHEETS, extra = {}) {
   const pageOf = (page) => Object.values(sheets).flat().find((p) => p.page === page);
@@ -160,8 +210,8 @@ export function mergeSheets(clusters, units, sheets = SHEETS, extra = {}) {
     const box = [Math.min(...corners.map((p) => p[0])), Math.min(...corners.map((p) => p[1])), Math.max(...corners.map((p) => p[0])), Math.max(...corners.map((p) => p[1]))];
     // Each home's plot outline goes with the home; everything else in the plot path goes with the page.
     const here = units.filter((u) => u.cluster === c.id);
-    const { lines, closed } = splitPlot(c.plot);
-    const withPage = [], withHomes = [], owned = [];
+    const { closed } = splitPlot(c.plot);
+    const withPage = [], withHomes = [];
     for (const sub of closed) {
       const pts = pointsOf(sub);
       const cx = pts.reduce((sum, q) => sum + q[0], 0) / pts.length, cy = pts.reduce((sum, q) => sum + q[1], 0) / pts.length;
@@ -170,34 +220,16 @@ export function mergeSheets(clusters, units, sheets = SHEETS, extra = {}) {
       const own = homePlacement(owner);
       const moveSub = movePath(sub, own);
       withHomes.push(moveSub);
-      owned.push({ pts, own });
       for (const q of pointsOf(moveSub)) (moved[sheet] ??= []).push(q);
     }
-    // The plan's own lines: a stretch that lies along a home's plot outline is that plot's boundary and moves with the home (so a
-    // plot is drawn once, not twice a little apart); everything else (roads, site boundaries) stays with the page. Only matters
-    // where a home's placement differs from the page's.
-    const apart = owned.filter((o) => o.own !== t);
-    const placementOfStretch = (a, b) => {
-      if (!apart.length) return t;
-      const mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
-      for (const o of apart) {
-        for (let k = 0; k < o.pts.length; k++) {
-          const e1 = o.pts[k], e2 = o.pts[(k + 1) % o.pts.length];
-          if (distToSegment(mid, e1, e2) <= 3 && parallelSegments(a, b, e1, e2)) return o.own;
-        }
-      }
-      return t;
-    };
-    for (const sub of lines) {
-      const pts = pointsOf(sub);
-      let run = null;
-      const flush = () => { if (run && run.pts.length > 1) withPage.push(movePath(`M${run.pts.map(([qx, qy]) => `${qx} ${qy}`).join(' L')}`, run.p)); run = null; };
-      for (let k = 0; k + 1 < pts.length; k++) {
-        const p = placementOfStretch(pts[k], pts[k + 1]);
-        if (!run || run.p !== p) { flush(); run = { p, pts: [pts[k]] }; }
-        run.pts.push(pts[k + 1]);
-      }
-      flush();
+    // The plan's own lines, group by group (assignLines): a group's lines have a placement of their own if they have been placed, else they follow
+    // their homes' group (so a plot is drawn once, not twice a little apart); "other" (roads, site boundaries) follows the page.
+    const repHome = {};
+    for (const u of here) repHome[extra.groupOfHome?.[u.houseNo] ?? `h:${u.houseNo}`] ??= u;
+    for (const [key, polys] of assignLines(c.plot, here, extra.groupOfHome ?? {})) {
+      const own = extra.lineGroups?.[c.id]?.[key];
+      const placement = own ?? (key === 'other' ? t : repHome[key] ? homePlacement(repHome[key]) : t);
+      withPage.push(movePath(pathOfLines(polys), placement));
     }
     const plot = [...withPage, ...withHomes].filter(Boolean).join(' ');
     const have = out.find((o) => o.id === sheet);

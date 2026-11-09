@@ -175,8 +175,9 @@ test('a group dragged into place is saved as a direct fit, only for a group and 
   assert.equal(ok.direct, true);
   assert.deepEqual([ok.fit.a, ok.fit.b, ok.fit.tx, ok.fit.ty], [4, 0.5, 10, -20]);
   assert.equal(ok.pairs.length, 0);
-  assert.ok('error' in validateAlignment({ ...body, group: undefined }, ORIGIN)); // a whole page cannot be dragged
-  assert.ok('error' in validateAlignment(body, null)); // no frame yet
+  const page = validateAlignment({ cluster: 'H1-B', direct, pairs: [] }, ORIGIN); // a whole page can be placed by dragging too
+  assert.ok(!('error' in page) && page.group === null && page.direct === true);
+  assert.ok('error' in validateAlignment(body, null)); // no reference point yet
   assert.ok('error' in validateAlignment({ ...body, direct: { ...direct, a: 'x' } }, ORIGIN));
 });
 
@@ -195,4 +196,46 @@ test('snapShift brings a group\'s wall onto the neighbour\'s, in metres', async 
   assert.ok(Math.abs(s.before - 3) < 1e-3);
   // Groups that do not touch have nothing to snap to.
   assert.equal(snapShift({ mine, theirs: [[[300, 0], [400, 0], [400, 60], [300, 60]]], fitMine, fitTheirs }), null);
+});
+
+test('lineGroupPlacements gives a group\'s lines (and a page\'s other lines) their own placement, like a group of homes', async () => {
+  const { lineGroupPlacements } = await import('./site-map-align.mjs');
+  const mk = (cluster, t, houses = null) => shapeAlignment({ cluster, group_key: houses ? `${cluster}:${houses[0]}` : undefined, houses, a: t.a, b: t.b, tx: t.tx, ty: t.ty, origin_lat: ORIGIN.lat, origin_lng: ORIGIN.lng, pairs: [] });
+  const sheets = { All: [{ page: 'H1-A' }, { page: 'H1-B' }] };
+  const A = mk('H1-A', truth), B = { a: 1, b: 0, tx: 5, ty: 6 };
+  const detected = [{ key: 'H1-B:H-35', cluster: 'H1-B', houses: ['H-35', 'H-36'] }, { key: 'H1-B:H-38', cluster: 'H1-B', houses: ['H-38'] }];
+  const rows = [mk('H1-B', B, ['H-35', 'H-36']), mk('H1-B', B)]; // the lines of 35-36, and the page's other lines
+  const out = lineGroupPlacements(sheets, [A], rows, detected);
+  assert.deepEqual(Object.keys(out['H1-B']).sort(), ['H1-B:H-35', 'other']);
+  const direct = relativePlacement(A, mk('H1-B', B));
+  for (const k of ['scale', 'rotate', 'dx', 'dy']) assert.ok(Math.abs(out['H1-B'].other[k] - direct[k]) < 1e-9, k);
+  assert.deepEqual(lineGroupPlacements(sheets, [], rows, detected), {}); // no frame page alignment yet
+});
+
+test('snapToLines lays a group\'s plot walls on the nearby parallel plan line, and ignores far or crossing lines', async () => {
+  const { snapToLines } = await import('./site-map-align.mjs');
+  const fit = { a: 2, b: 0, tx: 0, ty: 0 }; // 2 plan units per metre, no turn
+  // A 20 m x 20 m plot (40 x 40 plan units) whose right wall (x = 40) should lie on a vertical line at x = 34 (3 m west of it).
+  const mine = [[[0, 0], [40, 0], [40, 40], [0, 40]]];
+  const lines = [[[34, -10], [34, 60]]];
+  const set = (polys) => [{ polys, fit }];
+  const s = snapToLines({ mine, lines: set(lines), fitMine: fit });
+  assert.ok(Math.abs(s.east + 3) < 1e-3 && Math.abs(s.north) < 1e-3, JSON.stringify(s)); // move 3 m west
+  assert.equal(s.walls, 1);
+  // A line too far (over 6 m), or crossing the wall, is not a boundary of this plot.
+  assert.equal(snapToLines({ mine, lines: set([[[0, -60], [40, -60]]]), fitMine: fit }), null);
+  assert.equal(snapToLines({ mine, lines: set([[[20, -10], [20, 60]]]), fitMine: fit }), null); // 10 m away
+  assert.equal(snapToLines({ mine, lines: set([[[30, 0], [60, 40]]]), fitMine: fit }), null); // not parallel
+});
+
+test('walls that are nearly parallel but at different offsets do not throw the group across the farm', async () => {
+  const { snapToLines } = await import('./site-map-align.mjs');
+  const fit = { a: 2, b: 0, tx: 0, ty: 0 };
+  // Two plots side by side; their (nearly vertical) walls match two lines 5 degrees apart, one 3 m west of its wall and one 3 m east of the
+  // other. A naive least-squares solution is ~30 m off along the weakly constrained direction; the answer must stay a few metres.
+  const mine = [[[0, 0], [40, 0], [40, 40], [0, 40]], [[100, 0], [140, 0], [140, 40], [100, 40]]];
+  const t = Math.tan((5 * Math.PI) / 180);
+  const lines = [[[34, -10], [34 + 70 * t, 60]], [[146, -10], [146 + 70 * t, 60]]];
+  const s = snapToLines({ mine, lines: [{ polys: lines, fit }], fitMine: fit });
+  assert.ok(Math.hypot(s.east, s.north) < 6, JSON.stringify(s));
 });
