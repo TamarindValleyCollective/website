@@ -270,3 +270,20 @@ test('a group of homes has its own placement, and its plot outlines move with it
   const [, vy, , vh] = out.clusters[0].viewBox;
   assert.ok(vy + vh >= 320);
 });
+
+test('the plan\'s own plot-boundary lines follow their home\'s group, so a plot is drawn once; roads stay with the page', async () => {
+  const { mergeSheets } = await import('./site-map.mjs');
+  const sheets = { H1: [{ page: 'H1-A', scale: 1, rotate: 0, dx: 0, dy: 0 }, { page: 'H1-B', scale: 1, rotate: 0, dx: 100, dy: 0 }] };
+  // The plan's lines: a road, H-40's top boundary (lies along its outline), H-41's bottom boundary; and each home's closed outline.
+  const plot = 'M0 50 L200 50 M0 0 L20 0 M40 20 L60 20 M0 0 L20 0 L20 20 L0 20 Z M40 0 L60 0 L60 20 L40 20 Z';
+  const clusters = [{ id: 'H1-A', baseSize: 1.63, viewBox: [0, 0, 10, 10], plot: 'M0 0 L1 1' }, { id: 'H1-B', baseSize: 1.8, viewBox: [0, 0, 200, 100], plot }];
+  const units = [{ houseNo: 'H-40', cluster: 'H1-B', x: 10, y: 10, rotation: 0 }, { houseNo: 'H-41', cluster: 'H1-B', x: 50, y: 10, rotation: 0 }];
+  const turned = { scale: 1, rotate: 90, dx: 0, dy: 300 };
+  const out = mergeSheets(clusters, units, sheets, { homes: { 'H-40': turned } }).clusters[0].plot;
+  assert.match(out, /M0 300 L0 320/); // H-40's boundary moved with H-40's group, like its outline
+  assert.match(out, /M100 50 L300 50/); // the road stayed with the page
+  assert.match(out, /M140 20 L160 20/); // H-41 has no placement of its own: its boundary is the page's
+  assert.doesNotMatch(out, /M100 0 L120 0/); // and H-40's boundary is not also drawn where the page puts it
+  // With no group placements nothing is split: the page's lines move as one.
+  assert.match(mergeSheets(clusters, units, sheets).clusters[0].plot, /M100 0 L120 0/);
+});

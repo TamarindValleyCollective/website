@@ -105,6 +105,17 @@ function splitPlot(plot) {
   return { lines, closed };
 }
 const pointsOf = (sub) => { const n = (sub.match(/-?\d+(?:\.\d+)?/g) || []).map(Number); const pts = []; for (let i = 0; i + 1 < n.length; i += 2) pts.push([n[i], n[i + 1]]); return pts; };
+// How far a point is from a segment, and whether two segments run the same way (within `maxDeg` degrees).
+const distToSegment = (p, a, b) => {
+  const dx = b[0] - a[0], dy = b[1] - a[1], len2 = dx * dx + dy * dy;
+  const t = len2 < 1e-12 ? 0 : Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / len2));
+  return Math.hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy));
+};
+const parallelSegments = (a, b, c, d, maxDeg = 5) => {
+  const l1 = Math.hypot(b[0] - a[0], b[1] - a[1]), l2 = Math.hypot(d[0] - c[0], d[1] - c[1]);
+  if (l1 < 1e-9 || l2 < 1e-9) return false;
+  return Math.abs((b[0] - a[0]) * (d[1] - c[1]) - (b[1] - a[1]) * (d[0] - c[0])) / (l1 * l2) <= Math.sin((maxDeg * Math.PI) / 180);
+};
 const insidePoly = (pts, px, py) => {
   let inside = false;
   for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
@@ -147,18 +158,45 @@ export function mergeSheets(clusters, units, sheets = SHEETS, extra = {}) {
     // Each home's plot outline goes with the home; everything else in the plot path goes with the page.
     const here = units.filter((u) => u.cluster === c.id);
     const { lines, closed } = splitPlot(c.plot);
-    const withPage = [...lines], withHomes = [];
+    const withPage = [], withHomes = [], owned = [];
     for (const sub of closed) {
       const pts = pointsOf(sub);
       const cx = pts.reduce((sum, q) => sum + q[0], 0) / pts.length, cy = pts.reduce((sum, q) => sum + q[1], 0) / pts.length;
       const owner = here.filter((u) => u.houseNo && insidePoly(pts, u.x, u.y)).sort((a, b) => Math.hypot(a.x - cx, a.y - cy) - Math.hypot(b.x - cx, b.y - cy))[0];
-      if (!owner) { withPage.push(sub); continue; }
+      if (!owner) { withPage.push(movePath(sub, t)); continue; }
       const own = homePlacement(owner);
       const moveSub = movePath(sub, own);
       withHomes.push(moveSub);
+      owned.push({ pts, own });
       for (const q of pointsOf(moveSub)) (moved[sheet] ??= []).push(q);
     }
-    const plot = [movePath(withPage.join(' '), t), ...withHomes].filter(Boolean).join(' ');
+    // The plan's own lines: a stretch that lies along a home's plot outline is that plot's boundary and moves with the home (so a
+    // plot is drawn once, not twice a little apart); everything else (roads, site boundaries) stays with the page. Only matters
+    // where a home's placement differs from the page's.
+    const apart = owned.filter((o) => o.own !== t);
+    const placementOfStretch = (a, b) => {
+      if (!apart.length) return t;
+      const mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+      for (const o of apart) {
+        for (let k = 0; k < o.pts.length; k++) {
+          const e1 = o.pts[k], e2 = o.pts[(k + 1) % o.pts.length];
+          if (distToSegment(mid, e1, e2) <= 3 && parallelSegments(a, b, e1, e2)) return o.own;
+        }
+      }
+      return t;
+    };
+    for (const sub of lines) {
+      const pts = pointsOf(sub);
+      let run = null;
+      const flush = () => { if (run && run.pts.length > 1) withPage.push(movePath(`M${run.pts.map(([qx, qy]) => `${qx} ${qy}`).join(' L')}`, run.p)); run = null; };
+      for (let k = 0; k + 1 < pts.length; k++) {
+        const p = placementOfStretch(pts[k], pts[k + 1]);
+        if (!run || run.p !== p) { flush(); run = { p, pts: [pts[k]] }; }
+        run.pts.push(pts[k + 1]);
+      }
+      flush();
+    }
+    const plot = [...withPage, ...withHomes].filter(Boolean).join(' ');
     const have = out.find((o) => o.id === sheet);
     if (!have) { out.push({ id: sheet, baseSize: c.baseSize, viewBox: [round2(box[0]), round2(box[1]), round2(box[2] - box[0]), round2(box[3] - box[1])], plot }); continue; }
     const [hx, hy, hw, hh] = have.viewBox;

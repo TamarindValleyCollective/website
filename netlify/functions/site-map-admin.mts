@@ -24,7 +24,7 @@ import { roleHasCapability } from './lib/staff-registry';
 import { restHeaders } from '../../scripts/lib/supabase.mjs';
 import { buildAdminSiteMap, shapeClusters } from '../../scripts/lib/site-map.mjs';
 import { auditDetail, validateEdit, CLUSTER_IDS } from '../../scripts/lib/site-map-edit.mjs';
-import { auditAlignment, shapeAlignment, validateAlignment } from '../../scripts/lib/site-map-align.mjs';
+import { auditAlignment, planToLocal, shapeAlignment, validateAlignment, withOrigin } from '../../scripts/lib/site-map-align.mjs';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
@@ -170,6 +170,22 @@ async function handleAlignmentWrite(req: Request): Promise<Response> {
   const checked = validateAlignment(body, origin);
   if ('error' in checked) return jsonResponse({ error: checked.error }, 400);
   const { cluster, pairs, fit, tune, group } = checked;
+  if (checked.direct && group) {
+    // A group placed by dragging starts from its page and is only moved, turned and slightly resized: it must still be near what the
+    // page's own alignment says (about 150 m and 20% in size), so a typo or a bad drag cannot throw a group across the farm.
+    const [pageRows, onPage] = await Promise.all([
+      select('site_map_alignment', `select=${ALIGNMENT_COLUMNS}&cluster=eq.${encodeURIComponent(cluster)}`),
+      select('site_map_units', `select=house_no,x,y&cluster=eq.${encodeURIComponent(cluster)}`),
+    ]);
+    if (!pageRows[0]) return jsonResponse({ error: 'Align the whole plan page first: a group starts from its page.' }, 400);
+    const page = withOrigin(shapeAlignment(pageRows[0]), checked.origin);
+    const mine = onPage.filter((u: any) => group.houses.includes(u.house_no));
+    if (!mine.length) return jsonResponse({ error: 'A home in that group is not on this plan page. Reload and try again.' }, 400);
+    const centre: [number, number] = [mine.reduce((sum: number, u: any) => sum + Number(u.x), 0) / mine.length, mine.reduce((sum: number, u: any) => sum + Number(u.y), 0) / mine.length];
+    const here = planToLocal(fit, centre), there = planToLocal(page, centre);
+    const ratio = fit.scale / page.scale;
+    if (Math.hypot(here[0] - there[0], here[1] - there[1]) > 150 || ratio < 0.8 || ratio > 1.25) return jsonResponse({ error: 'That placement is too far from where the page puts the group. Undo the last move and try again.' }, 400);
+  }
   if (group) {
     // Every home of the group must be on the map, on this plan page.
     const onPage = await select('site_map_units', `select=house_no&cluster=eq.${encodeURIComponent(cluster)}`);
