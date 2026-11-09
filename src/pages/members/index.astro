@@ -7352,6 +7352,9 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     let gmap: any = null;
     let satScale = 1;
     let fromMap = false;
+    // Google can refuse the key after the map has loaded (a site the key does not allow, no billing): the layer then leaves itself
+    // and the switch goes, rather than leaving a blank map.
+    let satFailed = false;
     const groundOf = (id: string): Ground | null => data.ground?.[id] ?? null;
     const originOf = (g: Ground) => ({ lat: g.originLat, lng: g.originLng });
     const geoOf = (g: Ground, x: number, y: number): [number, number] => localToGeo(originOf(g), planToLocal(g, [x, y]) as [number, number]) as [number, number];
@@ -7412,6 +7415,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       if ((window as any).google?.maps?.Map) return Promise.resolve();
       return new Promise((res, rej) => {
         (window as any).__tvcMapsReady = () => res();
+        (window as any).gm_authFailure = () => { satFailed = true; void setSat(false); toast('The satellite map is not available right now. The plan is shown without it.'); };
         const el = document.createElement('script');
         el.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(MAPS_KEY)}&v=weekly&callback=__tvcMapsReady`;
         el.async = true;
@@ -7439,9 +7443,9 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       if (near) pick(near); else if (selected) pick(null);
     }
     async function setSat(on: boolean) {
-      if (on && !(MAPS_KEY && groundOf(clusterId))) return;
+      if (on && (satFailed || !(MAPS_KEY && groundOf(clusterId)))) return;
       if (on && !gmap) {
-        try { await loadGoogleMaps(); } catch { toast('The satellite map could not be loaded.'); return; }
+        try { await loadGoogleMaps(); } catch { satFailed = true; toast('The satellite map could not be loaded.'); paint(); return; }
         gdiv.hidden = false;
         gmap = new (window as any).google.maps.Map(gdiv, { mapTypeId: 'satellite', tilt: 0, center: { lat: 20, lng: 78 }, zoom: 3, disableDefaultUI: true, gestureHandling: 'greedy', clickableIcons: false, maxZoom: 21, keyboardShortcuts: false });
         gmap.addListener('bounds_changed', () => syncSat());
@@ -7486,7 +7490,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       const c = clusterOf(clusterId);
       // The Satellite switch is offered where the sheet has a place on the ground (and the browser key is set); a sheet without one
       // leaves the layer.
-      satBtn.hidden = !(MAPS_KEY && groundOf(clusterId));
+      satBtn.hidden = !(MAPS_KEY && groundOf(clusterId)) || satFailed;
       if (satOn && !groundOf(clusterId)) { satOn = false; stage.classList.remove('is-sat'); gdiv.hidden = true; satBtn.setAttribute('aria-pressed', 'false'); world.removeAttribute('transform'); }
       if (satOn && gmap && !fromMap) viewToMap();
       if (satOn) syncSat(); else svg.setAttribute('viewBox', vb.join(' '));
