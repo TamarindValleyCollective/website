@@ -9,7 +9,8 @@
 import { requireMember } from './lib/member-access';
 import { privacyNoticeRequired } from '../../scripts/lib/member-privacy.mjs';
 import { restHeaders } from '../../scripts/lib/supabase.mjs';
-import { buildSiteMap, mergeSheets, shapeClusters } from '../../scripts/lib/site-map.mjs';
+import { buildSiteMap, mergeSheets, shapeClusters, SHEETS } from '../../scripts/lib/site-map.mjs';
+import { shapeAlignment, sheetsFromAlignments } from '../../scripts/lib/site-map-align.mjs';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
@@ -34,14 +35,17 @@ async function handleGet(req: Request): Promise<Response> {
   const householdId = auth.member.householdIds[0];
 
   // Only the columns the page may show: ids and names, no email, phone or land fields.
-  const [clusters, units, households, people, memberships] = await Promise.all([
+  const [clusters, units, households, people, memberships, alignments] = await Promise.all([
     select('site_map_clusters', 'select=cluster,base_size,view_box,plot_path&order=cluster.asc'),
     select('site_map_units', 'select=house_no,cluster,shape,x,y,rotation,mirror_x,mirror_y&order=house_no.asc'),
     select('member_households', 'house_no=not.is.null&select=id,farm_unit,house_no,unit_type'),
     select('member_people', 'select=id,full_name,active,directory_visible'),
     select('member_household_members', 'select=household_id,person_id,role'),
+    // How each plan page sits on the satellite image: only the numbers, never the image. Pages joined into one sheet are
+    // placed from these once all of the sheet's pages have one; until then the defaults in SHEETS apply.
+    select('site_map_alignment', 'select=cluster,a,b,tx,ty,rms,pairs,updated_at').catch(() => []),
   ]);
-  const merged = mergeSheets(shapeClusters(clusters), buildSiteMap({ units, households, people, memberships }, householdId ?? null));
+  const merged = mergeSheets(shapeClusters(clusters), buildSiteMap({ units, households, people, memberships }, householdId ?? null), sheetsFromAlignments(SHEETS, alignments.map(shapeAlignment)));
   return jsonResponse({ enabled: true, ...merged });
 }
 

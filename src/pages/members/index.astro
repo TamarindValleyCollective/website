@@ -3596,31 +3596,6 @@ import SignInGate from '../../components/SignInGate.astro';
     border-radius: 50%;
   }
 
-  /* The satellite review aid (local only, see siteMapPane): a switch and an opacity slider at the top of the plan. */
-  .sm-sat {
-    position: absolute;
-    top: 10px;
-    left: 50%;
-    z-index: 2;
-    transform: translateX(-50%);
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 8px;
-    border-radius: 999px;
-    background: var(--tvc-white);
-    box-shadow: 0 1px 4px var(--tvc-line);
-  }
-
-  .sm-sat .btn[aria-pressed='true'] {
-    background: var(--tvc-green-dark);
-    color: var(--tvc-white);
-  }
-
-  .sm-satellite .sm-plotfill {
-    opacity: 0.35;
-  }
-
   .sm-zoom .btn {
     width: 36px;
     padding: 0;
@@ -7330,19 +7305,6 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     // The house numbers sit above the homes, inside each home's plot, and never take a tap or a hover.
     const badgeLayer = document.createElementNS(SVG_NS, 'g');
     svg.append(fillLayer, plotPath, unitLayer, outlineLayer, badgeLayer);
-    // Local review aid only: a satellite screenshot behind the H1 plan. The file is gitignored (public/dev-only/), so the
-    // switch and the slider exist only on a machine that has it, never on the live site.
-    const SAT = { src: '/dev-only/satellite-h1.png', w: 2000, h: 1169, scale: 0.5, rotate: 8.5, at: [845, 460], planAt: [630.66, 343.1], sheet: 'H1' };
-    const satImg = document.createElementNS(SVG_NS, 'image');
-    satImg.setAttribute('href', SAT.src);
-    satImg.setAttribute('width', String(SAT.w));
-    satImg.setAttribute('height', String(SAT.h));
-    satImg.setAttribute('transform', `translate(${SAT.planAt[0]} ${SAT.planAt[1]}) scale(${1 / SAT.scale}) rotate(${SAT.rotate}) translate(${-SAT.at[0]} ${-SAT.at[1]})`);
-    satImg.setAttribute('class', 'sm-sat-img');
-    satImg.setAttribute('opacity', '0.75');
-    satImg.setAttribute('pointer-events', 'none');
-    let satOn = false;
-    let satRefresh: (() => void) | null = null;
     const pop = h('div', 'sm-pop');
     pop.id = 'sm-pop';
     pop.setAttribute('role', 'tooltip');
@@ -7358,25 +7320,6 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     const key = h('ul', 'dir-map-key', undefined, ...(mine ? [keyItem('is-yours', 'Yours')] : []), keyItem('sm-named', 'Member'), keyItem('sm-private', 'Private'), keyItem('sm-vacant', 'No member yet'));
     key.setAttribute('aria-label', 'Colours');
     const stage = h('div', 'sm-stage', undefined, svg, tabs, pop, key, h('div', 'sm-zoom', undefined, zoomBtn('Zoom in', '+', () => zoomBy(1.4)), zoomBtn('Zoom out', '−', () => zoomBy(1 / 1.4)), zoomBtn('Show the whole cluster', 'Fit', () => { fitAll(); paint(); })));
-    void fetch(SAT.src, { method: 'HEAD' }).then((r) => {
-      if (!r.ok || !(r.headers.get('content-type') ?? '').startsWith('image/')) return;
-      const toggle = h('button', 'btn', 'Satellite');
-      toggle.setAttribute('type', 'button');
-      toggle.setAttribute('aria-pressed', 'false');
-      const slider = document.createElement('input');
-      slider.type = 'range'; slider.min = '0'; slider.max = '100'; slider.value = '75';
-      slider.setAttribute('aria-label', 'Satellite opacity');
-      slider.addEventListener('input', () => satImg.setAttribute('opacity', String(Number(slider.value) / 100)));
-      const showSat = () => {
-        const on = satOn && clusterId === SAT.sheet;
-        satImg.parentNode?.removeChild(satImg);
-        if (on) svg.prepend(satImg);
-        stage.classList.toggle('sm-satellite', on);
-      };
-      toggle.addEventListener('click', () => { satOn = !satOn; toggle.setAttribute('aria-pressed', String(satOn)); showSat(); });
-      stage.append(h('div', 'sm-sat', undefined, toggle, slider));
-      satRefresh = showSat;
-    }).catch(() => { /* no local image: nothing to offer */ });
     if (mine) {
       const find = h('button', 'btn dir-map-find', undefined, h('span', 'dir-map-find-dot'), 'Find my home');
       find.setAttribute('type', 'button');
@@ -7414,7 +7357,6 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       const c = clusterOf(clusterId);
       svg.setAttribute('viewBox', vb.join(' '));
       plotPath.setAttribute('d', c.plot);
-      satRefresh?.();
       const u = unitsPerPx();
       hidePop();
       const here = data.units.filter((x) => x.cluster === clusterId);

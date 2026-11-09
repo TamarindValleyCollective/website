@@ -4,6 +4,10 @@
 //
 //   GET  /api/site-map-admin/overview    the clusters and every home, plus households that name a house the map does not have
 //   POST /api/site-map-admin/units       change the layout: { action: update | add | renumber | remove, houseNo, ... }
+//   GET  /api/site-map-admin/alignment   each plan page's satellite alignment (the pairs and the fit)
+//   POST /api/site-map-admin/alignment   save a page's alignment from its point pairs { cluster, pairs } (or { cluster, clear: true })
+//   GET  /api/site-map-admin/satellite   the satellite image (a data URL) the pages are aligned to, from a private store
+//   POST /api/site-map-admin/satellite   replace it { image: data URL }
 //
 // Auth: requireStaff on every request. Viewing needs `site-map` / `view` (a super admin gives the module to the admins who
 // should have it, on Access); changing the layout needs `site-map` / `edit` (admin role only), because every member sees
@@ -13,12 +17,14 @@
 // Every edit is written to staff_audit_log BEFORE it is made (house number and the changed plan values only, never a name),
 // and if the entry cannot be written the edit is refused, the same as the member register. An update carries the row's
 // updated_at as loaded and is refused if the row has changed since, so two admins cannot silently overwrite each other.
+import { getStore } from '@netlify/blobs';
 import { requireStaff, logStaffAction } from './lib/staff-access';
 import { canSeeNames, maskName } from './lib/staff-masking';
 import { roleHasCapability } from './lib/staff-registry';
 import { restHeaders } from '../../scripts/lib/supabase.mjs';
 import { buildAdminSiteMap, shapeClusters } from '../../scripts/lib/site-map.mjs';
-import { auditDetail, validateEdit } from '../../scripts/lib/site-map-edit.mjs';
+import { auditDetail, validateEdit, CLUSTER_IDS } from '../../scripts/lib/site-map-edit.mjs';
+import { auditAlignment, shapeAlignment, validateAlignment, validateSatellite } from '../../scripts/lib/site-map-align.mjs';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
@@ -101,11 +107,88 @@ async function handleUnits(req: Request): Promise<Response> {
   return jsonResponse({ ok: true });
 }
 
+// ---- Satellite alignment -----------------------------------------------------------------------------------------
+// The image is imagery from a map provider, so it is kept in a private store and handed only to signed-in admins; members are
+// never served it. Each page's fit is made here from the pairs, so the stored numbers always follow from the stored pairs.
+const satelliteStore = () => getStore('site-map');
+
+async function handleAlignmentRead(req: Request): Promise<Response> {
+  const auth = await requireStaff(req, 'site-map', 'view');
+  if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
+  const [rows, image] = await Promise.all([select('site_map_alignment', 'select=cluster,a,b,tx,ty,rms,pairs,updated_at&order=cluster.asc'), satelliteStore().get('satellite')]);
+  return jsonResponse({ alignments: rows.map(shapeAlignment), hasImage: !!image, canEdit: roleHasCapability('site-map', auth.staff.role, 'edit') });
+}
+
+async function handleSatelliteRead(req: Request): Promise<Response> {
+  const auth = await requireStaff(req, 'site-map', 'view');
+  if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
+  const image = await satelliteStore().get('satellite');
+  if (!image) return jsonResponse({ error: 'No satellite image has been uploaded yet.' }, 404);
+  return jsonResponse({ image });
+}
+
+async function handleSatelliteWrite(req: Request): Promise<Response> {
+  const auth = await requireStaff(req, 'site-map', 'edit');
+  if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
+  let body: any = null;
+  try { body = await req.json(); } catch { /* validateSatellite answers for a missing body */ }
+  const checked = validateSatellite(body?.image);
+  if ('error' in checked) return jsonResponse({ error: checked.error }, 400);
+  try {
+    await logStaffAction({ actorId: auth.staff.id, action: 'site-map.satellite-upload', module: 'site-map', detail: { kb: checked.kb } });
+  } catch (err) {
+    console.error('[site-map-admin] audit log write failed; upload refused', err);
+    return jsonResponse({ error: 'Could not record the change, so nothing was changed. Try again.' }, 500);
+  }
+  await satelliteStore().set('satellite', checked.dataUrl);
+  return jsonResponse({ ok: true });
+}
+
+async function handleAlignmentWrite(req: Request): Promise<Response> {
+  const auth = await requireStaff(req, 'site-map', 'edit');
+  if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
+  let body: any = null;
+  try { body = await req.json(); } catch { /* validateAlignment answers for a missing body */ }
+
+  if (body?.clear === true) {
+    if (!CLUSTER_IDS.includes(body.cluster)) return jsonResponse({ error: 'Pick a cluster.' }, 400);
+    try {
+      await logStaffAction({ actorId: auth.staff.id, action: 'site-map.alignment-clear', module: 'site-map', detail: { cluster: body.cluster } });
+    } catch (err) {
+      console.error('[site-map-admin] audit log write failed; edit refused', err);
+      return jsonResponse({ error: 'Could not record the change, so nothing was changed. Try again.' }, 500);
+    }
+    const gone = await write('DELETE', `site_map_alignment?cluster=eq.${encodeURIComponent(body.cluster)}`);
+    return gone.ok ? jsonResponse({ ok: true }) : jsonResponse({ error: 'Server error' }, 500);
+  }
+
+  const checked = validateAlignment(body);
+  if ('error' in checked) return jsonResponse({ error: checked.error }, 400);
+  const { cluster, pairs, fit } = checked;
+  try {
+    await logStaffAction({ actorId: auth.staff.id, action: 'site-map.alignment', module: 'site-map', detail: { cluster, pairs: pairs.length, summary: auditAlignment(cluster, fit, pairs.length) } });
+  } catch (err) {
+    console.error('[site-map-admin] audit log write failed; edit refused', err);
+    return jsonResponse({ error: 'Could not record the change, so nothing was changed. Try again.' }, 500);
+  }
+  const row = { cluster, a: fit.a, b: fit.b, tx: fit.tx, ty: fit.ty, rms: Math.round(fit.rms * 100) / 100, pairs, updated_at: new Date().toISOString() };
+  const res = await fetch(`${base()}/site_map_alignment?on_conflict=cluster`, { method: 'POST', headers: restHeaders({ Prefer: 'return=representation,resolution=merge-duplicates' }), body: JSON.stringify(row) });
+  if (!res.ok) {
+    console.error('[site-map-admin] alignment write failed', res.status);
+    return jsonResponse({ error: 'Server error' }, 500);
+  }
+  return jsonResponse({ ok: true, alignment: shapeAlignment(row) });
+}
+
 export default async (req: Request): Promise<Response> => {
   const path = new URL(req.url).pathname;
   try {
     if (req.method === 'GET' && path === '/api/site-map-admin/overview') return await handleOverview(req);
     if (req.method === 'POST' && path === '/api/site-map-admin/units') return await handleUnits(req);
+    if (req.method === 'GET' && path === '/api/site-map-admin/alignment') return await handleAlignmentRead(req);
+    if (req.method === 'POST' && path === '/api/site-map-admin/alignment') return await handleAlignmentWrite(req);
+    if (req.method === 'GET' && path === '/api/site-map-admin/satellite') return await handleSatelliteRead(req);
+    if (req.method === 'POST' && path === '/api/site-map-admin/satellite') return await handleSatelliteWrite(req);
     return jsonResponse({ error: 'Not found' }, 404);
   } catch (err) {
     console.error('[site-map-admin] request failed', err);
@@ -113,4 +196,4 @@ export default async (req: Request): Promise<Response> => {
   }
 };
 
-export const config = { path: ['/api/site-map-admin/overview', '/api/site-map-admin/units'] };
+export const config = { path: ['/api/site-map-admin/overview', '/api/site-map-admin/units', '/api/site-map-admin/alignment', '/api/site-map-admin/satellite'] };

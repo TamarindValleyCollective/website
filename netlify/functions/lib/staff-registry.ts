@@ -157,7 +157,7 @@ export const MODULE_INFO: Record<ModuleId, { label: string; path: string; capabi
     path: '/internal/site-map/',
     capabilities: {
       view: 'See every home on the site plan with its household, unit type and plot size, and the gaps to fix',
-      edit: 'Change the layout members see: add, remove, renumber, reshape, move or rotate a home',
+      edit: 'Change the layout members see: add, remove, renumber, reshape, move or rotate a home, and align the plan to the satellite image',
     },
   },
   finance: {

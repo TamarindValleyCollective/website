@@ -1013,8 +1013,14 @@ outside both the local machine and Netlify (the member-update-email workflow).
   site plan's raw lines plus, from migration `0075`, the closed outline of every home's plot),
   seeded from the layout fixed by hand on 2026-10-29 (`docs/site-map/`). The plan is drawn on one page per cluster, but
   the member map shows H1-A and H1-B as one "H1" sheet: `mergeSheets` in `scripts/lib/site-map.mjs` moves H1-B into
-  H1-A's coordinates (scale and offset in `SHEETS`; H2 joins later) before the response is sent, while the database and the admin
-  layout editor keep each home in its own page's coordinates. The function selects only ids, names and unit
+  H1-A's coordinates (its own scale, rotation and offset; every home keeps the one base size) before the response is sent,
+  while the database and the admin layout editor keep each home in its own page's coordinates. The placement comes from
+  `site_map_alignment` (migration `0095`, one row per plan page: the fit of the page onto a satellite image, made on the
+  admin page **Align to satellite**, `/internal/site-map-align/`, by pairing points on the plan and on the image; the
+  maths and rules are in `scripts/lib/site-map-align.mjs`) once both H1 pages are aligned, and from `SHEETS` until then.
+  The satellite image is imagery from a map provider, so it is not in the repo or the database: `site-map-admin.mts`
+  keeps it in the private Netlify Blobs store `site-map` (`GET/POST /api/site-map-admin/satellite`, admins only, never
+  served to members; alignment saves and uploads need `site-map` / `edit` and are audited first). The function selects only ids, names and unit
   fields, and `scripts/lib/site-map.mjs` (tested) applies the directory's privacy rule: a person is named only when
   active and not opted out of the directory, a household with nobody listed shows as "Private member" with no profile
   link, a home with no household as "No member yet". The plan is drawn client-side in `members/index.astro`

@@ -230,3 +230,22 @@ test('H1-A and H1-B are combined into one H1 sheet, in H1-A coordinates', async 
   assert.equal(sheetOf('H2'), 'H2');
   assert.equal(a.scale, 1);
 });
+
+test('a cluster is rotated on its own, and homes keep the one base size', async () => {
+  const { mergeSheets } = await import('./site-map.mjs');
+  const sheets = { H1: [{ page: 'H1-A', scale: 1, rotate: 0, dx: 0, dy: 0 }, { page: 'H1-B', scale: 2, rotate: 90, dx: 10, dy: 20 }] };
+  const clusters = [
+    { id: 'H1-A', baseSize: 1.63, viewBox: [0, 0, 100, 50], plot: 'M0 0 L10 0 Z' },
+    { id: 'H1-B', baseSize: 1.8, viewBox: [0, 0, 100, 50], plot: 'M0 0 L10 0 Z' },
+  ];
+  const units = [{ houseNo: 'H-01', cluster: 'H1-A', x: 5, y: 5, rotation: 30 }, { houseNo: 'H-40', cluster: 'H1-B', x: 10, y: 0, rotation: 100 }];
+  const out = mergeSheets(clusters, units, sheets);
+  assert.equal(out.clusters.length, 1);
+  assert.equal(out.clusters[0].baseSize, 1.63); // one size for every home, never rescaled per page
+  const [a, b] = out.units;
+  assert.deepEqual([a.x, a.y, a.rotation], [5, 5, 30]);
+  // (10, 0) turned 90 degrees clockwise is (0, 10); doubled is (0, 20); shifted by (10, 20) is (10, 40).
+  assert.deepEqual([b.x, b.y], [10, 40]);
+  assert.equal(b.rotation, -170); // 100 + 90, kept in (-180, 180]
+  assert.match(out.clusters[0].plot, /M0 0 L10 0 Z M10 20 L10 40 Z/);
+});
