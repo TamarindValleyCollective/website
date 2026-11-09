@@ -11,6 +11,7 @@ The layout of the 52 homes on the 2023 site plan, fixed by hand on 2026-10-29 wi
 - The member map shows H1-A and H1-B as one H1 sheet (`mergeSheets` in `scripts/lib/site-map.mjs`): each cluster has its own
   scale, rotation and offset into the first page's coordinates, and every home is drawn at the one base size. The placement
   comes from the admin page **Align to satellite** (`/internal/site-map-align/`): pair three or more points on a plan page and
-  on a satellite image, and the page's fit is stored in `site_map_alignment` (migration 0095); the pages of a sheet are
-  placed against each other from their fits to the same image. Until both H1 pages are aligned, `SHEETS` holds the placement
-  (set by laying the plan over a satellite image by eye). The image itself is kept in a private store, never in the repo.
+  on Google's live satellite map (a latitude and longitude each), and the page's fit is stored in `site_map_alignment`
+  (migration 0095); the pages of a sheet are placed against each other from their fits to the same ground. Until both H1 pages
+  are aligned, `SHEETS` holds the placement (set by laying the plan over a satellite screenshot by eye). No imagery is stored;
+  the page needs the browser key `PUBLIC_GOOGLE_MAPS_API_KEY` (see `.env.example`).

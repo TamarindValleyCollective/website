@@ -1,19 +1,20 @@
 ---
-// Align to satellite (internal): lay each plan page of the Map over a satellite image by pairing points. An admin taps a home
-// (or any spot) on the plan page, then the same spot on the image, three or more times; the page fits the scale, rotation and
-// shift from the pairs, shows how far each pair is from the fit, and draws the plan over the image to check. Saving stores the
-// pairs and the fit for that page (netlify/functions/site-map-admin.mts); the member map joins H1-A and H1-B from them
-// (scripts/lib/site-map-align.mjs). The image is imagery from a map provider: it is kept in a private store and only admins
-// are given it. Same shell and sign-in as the Map page. Everything the server returns is placed with textContent only.
+// Align to satellite (internal): lay each plan page of the Map over Google's live satellite map by pairing points. An admin
+// taps a home (or any spot) on the plan page, then the same spot on the map, three or more times; the page fits the scale,
+// rotation and shift from the pairs, shows how far each pair is from the fit in metres, and draws the plan over the map to
+// check. Saving stores the pairs and the fit for that page (netlify/functions/site-map-admin.mts); the member map joins H1-A
+// and H1-B from them (scripts/lib/site-map-align.mjs). No imagery is stored: the map is Google's, drawn live through the Maps
+// JavaScript API with the browser key PUBLIC_GOOGLE_MAPS_API_KEY (restricted to the admin site). Same shell and sign-in as the
+// Map page. Everything the server returns is placed with textContent only.
 import StaffLayout from '../../layouts/StaffLayout.astro';
 import SignInGate from '../../components/SignInGate.astro';
 import '../../styles/site-map.css';
 ---
 
-<StaffLayout title="Align map" description="Lay the plan over the satellite image." current="site-map">
+<StaffLayout title="Align map" description="Lay the plan over the satellite map." current="site-map">
   <section class="align section wrapper">
     <h1>Align to satellite</h1>
-    <p id="intro" class="hint">Sign in to lay the plan over the satellite image.</p>
+    <p id="intro" class="hint">Sign in to lay the plan over the satellite map.</p>
 
     <SignInGate forbiddenWhat="the Map tool" />
 
@@ -22,20 +23,21 @@ import '../../styles/site-map.css';
     <div id="content" hidden>
       <p class="hint"><a href="/internal/site-map/">&larr; Back to the Map</a></p>
       <ol class="steps">
-        <li id="step-image">Upload a satellite image (a screenshot of the farm from above, north up). <span id="image-note"></span></li>
-        <li>Pick a plan page. Tap a home on the plan (or any spot, such as a plot corner), then tap the <em>same</em> spot on the image. Zoom in for a precise tap.</li>
-        <li>Three or more pairs, spread apart, fit the page. The list shows how far each pair is from the fit; remove or redo the ones that are off, then Save.</li>
+        <li>Find the farm on the map: in Google Maps, right-click the farm and copy its position, then paste it in the box below. Zoom in until the buildings are clear.</li>
+        <li>Pick a plan page. Tap a home on the plan (or any spot, such as a plot corner), then tap the <em>same</em> spot on the map.</li>
+        <li>Three or more pairs, spread apart, fit the page. The list shows how far each pair is from the fit in metres; remove or redo the ones that are off, then Save.</li>
       </ol>
 
       <div class="bar">
         <div class="segmented" id="clusters" role="group" aria-label="Plan page"></div>
-        <div class="editbar" id="imagebar" hidden>
-          <input type="file" id="file" accept="image/png,image/jpeg" hidden />
-          <button type="button" class="button button--outline" id="upload">Upload image</button>
-        </div>
+        <form class="editbar" id="goto-form">
+          <label class="line">Go to <input type="text" id="goto" placeholder="29.12345, 79.12345" autocomplete="off" aria-label="Latitude and longitude" /></label>
+          <button type="submit" class="button button--outline">Go</button>
+        </form>
       </div>
 
       <p id="hint" class="hint" role="status"></p>
+      <p id="nokey" class="hint hint--wait" hidden>The Google Maps key is not set. Put it in <code>PUBLIC_GOOGLE_MAPS_API_KEY</code> (a browser key limited to this site) and reload.</p>
 
       <div class="al-grid">
         <div class="al-pane">
@@ -43,25 +45,20 @@ import '../../styles/site-map.css';
           <div class="sm-stage">
             <svg id="plan" class="sm-map" role="group" aria-label="Plan page: tap a home or a spot"></svg>
             <div class="sm-zoom">
-              <button type="button" class="button button--outline" data-z="plan" data-d="in" aria-label="Zoom in the plan">+</button>
-              <button type="button" class="button button--outline" data-z="plan" data-d="out" aria-label="Zoom out the plan">&minus;</button>
-              <button type="button" class="button button--outline" data-z="plan" data-d="fit" aria-label="Show the whole plan page">Fit</button>
+              <button type="button" class="button button--outline" data-d="in" aria-label="Zoom in the plan">+</button>
+              <button type="button" class="button button--outline" data-d="out" aria-label="Zoom out the plan">&minus;</button>
+              <button type="button" class="button button--outline" data-d="fit" aria-label="Show the whole plan page">Fit</button>
             </div>
           </div>
         </div>
         <div class="al-pane">
-          <h2>Satellite image</h2>
+          <h2>Satellite map</h2>
           <div class="sm-stage">
-            <svg id="sat" class="sm-map" role="group" aria-label="Satellite image: tap the same spot"></svg>
-            <div class="sm-zoom">
-              <button type="button" class="button button--outline" data-z="sat" data-d="in" aria-label="Zoom in the image">+</button>
-              <button type="button" class="button button--outline" data-z="sat" data-d="out" aria-label="Zoom out the image">&minus;</button>
-              <button type="button" class="button button--outline" data-z="sat" data-d="fit" aria-label="Show the whole image">Fit</button>
-            </div>
+            <div id="gmap" class="al-gmap" aria-label="Satellite map: tap the same spot"></div>
           </div>
           <div class="line" id="overlaybar" hidden>
-            <button type="button" class="button button--outline" id="overlay" aria-pressed="false">Show the plan on the image</button>
-            <label class="line">Plan strength <input type="range" id="strength" min="0" max="100" value="80" /></label>
+            <button type="button" class="button button--outline" id="overlay" aria-pressed="false">Show the plan on the map</button>
+            <label class="line">Plan strength <input type="range" id="strength" min="10" max="100" value="90" /></label>
           </div>
         </div>
       </div>
@@ -84,28 +81,29 @@ import '../../styles/site-map.css';
 
   .align .steps { margin: 0 0 8px; padding-left: 20px; font-size: var(--text-sm); color: var(--tvc-ink-soft); }
   .align .steps li { margin: 2px 0; }
-  .align .editbar { display: flex; flex-wrap: wrap; gap: 8px; }
+  .align .editbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .align .editbar input[type='text'] { width: 190px; }
   .align .al-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-items: start; }
   .align .al-pane h2 { margin: 0 0 6px; font-size: var(--text-md); }
   .align .al-pane h2 span { color: var(--tvc-ink-soft); font-weight: 400; }
-  .align .sm-map { height: min(56vh, 560px); }
+  .align .sm-map,
+  .align .al-gmap { display: block; width: 100%; height: min(56vh, 560px); }
   .align .sm-zoom .button { width: 36px; padding: 0; background: var(--tvc-white); }
   .align .line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-top: 8px; font-size: var(--text-sm); }
+  .align .editbar .line { margin-top: 0; }
   .align .hint--wait { color: var(--tvc-orange-text); }
 
   @media (min-width: 901px) {
     .align .al-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
 
-  /* Marks on the two pictures. A pair is the same number on both; the pending point has a ring until its partner is tapped. */
+  /* Marks on the plan page. A pair is the same number on the plan and on the map; the pending point has a ring until its partner is tapped. */
   .align .al-home { fill: var(--tvc-white); stroke: var(--tvc-green-dark); stroke-width: 1.5; vector-effect: non-scaling-stroke; cursor: pointer; }
   .align .al-home-label { fill: var(--tvc-ink-soft); text-anchor: middle; pointer-events: none; }
   .align .al-pin { fill: var(--tvc-green-dark); stroke: var(--tvc-white); stroke-width: 1.5; vector-effect: non-scaling-stroke; pointer-events: none; }
   .align .al-pin.is-off { fill: var(--tvc-error-text); }
   .align .al-pin-label { fill: var(--tvc-white); font-weight: 700; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
   .align .al-pending { fill: none; stroke: var(--tvc-orange); stroke-width: 3; vector-effect: non-scaling-stroke; pointer-events: none; }
-  .align .al-overlay-line { fill: none; stroke: var(--tvc-orange-light); stroke-width: 1.4; vector-effect: non-scaling-stroke; pointer-events: none; }
-  .align .al-overlay-home { fill: var(--tvc-orange-light); stroke: var(--tvc-green-dark); stroke-width: 1; vector-effect: non-scaling-stroke; pointer-events: none; }
 
   .align .fit-grid { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 10px 0 0; font-size: var(--text-sm); }
   .align .fit-grid dt { color: var(--tvc-ink-soft); }
@@ -124,11 +122,12 @@ import '../../styles/site-map.css';
 <script>
   import { StaffAuthError, clearStepUp, clearToken, decodeTokenEmail, getToken, setToken, showToast, staffFetch } from '../../../scripts/lib/staff-client.mjs';
   import { busyForPress } from '../../../scripts/lib/busy.mjs';
-  import { MAX_PAIRS, MIN_PAIRS, fitSimilarity, planToImageMatrix } from '../../../scripts/lib/site-map-align.mjs';
+  import { MAX_PAIRS, MIN_PAIRS, fitSimilarity, geoToLocal, localToGeo, originOf, planToLocal } from '../../../scripts/lib/site-map-align.mjs';
   import { SVG_NS } from '../../../scripts/lib/site-map-draw.mjs';
 
   declare const google: any;
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
+  const MAPS_KEY = import.meta.env.PUBLIC_GOOGLE_MAPS_API_KEY;
   const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
   // text only, never HTML
@@ -146,11 +145,13 @@ import '../../styles/site-map.css';
     for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, String(v));
     return e;
   };
+  // The map's marks take their colours from the TVC tokens, so they follow the design language and the dark appearance.
+  const tok = (name: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
   type Unit = { houseNo: string; cluster: string; x: number; y: number };
   type Cluster = { id: string; viewBox: number[]; plot: string };
-  type Pair = { house: string | null; plan: number[]; image: number[] };
-  type Saved = { cluster: string; a: number; b: number; tx: number; ty: number; scale: number; rotation: number; rms: number | null; pairs: Pair[]; updatedAt: string | null };
+  type Pair = { house: string | null; plan: number[]; geo: number[] };
+  type Saved = { cluster: string; a: number; b: number; tx: number; ty: number; scale: number; rotation: number; originLat: number; originLng: number; rms: number | null; pairs: Pair[]; updatedAt: string | null };
 
   const gate = $('gate');
   const forbidden = $('forbidden');
@@ -159,17 +160,12 @@ import '../../styles/site-map.css';
   const intro = $('intro');
   const gateError = $('gate-error');
   const planSvg = $('plan') as unknown as SVGSVGElement;
-  const satSvg = $('sat') as unknown as SVGSVGElement;
   const nf = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 1 });
 
   let clusters: Cluster[] = [];
   let units: Unit[] = [];
   let saved: Saved[] = [];
   let canEdit = false;
-  let hasImage = false;
-  let imageUrl = '';
-  let imgW = 0;
-  let imgH = 0;
   let clusterId = '';
   // What is on screen for the page being aligned: not saved until Save.
   let pairs: Pair[] = [];
@@ -178,47 +174,42 @@ import '../../styles/site-map.css';
   let showOverlay = false;
   const clusterOf = (id: string) => clusters.find((c) => c.id === id) ?? clusters[0];
 
-  // ---- the two pictures: pan by dragging, zoom with the wheel or the buttons; a touch that does not move is a tap ----
-  type View = { svg: SVGSVGElement; vb: number[]; full: () => number[]; onTap: (ux: number, uy: number, target: Element) => void };
-  const views: Record<string, View> = {
-    plan: { svg: planSvg, vb: [0, 0, 1, 1], full: () => [...clusterOf(clusterId).viewBox], onTap: (x, y, t) => tapPlan(x, y, t) },
-    sat: { svg: satSvg, vb: [0, 0, 1, 1], full: () => [0, 0, imgW || 1, imgH || 1], onTap: (x, y) => tapImage(x, y) },
+  // ---- the plan page: pan by dragging, zoom with the wheel or two fingers; a touch that does not move is a tap ----
+  let vb: number[] = [0, 0, 1, 1];
+  const unitsPerPx = () => { const r = planSvg.getBoundingClientRect(); return Math.max(vb[2] / (r.width || 1), vb[3] / (r.height || 1)); };
+  const toUser = (e: { clientX: number; clientY: number }) => {
+    const r = planSvg.getBoundingClientRect();
+    const k = Math.max(vb[2] / r.width, vb[3] / r.height);
+    return [vb[0] + (e.clientX - r.left - (r.width - vb[2] / k) / 2) * k, vb[1] + (e.clientY - r.top - (r.height - vb[3] / k) / 2) * k];
   };
-  const unitsPerPx = (v: View) => { const r = v.svg.getBoundingClientRect(); return Math.max(v.vb[2] / (r.width || 1), v.vb[3] / (r.height || 1)); };
-  const toUser = (v: View, e: { clientX: number; clientY: number }) => {
-    const r = v.svg.getBoundingClientRect();
-    const k = Math.max(v.vb[2] / r.width, v.vb[3] / r.height);
-    return [v.vb[0] + (e.clientX - r.left - (r.width - v.vb[2] / k) / 2) * k, v.vb[1] + (e.clientY - r.top - (r.height - v.vb[3] / k) / 2) * k];
-  };
-  function zoomBy(name: string, f: number, cx?: number, cy?: number) {
-    const v = views[name];
-    const [x, y, w, ht] = v.vb;
+  function zoomBy(f: number, cx?: number, cy?: number) {
+    const [x, y, w, ht] = vb;
     const nw = w / f;
-    if (nw < 30 || nw > v.full()[2] * 1.6) return;
+    if (nw < 30 || nw > clusterOf(clusterId).viewBox[2] * 1.6) return;
     const px = cx ?? x + w / 2, py = cy ?? y + ht / 2;
-    v.vb = [px - (px - x) / f, py - (py - y) / f, nw, ht / f];
+    vb = [px - (px - x) / f, py - (py - y) / f, nw, ht / f];
     paint();
   }
-  for (const [name, v] of Object.entries(views)) {
+  {
     const ptrs = new Map<number, { x: number; y: number }>();
     let moved = false;
     let pinch = 0;
     // With the pointer captured, pointerup is addressed to the svg itself, so what was tapped is read when it went down.
     let down: Element | null = null;
-    v.svg.addEventListener('wheel', (e) => { e.preventDefault(); const [ux, uy] = toUser(v, e); zoomBy(name, e.deltaY < 0 ? 1.15 : 1 / 1.15, ux, uy); }, { passive: false });
-    v.svg.addEventListener('pointerdown', (e) => {
-      v.svg.setPointerCapture(e.pointerId);
+    planSvg.addEventListener('wheel', (e) => { e.preventDefault(); const [ux, uy] = toUser(e); zoomBy(e.deltaY < 0 ? 1.15 : 1 / 1.15, ux, uy); }, { passive: false });
+    planSvg.addEventListener('pointerdown', (e) => {
+      planSvg.setPointerCapture(e.pointerId);
       ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (ptrs.size === 1) { moved = false; down = e.target as Element; } else pinch = 0;
     });
-    v.svg.addEventListener('pointermove', (e) => {
+    planSvg.addEventListener('pointermove', (e) => {
       const p = ptrs.get(e.pointerId);
       if (!p) return;
       if (ptrs.size === 2) {
         ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
         const [a, b] = [...ptrs.values()];
         const d = Math.hypot(a.x - b.x, a.y - b.y);
-        if (pinch) { const [ux, uy] = toUser(v, { clientX: (a.x + b.x) / 2, clientY: (a.y + b.y) / 2 }); zoomBy(name, d / pinch, ux, uy); }
+        if (pinch) { const [ux, uy] = toUser({ clientX: (a.x + b.x) / 2, clientY: (a.y + b.y) / 2 }); zoomBy(d / pinch, ux, uy); }
         pinch = d;
         moved = true;
         return;
@@ -226,24 +217,23 @@ import '../../styles/site-map.css';
       const dx = e.clientX - p.x, dy = e.clientY - p.y;
       if (!moved && Math.hypot(dx, dy) < 4) return;
       moved = true;
-      const k = unitsPerPx(v);
-      v.vb = [v.vb[0] - dx * k, v.vb[1] - dy * k, v.vb[2], v.vb[3]];
+      const k = unitsPerPx();
+      vb = [vb[0] - dx * k, vb[1] - dy * k, vb[2], vb[3]];
       ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      v.svg.setAttribute('viewBox', v.vb.join(' '));
+      planSvg.setAttribute('viewBox', vb.join(' '));
     });
     const end = (e: PointerEvent) => {
       const had = ptrs.has(e.pointerId);
       ptrs.delete(e.pointerId);
-      if (had && !moved && ptrs.size === 0 && e.type === 'pointerup') { const [ux, uy] = toUser(v, e); v.onTap(ux, uy, down ?? (e.target as Element)); }
+      if (had && !moved && ptrs.size === 0 && e.type === 'pointerup') { const [ux, uy] = toUser(e); tapPlan(ux, uy, down ?? (e.target as Element)); }
       if (moved && ptrs.size === 0) paint();
     };
-    v.svg.addEventListener('pointerup', end);
-    v.svg.addEventListener('pointercancel', end);
+    planSvg.addEventListener('pointerup', end);
+    planSvg.addEventListener('pointercancel', end);
   }
-  document.querySelectorAll<HTMLElement>('[data-z]').forEach((b) => b.addEventListener('click', () => {
-    const name = b.getAttribute('data-z')!;
+  document.querySelectorAll<HTMLElement>('.sm-zoom [data-d]').forEach((b) => b.addEventListener('click', () => {
     const d = b.getAttribute('data-d');
-    if (d === 'fit') { views[name].vb = views[name].full(); paint(); } else zoomBy(name, d === 'in' ? 1.4 : 1 / 1.4);
+    if (d === 'fit') { vb = [...clusterOf(clusterId).viewBox]; paint(); } else zoomBy(d === 'in' ? 1.4 : 1 / 1.4);
   }));
   window.addEventListener('resize', paint);
 
@@ -254,10 +244,10 @@ import '../../styles/site-map.css';
     pending = home ? { house: home.houseNo, plan: [home.x, home.y] } : { house: null, plan: [Math.round(ux * 100) / 100, Math.round(uy * 100) / 100] };
     paint();
   }
-  function tapImage(ux: number, uy: number) {
-    if (!pending) { setHint('Tap a spot on the plan first, then the same spot here.', true); return; }
+  function tapMap(lat: number, lng: number) {
+    if (!pending) { setHint('Tap a spot on the plan first, then the same spot on the map.', true); return; }
     if (pairs.length >= MAX_PAIRS) { setHint(`That is ${MAX_PAIRS} pairs, the most one page takes. Remove one first.`, true); return; }
-    pairs = [...pairs, { house: pending.house, plan: pending.plan, image: [Math.round(ux * 10) / 10, Math.round(uy * 10) / 10] }];
+    pairs = [...pairs, { house: pending.house, plan: pending.plan, geo: [Math.round(lat * 1e7) / 1e7, Math.round(lng * 1e7) / 1e7] }];
     pending = null;
     dirty = true;
     paint();
@@ -268,8 +258,21 @@ import '../../styles/site-map.css';
     el.classList.toggle('hint--wait', wait);
   }
 
-  // ---- drawing ----
-  const fit = () => (pairs.length >= 2 ? fitSimilarity(pairs) : null);
+  // ---- the fit ----
+  // Every page is fitted around one reference point: the one the other saved pages use, or this page's pairs' average.
+  const frame = () => {
+    const other = saved.find((s) => s.cluster !== clusterId);
+    return other ? { lat: other.originLat, lng: other.originLng } : pairs.length ? originOf(pairs) : null;
+  };
+  function fit() {
+    const f0 = frame();
+    if (!f0 || pairs.length < 2) return null;
+    const f = fitSimilarity(pairs.map((p) => ({ plan: p.plan, image: geoToLocal(f0, p.geo as [number, number]) })));
+    return f ? { ...f, frame: f0, residualsM: f.residuals.map((r: number) => r / f.scale), rmsM: f.rms / f.scale } : null;
+  }
+  type Fit = NonNullable<ReturnType<typeof fit>>;
+
+  // ---- the plan page drawing ----
   function pin(x: number, y: number, n: number, r: number, off: boolean) {
     const g = svgEl('g');
     g.append(svgEl('circle', { cx: x, cy: y, r }, `al-pin${off ? ' is-off' : ''}`));
@@ -279,57 +282,104 @@ import '../../styles/site-map.css';
     return g;
   }
   function paintPlan(off: boolean[]) {
-    const v = views.plan;
-    v.svg.setAttribute('viewBox', v.vb.join(' '));
-    const k = unitsPerPx(v);
+    planSvg.setAttribute('viewBox', vb.join(' '));
+    const k = unitsPerPx();
     const c = clusterOf(clusterId);
-    v.svg.replaceChildren();
-    v.svg.append(svgEl('path', { d: c.plot }, 'sm-plot'));
+    planSvg.replaceChildren();
+    planSvg.append(svgEl('path', { d: c.plot }, 'sm-plot'));
     const paired = new Set(pairs.map((p) => p.house).filter(Boolean));
     for (const u of units.filter((x) => x.cluster === clusterId)) {
       const g = svgEl('g');
       g.append(svgEl('circle', { cx: u.x, cy: u.y, r: 7 * k, 'data-house': u.houseNo }, 'al-home'));
       if (!paired.has(u.houseNo)) { const t = svgEl('text', { x: u.x, y: u.y + 16 * k, 'font-size': 10 * k }, 'al-home-label'); t.textContent = u.houseNo.slice(2); g.append(t); }
-      v.svg.append(g);
+      planSvg.append(g);
     }
-    pairs.forEach((p, i) => v.svg.append(pin(p.plan[0], p.plan[1], i + 1, 9 * k, off[i])));
-    if (pending) v.svg.append(svgEl('circle', { cx: pending.plan[0], cy: pending.plan[1], r: 13 * k }, 'al-pending'));
+    pairs.forEach((p, i) => planSvg.append(pin(p.plan[0], p.plan[1], i + 1, 9 * k, off[i])));
+    if (pending) planSvg.append(svgEl('circle', { cx: pending.plan[0], cy: pending.plan[1], r: 13 * k }, 'al-pending'));
   }
-  function paintSat(f: ReturnType<typeof fit>, off: boolean[]) {
-    const v = views.sat;
-    v.svg.setAttribute('viewBox', v.vb.join(' '));
-    v.svg.replaceChildren();
-    if (!imageUrl) return;
-    const k = unitsPerPx(v);
-    v.svg.append(svgEl('image', { href: imageUrl, x: 0, y: 0, width: imgW, height: imgH }));
-    if (showOverlay && f && pairs.length >= MIN_PAIRS) {
-      const m = planToImageMatrix(f);
-      const g = svgEl('g', { transform: `matrix(${m.a} ${m.b} ${m.c} ${m.d} ${m.e} ${m.f})`, opacity: Number((document.getElementById('strength') as HTMLInputElement).value) / 100 });
-      g.append(svgEl('path', { d: clusterOf(clusterId).plot }, 'al-overlay-line'));
-      // The homes are drawn at a fixed size on screen: the plan's scale on the image would make them tiny or huge.
-      const s = Math.hypot(m.a, m.b);
-      for (const u of units.filter((x) => x.cluster === clusterId)) g.append(svgEl('circle', { cx: u.x, cy: u.y, r: (4 * k) / s }, 'al-overlay-home'));
-      v.svg.append(g);
+
+  // ---- the live map ----
+  let map: any = null;
+  let mapMarks: any[] = [];
+  let overlayMarks: any[] = [];
+  const CENTER_KEY = 'tvc-site-map-align-view';
+  function loadGoogleMaps(): Promise<void> {
+    if ((window as any).google?.maps) return Promise.resolve();
+    return new Promise((res, rej) => {
+      (window as any).__tvcMapsReady = () => res();
+      (window as any).gm_authFailure = () => { $('nokey').hidden = false; $('nokey').textContent = 'Google refused the map key. Check that the key allows the Maps JavaScript API and this site, then reload.'; };
+      const s = document.createElement('script');
+      s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(MAPS_KEY)}&v=weekly&callback=__tvcMapsReady`;
+      s.async = true;
+      s.onerror = () => rej(new Error('The Google map could not be loaded.'));
+      document.head.append(s);
+    });
+  }
+  async function startMap() {
+    if (map) return;
+    if (!MAPS_KEY) { $('nokey').hidden = false; $('gmap').hidden = true; return; }
+    try { await loadGoogleMaps(); } catch (err) { $('nokey').hidden = false; $('nokey').textContent = err instanceof Error ? err.message : 'The Google map could not be loaded.'; return; }
+    let start = { lat: 20.5937, lng: 78.9629, zoom: 5 }; // India, until the farm has been found
+    try { const kept = JSON.parse(localStorage.getItem(CENTER_KEY) ?? 'null'); if (kept && Number.isFinite(kept.lat) && Number.isFinite(kept.lng)) start = kept; } catch { /* nothing kept */ }
+    const first = saved[0];
+    if (first && start.zoom < 10) start = { lat: first.originLat, lng: first.originLng, zoom: 19 };
+    map = new google.maps.Map($('gmap'), {
+      center: { lat: start.lat, lng: start.lng }, zoom: start.zoom, mapTypeId: 'satellite', tilt: 0, rotateControl: false, streetViewControl: false, mapTypeControl: false,
+      gestureHandling: 'greedy', clickableIcons: false, draggableCursor: 'crosshair', maxZoom: 21,
+    });
+    map.addListener('click', (e: any) => tapMap(e.latLng.lat(), e.latLng.lng()));
+    map.addListener('idle', () => { const c = map.getCenter(); try { localStorage.setItem(CENTER_KEY, JSON.stringify({ lat: c.lat(), lng: c.lng(), zoom: map.getZoom() })); } catch { /* not remembered */ } });
+  }
+  function paintMap(f: Fit | null, off: boolean[]) {
+    if (!map) return;
+    for (const m of mapMarks) m.setMap(null);
+    for (const m of overlayMarks) m.setMap(null);
+    mapMarks = [];
+    overlayMarks = [];
+    pairs.forEach((p, i) => mapMarks.push(new google.maps.Marker({
+      map, position: { lat: p.geo[0], lng: p.geo[1] }, clickable: false,
+      icon: { path: google.maps.SymbolPath.CIRCLE, scale: 11, fillColor: tok(off[i] ? '--tvc-error-text' : '--tvc-green-dark'), fillOpacity: 1, strokeColor: tok('--tvc-white'), strokeWeight: 2 },
+      label: { text: String(i + 1), color: tok('--tvc-white'), fontSize: '12px', fontWeight: '700' },
+    })));
+    if (!showOverlay || !f || pairs.length < MIN_PAIRS) return;
+    // The plan drawn on the ground: every plan point goes through the fit's inverse to a position on the map.
+    const toLatLng = ([x, y]: number[]) => { const [lat, lng] = localToGeo(f.frame, planToLocal(f, [x, y] as [number, number]) as [number, number]); return { lat, lng }; };
+    const opacity = Number(($('strength') as HTMLInputElement).value) / 100;
+    const line = tok('--tvc-orange-light');
+    for (const sub of clusterOf(clusterId).plot.split('M').slice(1)) {
+      const n = (sub.match(/-?\d+(?:\.\d+)?/g) ?? []).map(Number);
+      const path: { lat: number; lng: number }[] = [];
+      for (let i = 0; i + 1 < n.length; i += 2) path.push(toLatLng([n[i], n[i + 1]]));
+      if (path.length > 1) overlayMarks.push(new google.maps.Polyline({ map, path, strokeColor: line, strokeOpacity: opacity, strokeWeight: 1.6, clickable: false }));
     }
-    pairs.forEach((p, i) => v.svg.append(pin(p.image[0], p.image[1], i + 1, 9 * k, off[i])));
+    for (const u of units.filter((x) => x.cluster === clusterId)) overlayMarks.push(new google.maps.Circle({ map, center: toLatLng([u.x, u.y]), radius: 1.6, strokeColor: tok('--tvc-green-dark'), strokeWeight: 1, fillColor: line, fillOpacity: opacity, clickable: false }));
   }
-  function paintCard(f: ReturnType<typeof fit>, off: boolean[]) {
+  $('goto-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const m = ($('goto') as HTMLInputElement).value.match(/(-?\d+(?:\.\d+)?)\s*[,\s]\s*(-?\d+(?:\.\d+)?)/);
+    if (!m || !map) { showToast('Type or paste a latitude and longitude, like 29.12345, 79.12345.'); return; }
+    map.setCenter({ lat: Number(m[1]), lng: Number(m[2]) });
+    map.setZoom(19);
+  });
+
+  // ---- the card ----
+  function paintCard(f: Fit | null, off: boolean[]) {
     const card = $('fit-card');
     const old = saved.find((s) => s.cluster === clusterId);
     const fitOk = !!f && pairs.length >= MIN_PAIRS;
     const rows = pairs.map((p, i) => {
       const li = h('li', off[i] ? 'is-off' : '', undefined, h('span', 'n', String(i + 1)), h('span', 'what', p.house ? `Home ${p.house}` : `Plan spot ${nf.format(p.plan[0])}, ${nf.format(p.plan[1])}`));
-      if (fitOk) li.append(h('span', 'off', `off by ${nf.format(f!.residuals[i])} units${off[i] ? ' (check this one)' : ''}`));
+      if (fitOk) li.append(h('span', 'off', `off by ${nf.format(f!.residualsM[i])} m${off[i] ? ' (check this one)' : ''}`));
       if (canEdit) { const b = h('button', 'button button--outline button--small', 'Remove'); b.setAttribute('type', 'button'); b.addEventListener('click', () => { pairs = pairs.filter((_, j) => j !== i); dirty = true; paint(); }); li.append(b); }
       return li;
     });
     const fitLines = fitOk
       ? h('dl', 'fit-grid', undefined,
-        h('dt', '', 'Scale'), h('dd', '', `${nf.format(f!.scale)} plan units per image pixel`),
-        h('dt', '', 'Rotation'), h('dd', '', `${nf.format(f!.rotation)}° (the plan page against the image, clockwise)`),
-        h('dt', '', 'Typical error'), h('dd', '', `${nf.format(f!.rms)} plan units`))
+        h('dt', '', 'Scale'), h('dd', '', `${nf.format(f!.scale)} plan units per metre`),
+        h('dt', '', 'Rotation'), h('dd', '', `North points ${nf.format(f!.rotation)}° clockwise from the top of the plan page`),
+        h('dt', '', 'Typical error'), h('dd', '', `${nf.format(f!.rmsM)} m`))
       : h('p', 'hint', pairs.length ? `Add ${Math.max(0, MIN_PAIRS - pairs.length)} more pair${MIN_PAIRS - pairs.length === 1 ? '' : 's'} to fit this page.` : 'No pairs yet for this page.');
-    const kids: Kid[] = [h('h2', '', `Page ${clusterId}`), old && !dirty ? h('p', 'hint', `Saved: ${old.pairs.length} pairs, typical error ${old.rms == null ? '–' : nf.format(old.rms)} plan units.`) : null, fitLines, rows.length ? h('ul', 'pairs', undefined, ...rows) : null];
+    const kids: Kid[] = [h('h2', '', `Page ${clusterId}`), old && !dirty ? h('p', 'hint', `Saved: ${old.pairs.length} pairs, typical error ${old.rms == null ? '–' : nf.format(old.rms / old.scale)} m.`) : null, fitLines, rows.length ? h('ul', 'pairs', undefined, ...rows) : null];
     if (dirty) kids.push(h('p', 'dirty', 'Not saved yet.'));
     if (canEdit) {
       const save = h('button', 'button button--primary', 'Save this page') as HTMLButtonElement;
@@ -350,17 +400,17 @@ import '../../styles/site-map.css';
   }
   function paint() {
     const f = fit();
-    // A pair is "off" when it is well beyond the typical error of the others (and at least a little off in absolute terms).
-    const off = pairs.map((_, i) => !!f && pairs.length > MIN_PAIRS && f.residuals[i] > Math.max(2 * f.rms, 6));
+    // A pair is "off" when it is well beyond the typical error of the others (and at least a couple of metres off).
+    const off = pairs.map((_, i) => !!f && pairs.length > MIN_PAIRS && f.residualsM[i] > Math.max(2 * f.rmsM, 2));
     $('clusters').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.getAttribute('data-c') === clusterId)));
     $('plan-name').textContent = clusterId;
     paintPlan(off);
-    paintSat(f, off);
+    paintMap(f, off);
     paintCard(f, off);
     ($('overlay') as HTMLButtonElement).setAttribute('aria-pressed', String(showOverlay));
-    $('overlaybar').hidden = !(hasImage && f && pairs.length >= MIN_PAIRS);
-    if (!hasImage) setHint(canEdit ? 'Upload a satellite image to start.' : 'No satellite image has been uploaded yet.');
-    else if (pending) setHint('Now tap the same spot on the satellite image.', true);
+    $('overlaybar').hidden = !(map && f && pairs.length >= MIN_PAIRS);
+    if (!map) setHint(MAPS_KEY ? 'Loading the map…' : 'The map needs a Google Maps key.');
+    else if (pending) setHint('Now tap the same spot on the satellite map.', true);
     else setHint(pairs.length ? 'Tap another home or spot on the plan to add a pair.' : 'Tap a home on the plan to start.');
   }
 
@@ -390,38 +440,6 @@ import '../../styles/site-map.css';
       selectCluster(clusterId);
     } catch (err) { errToast(err); } finally { done(); }
   }
-
-  // The image is shrunk and sent as a JPEG: a screenshot is far larger than the alignment needs, and the request is limited.
-  async function shrink(file: File): Promise<string> {
-    const url = URL.createObjectURL(file);
-    try {
-      const img = await new Promise<HTMLImageElement>((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('not an image')); i.src = url; });
-      const k = Math.min(1, 2400 / img.naturalWidth);
-      const c = document.createElement('canvas');
-      c.width = Math.round(img.naturalWidth * k);
-      c.height = Math.round(img.naturalHeight * k);
-      c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height);
-      return c.toDataURL('image/jpeg', 0.88);
-    } finally { URL.revokeObjectURL(url); }
-  }
-  $('upload').addEventListener('click', () => $('file').click());
-  $('file').addEventListener('change', async () => {
-    const input = $('file') as HTMLInputElement;
-    const file = input.files?.[0];
-    input.value = '';
-    if (!file) return;
-    if (hasImage && !window.confirm('Replacing the image means every saved alignment no longer matches it, and the pairs must be tapped again. Continue?')) return;
-    const done = busyForPress('Uploading…');
-    try {
-      const dataUrl = await shrink(file);
-      const { status, data: out } = await staffFetch('/api/site-map-admin/satellite', { method: 'POST', body: { image: dataUrl } });
-      if (status !== 200) { showToast(out?.error ?? 'Could not upload that image.'); return; }
-      showToast('Image uploaded.');
-      await loadImage();
-      views.sat.vb = views.sat.full();
-      paint();
-    } catch (err) { if (err instanceof StaffAuthError) errToast(err); else showToast('Could not read that image.'); } finally { done(); }
-  });
   $('overlay').addEventListener('click', () => { showOverlay = !showOverlay; paint(); });
   $('strength').addEventListener('input', paint);
 
@@ -431,27 +449,14 @@ import '../../styles/site-map.css';
     pairs = (saved.find((s) => s.cluster === id)?.pairs ?? []).map((p) => ({ ...p }));
     pending = null;
     dirty = false;
-    views.plan.vb = views.plan.full();
-    views.sat.vb = views.sat.full();
+    vb = [...clusterOf(id).viewBox];
     paint();
   }
   async function loadAlignments() {
     const { status, data: body } = await staffFetch('/api/site-map-admin/alignment');
     if (status !== 200) throw new Error(`the server answered ${status}`);
     saved = body.alignments as Saved[];
-    hasImage = !!body.hasImage;
     canEdit = !!body.canEdit;
-    $('imagebar').hidden = !canEdit;
-    $('image-note').textContent = hasImage ? 'One is uploaded; uploading another replaces it.' : 'None uploaded yet.';
-  }
-  async function loadImage() {
-    const { status, data: body } = await staffFetch('/api/site-map-admin/satellite');
-    if (status === 404) { hasImage = false; imageUrl = ''; return; }
-    if (status !== 200) throw new Error(`the server answered ${status}`);
-    imageUrl = body.image as string;
-    await new Promise<void>((res) => { const i = new Image(); i.onload = () => { imgW = i.naturalWidth; imgH = i.naturalHeight; res(); }; i.onerror = () => res(); i.src = imageUrl; });
-    hasImage = true;
-    $('image-note').textContent = 'One is uploaded; uploading another replaces it.';
   }
   let firstLoad = true;
   async function load() {
@@ -459,19 +464,19 @@ import '../../styles/site-map.css';
     forbidden.hidden = true;
     if (firstLoad) { statusEl.hidden = false; statusEl.textContent = 'Loading…'; }
     try {
-      const { status, data: map } = await staffFetch('/api/site-map-admin/overview');
+      const { status, data: plan } = await staffFetch('/api/site-map-admin/overview');
       if (status === 403) { showForbidden(); return; }
       if (status !== 200) throw new Error(`the server answered ${status}`);
-      clusters = map.clusters as Cluster[];
-      units = (map.units as Unit[]).map((u) => ({ houseNo: u.houseNo, cluster: u.cluster, x: u.x, y: u.y }));
+      clusters = plan.clusters as Cluster[];
+      units = (plan.units as Unit[]).map((u) => ({ houseNo: u.houseNo, cluster: u.cluster, x: u.x, y: u.y }));
       await loadAlignments();
-      if (hasImage) await loadImage();
       statusEl.hidden = true;
-      intro.textContent = 'Lay each plan page over the satellite image by pairing points. The member map uses this to place the pages against each other.';
+      intro.textContent = 'Lay each plan page over the satellite map by pairing points. The member map uses this to place the pages against each other.';
       content.hidden = false;
       $('clusters').replaceChildren(...clusters.map((c) => { const b = h('button', '', c.id); b.setAttribute('type', 'button'); b.setAttribute('data-c', c.id); b.addEventListener('click', () => { if (dirty && !window.confirm('This page has changes that are not saved. Leave them?')) return; selectCluster(c.id); }); return b; }));
       selectCluster(clusterId && clusters.some((c) => c.id === clusterId) ? clusterId : clusters[0].id);
       firstLoad = false;
+      void startMap().then(() => paint());
     } catch (err) {
       if (err instanceof StaffAuthError) {
         if (err.kind === 'unauthorized') showGate('Your session expired. Sign in again.');
@@ -504,14 +509,14 @@ import '../../styles/site-map.css';
     load();
   }
   function renderSignInButton() {
-    if (typeof google === 'undefined') return;
+    if (typeof google === 'undefined' || !google.accounts) return;
     google.accounts.id.initialize({ client_id: CLIENT_ID, callback: handleCredentialResponse });
     google.accounts.id.renderButton(document.getElementById('g_id_signin'), { theme: (window as any).tvcGsiTheme?.() ?? 'outline', size: 'large' });
   }
   function signOut() {
     clearToken();
     clearStepUp();
-    if (typeof google !== 'undefined') google.accounts.id.disableAutoSelect();
+    if (typeof google !== 'undefined' && google.accounts) google.accounts.id.disableAutoSelect();
     firstLoad = true;
     showGate();
   }

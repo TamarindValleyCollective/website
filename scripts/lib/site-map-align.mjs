@@ -1,18 +1,23 @@
-// Laying the site plan over a satellite image: the maths and the rules for the admin Site map's "Align to satellite" page
+// Laying the site plan over a live satellite map: the maths and the rules for the admin Site map's "Align to satellite" page
 // (src/pages/internal/site-map-align.astro, netlify/functions/site-map-admin.mts). Pure (no network), so it is tested on its own.
 //
-// An admin pairs points: a spot on a plan page (a home's centre, or any point of the page) and the same spot on the satellite
-// image. From three or more pairs this fits a similarity (scale, rotation and shift, no stretching) that takes a point of the
-// image to the plan page's coordinates, by least squares, and says how far each pair is from the fit. A similarity is written
-// as a complex number c = a + bi and a shift d: plan = c * image + d, with the picture's y pointing down as everywhere here.
+// An admin pairs points: a spot on a plan page (a home's centre, or any point of the page) and the same spot on Google's
+// satellite map, which gives a latitude and longitude. The latitude and longitude are turned into metres east and north of a
+// reference point (geoToLocal; "local" coordinates have y pointing south, like the plan page). From three or more pairs this
+// fits a similarity (scale, rotation and shift, no stretching) that takes a local point to the plan page's coordinates, by
+// least squares, and says how far each pair is from the fit. A similarity is written as a complex number c = a + bi and a
+// shift d: plan = c * local + d. Its scale is plan units per metre and its angle is how far the plan page is turned from
+// north-up (north points that many degrees clockwise from the top of the page).
 //
-// Each plan page (H1-A, H1-B, H2) is aligned to the same image on its own. Because both pages are then placed on the same
-// ground, one page can be moved into another's coordinates (relativePlacement): that is how the member map joins H1-A and
-// H1-B into one sheet without anyone guessing the offset (see mergeSheets in site-map.mjs).
+// Each plan page (H1-A, H1-B, H2) is aligned to the same ground on its own, from one shared reference point. Because the
+// pages are then placed on the same ground, one page can be moved into another's coordinates (relativePlacement): that is
+// how the member map joins H1-A and H1-B into one sheet without anyone guessing the offset (see mergeSheets in site-map.mjs).
 
 import { CLUSTER_IDS } from './site-map-edit.mjs';
 
 export const MIN_PAIRS = 3;
+const M_PER_DEG_LAT = 110540;
+const M_PER_DEG_LNG_AT_EQUATOR = 111320;
 export const MAX_PAIRS = 12;
 const LIMIT = 100000; // image pixels and plan units are a few thousand at most; this only stops a typo like 1e12
 const round = (n, d = 4) => { const k = 10 ** d; return Math.round(n * k) / k; };
@@ -47,40 +52,60 @@ export function fitSimilarity(pairs) {
   return { a, b, tx, ty, scale, rotation: (Math.atan2(b, a) * 180) / Math.PI, residuals, rms };
 }
 
-/** A plan point for an image point. */
+/** Metres east and (y down) south of `origin` for a [lat, lng]: the fit's "local" coordinates. */
+export function geoToLocal(origin, [lat, lng]) {
+  return [(lng - origin.lng) * M_PER_DEG_LNG_AT_EQUATOR * Math.cos((origin.lat * Math.PI) / 180), -(lat - origin.lat) * M_PER_DEG_LAT];
+}
+/** The [lat, lng] of a local point. */
+export function localToGeo(origin, [x, y]) {
+  return [origin.lat - y / M_PER_DEG_LAT, origin.lng + x / (M_PER_DEG_LNG_AT_EQUATOR * Math.cos((origin.lat * Math.PI) / 180))];
+}
+/** A plan point for a local point. */
 export const imageToPlan = (t, [x, y]) => [t.a * x - t.b * y + t.tx, t.b * x + t.a * y + t.ty];
-
-/** The SVG matrix(...) numbers that draw plan-page content in image pixels (the inverse of the fit): for the overlay. */
-export function planToImageMatrix(t) {
+/** The local point for a plan point (the inverse of the fit): where a spot of the plan is on the ground. */
+export function planToLocal(t, [x, y]) {
   const k = t.a * t.a + t.b * t.b;
-  const p = t.a / k, q = -t.b / k; // 1 / c
-  return { a: p, b: q, c: -q, d: p, e: -(p * t.tx - q * t.ty), f: -(q * t.tx + p * t.ty) };
+  const dx = x - t.tx, dy = y - t.ty;
+  return [(t.a * dx + t.b * dy) / k, (t.a * dy - t.b * dx) / k];
+}
+
+const isLat = (n) => isNum(n) && Math.abs(n) <= 90;
+const isLng = (n) => isNum(n) && Math.abs(n) <= 180;
+
+/** The reference point for a page's pairs: the average of their positions, to about a metre. */
+export function originOf(pairs) {
+  const r6 = (n) => Math.round(n * 1e6) / 1e6;
+  return { lat: r6(pairs.reduce((sum, p) => sum + p.geo[0], 0) / pairs.length), lng: r6(pairs.reduce((sum, p) => sum + p.geo[1], 0) / pairs.length) };
 }
 
 /**
  * What an admin may save for a page: the pairs (a home's number is kept so a re-opened page can show it) and the fit made
- * from them. The server makes the fit itself, so a page cannot store numbers the pairs do not give.
- * @returns {{ error: string } | { cluster: string, pairs: object[], fit: ReturnType<typeof fitSimilarity> & object }}
+ * from them around `origin`. The server makes the fit itself, so a page cannot store numbers the pairs do not give. The
+ * origin is the one the other saved pages use (so all pages share one frame), or, for the first page, the pairs' average.
+ * @param {unknown} body
+ * @param {{ lat: number, lng: number } | null} [origin]
+ * @returns {{ error: string } | { cluster: string, pairs: object[], origin: { lat: number, lng: number }, fit: NonNullable<ReturnType<typeof fitSimilarity>> }}
  */
-export function validateAlignment(body) {
+export function validateAlignment(body, origin = null) {
   if (!body || typeof body !== 'object') return { error: 'Nothing to save.' };
   if (!CLUSTER_IDS.includes(body.cluster)) return { error: 'Pick a cluster.' };
   if (!Array.isArray(body.pairs) || body.pairs.length < MIN_PAIRS) return { error: `Pair at least ${MIN_PAIRS} points.` };
   if (body.pairs.length > MAX_PAIRS) return { error: `Use at most ${MAX_PAIRS} pairs.` };
   const pairs = [];
   for (const p of body.pairs) {
-    if (!p || !isPoint(p.image) || !isPoint(p.plan)) return { error: 'Every pair needs a point on the plan and a point on the image.' };
+    if (!p || !isPoint(p.plan) || !Array.isArray(p.geo) || p.geo.length !== 2 || !isLat(p.geo[0]) || !isLng(p.geo[1])) return { error: 'Every pair needs a point on the plan and a point on the map.' };
     const house = typeof p.house === 'string' && /^H-\d{2}$/.test(p.house) ? p.house : null;
-    pairs.push({ house, image: p.image.map((n) => round(n, 1)), plan: p.plan.map((n) => round(n, 2)) });
+    pairs.push({ house, plan: p.plan.map((n) => round(n, 2)), geo: p.geo.map((n) => round(n, 7)) });
   }
-  const fit = fitSimilarity(pairs);
+  const frame = origin ?? originOf(pairs);
+  const fit = fitSimilarity(pairs.map((p) => ({ plan: p.plan, image: geoToLocal(frame, p.geo) })));
   if (!fit) return { error: 'These points cannot be fitted. Pick points that are apart from each other.' };
   if (fit.scale < 0.05 || fit.scale > 20) return { error: 'These points give an unlikely scale. Check that each pair is the same spot.' };
-  return { cluster: body.cluster, pairs, fit };
+  return { cluster: body.cluster, pairs, origin: frame, fit };
 }
 
 /** The audit detail for a saved alignment: the cluster and the result, never anything personal. */
-export const auditAlignment = (cluster, fit, count) => `${cluster}: ${count} pairs, scale ${round(fit.scale, 3)}, rotation ${round(fit.rotation, 2)} deg, rms ${round(fit.rms, 1)}`;
+export const auditAlignment = (cluster, fit, count) => `${cluster}: ${count} pairs, ${round(fit.scale, 3)} plan units per metre, rotation ${round(fit.rotation, 2)} deg, error ${round(fit.rms / fit.scale, 1)} m`;
 
 /** A stored row as the pages and the merge use it. */
 export const shapeAlignment = (row) => ({
@@ -88,10 +113,20 @@ export const shapeAlignment = (row) => ({
   a: Number(row.a), b: Number(row.b), tx: Number(row.tx), ty: Number(row.ty),
   scale: Math.hypot(Number(row.a), Number(row.b)),
   rotation: (Math.atan2(Number(row.b), Number(row.a)) * 180) / Math.PI,
+  originLat: Number(row.origin_lat), originLng: Number(row.origin_lng),
   rms: row.rms == null ? null : Number(row.rms),
   pairs: Array.isArray(row.pairs) ? row.pairs : [],
   updatedAt: row.updated_at ?? null,
 });
+
+/**
+ * The same fit expressed around another reference point (the pages of a sheet must share one before they are compared):
+ * a shift of the origin by v metres changes the plan shift by c * v.
+ */
+export function withOrigin(al, origin) {
+  const [vx, vy] = geoToLocal({ lat: al.originLat, lng: al.originLng }, [origin.lat, origin.lng]); // the new origin, in the old frame
+  return { ...al, originLat: origin.lat, originLng: origin.lng, tx: al.a * vx - al.b * vy + al.tx, ty: al.b * vx + al.a * vy + al.ty };
+}
 
 /**
  * Where to move `page` so it sits in `into`'s coordinates, from the two pages' alignments to the same image:
@@ -121,21 +156,8 @@ export function sheetsFromAlignments(defaults, alignments) {
     const [first, ...rest] = pages;
     const base = by.get(first.page);
     if (!base || rest.some((p) => !by.get(p.page))) { out[sheet] = pages; continue; }
-    out[sheet] = [first, ...rest.map((p) => ({ page: p.page, ...relativePlacement(base, by.get(p.page)) }))];
+    const frame = { lat: base.originLat, lng: base.originLng };
+    out[sheet] = [first, ...rest.map((p) => ({ page: p.page, ...relativePlacement(base, withOrigin(by.get(p.page), frame)) }))];
   }
   return out;
-}
-
-// The satellite image is sent as a data URL (the page shrinks it first), kept as one string in a private store, and only
-// ever given back to a signed-in admin. Only PNG or JPEG, checked by their first bytes and not by what the page says.
-export const MAX_IMAGE_CHARS = 6_000_000; // about 4.5 MB of image: under the function request limit
-export function validateSatellite(dataUrl) {
-  const m = typeof dataUrl === 'string' ? dataUrl.match(/^data:image\/(png|jpeg);base64,([A-Za-z0-9+/]+={0,2})$/) : null;
-  if (!m) return { error: 'Send a PNG or JPEG image.' };
-  if (dataUrl.length > MAX_IMAGE_CHARS) return { error: 'That image is too large. Use one under 4 MB.' };
-  const head = Buffer.from(m[2].slice(0, 16), 'base64');
-  const png = head.length >= 4 && head[0] === 0x89 && head[1] === 0x50 && head[2] === 0x4e && head[3] === 0x47;
-  const jpeg = head.length >= 3 && head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff;
-  if ((m[1] === 'png' && !png) || (m[1] === 'jpeg' && !jpeg)) return { error: 'That file is not a PNG or JPEG image.' };
-  return { dataUrl, kb: Math.round((dataUrl.length * 3) / 4 / 1024) };
 }

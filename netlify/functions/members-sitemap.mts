@@ -41,9 +41,9 @@ async function handleGet(req: Request): Promise<Response> {
     select('member_households', 'house_no=not.is.null&select=id,farm_unit,house_no,unit_type'),
     select('member_people', 'select=id,full_name,active,directory_visible'),
     select('member_household_members', 'select=household_id,person_id,role'),
-    // How each plan page sits on the satellite image: only the numbers, never the image. Pages joined into one sheet are
+    // How each plan page sits on the ground (a fit to Google's satellite map): only the numbers. Pages joined into one sheet are
     // placed from these once all of the sheet's pages have one; until then the defaults in SHEETS apply.
-    select('site_map_alignment', 'select=cluster,a,b,tx,ty,rms,pairs,updated_at').catch(() => []),
+    select('site_map_alignment', 'select=cluster,a,b,tx,ty,origin_lat,origin_lng,rms,pairs,updated_at').catch(() => []),
   ]);
   const merged = mergeSheets(shapeClusters(clusters), buildSiteMap({ units, households, people, memberships }, householdId ?? null), sheetsFromAlignments(SHEETS, alignments.map(shapeAlignment)));
   return jsonResponse({ enabled: true, ...merged });
