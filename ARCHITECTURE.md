@@ -1020,7 +1020,9 @@ outside both the local machine and Netlify (the member-update-email workflow).
   (Maps JavaScript API, browser key `PUBLIC_GOOGLE_MAPS_API_KEY`, restricted to the admin site); a pair is a plan point and
   its latitude and longitude, fitted in metres around one shared reference point; the maths and rules are in
   `scripts/lib/site-map-align.mjs`; an admin can then fine-tune the plan on the map by hand, moving it in metres, turning it in degrees and resizing it in percent about the pairs' middle: that is folded into the stored fit, and the page works it back out of the stored fit and its pairs when it is reopened, so no extra column) once both H1 pages are aligned, and from `SHEETS` until then. No map imagery is stored
-  anywhere: the page draws our plan over Google's live map. Alignment saves go through `site-map-admin.mts`
+  anywhere: the page draws our plan over Google's live map. The site-wide CSP (`scripts/generate-csp.mjs`) allows the Maps
+  hosts it needs (`maps.googleapis.com`, `maps.gstatic.com`, the `*.googleapis.com` / `*.gstatic.com` tile and image hosts, Google's
+  font and stylesheet); without that the browser blocks the Maps script and the page says the map could not be loaded. Alignment saves go through `site-map-admin.mts`
   (`GET/POST /api/site-map-admin/alignment`, `site-map` / `edit`, audited first, fitted on the server). The function selects only ids, names and unit
   fields, and `scripts/lib/site-map.mjs` (tested) applies the directory's privacy rule: a person is named only when
   active and not opted out of the directory, a household with nobody listed shows as "Private member" with no profile
