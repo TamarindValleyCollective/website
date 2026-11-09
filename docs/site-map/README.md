@@ -20,6 +20,6 @@ The layout of the 52 homes on the 2023 site plan, fixed by hand on 2026-10-29 wi
   plan's own lines that are not plot boundaries stay with the page's alignment. A group can be placed without pairs: it starts from its
   page's placement and is dragged (Shift-drag turns) on the live map, and can be snapped to an aligned neighbour whose plots touch its own.
   While one page or group is adjusted, the other aligned layouts (other groups, other pages' lines, homes that follow their page) are
-  drawn on the map in white for context (a switch hides them).
+  drawn on the map in white for context (a switch hides them). Homes are drawn as their real footprints (with house numbers for the one being adjusted), on the map and in the plan pane.
 - The member map's optional Satellite layer draws Google's live map under the plan using the sheet's fit to the ground (add
   `https://members.tvc.farm/*` to the key's referrers).
