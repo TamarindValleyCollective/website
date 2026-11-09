@@ -204,30 +204,32 @@ test('plot span: the size of the smallest outline round a point', async () => {
   assert.equal(plotSpan(path, 500, 500), null);
 });
 
-test('H1-A and H1-B are combined into one H1 sheet, in H1-A coordinates', async () => {
+test('all three plan pages are one sheet, in H1-A coordinates, each home remembering its page', async () => {
   const { mergeSheets, sheetOf, SHEETS } = await import('./site-map.mjs');
-  const [a, b] = SHEETS.H1;
+  const [a, b, c2] = SHEETS.All;
   const clusters = [
     { id: 'H1-A', baseSize: 1.63, viewBox: [330, 90, 560, 930], plot: 'M10 20 L30 40 Z' },
     { id: 'H1-B', baseSize: 1.8, viewBox: [190, 130, 920, 500], plot: 'M100 200 L300 400 Z' },
     { id: 'H2', baseSize: 1.8, viewBox: [110, 330, 1010, 310], plot: 'M1 2 L3 4' },
   ];
-  const units = [{ houseNo: 'H-16', cluster: 'H1-A', x: 400, y: 500 }, { houseNo: 'H-40', cluster: 'H1-B', x: 500, y: 300 }, { houseNo: 'H-01', cluster: 'H2', x: 160, y: 530 }];
+  const units = [{ houseNo: 'H-16', cluster: 'H1-A', x: 400, y: 500, rotation: 0 }, { houseNo: 'H-40', cluster: 'H1-B', x: 500, y: 300, rotation: 0 }, { houseNo: 'H-01', cluster: 'H2', x: 160, y: 530, rotation: 0 }];
   const out = mergeSheets(clusters, units);
-  assert.deepEqual(out.clusters.map((c) => c.id), ['H1', 'H2']);
+  assert.deepEqual(out.clusters.map((c) => c.id), ['All']);
   assert.equal(out.clusters[0].baseSize, 1.63);
-  assert.equal(out.clusters[1].plot, 'M1 2 L3 4');
-  assert.deepEqual(out.units.map((u) => u.cluster), ['H1', 'H1', 'H2']);
+  assert.deepEqual(out.units.map((u) => u.cluster), ['All', 'All', 'All']);
+  assert.deepEqual(out.units.map((u) => u.page), ['H1-A', 'H1-B', 'H2']); // a home still knows which page (H1 or H2) it is on
   assert.deepEqual([out.units[0].x, out.units[0].y], [400, 500]);
-  assert.equal(out.units[1].x, Math.round((500 * b.scale + b.dx) * 100) / 100);
-  assert.equal(out.units[1].y, Math.round((300 * b.scale + b.dy) * 100) / 100);
-  assert.deepEqual([out.units[2].x, out.units[2].y], [160, 530]);
-  // The plot lines of both pages are in the combined cluster, and the view box covers both.
+  // H1-B and H2 are moved by their own scale, turn and offset.
+  const at = (t, x, y) => { const r = (t.rotate * Math.PI) / 180; return [Math.round((t.scale * (Math.cos(r) * x - Math.sin(r) * y) + t.dx) * 100) / 100, Math.round((t.scale * (Math.sin(r) * x + Math.cos(r) * y) + t.dy) * 100) / 100]; };
+  assert.deepEqual([out.units[1].x, out.units[1].y], at(b, 500, 300));
+  assert.deepEqual([out.units[2].x, out.units[2].y], at(c2, 160, 530));
+  assert.equal(out.units[2].rotation, Math.round(c2.rotate * 100) / 100); // the turn is added to the home's own
+  // The plot lines of every page are in the one sheet, and the view box covers all of them.
   assert.match(out.clusters[0].plot, /^M10 20 L30 40 Z M/);
-  const [x, y, w, h] = out.clusters[0].viewBox;
-  assert.ok(x <= 330 && x <= 190 * b.scale + b.dx + 0.01 && x + w >= 890 && y + h >= 1020);
-  assert.equal(sheetOf('H1-B'), 'H1');
-  assert.equal(sheetOf('H2'), 'H2');
+  const [vx, vy, vw, vh] = out.clusters[0].viewBox;
+  for (const [x, y] of [at(a, 330, 90), at(b, 190, 130), at(c2, 1120, 640)]) assert.ok(x >= vx - 1 && x <= vx + vw + 1 && y >= vy - 1 && y <= vy + vh + 1, `${x},${y}`);
+  assert.equal(sheetOf('H1-B'), 'All');
+  assert.equal(sheetOf('H2'), 'All');
   assert.equal(a.scale, 1);
 });
 

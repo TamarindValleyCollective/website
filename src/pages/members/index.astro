@@ -7225,7 +7225,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
   // Every home on the site plan: who it belongs to and what type it is. Read-only; the layout is changed by admins.
   // What each home shows follows the directory (netlify/functions/members-sitemap.mts, scripts/lib/site-map.mjs).
   type MapUnit = {
-    houseNo: string; cluster: string; shape: string; x: number; y: number; rotation: number; mirrorX: boolean; mirrorY: boolean;
+    houseNo: string; cluster: string; page?: string; shape: string; x: number; y: number; rotation: number; mirrorX: boolean; mirrorY: boolean;
     status: 'named' | 'private' | 'vacant'; names: string[]; unitType: string | null; bhk: string; detail: string; farmUnit: string | null; isYours: boolean;
   };
   type MapCluster = { id: string; baseSize: number; viewBox: number[]; plot: string };
@@ -7296,6 +7296,8 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       return { id: c.id, b, n };
     });
     tabs.append(...tabButtons.map((t) => t.b));
+    // The whole farm is one sheet, so there is nothing to switch between (a lone tab would only say a name).
+    tabs.hidden = data.clusters.length < 2;
 
     const svg = document.createElementNS(SVG_NS, 'svg');
     svg.setAttribute('class', 'sm-map');
@@ -8058,7 +8060,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         h('div', 'dir-map-card-head', undefined, h('div', 'dir-map-card-text', undefined,
           h('h2', '', u.status === 'private' ? 'Private member' : 'No member yet'),
           h('span', 'dir-pills', undefined, codeBadge(u.houseNo, 'House number')),
-          h('span', 'dir-map-card-meta', `Cluster ${u.cluster} · ${u.unitType ? `${u.bhk} ${u.unitType}` : u.bhk}`))),
+          h('span', 'dir-map-card-meta', `Cluster ${clusterName(u.page ?? u.cluster)} · ${u.unitType ? `${u.bhk} ${u.unitType}` : u.bhk}`))),
         h('p', 'dir-map-card-story', note), x));
     }
     // A tap on a home.

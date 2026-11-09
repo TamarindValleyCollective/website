@@ -80,12 +80,15 @@ export function shapeClusters(rows) {
 // combined. The placements come from the satellite alignments (site-map-align.mjs, set on the admin page "Align to
 // satellite"); SHEETS holds the placement used until a sheet's pages are all aligned.
 export const SHEETS = {
-  H1: [
+  // One sheet for the whole farm: H1-A is the frame, H1-B and H2 are placed against it. These are the placements the saved satellite
+  // alignments give (2026-11-09), kept as the fallback for when a page has no alignment.
+  All: [
     { page: 'H1-A', scale: 1, rotate: 0, dx: 0, dy: 0 },
-    { page: 'H1-B', scale: 1.63 / 1.8, rotate: 0, dx: -778, dy: -509 },
+    { page: 'H1-B', scale: 0.9614, rotate: 1.7, dx: -759, dy: -398.1 },
+    { page: 'H2', scale: 0.9452, rotate: -10.62, dx: 899.8, dy: 802 },
   ],
 };
-/** The sheet a plan page belongs to ("H1" for H1-A and H1-B); a page on no sheet is its own. */
+/** The sheet a plan page belongs to ("All": the whole farm is one sheet); a page on no sheet is its own. */
 export const sheetOf = (page, sheets = SHEETS) => Object.entries(sheets).find(([, pages]) => pages.some((p) => p.page === page))?.[0] ?? page;
 
 const round2 = (n) => Math.round(n * 100) / 100;
@@ -144,7 +147,7 @@ export function mergeSheets(clusters, units, sheets = SHEETS, extra = {}) {
     if (!t) return u;
     const [x, y] = place(t, u.x, u.y);
     (moved[sheetOf(u.cluster, sheets)] ??= []).push([x, y]);
-    return { ...u, cluster: sheetOf(u.cluster, sheets), x, y, rotation: normDeg((u.rotation ?? 0) + (t.rotate ?? 0)) };
+    return { ...u, cluster: sheetOf(u.cluster, sheets), page: u.cluster, x, y, rotation: normDeg((u.rotation ?? 0) + (t.rotate ?? 0)) };
   };
   const out = [];
   for (const c of clusters) {
