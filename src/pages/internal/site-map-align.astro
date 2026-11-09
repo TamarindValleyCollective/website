@@ -61,6 +61,8 @@ import '../../styles/site-map.css';
           </div>
           <div class="line" id="overlaybar" hidden>
             <button type="button" class="button button--outline" id="overlay" aria-pressed="true">Show the plan on the map</button>
+ 
+            <button type="button" class="button button--outline" id="others" aria-pressed="true" title="Draw the other groups and pages that are already aligned on the map, in white, so you can line this one up with them">Show other layouts</button>
             <button type="button" class="button button--outline" id="adjust" aria-pressed="true" title="Drag the plan on the map to move it; hold Shift and drag to turn it">Drag to adjust</button>
             <label class="line">Plan strength <input type="range" id="strength" min="10" max="100" value="90" /></label>
           </div>
@@ -509,8 +511,62 @@ import '../../styles/site-map.css';
     wireDrag();
     map.addListener('idle', () => { const c = map.getCenter(); try { localStorage.setItem(CENTER_KEY, JSON.stringify({ lat: c.lat(), lng: c.lng(), zoom: map.getZoom() })); } catch { /* not remembered */ } });
   }
+  // ---- the other layouts, for context ----
+  // While one page or group is adjusted, everything else that is already placed is drawn on the map too, in white and fainter: the
+  // other groups (their saved placements), the pages' own lines, and homes that follow their page. They change only when something is
+  // saved or the target changes, so they are cached and not redrawn while a group is being dragged.
+  let showOthers = true;
+  let othersMarks: any[] = [];
+  let othersKey = '';
+  function drawOthers() {
+    const key = `${targetKey()}|${showOthers}|${saved.map((r) => `${r.key}@${r.updatedAt}@${r.a.toFixed(4)}@${r.tx.toFixed(1)}@${r.ty.toFixed(1)}`).join(',')}|${units.length}`;
+    if (key === othersKey) return;
+    othersKey = key;
+    for (const m of othersMarks) m.setMap(null);
+    othersMarks = [];
+    if (!showOthers) return;
+    const white = tok('--tvc-white');
+    const draw = (row: Saved, subpaths: string[]) => {
+      const at = (x: number, y: number) => { const [lat, lng] = localToGeo({ lat: row.originLat, lng: row.originLng }, planToLocal(row, [x, y]) as [number, number]); return { lat, lng }; };
+      for (const sub of subpaths) {
+        const n = (sub.match(/-?\d+(?:\.\d+)?/g) ?? []).map(Number);
+        const path: { lat: number; lng: number }[] = [];
+        for (let i = 0; i + 1 < n.length; i += 2) path.push(at(n[i], n[i + 1]));
+        if (path.length > 1) othersMarks.push(new google.maps.Polyline({ map, path, strokeColor: white, strokeOpacity: 0.7, strokeWeight: 1.2, clickable: false }));
+      }
+    };
+    const own = targetGroup();
+    // Homes that follow a saved group are drawn with that group; every other home follows its page (if the page is aligned).
+    const grouped = new Set<string>();
+    for (const g of groups) {
+      const row = savedFit(g);
+      if (!row || (own && g.key === own.key)) { if (row) g.houses.forEach((h) => grouped.add(h)); continue; }
+      g.houses.forEach((h) => grouped.add(h));
+      const plot = clusterOf(g.cluster).plot;
+      const outlines = units.filter((u) => u.cluster === g.cluster && g.houses.includes(u.houseNo)).map((u) => plotOutline(plot, u.x, u.y)).filter((d): d is string => !!d);
+      draw(row, outlines);
+      for (const u of units.filter((x) => x.cluster === g.cluster && g.houses.includes(x.houseNo))) {
+        const [lat, lng] = localToGeo({ lat: row.originLat, lng: row.originLng }, planToLocal(row, [u.x, u.y]) as [number, number]);
+        othersMarks.push(new google.maps.Circle({ map, center: { lat, lng }, radius: 1.4, strokeColor: white, strokeOpacity: 0.8, strokeWeight: 1, fillColor: white, fillOpacity: 0.35, clickable: false }));
+      }
+    }
+    for (const row of saved.filter((r) => !r.houses)) {
+      // The page being aligned as a whole is the main overlay; any other page contributes its lines and the homes that follow it.
+      if (!groupKey && row.cluster === clusterId) continue;
+      const plot = clusterOf(row.cluster).plot;
+      const parts = plot.split('M').slice(1).map((x) => `M${x}`);
+      draw(row, parts.filter((x) => !/Z\s*$/i.test(x.trim()))); // the plan's lines
+      const follow = units.filter((u) => u.cluster === row.cluster && !grouped.has(u.houseNo) && !(own && own.houses.includes(u.houseNo)));
+      draw(row, follow.map((u) => plotOutline(plot, u.x, u.y)).filter((d): d is string => !!d));
+      for (const u of follow) {
+        const [lat, lng] = localToGeo({ lat: row.originLat, lng: row.originLng }, planToLocal(row, [u.x, u.y]) as [number, number]);
+        othersMarks.push(new google.maps.Circle({ map, center: { lat, lng }, radius: 1.4, strokeColor: white, strokeOpacity: 0.8, strokeWeight: 1, fillColor: white, fillOpacity: 0.35, clickable: false }));
+      }
+    }
+  }
   function paintMap(f: Fit | null, off: boolean[]) {
     if (!map) return;
+    drawOthers();
     for (const m of mapMarks) m.setMap(null);
     for (const m of overlayMarks) m.setMap(null);
     mapMarks = [];
@@ -592,7 +648,7 @@ import '../../styles/site-map.css';
     paintMap(f, off);
     paintCard(f, off);
     ($('overlay') as HTMLButtonElement).setAttribute('aria-pressed', String(showOverlay));
-    $('overlaybar').hidden = !(map && f);
+    $('overlaybar').hidden = !(map && (f || saved.length));
     $('tune').hidden = !(map && f && canEdit);
     paintTune();
     if (!map) setHint(MAPS_KEY ? 'Loading the map…' : 'The map needs a Google Maps key.');
@@ -704,6 +760,7 @@ import '../../styles/site-map.css';
     ($('tune-reset') as HTMLButtonElement).disabled = !isTuned(tune);
   }
   $('overlay').addEventListener('click', () => { showOverlay = !showOverlay; paint(); });
+  $('others').addEventListener('click', () => { showOthers = !showOthers; $('others').setAttribute('aria-pressed', String(showOthers)); paint(); });
   $('adjust').addEventListener('click', () => { adjustOn = !adjustOn; $('adjust').setAttribute('aria-pressed', String(adjustOn)); });
   $('strength').addEventListener('input', paint);
 
