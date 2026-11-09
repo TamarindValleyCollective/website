@@ -3958,6 +3958,41 @@ import SignInGate from '../../components/SignInGate.astro';
     }
   }
 
+  /* In a narrow card or row the pictures give width back to the names, so a long name keeps whole words. */
+  @media (max-width: 480px) {
+    .dir-card .dir-photo--card,
+    .dir-card .dir-initial--card {
+      width: 72px;
+      height: 72px;
+    }
+
+    .dir-card .dir-initial--card {
+      font-size: 1.6rem;
+    }
+
+    .dir-card .dir-faces--2 .dir-photo--card,
+    .dir-card .dir-faces--2 .dir-initial--card {
+      width: 60px;
+      height: 60px;
+    }
+
+    .dir-card .dir-faces--2 > * + * {
+      margin-left: -24px;
+    }
+
+    .dir-row {
+      gap: 10px;
+    }
+
+    .dir-row .dir-faces > * + * {
+      margin-left: -18px;
+    }
+
+    .dir-row .chev {
+      display: none;
+    }
+  }
+
   @media (max-width: 560px) {
     .dir-own-tools .dir-state,
     .dir-own .dir-pills {
