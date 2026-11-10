@@ -18,7 +18,7 @@ model are in [DESIGN.md](DESIGN.md); how to build it is in [README.md](README.md
 | 06 History load | **Loaded on 2026-11-05** (PR #530, migration `0084` applied): 1,031 allocations on 783 bank lines. Still open: the 2023-24 tracker tab, party on the history rows with none (the "No party" chip lists them), project details for the Farm Project placeholders (issue #531). |
 | 05/06 follow-up: the new ledger | **Draft PR #532.** The ledger page is rebuilt (TanStack Table and Virtual; every line fetched once, searched and sorted in the browser; cards on phones; saved drafts; undo; a line sheet that can set a maintenance unit and year) and replaces the first version at `/internal/finance/ledger/`; faster list, Paytm line, "No party" chip and flags. Critique 22 → 26 → 30 → 27 / 40 over four rounds (reviewers vary by about 3). No migration. Not yet tried on the real ledger. |
 | 08 Payment requests & bills | First slice **merged (PR #567, 2026-11-07)**. Migrations `0092` and `0093` **applied 2026-11-07**; the old sheet's 186 records are loaded. See "Payment requests and spend logs" below. |
-| 02 Dashboard mockup | Reviewed by the owner; draft PR #586 (`docs/finance/mockups/dashboards.html`, invented data). |
+| 02 Dashboard mockup | Reviewed by the owner; shipped in the same PR as session 07 (`docs/finance/mockups/dashboards.html`, invented data). |
 | 07 Dashboards & budget | **In progress, draft PR #587.** Migration `0098` **applied 2026-11-10**; `0099` (budget editing) **applied 2026-11-10**. Metrics, endpoint, the dashboard page and the budget editor are built; the budget import, CSV export and the member preview are next. See "Dashboards" and "The budget editor" below. |
 | 09-13 | Not started |
 
