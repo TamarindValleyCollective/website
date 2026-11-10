@@ -287,6 +287,7 @@ const dispatch = async (req: Request): Promise<Response> => {
 export const config = {
   path: [
     '/api/finance-admin/overview',
+    '/api/finance-admin/dashboard',
     '/api/finance-admin/imports',
     '/api/finance-admin/imports/preview',
     '/api/finance-admin/imports/commit',
