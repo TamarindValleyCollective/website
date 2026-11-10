@@ -45,7 +45,7 @@ Review against the sheet's numbers.
   See `FINANCE.md`, "Dashboards", for the rules and the tests.
 - **Second slice, same day:** the budget editor (`/internal/finance/budget/`): versions (draft, approve, supersede), a grid with every category and project as a
   row beside last year and what has been spent, audited writes, a head picker for a category with none. Migration `0099` (its two atomic database functions)
-  written and tested rolled back, **not yet applied**: reading works without it, saving does not. See `FINANCE.md`, "The budget editor".
+  tested rolled back and **applied 2026-11-10**. See `FINANCE.md`, "The budget editor".
 - **Not built yet:** the import of the existing plan (so the budget has to be typed in until it exists), monthly phasing screens, CSV export, the member-portal
   preview (a `finance` member feature for chosen homes), and the Maintenance and Advances views (sessions 10 and 09). **Committed** is a total, not per budget line, because a payment request carries no category.
 - **Before merging:** apply `0098` (the code tolerates it missing, so order is not critical); open the page signed in on the deployed or local site and compare

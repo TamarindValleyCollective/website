@@ -19,7 +19,7 @@ model are in [DESIGN.md](DESIGN.md); how to build it is in [README.md](README.md
 | 05/06 follow-up: the new ledger | **Draft PR #532.** The ledger page is rebuilt (TanStack Table and Virtual; every line fetched once, searched and sorted in the browser; cards on phones; saved drafts; undo; a line sheet that can set a maintenance unit and year) and replaces the first version at `/internal/finance/ledger/`; faster list, Paytm line, "No party" chip and flags. Critique 22 → 26 → 30 → 27 / 40 over four rounds (reviewers vary by about 3). No migration. Not yet tried on the real ledger. |
 | 08 Payment requests & bills | First slice **merged (PR #567, 2026-11-07)**. Migrations `0092` and `0093` **applied 2026-11-07**; the old sheet's 186 records are loaded. See "Payment requests and spend logs" below. |
 | 02 Dashboard mockup | Reviewed by the owner; draft PR #586 (`docs/finance/mockups/dashboards.html`, invented data). |
-| 07 Dashboards & budget | **In progress, draft PR #587.** Migration `0098` **applied 2026-11-10**; `0099` (budget editing) written and tested rolled back, **not yet applied**. Metrics, endpoint, the dashboard page and the budget editor are built; the budget import, CSV export and the member preview are next. See "Dashboards" and "The budget editor" below. |
+| 07 Dashboards & budget | **In progress, draft PR #587.** Migration `0098` **applied 2026-11-10**; `0099` (budget editing) **applied 2026-11-10**. Metrics, endpoint, the dashboard page and the budget editor are built; the budget import, CSV export and the member preview are next. See "Dashboards" and "The budget editor" below. |
 | 09-13 | Not started |
 
 ## Access
@@ -782,7 +782,7 @@ the page draws from `scripts/lib/finance-dashboard-view.mjs` (pure, tested) usin
   views (sessions 10 and 09: the mockup shows their shape); the member-portal preview of some of these figures (to be a preview feature for chosen
   homes, not open to everyone); CSV export of a table. **Not verified:** the page in a browser with a real sign-in, on a phone, and against the real ledger.
 
-## The budget editor (session 07, page `/internal/finance/budget/`, migration `0099_finance_budget_editing.sql`, **not yet applied**)
+## The budget editor (session 07, page `/internal/finance/budget/`, migration `0099_finance_budget_editing.sql`, **applied 2026-11-10**)
 
 Finance › Budget. Routes in `lib/finance-budget.ts` on `finance-admin.mts`: `GET /budget?fy=&v=` (everyone with `view`), `POST /budget/versions`
 (start a draft), `POST /budget/versions/:id/lines` (save), `/approve`, `/discard` (all need `configure`, which is admin-only). A category's head and
@@ -806,7 +806,7 @@ salary flag are set with `PATCH /categories/:id {head, isSalary}`, the route cat
 - **Migration `0099`** (one partial unique index for one draft per year, and the two functions, service role only): tested on 2026-11-10 against the real
   database inside a rolled-back transaction: the first version is 1, a save replaces the lines and trims text, a bad save leaves the old lines, a second
   draft and a save to an approved version are refused, copying within a year keeps project lines and copying to another year keeps only category lines, a
-  missing source is refused, anonymous callers are refused. **Not applied**: until it is, reading works and saving does not.
+  missing source is refused, anonymous callers are refused. Applied the same day (recorded as `finance_budget_editing`) and checked: both functions and the index present, only the service role can run the functions, no budget rows touched. A database without it answers a start or a save with 503 and a plain message ("needs a database update (migration 0099)"), not "Server error".
 - **Tests:** `finance-budget` (the rules, the grid, the input reading, 20), `finance-budget-endpoint` (the real function: who may read and change, a bad
   save changes nothing, audit first and without labels or amounts, approve and supersede, discard, a database without the tables, the category head), and
   `finance-routes` (every handled route is declared in `config.path`). The page's client script was run in a DOM against a stateful mock API through the

@@ -1,6 +1,7 @@
 -- Finance module, session 07: what the budget editor needs (docs/finance/FINANCE.md, "Dashboards" and "The budget editor").
--- NOT YET APPLIED to TVC ERP. Additive: one index and two functions; nothing existing changes. The editor needs it to save (reading a budget
--- and the dashboards do not).
+-- Applied to TVC ERP on 2026-11-10 (recorded as finance_budget_editing). Additive: one index and two functions; nothing existing changes. Checked
+-- afterwards: both functions and the index present, service role the only role able to run the functions, no budget rows touched. Tested the same
+-- day inside a transaction that was rolled back.
 --
 --   * One draft per financial year at a time (a partial unique index), so two people cannot be editing two drafts of the same year.
 --   * fin_start_budget_draft: creates the next version of a year as a draft, optionally copying the lines of another version. Copying a
