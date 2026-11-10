@@ -54,9 +54,9 @@ decisions below are the mockup's defaults and are listed on its Decisions tab.
    needing attention; below them, money still owed to the farm (maintenance pending, advances to recover).
 2. Runway is the bank balance divided by average monthly *spending* of the last six complete months, leaving out
    sinking-fund transfers. It replaces the design document's "net outflow" definition because maintenance arrives
-   in lumps. **Needs a yes; DESIGN.md says otherwise.**
+   in lumps. **Confirmed by the owner 2026-11-10;** DESIGN.md is updated in the session 07 PR.
 3. The budget is grouped by the presentation's heads (Company, Farm, Projects, Investment), not the design
-   document's Opex/Capex/Project buckets. **Needs a yes; DESIGN.md says otherwise.**
+   document's Opex/Capex/Project buckets. **Confirmed by the owner 2026-11-10;** DESIGN.md is updated in the session 07 PR.
 4. Salary is its own colour in spending charts and carries a share of spending on every budget line.
 5. Maintenance view: collected against expected, against last year at the same point, how late the pending dues
    are, clusters, and the households still to pay (house numbers only), plus how many months of spending the
@@ -67,7 +67,7 @@ decisions below are the mockup's defaults and are listed on its Decisions tab.
 7. Dashboards show house and employee numbers only; names stay in the directory and payroll.
 8. Member view: Overview (own household's maintenance instead of the attention list), Cashflow, Budget vs actual,
    Maintenance totals with a card for the member's own household. Hidden: Advances, other households' dues, Data
-   health, UPI circle, the draft next-year plan.
+   health, UPI circle, the draft next-year plan. **Decided 2026-11-10: the member view is a preview feature for chosen homes, not open to everyone yet.**
 9. Estimates only for the farm's running costs; "committed" means approved but not yet matched to a bank line;
    Cashflow is the cash view and Budget vs actual the period view; every chart has a table view or tooltips.
 10. Financial year selector in the header; a closed year shows final figures; Data health always describes today.
