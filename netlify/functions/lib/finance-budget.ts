@@ -29,6 +29,10 @@ const rows = async (path: string): Promise<Json[]> => (await (await rest(path)).
 const rpc = async (name: string, body: Json) => (await rest(`/rpc/${name}`, { method: 'POST', body: JSON.stringify(body) })).json();
 const serverError = (err: unknown, what: string) => {
   console.error(`[finance-admin] budget: ${what} failed`, err);
+  // A database function that does not exist answers 404 from /rpc/: the migration that adds it (0099) has not been applied.
+  if (err instanceof Error && /\/rpc\/fin_(start_budget_draft|save_budget_lines)\b.*404/.test(err.message)) {
+    return fail('The budget editor needs a database update that has not been applied yet (migration 0099). Ask a super admin to apply it.', 503);
+  }
   return fail('Server error', 500);
 };
 async function readBody(req: Request): Promise<Json | null> {

@@ -158,6 +158,8 @@ import SignInGate from '../../../components/SignInGate.astro';
   let attention: any = null;
   let view = 'overview';
   let fy: number | null = null;
+  let isLoading = false; // true from a choice until its answer arrives; clicks in between are ignored
+  let loadSeq = 0; // a response that is no longer the latest request is dropped, so a slow one cannot overwrite a newer choice
 
   const fyLabel = (y: number) => `${y}-${String((y + 1) % 100).padStart(2, '0')}`;
   const el = (tag: string, className?: string, text?: string): HTMLElement => {
@@ -491,8 +493,9 @@ import SignInGate from '../../../components/SignInGate.astro';
     box.replaceChildren(...data.fyOptions.map((y: number) => {
       const b = el('button', '', `FY ${fyLabel(y)}`) as HTMLButtonElement;
       b.type = 'button';
+      b.dataset.y = String(y);
       b.setAttribute('aria-pressed', String(y === data.fy));
-      b.addEventListener('click', () => { if (y !== data.fy) load(y); });
+      b.addEventListener('click', () => { if (!isLoading && y !== data.fy) load(y); });
       return b;
     }));
   }
@@ -511,16 +514,32 @@ import SignInGate from '../../../components/SignInGate.astro';
   let timer: number | undefined;
   window.addEventListener('resize', () => { clearTimeout(timer); timer = window.setTimeout(drawCharts, 120); });
 
+  // Show at once that a choice was heard: the content dims, the chosen year is marked, the buttons are held off until the answer
+  // arrives. The answer takes a moment from the live database; without this the page looked as if the first click did nothing.
+  function setLoading(on: boolean, year?: number) {
+    isLoading = on;
+    content.classList.toggle('dash-loading', on);
+    content.setAttribute('aria-busy', String(on));
+    $('fy').querySelectorAll('button').forEach((node) => {
+      const b = node as HTMLButtonElement;
+      b.disabled = on;
+      if (on && year !== undefined && b.dataset.y) b.setAttribute('aria-pressed', String(Number(b.dataset.y) === year));
+    });
+  }
+
   async function load(year?: number) {
     gate.hidden = true;
     forbidden.hidden = true;
-    showLoading(statusEl);
+    const mine = ++loadSeq;
+    setLoading(true, year);
+    showLoading(statusEl, year !== undefined ? `Loading FY ${fyLabel(year)}…` : 'Loading…');
     try {
       const q = year ?? fy;
       const [dash, over] = await Promise.all([
         staffFetch(`/api/finance-admin/dashboard${q ? `?fy=${q}` : ''}`),
         staffFetch('/api/finance-admin/overview').catch(() => ({ status: 0, data: null })),
       ]);
+      if (mine !== loadSeq) return; // a newer request has been made since; its answer is the one to show
       if (dash.status !== 200) throw new Error('load failed');
       data = dash.data;
       attention = over.status === 200 ? over.data?.attention ?? null : null;
@@ -546,6 +565,8 @@ import SignInGate from '../../../components/SignInGate.astro';
       }
       content.hidden = true;
       showFailure(statusEl, { title: "Couldn't load the dashboard", text: "The server didn't answer. Nothing was changed. Check your connection and try again; if it keeps failing, tell a super admin.", onRetry: () => load() });
+    } finally {
+      if (mine === loadSeq) setLoading(false);
     }
   }
 
@@ -596,6 +617,13 @@ import SignInGate from '../../../components/SignInGate.astro';
   .dash-tabs {
     margin: 18px 0 16px;
     overflow-x: auto;
+  }
+
+  /* A choice has been made and the answer is on its way: dim what is there and hold it still, so the click is seen to have worked. */
+  #content.dash-loading {
+    opacity: 0.5;
+    pointer-events: none;
+    transition: opacity 150ms ease-out;
   }
 
   .dash-view {

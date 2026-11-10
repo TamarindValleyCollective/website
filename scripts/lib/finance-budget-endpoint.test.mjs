@@ -112,6 +112,7 @@ globalThis.fetch = async (url, init = {}) => {
     return new Response(null, { status: 201 });
   }
   if (db.noBudgetTables && table.startsWith('fin_budget')) return new Response('relation does not exist', { status: 404 });
+  if (db.noEditingFunctions && (table === 'rpc/fin_start_budget_draft' || table === 'rpc/fin_save_budget_lines')) return new Response('function not found', { status: 404 });
   if (table === 'rpc/fin_start_budget_draft') {
     if (db.fin_budget_years.some((y) => y.entity_id === body.p_entity && y.financial_year === body.p_fy && y.status === 'draft')) return new Response('duplicate key', { status: 409 });
     const version = Math.max(0, ...db.fin_budget_years.filter((y) => y.entity_id === body.p_entity && y.financial_year === body.p_fy).map((y) => y.version)) + 1;
@@ -375,4 +376,22 @@ test('a category\'s head and salary flag are set where categories are edited, by
   assert.equal(db.audit.filter((a) => a.action === 'finance.category_changed').length, 2);
   reset('user');
   assert.equal((await call(`/categories/${C.fees}`, { method: 'PATCH', body: { head: 'farm' } })).status, 403);
+});
+
+test('when migration 0099 is not applied, starting or saving says so instead of "Server error", and changes nothing', async () => {
+  reset();
+  db.noEditingFunctions = true;
+  let res = await call('/budget/versions', { method: 'POST', body: { fy: FY, from: 'empty' } });
+  assert.equal(res.status, 503);
+  assert.match((await res.json()).error, /migration 0099/);
+  assert.equal(db.fin_budget_years.filter((y) => y.status === 'draft').length, 0);
+  // a save to an existing draft is told the same
+  reset();
+  db.fin_budget_years.push({ id: ID(77), entity_id: E, financial_year: FY + 1, version: 1, status: 'draft', approved_on: null, note: null, created_at: 'now' });
+  db.noEditingFunctions = true;
+  res = await call(`/budget/versions/${ID(77)}/lines`, { method: 'POST', body: { lines: lines([C.groc, null, 'x', 5]) } });
+  assert.equal(res.status, 503);
+  assert.match((await res.json()).error, /migration 0099/);
+  // reading still works without it
+  assert.equal((await call(`/budget?fy=${FY}`)).status, 200);
 });
