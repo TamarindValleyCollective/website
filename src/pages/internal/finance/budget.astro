@@ -1,0 +1,779 @@
+---
+// Finance (internal): the budget editor. Backed by /api/finance-admin/budget (netlify/functions/lib/finance-budget.ts). A year's budget
+// has versions: a draft is edited and saved, then approved, which makes it the live budget (the previous live version stays on record,
+// so the year-end can be compared with the original plan). Everyone with finance access can read it; changing it needs `configure`.
+//
+// Every category, and each project of the year, is a row under its head with an amount box: typing an amount makes a line, leaving it
+// blank means no line, so nothing can be duplicated or forgotten. Each row shows last year's amount and what has been spent so far, so
+// a plan is written beside the facts. The rules (what counts as an amount, what is a valid set of lines) are
+// scripts/lib/finance-budget.mjs, shared with the function. Everything the server returns is placed with textContent only.
+import StaffLayout from '../../../layouts/StaffLayout.astro';
+import SignInGate from '../../../components/SignInGate.astro';
+---
+
+<StaffLayout title="Finance budget" description="Finance budget." current="finance" currentPage="finance-budget">
+  <section class="bud section wrapper">
+    <div class="bud-top">
+      <div>
+        <h1>Budget</h1>
+        <p id="intro" class="hint">Sign in to open the budget.</p>
+      </div>
+      <div class="segmented" id="fy" role="group" aria-label="Financial year" hidden></div>
+    </div>
+
+    <SignInGate forbiddenWhat="the finance budget" />
+
+    <div id="status" aria-live="polite" class="hint" hidden></div>
+
+    <div id="content" hidden>
+      <div class="card bud-head" id="head">
+        <div class="bud-versions" id="versions-wrap">
+          <span class="bud-label">Version</span>
+          <div class="segmented" id="versions" role="group" aria-label="Budget version"></div>
+        </div>
+        <div class="bud-meta" id="meta"></div>
+        <div class="bud-actions" id="actions"></div>
+      </div>
+
+      <p id="problem" class="error" role="alert" hidden></p>
+
+      <div id="empty" class="card" hidden>
+        <h2 id="empty-title">No budget for this year yet</h2>
+        <p class="hint" id="empty-text"></p>
+      </div>
+
+      <div id="grid"></div>
+
+      <div class="card bud-totals" id="totals" hidden></div>
+    </div>
+  </section>
+</StaffLayout>
+
+<script>
+  import { StaffAuthError, askSheet, clearStepUp, clearToken, decodeTokenEmail, getToken, setToken, showToast, staffFetch } from '../../../../scripts/lib/staff-client.mjs';
+  import { clearState, showFailure, showLoading } from '../../../../scripts/lib/staff-states.mjs';
+  import { BUDGET_HEAD_LABELS, budgetTotals, editorRows, linesFromInputs, parseRupees, rupeesInput } from '../../../../scripts/lib/finance-budget.mjs';
+  import { lakhText, rupeesText } from '../../../../scripts/lib/finance-dashboard-view.mjs';
+
+  declare const google: any;
+  const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
+  const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+  const HEAD_CHOICES = [['company', 'Company'], ['farm', 'Farm'], ['projects', 'Projects'], ['investment', 'Sinking fund']];
+
+  const gate = $('gate');
+  const gateError = $('gate-error');
+  const forbidden = $('forbidden');
+  const statusEl = $('status');
+  const content = $('content');
+  const intro = $('intro');
+
+  type Input = { key: string; kind: 'category' | 'project'; id: string; amountText: string; label: string; comment: string };
+  let data: any = null;
+  let fy: number | null = null;
+  let inputs = new Map<string, Input>();
+  let rowErrors = new Map<string, string>();
+  let dirty = false;
+  let busy = false;
+  let note = '';
+
+  const fyLabel = (y: number) => `${y}-${String((y + 1) % 100).padStart(2, '0')}`;
+  const el = (tag: string, className?: string, text?: string): HTMLElement => {
+    const e = document.createElement(tag);
+    if (className) e.className = className;
+    if (text !== undefined) e.textContent = text;
+    return e;
+  };
+  const day = (iso: string) => new Date(`${iso.slice(0, 10)}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  const money = (paise: number) => rupeesText(paise);
+  const isDraft = () => data?.selected?.status === 'draft';
+  const canEdit = () => Boolean(data?.canConfigure) && isDraft();
+
+  function showGate(message?: string) {
+    gate.hidden = false;
+    forbidden.hidden = true;
+    content.hidden = true;
+    $('fy').hidden = true;
+    clearState(statusEl);
+    intro.hidden = false;
+    intro.textContent = 'Sign in to open the budget.';
+    gateError.hidden = !message;
+    if (message) gateError.textContent = message;
+    renderSignInButton();
+  }
+  function showForbidden() {
+    gate.hidden = true;
+    content.hidden = true;
+    clearState(statusEl);
+    forbidden.hidden = false;
+    $('forbidden-email').textContent = decodeTokenEmail(getToken() ?? '');
+  }
+  const problem = (text: string | null) => {
+    const p = $('problem');
+    p.hidden = !text;
+    if (text) p.textContent = text;
+  };
+
+  // ---- the grid
+  function ctx() {
+    return { categories: data.categories, projects: data.projects };
+  }
+  function currentLines() {
+    return linesFromInputs([...inputs.values()]).lines;
+  }
+  function renderTotals() {
+    const box = $('totals');
+    const lines = currentLines();
+    box.hidden = !data.selected;
+    if (!data.selected) return;
+    const t = budgetTotals(lines.map((l: any) => ({ categoryId: l.categoryId ?? null, projectId: l.projectId ?? null, annualPaise: l.annualPaise })), ctx());
+    const fig = (k: string, v: string, tone = '') => {
+      const d = el('div', `fig${tone ? ` fig--${tone}` : ''}`);
+      d.append(el('div', 'k', k), el('div', 'v', v));
+      return d;
+    };
+    box.replaceChildren(
+      fig('Money out', `${lakhText(t.outflowPaise, 2)}`), fig('Money in', `${lakhText(t.inflowPaise, 2)}`),
+      fig(t.surplusPaise < 0 ? 'Shortfall to cover' : 'Surplus', lakhText(Math.abs(t.surplusPaise), 2), t.surplusPaise < 0 ? 'warn' : ''),
+      fig('Lines', String(lines.length)),
+    );
+  }
+  function groupSubtotal(rows: any[]): number {
+    return rows.reduce((n, r) => {
+      const p = parseRupees(inputs.get(r.key)?.amountText ?? '');
+      return n + (p ?? 0);
+    }, 0);
+  }
+
+  function rowEl(r: any, editable: boolean, headValue: string): HTMLElement {
+    const input = inputs.get(r.key)!;
+    const row = el('div', 'bud-row');
+    row.dataset.key = r.key;
+    const name = el('div', 'bud-name');
+    name.append(el('strong', '', r.name));
+    if (r.retired) name.append(el('span', 'pill', 'No longer in use'));
+    const facts = el('div', 'bud-facts');
+    facts.append(el('span', '', r.previousPaise === null ? 'Last year: none' : `Last year ${money(r.previousPaise)}`), el('span', '', `Spent so far ${money(r.actualPaise)}`));
+    name.append(facts);
+    row.append(name);
+
+    const side = el('div', 'bud-side');
+    if (editable) {
+      const box = el('input', 'bud-amount') as HTMLInputElement;
+      box.type = 'text';
+      box.inputMode = 'decimal';
+      box.autocomplete = 'off';
+      box.placeholder = '0';
+      box.value = input.amountText;
+      box.setAttribute('aria-label', `Budget for ${r.name}, in rupees`);
+      box.id = `amt-${r.key.replace(':', '-')}`;
+      box.addEventListener('input', () => {
+        input.amountText = box.value;
+        dirty = true;
+        rowErrors.delete(r.key);
+        row.classList.remove('bud-row--bad');
+        row.querySelector('.bud-error')?.remove();
+        updateSubtotals();
+        renderTotals();
+        renderActions();
+      });
+      box.addEventListener('blur', () => {
+        const p = parseRupees(box.value);
+        if (p !== null && box.value.trim()) {
+          box.value = rupeesInput(p);
+          input.amountText = box.value;
+        }
+      });
+      side.append(box);
+    } else {
+      side.append(el('span', 'bud-amount-read', r.amountPaise === null ? '' : money(r.amountPaise)));
+    }
+    row.append(side);
+
+    if (editable) {
+      const more = el('details', 'bud-more');
+      more.append(el('summary', '', input.label || input.comment ? 'Name and comment' : 'Add a name or comment'));
+      const nameBox = el('input') as HTMLInputElement;
+      nameBox.type = 'text';
+      nameBox.maxLength = 120;
+      nameBox.placeholder = `Shown as: ${r.name}`;
+      nameBox.value = input.label;
+      nameBox.setAttribute('aria-label', `Name shown for ${r.name}`);
+      const commentBox = el('input') as HTMLInputElement;
+      commentBox.type = 'text';
+      commentBox.maxLength = 200;
+      commentBox.placeholder = 'A line of explanation, shown beside the line';
+      commentBox.value = input.comment;
+      commentBox.setAttribute('aria-label', `Comment for ${r.name}`);
+      nameBox.addEventListener('input', () => { input.label = nameBox.value; dirty = true; renderActions(); });
+      commentBox.addEventListener('input', () => { input.comment = commentBox.value; dirty = true; renderActions(); });
+      more.append(nameBox, commentBox);
+      if (input.label || input.comment) (more as HTMLDetailsElement).open = true;
+      row.append(more);
+      if (headValue === 'none' && r.kind === 'category') row.append(headPicker(r));
+    } else if (r.comment) {
+      row.append(el('div', 'bud-comment', r.comment));
+    }
+    const err = rowErrors.get(r.key);
+    if (err) {
+      row.classList.add('bud-row--bad');
+      row.append(el('div', 'bud-error', err));
+    }
+    return row;
+  }
+
+  // A spending category nobody has given a head yet: choose one, so the dashboards count it in the right place.
+  function headPicker(r: any): HTMLElement {
+    const wrap = el('div', 'bud-head-pick');
+    const label = el('label', '', 'Count it under') as HTMLLabelElement;
+    const sel = el('select') as HTMLSelectElement;
+    sel.id = `head-${r.id}`;
+    label.htmlFor = sel.id;
+    sel.append(new Option('Choose a head', ''), ...HEAD_CHOICES.map(([v, t]) => new Option(t, v)));
+    sel.disabled = !data.canConfigure;
+    sel.addEventListener('change', async () => {
+      if (!sel.value) return;
+      if (dirty) {
+        sel.value = '';
+        problem('Save your changes first, then choose the head.');
+        return;
+      }
+      const res = await staffFetch(`/api/finance-admin/categories/${r.id}`, { method: 'PATCH', body: { head: sel.value } });
+      if (res.status !== 200) { problem(res.data?.error ?? 'Could not set the head.'); return; }
+      showToast(`${r.name} now counts under ${(BUDGET_HEAD_LABELS as any)[sel.value]}.`);
+      await load(fy!, data.selected?.id);
+    });
+    wrap.append(label, sel);
+    return wrap;
+  }
+
+  let subtotalEls = new Map<string, { el: HTMLElement; rows: any[] }>();
+  function updateSubtotals() {
+    for (const { el: node, rows } of subtotalEls.values()) node.textContent = money(groupSubtotal(rows));
+  }
+
+  function renderGrid() {
+    const grid = $('grid');
+    subtotalEls = new Map();
+    if (!data.selected) { grid.replaceChildren(); return; }
+    const editable = canEdit();
+    const groups = editorRows({ categories: data.categories, projects: data.projects, lines: data.lines, actuals: data.actuals, previous: data.previous });
+    const shown = editable ? groups : groups.map((g: any) => ({ ...g, rows: g.rows.filter((r: any) => r.amountPaise !== null) })).filter((g: any) => g.rows.length);
+    const cards: HTMLElement[] = [];
+    for (const g of shown) {
+      const card = el('div', 'card bud-group');
+      const head = el('div', 'bud-group-head');
+      head.append(el('h2', '', g.label));
+      const sub = el('span', 'bud-sub');
+      head.append(sub);
+      subtotalEls.set(g.head, { el: sub, rows: g.rows });
+      card.append(head, ...g.rows.map((r: any) => rowEl(r, editable, g.head)));
+      cards.push(card);
+    }
+    if (!cards.length) cards.push(el('p', 'hint', 'This version has no lines.'));
+    grid.replaceChildren(...cards);
+    updateSubtotals();
+  }
+
+  // ---- the header: versions, status, actions
+  function renderHead() {
+    const versions = $('versions');
+    versions.replaceChildren(...data.versions.map((v: any) => {
+      const b = el('button', '', `v${v.version} ${v.status === 'approved' ? 'live' : v.status}`) as HTMLButtonElement;
+      b.type = 'button';
+      b.setAttribute('aria-pressed', String(v.id === data.selected?.id));
+      b.addEventListener('click', async () => {
+        if (v.id === data.selected?.id) return;
+        if (dirty && !(await askSheet({ title: 'Leave without saving?', text: 'You have changes that are not saved. They will be lost.', actions: [{ label: 'Leave', value: true, kind: 'danger' }, { label: 'Stay and keep editing', value: false }] }))) return;
+        await load(fy!, v.id);
+      });
+      return b;
+    }));
+    $('versions-wrap').hidden = data.versions.length < 2;
+    const meta = $('meta');
+    const s = data.selected;
+    if (!s) { meta.replaceChildren(); return; }
+    const pill = el('span', `pill${s.status === 'approved' ? ' pill--ok' : s.status === 'draft' ? ' pill--warn' : ''}`, s.status === 'approved' ? 'Live budget' : s.status === 'draft' ? 'Draft' : 'Replaced');
+    const when = s.status === 'approved' ? `Approved ${s.approvedOn ? day(s.approvedOn) : ''}` : s.status === 'draft' ? 'Not live until it is approved' : 'Kept on record';
+    meta.replaceChildren(pill, el('span', 'hint', when));
+    if (canEdit()) {
+      const n = el('input') as HTMLInputElement;
+      n.type = 'text';
+      n.maxLength = 300;
+      n.id = 'note';
+      n.placeholder = 'What changed in this version (optional)';
+      n.value = note;
+      n.setAttribute('aria-label', 'Note on this version');
+      n.addEventListener('input', () => { note = n.value; dirty = true; renderActions(); });
+      meta.append(n);
+    } else if (s.note) {
+      meta.append(el('span', 'bud-note', s.note));
+    }
+  }
+
+  async function startDraft() {
+    const hasLive = data.versions.some((v: any) => v.status === 'approved');
+    const hasPrev = Boolean(data.previous);
+    const actions: any[] = [];
+    if (hasLive) actions.push({ label: 'Copy the live budget', value: 'live', kind: 'primary' });
+    if (hasPrev) actions.push({ label: `Copy ${fyLabel(fy! - 1)}'s budget`, value: 'previous', kind: hasLive ? undefined : 'primary' });
+    actions.push({ label: 'Start empty', value: 'empty' }, { label: 'Cancel', value: null });
+    const from = await askSheet({ title: `Start a draft for ${fyLabel(fy!)}`, text: 'A draft is not live until you approve it, so you can work on it and come back.', actions });
+    if (!from) return;
+    const res = await staffFetch('/api/finance-admin/budget/versions', { method: 'POST', body: { fy, from } });
+    if (res.status === 409 && res.data?.id) { await load(fy!, res.data.id); showToast('There was already a draft; opened it.'); return; }
+    if (res.status !== 201) { problem(res.data?.error ?? 'Could not start a draft.'); return; }
+    problem(null);
+    await load(fy!, res.data.id);
+    showToast('Draft started.');
+  }
+
+  // Save what is typed. Returns true when it was saved.
+  async function save(): Promise<boolean> {
+    const inputsNow = [...inputs.values()];
+    const read = linesFromInputs(inputsNow);
+    rowErrors = new Map(Object.entries(read.errors as Record<string, string>));
+    if (rowErrors.size) {
+      renderGrid();
+      problem('Some amounts are not amounts. Fix the marked rows, then save.');
+      return false;
+    }
+    const readErrors = read.errors as Record<string, string>;
+    const keys = inputsNow.filter((i) => i.amountText.trim() && !readErrors[i.key]).map((i) => i.key);
+    busy = true;
+    renderActions();
+    try {
+      const res = await staffFetch(`/api/finance-admin/budget/versions/${data.selected.id}/lines`, { method: 'POST', body: { lines: read.lines, note } });
+      if (res.status === 400 && Array.isArray(res.data?.errors)) {
+        rowErrors = new Map<string, string>(res.data.errors.filter((e: any) => e.index >= 0).map((e: any): [string, string] => [keys[e.index], e.message]));
+        renderGrid();
+        problem(res.data.errors.find((e: any) => e.index < 0)?.message ?? 'Some lines need fixing. They are marked.');
+        return false;
+      }
+      if (res.status !== 200) { problem(res.data?.error ?? 'Could not save.'); return false; }
+      dirty = false;
+      problem(null);
+      showToast(`Saved ${res.data.saved} ${res.data.saved === 1 ? 'line' : 'lines'}.`);
+      return true;
+    } finally {
+      busy = false;
+      renderActions();
+    }
+  }
+
+  async function approve() {
+    if (dirty && !(await save())) return;
+    const t = budgetTotals(currentLines().map((l: any) => ({ categoryId: l.categoryId ?? null, projectId: l.projectId ?? null, annualPaise: l.annualPaise })), ctx());
+    const replaces = data.versions.find((v: any) => v.status === 'approved');
+    const ok = await askSheet({
+      title: `Approve version ${data.selected.version} for ${fyLabel(fy!)}?`,
+      text: `It becomes the live budget: ${lakhText(t.outflowPaise, 2)} planned money out and ${lakhText(t.inflowPaise, 2)} money in.${replaces ? `\n\nVersion ${replaces.version} stays on record, so the year-end can be compared with it.` : ''}\n\nAn approved budget cannot be edited; a change is a new version.`,
+      actions: [{ label: 'Approve', value: true, kind: 'primary' }, { label: 'Not yet', value: false }],
+    });
+    if (!ok) return;
+    const res = await staffFetch(`/api/finance-admin/budget/versions/${data.selected.id}/approve`, { method: 'POST' });
+    if (res.status !== 200) { problem(res.data?.error ?? 'Could not approve.'); return; }
+    problem(null);
+    await load(fy!);
+    showToast('Approved. It is now the live budget.');
+  }
+
+  async function discard() {
+    const ok = await askSheet({ title: 'Discard this draft?', text: 'Its lines are deleted. The live budget is not touched.', actions: [{ label: 'Discard draft', value: true, kind: 'danger' }, { label: 'Keep it', value: false }] });
+    if (!ok) return;
+    const res = await staffFetch(`/api/finance-admin/budget/versions/${data.selected.id}/discard`, { method: 'POST' });
+    if (res.status !== 200) { problem(res.data?.error ?? 'Could not discard.'); return; }
+    dirty = false;
+    problem(null);
+    await load(fy!);
+    showToast('Draft discarded.');
+  }
+
+  function renderActions() {
+    const box = $('actions');
+    const buttons: HTMLElement[] = [];
+    const btn = (label: string, cls: string, onClick: () => void, disabled = false) => {
+      const b = el('button', `button ${cls}`, label) as HTMLButtonElement;
+      b.type = 'button';
+      b.disabled = disabled || busy;
+      b.addEventListener('click', onClick);
+      buttons.push(b);
+    };
+    if (data.canConfigure) {
+      if (canEdit()) {
+        if (dirty) buttons.push(el('span', 'bud-dirty', 'Unsaved changes'));
+        btn('Save', 'button--primary', () => void save(), !dirty);
+        btn('Approve…', '', () => void approve());
+        btn('Discard draft', 'button--outline', () => void discard());
+      } else if (!data.versions.some((v: any) => v.status === 'draft')) {
+        btn(data.selected ? 'Start a new version' : 'Start a budget', data.selected ? '' : 'button--primary', () => void startDraft());
+      } else {
+        const draft = data.versions.find((v: any) => v.status === 'draft');
+        btn('Open the draft', 'button--primary', () => void load(fy!, draft.id));
+      }
+    }
+    box.replaceChildren(...buttons);
+  }
+
+  function renderAll() {
+    const none = !data.selected;
+    $('empty').hidden = !none;
+    $('head').hidden = none && !data.canConfigure;
+    if (none) {
+      $('empty-title').textContent = `No budget for ${fyLabel(data.fy)} yet`;
+      $('empty-text').textContent = data.canConfigure ? 'Start a budget to plan the year. You can copy last year\'s as a starting point, or begin empty.' : 'Nothing has been planned for this year. Someone who can set up the budget has to start one.';
+    }
+    renderHead();
+    renderActions();
+    renderGrid();
+    renderTotals();
+  }
+
+  function renderFy() {
+    const box = $('fy');
+    const years = [data.currentFy - 1, data.currentFy, data.currentFy + 1];
+    box.hidden = false;
+    box.replaceChildren(...years.map((y) => {
+      const b = el('button', '', `FY ${fyLabel(y)}`) as HTMLButtonElement;
+      b.type = 'button';
+      b.setAttribute('aria-pressed', String(y === data.fy));
+      b.addEventListener('click', async () => {
+        if (y === data.fy) return;
+        if (dirty && !(await askSheet({ title: 'Leave without saving?', text: 'You have changes that are not saved. They will be lost.', actions: [{ label: 'Leave', value: true, kind: 'danger' }, { label: 'Stay and keep editing', value: false }] }))) return;
+        await load(y);
+      });
+      return b;
+    }));
+  }
+
+  async function load(year?: number, version?: string) {
+    gate.hidden = true;
+    forbidden.hidden = true;
+    showLoading(statusEl);
+    try {
+      const q = new URLSearchParams();
+      if (year ?? fy) q.set('fy', String(year ?? fy));
+      if (version) q.set('v', version);
+      const res = await staffFetch(`/api/finance-admin/budget${q.toString() ? `?${q}` : ''}`);
+      if (res.status !== 200) throw new Error('load failed');
+      data = res.data;
+      clearState(statusEl);
+      if (data.available === false) {
+        content.hidden = true;
+        intro.textContent = 'The budget tables are not set up in the database yet. A super admin needs to apply the latest migrations.';
+        return;
+      }
+      fy = data.fy;
+      inputs = new Map();
+      rowErrors = new Map();
+      dirty = false;
+      note = data.selected?.note ?? '';
+      for (const g of editorRows({ categories: data.categories, projects: data.projects, lines: data.lines, actuals: data.actuals, previous: data.previous })) {
+        for (const r of g.rows as any[]) inputs.set(r.key, { key: r.key, kind: r.kind, id: r.id, amountText: r.amountPaise === null ? '' : rupeesInput(r.amountPaise), label: r.label, comment: r.comment });
+      }
+      intro.textContent = data.canConfigure ? 'Plan the year beside last year and what has been spent. Amounts are in rupees.' : 'You can read the budget; someone who can set it up changes it.';
+      content.hidden = false;
+      problem(null);
+      renderFy();
+      try {
+        renderAll();
+      } catch (renderErr) {
+        console.error('[finance budget] could not draw the budget', renderErr);
+        content.hidden = true;
+        showFailure(statusEl, { title: "Couldn't show the budget", text: 'The budget arrived but something went wrong drawing it. Nothing was changed. Tell a super admin; the browser console has the detail.', onRetry: () => load(fy ?? undefined) });
+      }
+    } catch (err) {
+      if (err instanceof StaffAuthError) {
+        if (err.kind === 'unauthorized') showGate('Your session expired. Sign in again.');
+        else showForbidden();
+        return;
+      }
+      content.hidden = true;
+      showFailure(statusEl, { title: "Couldn't load the budget", text: "The server didn't answer. Nothing was changed. Check your connection and try again; if it keeps failing, tell a super admin.", onRetry: () => load(fy ?? undefined) });
+    }
+  }
+
+  window.addEventListener('beforeunload', (e) => {
+    if (dirty) { e.preventDefault(); e.returnValue = ''; }
+  });
+
+  function handleCredentialResponse(response: { credential: string }) {
+    setToken(response.credential);
+    load();
+  }
+  function renderSignInButton() {
+    if (typeof google === 'undefined') return;
+    google.accounts.id.initialize({ client_id: CLIENT_ID, callback: handleCredentialResponse });
+    google.accounts.id.renderButton(document.getElementById('g_id_signin'), { theme: (window as any).tvcGsiTheme?.() ?? 'outline', size: 'large' });
+  }
+  $('use-different-account').addEventListener('click', () => {
+    clearToken();
+    clearStepUp();
+    if (typeof google !== 'undefined') google.accounts.id.disableAutoSelect();
+    showGate();
+  });
+
+  if (getToken()) load();
+  else showGate();
+</script>
+<script is:inline src="https://accounts.google.com/gsi/client"></script>
+
+<style is:global>
+  .bud.section.wrapper {
+    padding-top: 32px;
+    padding-bottom: 48px;
+  }
+
+  .bud h2 {
+    margin: 0;
+    font-size: var(--text-lg);
+  }
+
+  .bud-top {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 24px;
+    align-items: flex-end;
+    justify-content: space-between;
+  }
+
+  .bud-head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 20px;
+    align-items: center;
+    margin-top: 16px;
+  }
+
+  .bud-head[hidden] {
+    display: none;
+  }
+
+  .bud-versions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .bud-versions[hidden] {
+    display: none;
+  }
+
+  .bud-label {
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  .bud-meta {
+    display: flex;
+    flex: 1 1 260px;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    align-items: center;
+    min-width: 0;
+  }
+
+  .bud-meta .hint {
+    margin: 0;
+  }
+
+  .bud-meta input {
+    flex: 1 1 220px;
+    min-width: 0;
+  }
+
+  .bud-note {
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  .bud-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .bud-dirty {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--tvc-orange-text);
+  }
+
+  #problem {
+    margin: 12px 0 0;
+  }
+
+  #empty {
+    margin-top: 16px;
+  }
+
+  #grid {
+    display: grid;
+    gap: 16px;
+    margin-top: 16px;
+  }
+
+  .bud-group {
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .bud-group-head {
+    display: flex;
+    gap: 12px;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: var(--tvc-cream);
+  }
+
+  .bud-sub {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .bud-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(130px, 190px);
+    gap: 6px 16px;
+    align-items: start;
+    padding: 12px 16px;
+    border-top: 1px solid var(--tvc-line);
+  }
+
+  .bud-row--bad {
+    background: var(--tvc-error-bg);
+  }
+
+  .bud-name {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .bud-name .pill {
+    justify-self: start;
+  }
+
+  .bud-facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 14px;
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .bud-side {
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .bud-amount {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 36px;
+    padding: 0 12px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: var(--radius-field);
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+    font: inherit;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+
+  .bud-amount:focus {
+    outline: none;
+    border-color: var(--tvc-orange);
+    box-shadow: 0 0 0 3px var(--tvc-orange-tint);
+  }
+
+  .bud-amount-read {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .bud-more,
+  .bud-comment,
+  .bud-error,
+  .bud-head-pick {
+    grid-column: 1 / -1;
+  }
+
+  .bud-more summary {
+    cursor: pointer;
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  .bud-more input {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 36px;
+    margin-top: 6px;
+    padding: 0 12px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: var(--radius-field);
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+    font: inherit;
+  }
+
+  .bud-comment {
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  .bud-error {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--tvc-error-text);
+  }
+
+  .bud-head-pick {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    font-size: var(--text-sm);
+  }
+
+  .bud-totals {
+    position: sticky;
+    bottom: calc(var(--tabbar-h, 0px) + 8px);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 32px;
+    margin-top: 16px;
+    box-shadow: var(--shadow-soft);
+  }
+
+  .bud-totals[hidden] {
+    display: none;
+  }
+
+  .bud .fig .k {
+    font-size: var(--text-xs);
+    color: var(--tvc-ink-soft);
+  }
+
+  .bud .fig .v {
+    font-size: var(--text-xl);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .bud .fig--warn .v {
+    color: var(--tvc-orange-text);
+  }
+
+  @media (max-width: 560px) {
+    .bud-row {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .bud-side {
+      justify-content: stretch;
+    }
+  }
+</style>

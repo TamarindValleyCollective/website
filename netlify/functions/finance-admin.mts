@@ -23,6 +23,7 @@ import { PARTY_ID, addEvidence, addMissingIfsc, getEvidence, listEvidence, addVe
 import { REQUEST_ID, addVoucher, cancelOrDecide, listFiles, createRecord, getVoucher, listMine, listRequests, matchRecord, reviewRecord, unmatchRecord } from './lib/finance-requests';
 import { listUpiLines } from './lib/finance-upi-view';
 import { getDashboard } from './lib/finance-dashboard';
+import { BUDGET_ID, approveDraft, discardDraft, getBudget, saveLines, startDraft } from './lib/finance-budget';
 import { setPaymentNote } from './lib/finance-notes';
 import { heldCoverage, reconciliationOf, runImport } from './lib/finance-import';
 import { supabaseImportStore } from './lib/finance-import-store';
@@ -200,6 +201,14 @@ const dispatch = async (req: Request): Promise<Response> => {
   const route = pathname.replace('/api/finance-admin', '');
   if (route === '/overview' && req.method === 'GET') return handleOverview(req);
   if (route === '/dashboard' && req.method === 'GET') return getDashboard(req);
+  if (route === '/budget' && req.method === 'GET') return getBudget(req);
+  if (route === '/budget/versions' && req.method === 'POST') return startDraft(req);
+  const budgetVersion = route.match(/^\/budget\/versions\/([^/]+)\/(lines|approve|discard)$/);
+  if (budgetVersion && BUDGET_ID.test(budgetVersion[1]) && req.method === 'POST') {
+    if (budgetVersion[2] === 'lines') return saveLines(req, budgetVersion[1]);
+    if (budgetVersion[2] === 'approve') return approveDraft(req, budgetVersion[1]);
+    return discardDraft(req, budgetVersion[1]);
+  }
   // Statement import and bank accounts (session 03)
   if (route === '/imports' && req.method === 'GET') return handleImportList(req);
   if (route === '/imports/preview' && req.method === 'POST') return handleImport(req, false);
@@ -288,6 +297,8 @@ export const config = {
   path: [
     '/api/finance-admin/overview',
     '/api/finance-admin/dashboard',
+    '/api/finance-admin/budget',
+    '/api/finance-admin/budget/*',
     '/api/finance-admin/imports',
     '/api/finance-admin/imports/preview',
     '/api/finance-admin/imports/commit',

@@ -1,6 +1,7 @@
 -- Finance module, session 07: the yearly budget and the heads the dashboards report by (docs/finance/sessions/07-dashboards-and-budget.md).
--- NOT YET APPLIED to TVC ERP. Nothing in the app reads these tables until the dashboard code is deployed, and the dashboard code
--- tolerates a year with no budget, so applying this first is safe.
+-- Applied to TVC ERP on 2026-11-10 (recorded as finance_budget). Checked afterwards: heads set on 21 categories and none left without one among the
+-- spending categories, one category flagged as salary, both new tables RLS-on with no anon/authenticated grants, the guard trigger present, only the
+-- service role able to run fin_approve_budget. Tested the day before inside a transaction that was rolled back.
 --
 -- Two decisions made while mocking the dashboards (2026-11-10):
 --   * The budget is reported by the heads the community's yearly presentation uses: Company, Farm, Projects, Investment. A category

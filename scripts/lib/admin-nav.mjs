@@ -39,6 +39,7 @@ export const BLOCKS = [
     pages: [
       { id: 'finance', label: 'Overview', path: '/internal/finance/', module: 'finance' },
       { id: 'finance-dashboard', label: 'Dashboard', path: '/internal/finance/dashboard/', module: 'finance' },
+      { id: 'finance-budget', label: 'Budget', path: '/internal/finance/budget/', module: 'finance' },
       { id: 'finance-ledger', label: 'Ledger', path: '/internal/finance/ledger/', module: 'finance' },
       { id: 'finance-upi', label: 'UPI', path: '/internal/finance/upi/', module: 'finance' },
       { id: 'finance-approvals', label: 'Approvals', path: '/internal/finance/requests/', module: 'finance' },

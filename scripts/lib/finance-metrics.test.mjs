@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  GROUPS, budgetVsActual, cashflow, circleMonth, completeMonths, fdBalance, fyLabel, fyMonths, groupOf, headOfCategory, healthOf, runwayOf,
+  GROUPS, actualsByTarget, budgetVsActual, cashflow, circleMonth, completeMonths, fdBalance, fyLabel, fyMonths, groupOf, headOfCategory, healthOf, runwayOf,
 } from './finance-metrics.mjs';
 
 const RS = 100; // paise in a rupee
@@ -310,4 +310,21 @@ test('health counts lines nobody has fully explained, approved requests waiting 
   assert.deepEqual(h.unallocated, { count: 3, oldestDate: '2026-10-01' });
   assert.deepEqual(h.awaitingBank, { count: 2, oldestDays: 16, totalPaise: 500 * RS });
   assert.equal(h.committedPaise, 500 * RS);
+});
+
+// ---- What each category and project has cost so far (the budget editor's "actual" column) ----
+test('actuals by category and by project, in the period view: refunds net, income counts credits, project money stays with the project', () => {
+  const a = actualsByTarget({ allocations: spent, categories, fy: 2026 });
+  assert.equal(a.byCategory.groc, 450 * RS); // 400 + 100 - 50; the 120 that names a project is not here; last year's 999 is out
+  assert.equal(a.byCategory.sal, 3000 * RS);
+  assert.equal(a.byCategory.stay, 300 * RS); // income: credits count
+  assert.equal(a.byCategory.maint, 4500 * RS);
+  assert.equal(a.byCategory.misc, 70 * RS);
+  assert.equal(a.byCategory.tank, undefined); // its only allocation names a project
+  assert.equal(a.byProject.p1, 320 * RS); // 120 + 200
+});
+
+test('actuals of a year with nothing in it are empty, not an error', () => {
+  const a = actualsByTarget({ allocations: [], categories, fy: 2026 });
+  assert.deepEqual(a, { byCategory: {}, byProject: {} });
 });

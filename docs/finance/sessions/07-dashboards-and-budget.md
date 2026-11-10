@@ -41,11 +41,12 @@ Review against the sheet's numbers.
 
 - Decisions confirmed by the owner before starting: runway is bank balance ÷ average monthly *spending* (not net outflow); the budget is grouped by the
   presentation's heads (Company, Farm, Projects, Investment); the member view of some of these figures is a **preview feature** for chosen homes, not open to everyone.
-- Built: migration `0098` (heads on categories, `is_salary`, budget versions and lines, approval function) **not yet applied**, tested rolled back against the
-  real database; `finance-metrics.mjs` (the formulas, once); `GET /api/finance-admin/dashboard`; the page `/internal/finance/dashboard/` with the year selector.
+- Built: migration `0098` (heads on categories, `is_salary`, budget versions and lines, approval function), **applied 2026-11-10** after a rolled-back test; `finance-metrics.mjs` (the formulas, once); `GET /api/finance-admin/dashboard`; the page `/internal/finance/dashboard/` with the year selector.
   See `FINANCE.md`, "Dashboards", for the rules and the tests.
-- **Not built yet:** the budget editor and the import of the existing plan (so the Budget view is empty until a budget exists), CSV export, the member-portal
-  preview (a `finance` member feature for chosen homes), a select for a category's head on the Rules page, and the Maintenance and Advances views (sessions 10
-  and 09). **Committed** is a total, not per budget line, because a payment request carries no category.
+- **Second slice, same day:** the budget editor (`/internal/finance/budget/`): versions (draft, approve, supersede), a grid with every category and project as a
+  row beside last year and what has been spent, audited writes, a head picker for a category with none. Migration `0099` (its two atomic database functions)
+  written and tested rolled back, **not yet applied**: reading works without it, saving does not. See `FINANCE.md`, "The budget editor".
+- **Not built yet:** the import of the existing plan (so the budget has to be typed in until it exists), monthly phasing screens, CSV export, the member-portal
+  preview (a `finance` member feature for chosen homes), and the Maintenance and Advances views (sessions 10 and 09). **Committed** is a total, not per budget line, because a payment request carries no category.
 - **Before merging:** apply `0098` (the code tolerates it missing, so order is not critical); open the page signed in on the deployed or local site and compare
   the figures with the sheet for FY 2025-26, explaining any difference (this is the brief's "how to verify" and needs the owner).

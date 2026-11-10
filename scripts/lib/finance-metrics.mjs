@@ -238,6 +238,27 @@ export function budgetVsActual({ budget, allocations, categories, fy, today, com
 }
 
 /**
+ * What each category and each project has cost (or, for income and maintenance, brought in) in a financial year, period view, as
+ * { byCategory: { id: paise }, byProject: { id: paise } }. The same rules as budgetVsActual: refunds net, and an allocation that
+ * names a project counts under the project, not its category. Shown beside the budget editor's amounts.
+ */
+export function actualsByTarget({ allocations, categories, fy }) {
+  const cats = byId(categories);
+  const months = new Set(fyMonths(fy));
+  const byCategory = {};
+  const byProject = {};
+  for (const a of allocations) {
+    if (!months.has(a.period)) continue;
+    const head = a.project_id ? 'projects' : headOfCategory(cats.get(a.category_id));
+    const inflow = head === 'income' || head === 'maintenance';
+    const amount = (a.direction === (inflow ? 'credit' : 'debit') ? 1 : -1) * a.amount_paise;
+    if (a.project_id) byProject[a.project_id] = (byProject[a.project_id] ?? 0) + amount;
+    else byCategory[a.category_id] = (byCategory[a.category_id] ?? 0) + amount;
+  }
+  return { byCategory, byProject };
+}
+
+/**
  * The circle's month: debit rows tagged for the circle, not ignored, dated in the calendar month, against the monthly cap.
  * `day` is today's day for the current month, the whole month once it is over. `runsOutOnDay` is an estimate from this
  * month's pace (null when the cap lasts the month); it is the day itself when the cap is already used.
