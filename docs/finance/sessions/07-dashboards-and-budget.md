@@ -37,4 +37,20 @@ Review against the sheet's numbers.
 > Read `docs/finance/README.md`, `DESIGN.md`, `sessions/07-dashboards-and-budget.md`, and the approved mockup notes in session 02. Build session 07 test-first; write the metric definitions once and reuse them.
 
 ## Done
-_Fill in at the end of the session._
+**First slice, 2026-11-10 (draft PR).** Built test-first and tested; not yet seen in a browser with a real sign-in.
+
+- Decisions confirmed by the owner before starting: runway is bank balance ÷ average monthly *spending* (not net outflow); the budget is grouped by the
+  presentation's heads (Company, Farm, Projects, Investment); the member view of some of these figures is a **preview feature** for chosen homes, not open to everyone.
+- Built: migration `0098` (heads on categories, `is_salary`, budget versions and lines, approval function), **applied 2026-11-10** after a rolled-back test; `finance-metrics.mjs` (the formulas, once); `GET /api/finance-admin/dashboard`; the page `/internal/finance/dashboard/` with the year selector.
+  See `FINANCE.md`, "Dashboards", for the rules and the tests.
+- **Second slice, same day:** the budget editor (`/internal/finance/budget/`): versions (draft, approve, supersede), a grid with every category and project as a
+  row beside last year and what has been spent, audited writes, a head picker for a category with none. Migration `0099` (its two atomic database functions)
+  tested rolled back and **applied 2026-11-10**. See `FINANCE.md`, "The budget editor".
+- **Not built yet:** the import of the existing plan (so the budget has to be typed in until it exists), monthly phasing screens, CSV export, the member-portal
+  preview (a `finance` member feature for chosen homes), and the Maintenance and Advances views (sessions 10 and 09). **Committed** is a total, not per budget line, because a payment request carries no category.
+- **Follow-ups, tracked as issues (2026-11-10):** #588 compare the figures with the sheet and look at both pages on a phone and in dark mode (the owner's check);
+  #589 import the existing plan (dry-run script; needs the plan file); #590 member-portal preview as a feature for chosen homes; #591 CSV export; #592 monthly
+  phasing; #593 'committed' per budget line (needs a category on payment requests: a decision); #594 Maintenance dashboard (session 10); #595 Advances (session 09).
+  The owner decided to ship to production before #588 because few people have access and the functionality is not used operationally yet.
+- **Before merging:** apply `0098` (the code tolerates it missing, so order is not critical); open the page signed in on the deployed or local site and compare
+  the figures with the sheet for FY 2025-26, explaining any difference (this is the brief's "how to verify" and needs the owner).

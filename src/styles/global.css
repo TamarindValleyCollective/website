@@ -154,6 +154,18 @@
   --footer-text-muted: #b9d0bc;
   --hero-intro-light: #eef2ea;
 
+  /* Finance dashboards' chart colours (docs/finance/FINANCE.md "Dashboards"): money in, money out, the balance, and one
+     colour per spending group. Validated as a set for colour-blind separation and 3:1 contrast on the card surface in
+     both appearances (the dark values are in portal-look.css); a few light steps sit below 3:1, so every chart has a legend,
+     tooltips and a table view. */
+  --tvc-chart-in: #2a78d6;
+  --tvc-chart-out: #eb6834;
+  --tvc-chart-balance: #2a8f56;
+  --tvc-chart-salary: #6250d6;
+  --tvc-chart-farm: #1baf7a;
+  --tvc-chart-projects: #eda100;
+  --tvc-chart-company: #e87ba4;
+
   --tvc-orange-strong: var(--tvc-orange-text);
   --tvc-ink-faint: var(--tvc-ink-soft);
   --tvc-surface: var(--tvc-white);

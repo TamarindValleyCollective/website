@@ -1,0 +1,958 @@
+<title>Finance Dashboards Mockup</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: one admin-style page, a segmented switch between eight views, and a financial-year selector in the header
+   that drives all of them. Overview leads with the four numbers the owner named. The Budget view follows the shape of
+   the annual budget presentation (heads, lines with a comment, income, maintenance, summary, financial status).
+   Maintenance and Advances are the two views the owner added because both move cash. All figures are invented.
+   Tokens are the admin portal look (src/styles/portal-look.css). Chart colours: blue = money in, orange = money out,
+   green = balance, one colour per spending group. */
+:root {
+  --bg: #f4f5f1;
+  --card: #ffffff;
+  --soft: #ebece7;
+  --ink: #1b1e1b;
+  --ink-soft: #596057;
+  --line: rgba(27, 30, 27, 0.12);
+  --line-strong: #868c83;
+  --grid: rgba(27, 30, 27, 0.08);
+  --accent: #1f7a46;
+  --s-in: #2a78d6;
+  --s-out: #eb6834;
+  --s-bal: #2a8f56;
+  --g-sal: #6250d6;
+  --g-farm: #1baf7a;
+  --g-proj: #eda100;
+  --g-co: #e87ba4;
+  --ok-text: #1f7a46;
+  --ok-bg: rgba(31, 122, 70, 0.12);
+  --warn-text: #965836;
+  --warn-bg: #fdead3;
+  --crit-text: #b3261e;
+  --crit-bg: #fbebe9;
+  --focus: #bd7248;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 8px 28px rgba(20, 30, 20, 0.1);
+  --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #151715; --card: #242724; --soft: #1b1d1b; --ink: #f1f3ef; --ink-soft: #a9afa7;
+    --line: rgba(255, 255, 255, 0.13); --line-strong: #7d837b; --grid: rgba(255, 255, 255, 0.08);
+    --accent: #5bc88a; --s-in: #3987e5; --s-out: #d95926; --s-bal: #4faa77;
+    --g-sal: #9085e9; --g-farm: #199e70; --g-proj: #c98500; --g-co: #d55181;
+    --ok-text: #5bc88a; --ok-bg: rgba(91, 200, 138, 0.16);
+    --warn-text: #f0a272; --warn-bg: rgba(217, 138, 90, 0.18);
+    --crit-text: #ff6b60; --crit-bg: rgba(255, 107, 96, 0.16);
+    --focus: #d98a5a; --shadow: 0 1px 2px rgba(0, 0, 0, 0.45), 0 6px 22px rgba(0, 0, 0, 0.4);
+    color-scheme: dark;
+  }
+}
+:root[data-theme='dark'] {
+  --bg: #151715; --card: #242724; --soft: #1b1d1b; --ink: #f1f3ef; --ink-soft: #a9afa7;
+  --line: rgba(255, 255, 255, 0.13); --line-strong: #7d837b; --grid: rgba(255, 255, 255, 0.08);
+  --accent: #5bc88a; --s-in: #3987e5; --s-out: #d95926; --s-bal: #4faa77;
+  --g-sal: #9085e9; --g-farm: #199e70; --g-proj: #c98500; --g-co: #d55181;
+  --ok-text: #5bc88a; --ok-bg: rgba(91, 200, 138, 0.16);
+  --warn-text: #f0a272; --warn-bg: rgba(217, 138, 90, 0.18);
+  --crit-text: #ff6b60; --crit-bg: rgba(255, 107, 96, 0.16);
+  --focus: #d98a5a; --shadow: 0 1px 2px rgba(0, 0, 0, 0.45), 0 6px 22px rgba(0, 0, 0, 0.4);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 15px; line-height: 1.45; -webkit-font-smoothing: antialiased; }
+.wrap { max-width: 1080px; margin: 0 auto; padding-block: 24px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+h1 { font-size: 1.9rem; line-height: 1.15; margin: 0; font-weight: 700; letter-spacing: -0.01em; text-wrap: balance; }
+h2 { font-size: 1.1rem; margin: 0; font-weight: 650; }
+p { margin: 0; }
+.muted { color: var(--ink-soft); }
+.small { font-size: 0.85rem; }
+.num { font-variant-numeric: tabular-nums; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+.top { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: flex-end; justify-content: space-between; }
+.top .meta { margin-top: 6px; }
+.banner { margin-top: 14px; padding: 10px 14px; border-radius: 10px; background: var(--warn-bg); color: var(--warn-text); font-size: 0.85rem; }
+
+.segmented { display: inline-flex; gap: 2px; padding: 2px; border-radius: 9px; background: var(--soft); max-width: 100%; }
+.segmented button { min-height: 32px; padding: 3px 12px; border: 0; border-radius: 7px; background: none; color: var(--ink-soft); font-size: 0.85rem; cursor: pointer; white-space: nowrap; }
+.segmented button[aria-pressed='true'] { background: var(--card); color: var(--ink); font-weight: 600; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.16); }
+.navrow { margin-top: 20px; overflow-x: auto; padding-bottom: 2px; }
+.navrow .segmented button { min-height: 38px; padding: 4px 16px; font-size: 0.92rem; }
+
+.view { margin-top: 20px; display: grid; gap: 16px; }
+.view[hidden] { display: none; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; min-width: 0; }
+.card-head { display: flex; flex-wrap: wrap; gap: 6px 16px; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
+.grid2 { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); }
+
+.tiles { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.tile { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 6px; min-width: 0; text-decoration: none; color: inherit; }
+.tile .label { font-size: 0.8rem; color: var(--ink-soft); font-weight: 500; }
+.tile .big { font-size: 1.85rem; line-height: 1.1; font-weight: 700; letter-spacing: -0.02em; }
+.tile .big small { font-size: 0.95rem; font-weight: 600; color: var(--ink-soft); letter-spacing: 0; }
+.tile .sub { font-size: 0.82rem; color: var(--ink-soft); }
+.tile svg { display: block; width: 100%; height: 30px; margin-top: 2px; }
+a.tile:hover { background: var(--soft); }
+
+.pill { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 99px; font-size: 0.78rem; font-weight: 600; white-space: nowrap; }
+.pill.ok { background: var(--ok-bg); color: var(--ok-text); }
+.pill.warn { background: var(--warn-bg); color: var(--warn-text); }
+.pill.crit { background: var(--crit-bg); color: var(--crit-text); }
+.pill.neutral { background: var(--soft); color: var(--ink-soft); }
+
+.list { list-style: none; margin: 0; padding: 0; background: var(--card); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.list > li + li { border-top: 1px solid var(--line); }
+.row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; min-height: 52px; }
+.row .grow { flex: 1; min-width: 0; }
+.row .t { font-weight: 550; }
+.row .d { font-size: 0.82rem; color: var(--ink-soft); }
+.row .count { font-size: 1.25rem; font-weight: 700; min-width: 2.2ch; text-align: right; font-variant-numeric: tabular-nums; }
+.chev { width: 14px; height: 14px; fill: none; stroke: var(--ink-soft); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; opacity: 0.7; flex: none; }
+
+.chart { position: relative; width: 100%; }
+.chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.chart text { fill: var(--ink-soft); font-family: var(--font); font-size: 11.5px; }
+.chart .strong { fill: var(--ink); font-weight: 600; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 0.82rem; color: var(--ink-soft); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.sw.line { height: 3px; width: 16px; border-radius: 2px; }
+.sw.dash { height: 0; width: 16px; border-top: 2px dashed var(--ink-soft); border-radius: 0; }
+.sw.hatch { background: repeating-linear-gradient(135deg, var(--s-in) 0 2px, transparent 2px 4px); outline: 1px solid var(--s-in); outline-offset: -1px; }
+.tip { position: absolute; pointer-events: none; z-index: 5; background: var(--ink); color: var(--bg); padding: 7px 10px; border-radius: 8px; font-size: 0.8rem; line-height: 1.35; white-space: nowrap; box-shadow: var(--shadow); transform: translate(-50%, -100%); }
+.tip b { font-weight: 650; }
+.hit { fill: transparent; cursor: crosshair; }
+details { margin-top: 12px; }
+summary { cursor: pointer; font-size: 0.85rem; color: var(--ink-soft); }
+.tablewrap { overflow-x: auto; margin-top: 8px; }
+table { border-collapse: collapse; width: 100%; font-size: 0.88rem; font-variant-numeric: tabular-nums; }
+th, td { padding: 7px 10px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; }
+th { font-weight: 600; color: var(--ink-soft); }
+tr.total td { font-weight: 700; border-top: 1px solid var(--line-strong); }
+tr.sub td { color: var(--ink-soft); }
+
+.brow { padding: 14px; display: grid; gap: 8px; }
+.brow .head { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; justify-content: space-between; }
+.hhead { padding: 12px 14px; background: var(--soft); display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: baseline; justify-content: space-between; }
+.hhead .hn { font-weight: 700; }
+.track { position: relative; height: 14px; border-radius: 7px; background: var(--soft); overflow: visible; }
+.track .act, .track .com { position: absolute; top: 0; height: 100%; }
+.track .act { left: 0; background: var(--s-in); border-radius: 7px 0 0 7px; }
+.track .com { background: repeating-linear-gradient(135deg, var(--s-in) 0 2px, transparent 2px 4px); outline: 1px solid var(--s-in); outline-offset: -1px; border-radius: 0 7px 7px 0; }
+.track .act.only { border-radius: 7px; }
+.track .bud { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--ink); border-radius: 1px; }
+.track .est { position: absolute; top: -2px; width: 0; height: 0; margin-left: -5px; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 7px solid var(--ink-soft); }
+.figs { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 6px 12px; }
+.fig .k { font-size: 0.75rem; color: var(--ink-soft); }
+.fig .v { font-weight: 600; font-variant-numeric: tabular-nums; }
+.btotal { padding: 14px; display: flex; flex-wrap: wrap; gap: 8px 24px; background: var(--soft); }
+
+.sbar { display: flex; gap: 2px; height: 18px; border-radius: 9px; overflow: hidden; }
+.sbar i { display: block; height: 100%; }
+.spend { display: grid; gap: 4px 24px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); margin-top: 12px; }
+.spend div { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; }
+.spend .amt { margin-left: auto; font-weight: 600; font-variant-numeric: tabular-nums; }
+.meter { height: 12px; border-radius: 6px; background: var(--soft); overflow: hidden; margin: 8px 0; }
+.meter i { display: block; height: 100%; background: var(--s-in); border-radius: 6px 0 0 6px; }
+.hbar { display: grid; grid-template-columns: 90px 1fr auto; gap: 10px; align-items: center; padding: 6px 0; font-size: 0.88rem; }
+.hbar .bar { height: 14px; border-radius: 7px; background: var(--soft); overflow: hidden; }
+.hbar .bar i { display: block; height: 100%; border-radius: 7px; }
+.hbar .v { font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+.hbar.ok i { background: var(--ok-text); } .hbar.warn i { background: var(--warn-text); } .hbar.crit i { background: var(--crit-text); }
+
+.gauge { display: grid; place-items: center; }
+.pace { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-top: 8px; justify-content: center; }
+
+.dec { padding: 14px; display: grid; gap: 6px; }
+.dec .q { font-weight: 600; }
+.dec .rec { font-size: 0.88rem; }
+.dec .rec b { color: var(--accent); }
+.dec .alt { font-size: 0.85rem; color: var(--ink-soft); }
+@media (max-width: 560px) { h1 { font-size: 1.55rem; } .tile .big { font-size: 1.6rem; } }
+@media (prefers-reduced-motion: no-preference) { .segmented button { transition: background 150ms ease-out, color 150ms ease-out; } }
+</style>
+
+<div class="wrap">
+  <div class="top">
+    <div>
+      <h1>Finance</h1>
+      <p class="muted meta small num" id="meta"></p>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px"><div class="segmented" role="group" aria-label="Financial year" id="fy"></div>
+    <div class="segmented" role="group" aria-label="Preview as" id="aud"><button type="button" data-a="admin" aria-pressed="true">Admin</button><button type="button" data-a="member" aria-pressed="false">Member view</button></div>
+    <div class="segmented" role="group" aria-label="Appearance" id="theme">
+      <button type="button" data-t="auto" aria-pressed="true">Auto</button>
+      <button type="button" data-t="light" aria-pressed="false">Light</button>
+      <button type="button" data-t="dark" aria-pressed="false">Dark</button>
+    </div></div>
+  </div>
+  <p class="banner">Mockup with invented data. No figure here is real, and nothing is connected to the ledger.</p>
+  <p class="banner" id="aud-note" hidden>Member view: what a member would see on the portal. Advances, which household owes what, data health, the UPI circle and the draft maintenance plan stay with admins.</p>
+
+  <div class="navrow"><div class="segmented" role="group" aria-label="Dashboard" id="nav">
+    <button type="button" data-v="overview">Overview</button>
+    <button type="button" data-v="cashflow">Cashflow</button>
+    <button type="button" data-v="budget">Budget vs actual</button>
+    <button type="button" data-v="maintenance">Maintenance</button>
+    <button type="button" data-v="advances" data-aud="admin">Advances</button>
+    <button type="button" data-v="upi-circle" data-aud="admin">UPI circle</button>
+    <button type="button" data-v="data-health" data-aud="admin">Data health</button>
+    <button type="button" data-v="decisions" data-aud="admin">Decisions</button>
+  </div></div>
+
+  <section class="view" id="v-overview" hidden>
+    <div class="tiles" id="tiles"></div>
+    <div class="card">
+      <div class="card-head"><h2>Where the money went</h2><span class="small muted" id="ov-spend-note"></span></div>
+      <div id="ov-spend"></div>
+    </div>
+    <div class="grid2">
+      <div class="card" id="ov-attn-card">
+        <div class="card-head"><h2>Needs attention</h2><a class="small muted" href="#data-health">All checks</a></div>
+        <ul class="list" id="ov-attn" style="border:0;border-radius:0;background:none"></ul>
+      </div>
+      <div class="card" id="ov-owed-card">
+        <div class="card-head"><h2>Still to come in or back</h2><span class="small muted">money that is owed to the farm</span></div>
+        <ul class="list" id="ov-owed" style="border:0;border-radius:0;background:none"></ul>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>Closing balance</h2><span class="small muted">month end, ₹ L</span></div>
+      <div class="chart" id="ov-bal"></div>
+    </div>
+  </section>
+
+  <section class="view" id="v-cashflow" hidden>
+    <div class="card">
+      <div class="card-head"><h2>Money in and out</h2><span class="small muted">by month, as it hit the bank (cash view)</span></div>
+      <div class="legend" style="margin-bottom:8px"><span><i class="sw" style="background:var(--s-in)"></i>Money in</span><span><i class="sw" style="background:var(--s-out)"></i>Money out</span></div>
+      <div class="chart" id="cf-bars"></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>Where the money went</h2><span class="small muted" id="cf-sal-note"></span></div>
+      <div class="legend" style="margin-bottom:8px" id="cf-legend"></div>
+      <div class="chart" id="cf-stack"></div>
+      <details><summary>Table view of money in and out</summary><div class="tablewrap" id="cf-table"></div></details>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>Closing balance and runway</h2><span class="small muted">sinking fund shown separately</span></div>
+      <div class="legend" style="margin-bottom:8px"><span><i class="sw line" style="background:var(--s-bal)"></i>Bank balance</span><span><i class="sw dash"></i>Bank balance + sinking fund</span></div>
+      <div class="chart" id="cf-bal"></div>
+      <div class="tiles" style="margin-top:14px" id="runway-tiles"></div>
+      <p class="small muted" style="margin-top:10px" id="runway-note"></p>
+    </div>
+  </section>
+
+  <section class="view" id="v-budget" hidden>
+    <p class="small muted" id="fy-note"></p>
+    <div class="card" style="padding:0;overflow:hidden">
+      <div class="btotal" id="b-total"></div>
+      <div style="padding:12px 14px;border-top:1px solid var(--line)">
+        <div class="legend"><span><i class="sw" style="background:var(--s-in)"></i>Spent</span><span><i class="sw hatch"></i>Committed (approved, not yet paid)</span><span><i class="sw" style="width:3px;height:12px;background:var(--ink)"></i>Budget</span><span><i style="width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:7px solid var(--ink-soft);display:inline-block"></i>Year-end estimate</span></div>
+      </div>
+    </div>
+    <ul class="list" id="b-rows"></ul>
+    <p class="small muted">Period view: an expense counts in the month it belongs to, not the month it was paid. Estimates assume spending continues at the pace so far and are shown for the farm’s running costs only, since company fees, projects and the sinking fund arrive in lumps.</p>
+    <div class="grid2" id="b-extra"></div>
+  </section>
+
+  <section class="view" id="v-maintenance" hidden>
+    <p class="small muted" id="m-note"></p>
+    <div class="card" id="m-mine" hidden>
+      <div class="card-head"><h2>Your household</h2><span class="small muted">only you see this</span></div>
+      <div id="m-mine-body"></div>
+    </div>
+    <div class="tiles" id="m-tiles"></div>
+    <div class="card">
+      <div class="card-head"><h2>Collected through the year</h2><span class="small muted">running total of maintenance received, ₹ L</span></div>
+      <div class="legend" style="margin-bottom:8px" id="m-legend"></div>
+      <div class="chart" id="m-curve"></div>
+    </div>
+    <div class="grid2" id="m-detail">
+      <div class="card">
+        <div class="card-head"><h2>How late are the pending dues?</h2><span class="small muted">months past the due date</span></div>
+        <div id="m-age"></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>By cluster</h2><span class="small muted">households that have paid in full</span></div>
+        <div class="tablewrap" id="m-cluster"></div>
+      </div>
+    </div>
+    <div class="card" id="m-list-card">
+      <div class="card-head"><h2>Households still to pay</h2><span class="small muted">house numbers only; names live in the directory</span></div>
+      <ul class="list" id="m-list" style="border:0;border-radius:0;background:none"></ul>
+    </div>
+  </section>
+
+  <section class="view" id="v-advances" hidden>
+    <p class="small muted" id="a-note"></p>
+    <div class="tiles" id="a-tiles"></div>
+    <div class="card" id="a-chart-card">
+      <div class="card-head"><h2>Given, recovered and still to recover</h2><span class="small muted">by month, ₹ thousand</span></div>
+      <div class="legend" style="margin-bottom:8px"><span><i class="sw" style="background:var(--s-out)"></i>Advance given</span><span><i class="sw" style="background:var(--s-in)"></i>Recovered from pay</span><span><i class="sw line" style="background:var(--ink)"></i>Still to recover at month end</span></div>
+      <div class="chart" id="a-chart"></div>
+    </div>
+    <div class="card" id="a-list-card">
+      <div class="card-head"><h2>Each advance</h2><span class="small muted">employee numbers only; names stay in payroll</span></div>
+      <ul class="list" id="a-list" style="border:0;border-radius:0;background:none"></ul>
+    </div>
+  </section>
+
+  <section class="view" id="v-upi-circle" hidden>
+    <div class="grid2" id="upi-top">
+      <div class="card">
+        <div class="card-head"><h2>November so far</h2><span class="small muted">cap resets on the 1st, ₹15,000 a calendar month</span></div>
+        <div class="gauge" id="ring"></div>
+        <div class="pace" id="ring-notes"></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Running total this month</h2></div>
+        <div class="legend" style="margin-bottom:8px"><span><i class="sw line" style="background:var(--s-in)"></i>Circle spend</span><span><i class="sw dash"></i>Even pace to the cap</span></div>
+        <div class="chart" id="upi-line"></div>
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <div class="card-head"><h2 id="upi-bars-title">Last six months</h2><span class="small muted">circle spend against the cap</span></div>
+        <div class="chart" id="upi-bars"></div>
+      </div>
+      <div class="card" id="upi-flags-card">
+        <div class="card-head"><h2>Flagged payments</h2><span class="small muted">held for review</span></div>
+        <ul class="list" id="upi-flags" style="border:0;border-radius:0;background:none"></ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="view" id="v-data-health" hidden>
+    <p class="banner" id="dh-note" hidden>These checks describe today’s books. They do not change with the financial year.</p>
+    <div class="card">
+      <div class="card-head"><h2>Can I trust the numbers?</h2><span class="small muted">each check opens the screen where it is fixed</span></div>
+      <ul class="list" id="dh-list" style="border:0;border-radius:0;background:none"></ul>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>Last imports</h2><span class="small muted">a stale file makes every figure above old</span></div>
+      <ul class="list" id="dh-imports" style="border:0;border-radius:0;background:none"></ul>
+    </div>
+  </section>
+
+  <section class="view" id="v-decisions" hidden>
+    <p class="muted">Each line is a choice this mockup already makes. Say which to change before anything is built.</p>
+    <div class="list" id="dec"></div>
+  </section>
+</div>
+
+<script>
+/* ---------- invented data (lakh = ₹1,00,000) ---------- */
+var M12 = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'];
+var G = ['salary', 'farm', 'projects', 'company', 'sinking'];
+var GN = { salary: 'Salary', farm: 'Farm and household', projects: 'Projects', company: 'Company', sinking: 'Sinking fund' };
+var GC = { salary: 'var(--g-sal)', farm: 'var(--g-farm)', projects: 'var(--g-proj)', company: 'var(--g-co)', sinking: 'var(--ink-soft)' };
+var HEADS = ['Company', 'Farm', 'Projects', 'Investment'];
+function r2(x) { return Math.round(x * 100) / 100; }
+function sum(a) { return a.reduce(function (x, y) { return x + y; }, 0); }
+
+/* budget lines: [head, name, comment, budget, spent to date, committed] */
+var L27 = [
+  ['Company', 'Bank charges', 'Monthly and card fees', 0.03, 0.02, 0],
+  ['Company', 'Accounts and filings', 'Bookkeeping, audit and returns', 1.35, 0.8, 0.1],
+  ['Company', 'Income tax', 'On interest earned', 0.28, 0, 0],
+  ['Company', 'Registrations and licences', 'Entity setup and approvals', 0.85, 0.35, 0.2],
+  ['Farm', 'Donations', 'Yearly gifts', 0.2, 0.1, 0],
+  ['Farm', 'Farm operations', 'Seed, hired labour, repairs, consumables', 4.4, 2.7, 0.35],
+  ['Farm', 'Groceries', 'Kitchen supplies', 2.35, 1.45, 0.1],
+  ['Farm', 'Insurance', 'Staff medical cover', 0.17, 0.17, 0],
+  ['Farm', 'Online services', 'Domains and workspace accounts', 0.09, 0.09, 0],
+  ['Farm', 'Local taxes', 'Paid on behalf of all households', 0.31, 0.31, 0],
+  ['Farm', 'Power', 'Billed every two months', 0.24, 0.13, 0.02],
+  ['Farm', 'Fuel and transport', 'Vehicle and pump fuel', 0.35, 0.21, 0.03],
+  ['Farm', 'Salary', 'Monthly pay for farm staff; advances are recovered separately', 16.2, 9.95, 1.4],
+  ['Farm', 'Telecom charges', 'Phone and internet lines', 0.19, 0.12, 0],
+  ['Projects', 'Water storage', 'Tank and plumbing', 1.4, 0.7, 0.15],
+  ['Projects', 'Soil works', 'Terracing and drains', 0.7, 0.3, 0],
+  ['Projects', 'Perimeter fencing', 'Design and first section', 1.8, 0.55, 0.6],
+  ['Projects', 'Small projects', 'Repairs and one-off builds', 2.4, 1.1, 0.15],
+  ['Investment', 'Sinking fund', 'Put into a fixed deposit', 4.0, 4.0, 0]
+];
+function derive(fb, fa, seed, sink) {
+  return L27.map(function (r, i) {
+    if (r[1] === 'Sinking fund') return [r[0], r[1], r[2], sink, sink, 0];
+    var b = r2(r[3] * fb), amp = r[1] === 'Salary' ? 0.02 : 0.12;
+    return [r[0], r[1], r[2], b, r2(b * fa * (1 + amp * Math.sin(i * 2.3 + seed))), 0];
+  });
+}
+var LINES = { '2026-27': L27, '2025-26': derive(0.92, 0.97, 1, 3.5), '2024-25': derive(0.82, 0.96, 2, 3.0) };
+var INCOME = {
+  '2026-27': [['Guest-stay revenue', 1.7, 1.05], ['Bank interest', 0.25, 0.09], ['Tax refund', 0.06, 0]],
+  '2025-26': [['Guest-stay revenue', 1.5, 1.2], ['Bank interest', 0.2, 0.14], ['Tax refund', 0.06, 0.06]],
+  '2024-25': [['Guest-stay revenue', 1.3, 1.1], ['Bank interest', 0.15, 0.1], ['Tax refund', 0, 0]]
+};
+var MAINT = { /* households, yearly contribution per household, amount received, households paid in full */
+  '2026-27': { members: 48, per: 0.72, recAmt: 31.32, paid: 43 },
+  '2025-26': { members: 50, per: 0.66, recAmt: 32.34, paid: 49 },
+  '2024-25': { members: 46, per: 0.60, recAmt: 27.0, paid: 45 }
+};
+var CLUSTERS = [{ c: 'A', n: 12 }, { c: 'B', n: 13 }, { c: 'C', n: 12 }, { c: 'D', n: 11 }];
+var DUE = 'due 30 Apr';
+var PENDING = [  /* paid so far, months past due */
+  { h: 'B-07', c: 'B', paid: 0, over: 6, note: 'Reminded 3 Nov' },
+  { h: 'C-12', c: 'C', paid: 0.36, over: 6, note: 'Part paid; reminded 3 Nov' },
+  { h: 'A-03', c: 'A', paid: 0, over: 4, note: 'Reminded 20 Oct' },
+  { h: 'C-05', c: 'C', paid: 0, over: 3, note: 'Not yet reminded' },
+  { h: 'B-11', c: 'B', paid: 0, over: 1, note: 'Not yet reminded' }
+];
+var ADV = [  /* employee, role, date given, amount (₹), monthly recovery agreed (₹), first recovery month, recovered so far (₹), instalments due so far */
+  { e: 'E-01', role: 'Farm hand', date: '12 Jun', amt: 25000, mo: 2500, start: 'Jul', rec: 10000, due: 4 },
+  { e: 'E-02', role: 'Housekeeping', date: '3 Aug', amt: 10000, mo: 2000, start: 'Sep', rec: 4000, due: 2 },
+  { e: 'E-03', role: 'Farm hand', date: '20 Sep', amt: 15000, mo: 0, start: '', rec: 0, due: 0 },
+  { e: 'E-04', role: 'Supervisor', date: '5 May', amt: 30000, mo: 5000, start: 'Jun', rec: 20000, due: 5 },
+  { e: 'E-05', role: 'Driver', date: '1 Apr', amt: 12000, mo: 3000, start: 'May', rec: 12000, due: 4 }
+];
+var ADV_GIVEN = [12000, 30000, 25000, 0, 10000, 15000, 0, 0];
+var ADV_REC = [0, 3000, 8000, 10500, 5500, 9500, 9500, 0];
+var ADVC = { '2025-26': { given: 78000, rec: 70000, carried: 1 }, '2024-25': { given: 60000, rec: 60000, carried: 0 } };
+
+/* monthly money by group. The current year is typed in (Nov is a part month); closed years are spread from their
+   budget lines so every screen adds up. Maintenance arrives in lumps, mostly in the first months of the year. */
+var BASE = {
+  salary: [1.3, 1.3, 1.3, 1.4, 1.4, 1.4, 1.4, 1.4, 1.4, 1.4, 1.4, 1.4],
+  farm: [0.78, 0.6, 0.68, 0.56, 0.8, 0.58, 0.86, 0.8, 0.7, 0.75, 0.8, 0.9],
+  company: [0.25, 0.04, 0.18, 0, 0.3, 0.05, 0.25, 0.2, 0.1, 0.15, 0.1, 0.3],
+  projects: [0.15, 0.05, 0.6, 0.25, 0.5, 0.7, 0.3, 0.4, 0.3, 0.35, 0.2, 0.3],
+  maint: [18.6, 6.2, 2.9, 1.4, 0.9, 0.6, 0.4, 0.32, 0.25, 0.2, 0.15, 0.1],
+  other: [0.14, 0.12, 0.1, 0.18, 0.16, 0.14, 0.2, 0.15, 0.1, 0.1, 0.15, 0.1]
+};
+function spread(total, shape, seed) {
+  var w = shape.map(function (v, i) { return v * (1 + 0.1 * Math.sin(i * 1.9 + seed)); }), s = sum(w);
+  return w.map(function (v) { return total * v / s; });
+}
+function groupTotals(lines) {
+  var t = { salary: 0, farm: 0, company: 0, projects: 0, sinking: 0 };
+  lines.forEach(function (r) { t[r[1] === 'Salary' ? 'salary' : r[0] === 'Farm' ? 'farm' : r[0] === 'Company' ? 'company' : r[0] === 'Projects' ? 'projects' : 'sinking'] += r[4]; });
+  return t;
+}
+function finish(y) {
+  var n = y.months.length; y.out = []; y.inn = []; y.bal = []; y.fds = []; y.cm = [];
+  var b = y.open, f = y.fdOpen, c = 0;
+  for (var i = 0; i < n; i++) {
+    var o = 0; G.forEach(function (k) { o += y.g[k][i]; });
+    y.out.push(o); y.inn.push(y.maint[i] + y.other[i]); b += y.inn[i] - o; f += y.g.sinking[i]; c += y.maint[i];
+    y.bal.push(b); y.fds.push(f); y.cm.push(c);
+  }
+  y.close = b; y.fdEnd = f;
+  return y;
+}
+function closedYear(k, open, fdOpen, seed) {
+  var t = groupTotals(LINES[k]), z = []; for (var i = 0; i < 12; i++) z.push(i === 0 ? t.sinking : 0);
+  var inc = sum(INCOME[k].map(function (r) { return r[2]; }));
+  return finish({ months: M12, partial: -1, open: open, fdOpen: fdOpen,
+    g: { salary: spread(t.salary, BASE.salary, seed), farm: spread(t.farm, BASE.farm, seed + 1), company: spread(t.company, BASE.company, seed + 2), projects: spread(t.projects, BASE.projects, seed + 3), sinking: z },
+    maint: spread(MAINT[k].recAmt, BASE.maint, seed + 4), other: spread(inc, BASE.other, seed + 5) });
+}
+var YEARS = {};
+YEARS['2024-25'] = closedYear('2024-25', 6.0, 4.0, 1);
+YEARS['2025-26'] = closedYear('2025-26', YEARS['2024-25'].close, YEARS['2024-25'].fdEnd, 2);
+YEARS['2026-27'] = finish({ months: M12.slice(0, 8), partial: 7, open: YEARS['2025-26'].close, fdOpen: YEARS['2025-26'].fdEnd,
+  g: { salary: [1.3, 1.3, 1.3, 1.4, 1.4, 1.4, 1.4, 0.45], farm: [0.78, 0.6, 0.68, 0.56, 0.8, 0.58, 0.86, 0.42], company: [0.25, 0.04, 0.18, 0, 0.3, 0, 0.25, 0.15],
+       projects: [0.15, 0, 0.6, 0.25, 0.5, 0.7, 0.3, 0.15], sinking: [4, 0, 0, 0, 0, 0, 0, 0] },
+  maint: [18.6, 6.2, 2.9, 1.4, 0.9, 0.6, 0.4, 0.32], other: [0.14, 0.12, 0.1, 0.18, 0.16, 0.14, 0.2, 0.1] });
+
+var FYFRAC = 223 / 365;                              // 1 Apr to 10 Nov
+var FY_NOW = '2026-27', fy = FY_NOW;
+var Y, MONTHS, INN, OUT, PARTIAL, BAL, FDS, LAST, WIN0, WIN1, burn, runway, runwayFd, GS;
+function setYear(k) {
+  Y = YEARS[k]; MONTHS = Y.months; INN = Y.inn; OUT = Y.out; PARTIAL = Y.partial; BAL = Y.bal; FDS = Y.fds; GS = Y.g;
+  LAST = BAL.length - 1; WIN1 = PARTIAL >= 0 ? PARTIAL - 1 : LAST; WIN0 = WIN1 - 5;   // the last six complete months
+  var s = 0; for (var j = WIN0; j <= WIN1; j++) s += OUT[j] - GS.sinking[j];
+  burn = s / 6; runway = BAL[LAST] / burn; runwayFd = (BAL[LAST] + FDS[LAST]) / burn;
+}
+setYear(fy);
+function closed() { return fy !== FY_NOW; }
+var AUD = 'admin';
+function member() { return AUD === 'member'; }
+
+var CAP = 15000;
+var DAILY = [800, 0, 1250, 600, 2100, 0, 1850, 950, 1400, 500];
+var CUM = []; DAILY.reduce(function (s, v) { s += v; CUM.push(s); return s; }, 0);
+var PASTM = [['May', 13900], ['Jun', 14800], ['Jul', 12100], ['Aug', 14200], ['Sep', 15000], ['Oct', 13400]];
+var UPIFY = {
+  '2025-26': [13200, 14100, 14900, 12800, 13600, 15000, 14400, 13900, 12500, 14700, 13300, 14800],
+  '2024-25': [11800, 12900, 13400, 12200, 14100, 13700, 12600, 13800, 14300, 12900, 13500, 14000]
+};
+var FLAGS = [
+  ['3 Nov', 1250, 'To the requester’s own account'],
+  ['5 Nov', 2100, 'New payee, not yet verified'],
+  ['7 Nov', 1850, 'No remark entered']
+];
+var HEALTH = [
+  { t: 'Bank lines with no category', d: 'Oldest is from 28 Oct', n: 14, s: 'warn' },
+  { t: 'Approved requests waiting for a bank line', d: 'Oldest is 12 days old', n: 6, s: 'warn' },
+  { t: 'Payees in use that nobody has verified', d: '2 received money this month', n: 3, s: 'crit' },
+  { t: 'Advances with no recovery agreed', d: 'Money given to an employee with no schedule to get it back', n: 1, s: 'crit' },
+  { t: 'Advances behind their recovery schedule', d: 'A monthly recovery was missed', n: 1, s: 'warn' },
+  { t: 'Payments held for review', d: 'Circle spend and changed bank details', n: 4, s: 'warn' },
+  { t: 'Payments over ₹5,000 with no bill', d: 'Auditors ask for these', n: 9, s: 'warn' },
+  { t: 'Statement balance chain', d: 'Every line follows from the one before, across 4,812 lines', n: null, s: 'ok' }
+];
+var IMPORTS = [
+  { t: 'Bank statement', d: 'Through 8 Nov 2026', age: 2, s: 'ok' },
+  { t: 'Paytm UPI export', d: 'Through 5 Nov 2026', age: 5, s: 'warn' }
+];
+var DECISIONS = [
+  ['Which four numbers lead the Overview?', 'Runway, budget used, bank balance with this month’s movement, and items needing attention, in that order. Below them, money still owed to the farm: maintenance pending and advances not yet recovered.', 'Alternative: balance first, since it is the number you can check against the bank app.'],
+  ['What is runway?', 'The bank balance divided by the average monthly spending of the last six complete months, leaving out transfers to the sinking fund. It ignores money still to come, because maintenance arrives in lumps. The Maintenance view shows how much of that is still pending. This replaces the design document’s “net outflow” definition, which would swing with every collection.', 'Alternative: net of inflows, as the design document says. Looks better right after a collection and worse a month later.'],
+  ['What groups the budget?', 'The heads of the annual presentation: Company, Farm, Projects and Investment. A category belongs to one head. The design document’s Opex, Capex and Project buckets would become an optional second tag.', 'Alternative: keep the buckets from the design document and map the presentation’s heads onto them.'],
+  ['Should the Budget view reproduce the presentation’s tables?', 'Yes: lines with a comment under each head, income streams, maintenance expected, received and pending, the summary of outflow against inflow, the financial status, and the next-year contribution per household.', 'Alternative: only the budget lines here, the rest on a separate Summary tab.'],
+  ['How does salary show up?', 'As its own colour in the spending charts, a share of spending on every budget line, and the first row of the spending breakdown on the Overview. Who was paid for which days stays in the payroll session.', 'Alternative: a dedicated Salaries tab now.'],
+  ['What does the Maintenance view answer?', 'How much has been collected against what was expected, how it compares with last year at the same point, how late the pending dues are, which clusters are behind, and which households still owe, with the last reminder. It also says how many months of spending the pending amount equals.', 'Alternative: only the totals, with the household list left to the member directory.'],
+  ['How does the Advances view work?', 'Every advance shows what was given, the agreed monthly recovery, what has been recovered, what is left, and when it clears. An advance with no recovery agreed, or a missed recovery, goes on Data health and the Overview. Recoveries come from payroll once it exists; until then an approver records them against the advance.', 'Alternative: advances only inside the payroll session, with nothing on the dashboard.'],
+  ['What would members see on the portal?', 'Overview (with their own household’s maintenance instead of the attention list), Cashflow, Budget vs actual, and Maintenance totals with a card for their own household. Not shown: Advances, which other household owes what, data health, the UPI circle, the draft next-year plan. Use “Member view” in the header to preview.', 'Alternative: members see only Budget vs actual and Maintenance. Or also the Cashflow table view only for the year just closed.'],
+  ['Who sees names?', 'The dashboard shows house numbers and employee numbers only. Names stay in the member directory and payroll, so a screenshot of the dashboard is safe to share.', 'Alternative: show names to approvers.'],
+  ['Where does the sinking fund go?', 'It is the Investment head, its own grey segment in the spending chart, and is left out of runway because it is saved, not spent.', 'Alternative: show it as a separate line below spending.'],
+  ['What does “committed” mean?', 'Requests that are approved but not yet matched to a bank line.', 'Alternative: also count signed purchase orders, if those exist.'],
+  ['Year-end estimates?', 'Only for the farm’s running costs, labelled estimates. Company fees, projects and the sinking fund arrive in lumps, so they get none.', 'Alternative: a straight-line estimate for everything.'],
+  ['Cash view or period view?', 'Cashflow follows the bank date. Budget vs actual follows the month an expense belongs to. A note on each says so.', 'Alternative: one view everywhere. Simpler, but a March salary paid in April would land in the wrong year.'],
+  ['Charts or tables?', 'Charts for money in and out, where it went, balance, collections, advances and circle spend. The budget is bars with figures, because you read it line by line. Every chart has a table view or a tooltip.', 'Alternative: tables only on phones.'],
+  ['How does the financial year selector work?', 'One selector in the header; every view follows it and it opens on the current year. A closed year shows final figures: twelve months of cashflow, runway as at 31 March, budget with nothing committed and no estimate, collections and advances as they closed, and the circle month by month. Data health always describes today and says so.', 'Alternative: the selector only on Budget vs actual.'],
+  ['How early does the circle warn?', 'A projected date when the cap runs out, from this month’s pace, shown as soon as spend passes the even pace.', 'Alternative: warn only above 80% of the cap.'],
+  ['Which Data health items block a month close?', 'Unverified payees in use, bank lines with no category, advances with no recovery agreed, and a broken balance chain. The rest are warnings.', 'Alternative: block on every item.']
+];
+
+/* ---------- helpers ---------- */
+function $(id) { return document.getElementById(id); }
+function inr(n) { return '₹' + Math.round(n).toLocaleString('en-IN'); }
+function L(v) { return '₹' + v.toFixed(1) + ' L'; }
+function L2(v) { return '₹' + v.toFixed(2) + ' L'; }
+function sgn(v) { return (v < 0 ? '−' : '+') + L(Math.abs(v)); }
+function sL(v) { return v < 0 ? '−' + L(-v) : L(v); }
+function pct(a, b) { return b ? Math.round(a / b * 100) + '%' : '0%'; }
+function pill(s, txt) { var ic = s === 'ok' ? '✓' : s === 'warn' ? '!' : s === 'crit' ? '▲' : ''; return '<span class="pill ' + s + '">' + (ic ? '<span aria-hidden="true">' + ic + '</span>' : '') + txt + '</span>'; }
+var CHEV = '<svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>';
+function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
+function scale(d0, d1, r0, r1) { return function (v) { return r0 + (v - d0) / (d1 - d0) * (r1 - r0); }; }
+function frame(w, h, m, yMin, yMax, ticks, fmt) {
+  var y = scale(yMin, yMax, h - m.b, m.t), s = '';
+  ticks.forEach(function (t) {
+    s += '<line x1="' + m.l + '" x2="' + (w - m.r) + '" y1="' + y(t) + '" y2="' + y(t) + '" stroke="var(--grid)"/>';
+    s += '<text x="' + (m.l - 8) + '" y="' + (y(t) + 4) + '" text-anchor="end">' + fmt(t) + '</text>';
+  });
+  return { y: y, svg: s };
+}
+function roundTop(x, y, w, h, r) { r = Math.min(r, w / 2, h); return 'M' + x + ' ' + (y + h) + 'V' + (y + r) + 'Q' + x + ' ' + y + ' ' + (x + r) + ' ' + y + 'H' + (x + w - r) + 'Q' + (x + w) + ' ' + y + ' ' + (x + w) + ' ' + (y + r) + 'V' + (y + h) + 'Z'; }
+function lineD(pts) { return pts.map(function (p, i) { return (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1); }).join(''); }
+function niceAxis(vals) {
+  var mx = Math.max.apply(0, vals), step = mx > 40 ? 10 : mx > 20 ? 5 : mx > 10 ? 4 : 2, top = Math.ceil(mx / step) * step, t = [];
+  for (var v = 0; v <= top; v += step) t.push(v);
+  return { max: top, ticks: t };
+}
+function attachTips(el) {
+  var tip = document.createElement('div'); tip.className = 'tip'; tip.hidden = true; el.appendChild(tip);
+  function move(e) {
+    var t = e.target.closest ? e.target.closest('[data-tip]') : null;
+    if (!t) { tip.hidden = true; return; }
+    var r = el.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+    tip.innerHTML = t.getAttribute('data-tip'); tip.hidden = false;
+    var half = tip.offsetWidth / 2; x = Math.max(half + 4, Math.min(r.width - half - 4, x));
+    tip.style.left = x + 'px'; tip.style.top = Math.max(tip.offsetHeight + 8, y - 12) + 'px';
+  }
+  el.addEventListener('pointermove', move); el.addEventListener('pointerdown', move);
+  el.addEventListener('pointerleave', function () { tip.hidden = true; });
+}
+function monthLabel(i) { return MONTHS[i] + (i === PARTIAL ? ' (to 10 Nov)' : ''); }
+function advStatus(a) {
+  var bal = a.amt - a.rec;
+  if (bal <= 0) return { s: 'ok', t: 'Cleared', bal: 0, clears: '' };
+  if (!a.mo) return { s: 'crit', t: 'No recovery agreed', bal: bal, clears: '' };
+  var n = Math.ceil(bal / a.mo), idx = 7 + n - 1, clears = M12[idx % 12] + ' ' + (idx >= 9 ? 2027 : 2026);
+  if (a.rec < a.due * a.mo) return { s: 'warn', t: 'Behind by ' + inr(a.due * a.mo - a.rec), bal: bal, clears: clears };
+  return { s: 'ok', t: 'On schedule', bal: bal, clears: clears };
+}
+function pendingTotals() {
+  var rows = PENDING.map(function (p) { return { h: p.h, c: p.c, over: p.over, note: p.note, paid: p.paid, bal: MAINT['2026-27'].per - p.paid }; });
+  return { rows: rows, total: sum(rows.map(function (r) { return r.bal; })) };
+}
+
+/* ---------- charts ---------- */
+function barsInOut(el) {
+  var w = el.clientWidth || 600, h = 270, m = { l: 36, r: 8, t: 10, b: 26 };
+  var ax = niceAxis(INN.concat(OUT)), f = frame(w, h, m, 0, ax.max, ax.ticks, function (t) { return t; });
+  var n = MONTHS.length, slot = (w - m.l - m.r) / n, bw = Math.max(8, Math.min(26, slot * 0.34)), s = f.svg, base = f.y(0);
+  MONTHS.forEach(function (mo, i) {
+    var cx = m.l + slot * (i + .5), part = i === PARTIAL, op = part ? .55 : 1;
+    var tip = '<b>' + monthLabel(i) + '</b><br>In ' + L(INN[i]) + ' (maintenance ' + L(Y.maint[i]) + ')<br>Out ' + L(OUT[i]) + '<br>Net ' + sgn(INN[i] - OUT[i]);
+    s += '<path d="' + roundTop(cx - bw - 1, f.y(INN[i]), bw, base - f.y(INN[i]), 4) + '" fill="var(--s-in)" opacity="' + op + '"/>';
+    s += '<path d="' + roundTop(cx + 1, f.y(OUT[i]), bw, base - f.y(OUT[i]), 4) + '" fill="var(--s-out)" opacity="' + op + '"/>';
+    s += '<text x="' + cx + '" y="' + (h - 8) + '" text-anchor="middle">' + mo + (part ? '*' : '') + '</text>';
+    s += '<rect class="hit" x="' + (cx - slot / 2) + '" y="' + m.t + '" width="' + slot + '" height="' + (h - m.t - m.b) + '" data-tip="' + esc(tip) + '"/>';
+  });
+  s += '<line x1="' + m.l + '" x2="' + (w - m.r) + '" y1="' + base + '" y2="' + base + '" stroke="var(--line-strong)"/>';
+  el.innerHTML = '<svg viewBox="0 0 ' + w + ' ' + h + '" role="img" aria-label="Money in and out by month, in lakh rupees">' + s + '</svg><p class="small muted" style="margin-top:4px">₹ lakh. Money in is mostly maintenance, collected early in the year.' + (PARTIAL >= 0 ? ' * November is the month so far.' : '') + '</p>';
+  attachTips(el);
+}
+function stacked(el) {
+  var w = el.clientWidth || 600, h = 280, m = { l: 36, r: 8, t: 10, b: 26 };
+  var ax = niceAxis(OUT), f = frame(w, h, m, 0, ax.max, ax.ticks, function (t) { return t; });
+  var n = MONTHS.length, slot = (w - m.l - m.r) / n, bw = Math.max(10, Math.min(34, slot * .58)), base = f.y(0), s = f.svg;
+  MONTHS.forEach(function (mo, i) {
+    var cx = m.l + slot * (i + .5), cum = 0, part = i === PARTIAL, lastJ = -1, tip = '<b>' + monthLabel(i) + '</b>';
+    G.forEach(function (k, j) { if (GS[k][i] > 0.0001) lastJ = j; });
+    G.forEach(function (k, j) {
+      var v = GS[k][i]; if (v <= 0.0001) return;
+      tip += '<br>' + GN[k] + ' ' + L(v);
+      var y1 = f.y(cum + v), y0 = f.y(cum), hh = Math.max(1, y0 - y1 - (cum > 0 ? 2 : 0));
+      s += j === lastJ ? '<path d="' + roundTop(cx - bw / 2, y1, bw, hh, 4) + '" fill="' + GC[k] + '" opacity="' + (part ? .55 : 1) + '"/>'
+        : '<rect x="' + (cx - bw / 2) + '" y="' + y1 + '" width="' + bw + '" height="' + hh + '" fill="' + GC[k] + '" opacity="' + (part ? .55 : 1) + '"/>';
+      cum += v;
+    });
+    tip += '<br><b>Total ' + L(OUT[i]) + '</b>';
+    s += '<text x="' + cx + '" y="' + (h - 8) + '" text-anchor="middle">' + mo + (part ? '*' : '') + '</text>';
+    s += '<rect class="hit" x="' + (cx - slot / 2) + '" y="' + m.t + '" width="' + slot + '" height="' + (h - m.t - m.b) + '" data-tip="' + esc(tip) + '"/>';
+  });
+  s += '<line x1="' + m.l + '" x2="' + (w - m.r) + '" y1="' + base + '" y2="' + base + '" stroke="var(--line-strong)"/>';
+  el.innerHTML = '<svg viewBox="0 0 ' + w + ' ' + h + '" role="img" aria-label="Money out by month, split into salary, farm and household, projects, company and sinking fund">' + s + '</svg><p class="small muted" style="margin-top:4px">₹ lakh.' + (PARTIAL >= 0 ? ' * November is the month so far.' : '') + '</p>';
+  attachTips(el);
+}
+function balanceLines(el, opts) {
+  var w = el.clientWidth || 600, h = opts.h, m = { l: 36, r: 12, t: 22, b: 26 };
+  var vals = opts.fd ? BAL.concat(BAL.map(function (v, i) { return v + FDS[i]; })) : BAL;
+  var ax = niceAxis(vals), f = frame(w, h, m, 0, ax.max, ax.ticks, function (t) { return t; });
+  var slot = (w - m.l - m.r) / MONTHS.length, X = function (i) { return m.l + slot * (i + .5); };
+  var p1 = BAL.map(function (v, i) { return [X(i), f.y(v)]; }), p2 = BAL.map(function (v, i) { return [X(i), f.y(v + FDS[i])]; });
+  var s = f.svg;
+  if (opts.fd) s += '<path d="' + lineD(p2) + '" fill="none" stroke="var(--ink-soft)" stroke-width="2" stroke-dasharray="5 4" stroke-linejoin="round"/>';
+  s += '<path d="' + lineD(p1) + '" fill="none" stroke="var(--s-bal)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>';
+  s += '<circle cx="' + p1[LAST][0] + '" cy="' + p1[LAST][1] + '" r="5" fill="var(--s-bal)" stroke="var(--card)" stroke-width="2"/>';
+  s += '<text class="strong" x="' + p1[LAST][0] + '" y="' + (p1[LAST][1] + 20) + '" text-anchor="end">' + L(BAL[LAST]) + '</text>';
+  if (opts.fd) {
+    s += '<circle cx="' + p2[LAST][0] + '" cy="' + p2[LAST][1] + '" r="5" fill="var(--ink-soft)" stroke="var(--card)" stroke-width="2"/>';
+    s += '<text class="strong" x="' + p2[LAST][0] + '" y="' + (p2[LAST][1] - 10) + '" text-anchor="end">' + L(BAL[LAST] + FDS[LAST]) + '</text>';
+  }
+  MONTHS.forEach(function (mo, i) {
+    s += '<text x="' + X(i) + '" y="' + (h - 8) + '" text-anchor="middle">' + mo + (i === PARTIAL ? '*' : '') + '</text>';
+    var tip = '<b>' + (i === PARTIAL ? 'Nov (to 10 Nov)' : mo + ' end') + '</b><br>Bank ' + L(BAL[i]) + (opts.fd ? '<br>Sinking fund ' + L(FDS[i]) + '<br>Together ' + L(BAL[i] + FDS[i]) : '');
+    s += '<rect class="hit" x="' + (X(i) - slot / 2) + '" y="' + m.t + '" width="' + slot + '" height="' + (h - m.t - m.b) + '" data-tip="' + esc(tip) + '"/>';
+  });
+  el.innerHTML = '<svg viewBox="0 0 ' + w + ' ' + h + '" role="img" aria-label="Closing balance by month">' + s + '</svg>';
+  attachTips(el);
+}
+function maintCurve(el) {
+  var m = MAINT[fy], expected = m.members * m.per, keys = Object.keys(YEARS).sort(), pi = keys.indexOf(fy) - 1, prev = pi >= 0 ? YEARS[keys[pi]] : null;
+  var w = el.clientWidth || 600, h = 270, mg = { l: 40, r: 12, t: 22, b: 26 };
+  var ax = niceAxis([expected]), f = frame(w, h, mg, 0, ax.max, ax.ticks, function (t) { return t; });
+  var slot = (w - mg.l - mg.r) / 12, X = function (i) { return mg.l + slot * (i + .5); }, s = f.svg;
+  s += '<line x1="' + mg.l + '" x2="' + (w - mg.r) + '" y1="' + f.y(expected) + '" y2="' + f.y(expected) + '" stroke="var(--ink)" stroke-width="1.5"/>';
+  s += '<text x="' + (mg.l + 4) + '" y="' + (f.y(expected) - 6) + '" class="strong">Expected ' + L(expected) + '</text>';
+  if (prev) s += '<path d="' + lineD(prev.cm.map(function (v, i) { return [X(i), f.y(v)]; })) + '" fill="none" stroke="var(--ink-soft)" stroke-width="2" stroke-dasharray="5 4" stroke-linejoin="round"/>';
+  var pts = Y.cm.map(function (v, i) { return [X(i), f.y(v)]; }), e = pts[pts.length - 1];
+  s += '<path d="' + lineD(pts) + '" fill="none" stroke="var(--s-in)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>';
+  s += '<circle cx="' + e[0] + '" cy="' + e[1] + '" r="5" fill="var(--s-in)" stroke="var(--card)" stroke-width="2"/>';
+  s += '<text class="strong" x="' + e[0] + '" y="' + (e[1] + 20) + '" text-anchor="' + (closed() ? 'end' : 'middle') + '">' + L(Y.cm[Y.cm.length - 1]) + '</text>';
+  M12.forEach(function (mo, i) {
+    s += '<text x="' + X(i) + '" y="' + (h - 8) + '" text-anchor="middle">' + mo + '</text>';
+    var tip = '<b>' + mo + '</b>' + (i < Y.cm.length ? '<br>This year ' + L(Y.cm[i]) + ' (' + pct(Y.cm[i], expected) + ')' : '') + (prev ? '<br>Last year ' + L(prev.cm[i]) : '');
+    s += '<rect class="hit" x="' + (X(i) - slot / 2) + '" y="' + mg.t + '" width="' + slot + '" height="' + (h - mg.t - mg.b) + '" data-tip="' + esc(tip) + '"/>';
+  });
+  el.innerHTML = '<svg viewBox="0 0 ' + w + ' ' + h + '" role="img" aria-label="Maintenance collected through the year against what was expected">' + s + '</svg>';
+  attachTips(el);
+}
+function advChart(el) {
+  var w = el.clientWidth || 600, h = 260, m = { l: 40, r: 12, t: 16, b: 26 }, n = ADV_GIVEN.length;
+  var out = [], c = 0; for (var i = 0; i < n; i++) { c += ADV_GIVEN[i] - ADV_REC[i]; out.push(c); }
+  var k = function (v) { return v / 1000; }, ax = niceAxis(out.map(k)), f = frame(w, h, m, 0, ax.max, ax.ticks, function (t) { return t; });
+  var slot = (w - m.l - m.r) / n, bw = Math.max(8, Math.min(24, slot * .3)), base = f.y(0), s = f.svg;
+  for (var j = 0; j < n; j++) {
+    var cx = m.l + slot * (j + .5), part = j === 7, op = part ? .55 : 1;
+    s += '<path d="' + roundTop(cx - bw - 1, f.y(k(ADV_GIVEN[j])), bw, base - f.y(k(ADV_GIVEN[j])), 4) + '" fill="var(--s-out)" opacity="' + op + '"/>';
+    s += '<path d="' + roundTop(cx + 1, f.y(k(ADV_REC[j])), bw, base - f.y(k(ADV_REC[j])), 4) + '" fill="var(--s-in)" opacity="' + op + '"/>';
+    s += '<text x="' + cx + '" y="' + (h - 8) + '" text-anchor="middle">' + M12[j] + (part ? '*' : '') + '</text>';
+  }
+  var pts = out.map(function (v, j) { return [m.l + slot * (j + .5), f.y(k(v))]; }), e = pts[n - 1];
+  s += '<path d="' + lineD(pts) + '" fill="none" stroke="var(--ink)" stroke-width="2.5" stroke-linejoin="round"/>';
+  s += '<circle cx="' + e[0] + '" cy="' + e[1] + '" r="5" fill="var(--ink)" stroke="var(--card)" stroke-width="2"/>';
+  s += '<text class="strong" x="' + e[0] + '" y="' + (e[1] - 10) + '" text-anchor="end">' + inr(out[n - 1]) + '</text>';
+  s += '<line x1="' + m.l + '" x2="' + (w - m.r) + '" y1="' + base + '" y2="' + base + '" stroke="var(--line-strong)"/>';
+  for (var q = 0; q < n; q++) {
+    s += '<rect class="hit" x="' + (m.l + slot * q) + '" y="' + m.t + '" width="' + slot + '" height="' + (h - m.t - m.b) + '" data-tip="' + esc('<b>' + M12[q] + (q === 7 ? ' (to 10 Nov)' : '') + '</b><br>Given ' + inr(ADV_GIVEN[q]) + '<br>Recovered ' + inr(ADV_REC[q]) + '<br>Still to recover ' + inr(out[q])) + '"/>';
+  }
+  el.innerHTML = '<svg viewBox="0 0 ' + w + ' ' + h + '" role="img" aria-label="Advances given, recovered and still to recover by month">' + s + '</svg><p class="small muted" style="margin-top:4px">* November is the month so far.</p>';
+  attachTips(el);
+}
+function upiLine(el) {
+  var w = el.clientWidth || 520, h = 250, m = { l: 44, r: 12, t: 16, b: 26 };
+  var f = frame(w, h, m, 0, 16000, [0, 5000, 10000, 15000], function (t) { return t / 1000 + 'k'; });
+  var X = scale(0, 30, m.l, w - m.r), s = f.svg;
+  s += '<line x1="' + m.l + '" x2="' + (w - m.r) + '" y1="' + f.y(CAP) + '" y2="' + f.y(CAP) + '" stroke="var(--ink)" stroke-width="1.5"/>';
+  s += '<text x="' + (w - m.r) + '" y="' + (f.y(CAP) - 6) + '" text-anchor="end" class="strong">Cap ₹15,000</text>';
+  s += '<line x1="' + X(0) + '" y1="' + f.y(0) + '" x2="' + X(30) + '" y2="' + f.y(CAP) + '" stroke="var(--ink-soft)" stroke-width="2" stroke-dasharray="5 4"/>';
+  var pts = [[X(0), f.y(0)]].concat(CUM.map(function (v, i) { return [X(i + 1), f.y(v)]; }));
+  s += '<path d="' + lineD(pts) + '" fill="none" stroke="var(--s-in)" stroke-width="2.5" stroke-linejoin="round"/>';
+  var e = pts[pts.length - 1];
+  s += '<circle cx="' + e[0] + '" cy="' + e[1] + '" r="5" fill="var(--s-in)" stroke="var(--card)" stroke-width="2"/>';
+  s += '<text class="strong" x="' + (e[0] + 8) + '" y="' + (e[1] - 8) + '">' + inr(CUM[CUM.length - 1]) + '</text>';
+  [1, 10, 20, 30].forEach(function (d) { s += '<text x="' + X(d) + '" y="' + (h - 8) + '" text-anchor="middle">' + d + ' Nov</text>'; });
+  CUM.forEach(function (v, i) {
+    s += '<rect class="hit" x="' + (X(i + 1) - (X(1) - X(0)) / 2) + '" y="' + m.t + '" width="' + (X(1) - X(0)) + '" height="' + (h - m.t - m.b) + '" data-tip="' + esc('<b>' + (i + 1) + ' Nov</b><br>Spent that day ' + inr(DAILY[i]) + '<br>Total ' + inr(v)) + '"/>';
+  });
+  el.innerHTML = '<svg viewBox="0 0 ' + w + ' ' + h + '" role="img" aria-label="Circle spend running total in November against the cap">' + s + '</svg>';
+  attachTips(el);
+}
+function upiBars(el) {
+  var w = el.clientWidth || 520, h = 250, m = { l: 44, r: 12, t: 16, b: 26 };
+  var f = frame(w, h, m, 0, 16000, [0, 5000, 10000, 15000], function (t) { return t / 1000 + 'k'; });
+  var now = !closed();
+  var rows = now ? PASTM.concat([['Nov', CUM[CUM.length - 1]]]) : UPIFY[fy].map(function (v, i) { return [M12[i], v]; });
+  var slot = (w - m.l - m.r) / rows.length, bw = Math.min(34, slot * .55), base = f.y(0), s = f.svg;
+  rows.forEach(function (r, i) {
+    var cx = m.l + slot * (i + .5), part = now && i === rows.length - 1;
+    s += '<path d="' + roundTop(cx - bw / 2, f.y(r[1]), bw, base - f.y(r[1]), 4) + '" fill="var(--s-in)" opacity="' + (part ? .55 : 1) + '"/>';
+    s += '<text x="' + cx + '" y="' + (h - 8) + '" text-anchor="middle">' + r[0] + (part ? '*' : '') + '</text>';
+    s += '<rect class="hit" x="' + (cx - slot / 2) + '" y="' + m.t + '" width="' + slot + '" height="' + (h - m.t - m.b) + '" data-tip="' + esc('<b>' + r[0] + (part ? ' (to 10 Nov)' : '') + '</b><br>' + inr(r[1]) + ' of ' + inr(CAP)) + '"/>';
+  });
+  s += '<line x1="' + m.l + '" x2="' + (w - m.r) + '" y1="' + base + '" y2="' + base + '" stroke="var(--line-strong)"/>';
+  s += '<line x1="' + m.l + '" x2="' + (w - m.r) + '" y1="' + f.y(CAP) + '" y2="' + f.y(CAP) + '" stroke="var(--ink)" stroke-width="1.5"/>';
+  s += '<text x="' + (m.l + 4) + '" y="' + (f.y(CAP) - 6) + '" class="strong">Cap ₹15,000</text>';
+  el.innerHTML = '<svg viewBox="0 0 ' + w + ' ' + h + '" role="img" aria-label="Circle spend per month against the cap">' + s + '</svg>' + (now ? '<p class="small muted" style="margin-top:4px">* November is the month so far.</p>' : '');
+  attachTips(el);
+}
+function spark(vals, color) {
+  var w = 120, h = 30, mn = Math.min.apply(0, vals), mx = Math.max.apply(0, vals), X = scale(0, vals.length - 1, 3, w - 6), Yy = scale(mn, mx, h - 4, 4);
+  var pts = vals.map(function (v, i) { return [X(i), Yy(v)]; });
+  return '<svg viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none" aria-hidden="true"><path d="' + lineD(pts) + '" fill="none" stroke="' + color + '" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/></svg>';
+}
+function ring() {
+  var tot = CUM[CUM.length - 1], p = tot / CAP, r = 78, c = 2 * Math.PI * r, cx = 100, cy = 100;
+  var col = p > .9 ? 'var(--crit-text)' : p > .6 ? 'var(--warn-text)' : 'var(--accent)';
+  var ang = (10 / 30) * 2 * Math.PI - Math.PI / 2, tx1 = cx + Math.cos(ang) * (r - 12), ty1 = cy + Math.sin(ang) * (r - 12), tx2 = cx + Math.cos(ang) * (r + 12), ty2 = cy + Math.sin(ang) * (r + 12);
+  $('ring').innerHTML = '<svg viewBox="0 0 200 200" width="220" height="220" role="img" aria-label="63 percent of the November cap used"><circle cx="100" cy="100" r="' + r + '" fill="none" stroke="var(--soft)" stroke-width="16"/>' +
+    '<circle cx="100" cy="100" r="' + r + '" fill="none" stroke="' + col + '" stroke-width="16" stroke-linecap="round" stroke-dasharray="' + (c * p).toFixed(1) + ' ' + c.toFixed(1) + '" transform="rotate(-90 100 100)"/>' +
+    '<line x1="' + tx1 + '" y1="' + ty1 + '" x2="' + tx2 + '" y2="' + ty2 + '" stroke="var(--ink)" stroke-width="2.5" stroke-linecap="round"/>' +
+    '<text x="100" y="98" text-anchor="middle" style="fill:var(--ink);font-size:28px;font-weight:700;font-family:var(--font)">' + inr(tot) + '</text>' +
+    '<text x="100" y="120" text-anchor="middle" style="fill:var(--ink-soft);font-size:13px;font-family:var(--font)">of ' + inr(CAP) + '</text></svg>';
+  var perDay = tot / 10, daysLeft = (CAP - tot) / perDay, runOut = Math.min(30, 10 + Math.floor(daysLeft));
+  $('ring-notes').innerHTML = pill('warn', Math.round(p * 100) + '% used, 33% of the month gone') +
+    '<span class="small muted">Left: <b class="num" style="color:var(--ink)">' + inr(CAP - tot) + '</b></span>' +
+    '<span class="small muted">At this pace the cap runs out around <b style="color:var(--ink)">' + runOut + ' Nov</b> (estimate)</span>' +
+    '<span class="small muted">The tick marks an even pace</span>';
+}
+
+/* ---------- views ---------- */
+function yearTotals() {
+  var t = {}; G.forEach(function (k) { t[k] = sum(GS[k]); });
+  t.out = sum(OUT); t.inn = sum(INN); t.spend = t.out - t.sinking;
+  return t;
+}
+function advTotals() {
+  if (closed()) { var c = ADVC[fy]; return { given: c.given, rec: c.rec, out: c.given - c.rec, count: c.carried, noPlan: 0, behind: 0 }; }
+  var st = ADV.map(advStatus), out = sum(st.map(function (x) { return x.bal; }));
+  return { given: sum(ADV.map(function (a) { return a.amt; })), rec: sum(ADV.map(function (a) { return a.rec; })), out: out, count: st.filter(function (x) { return x.bal > 0; }).length,
+    noPlan: st.filter(function (x) { return x.s === 'crit'; }).length, behind: st.filter(function (x) { return x.s === 'warn'; }).length };
+}
+function renderTiles() {
+  var cl = closed(), lines = LINES[fy], frac = cl ? 1 : FYFRAC, t = yearTotals();
+  var bud = sum(lines.map(function (r) { return r[3]; })), spent = sum(lines.map(function (r) { return r[4]; })), p = spent / bud * 100;
+  var attn = HEALTH.reduce(function (s, h) { return s + (h.n || 0); }, 0);
+  var net = cl ? t.inn - t.out : INN[PARTIAL] - OUT[PARTIAL];
+  var fourth = cl
+    ? '<a class="tile" href="#cashflow"><span class="label">Net for the year</span><span class="big num">' + sgn(net).replace(' L', ' <small>L</small>') + '</span><span class="sub">In ' + L(t.inn) + ', out ' + L(t.out) + '</span></a>'
+    : member()
+      ? '<a class="tile" href="#maintenance"><span class="label">Your maintenance</span><span class="big num">Paid</span><span class="sub">House A-07 · ' + L2(MAINT[fy].per) + ' on 12 Apr</span></a>'
+      : '<a class="tile" href="#data-health"><span class="label">Needs attention</span><span class="big num">' + attn + ' <small>items</small></span><span class="sub">3 unverified payees in use</span></a>';
+  $('tiles').innerHTML =
+    '<a class="tile" href="#cashflow"><span class="label">' + (cl ? 'Runway at 31 Mar' : 'Runway') + '</span><span class="big num">' + runway.toFixed(1) + ' <small>months</small></span><span class="sub">of spending covered by the bank · ' + runwayFd.toFixed(1) + ' with the sinking fund</span></a>' +
+    '<a class="tile" href="#budget"><span class="label">Budget used</span><span class="big num">' + Math.round(p) + '<small>%</small></span><span class="sub">' + (cl ? 'Year closed' : Math.round(FYFRAC * 100) + '% of the year gone') + '</span>' +
+      '<div class="track" style="margin-top:4px"><div class="act only" style="width:' + Math.min(100, p) + '%"></div><div class="bud" style="left:' + (frac * 100) + '%"></div></div></a>' +
+    '<a class="tile" href="#cashflow"><span class="label">' + (cl ? 'Bank balance at 31 Mar' : 'Bank balance') + '</span><span class="big num">' + L(BAL[LAST]).replace(' L', ' <small>L</small>') + '</span><span class="sub">' + (cl ? 'Year ' + sgn(net) : 'This month ' + sgn(net) + ' so far') + '</span>' + spark(BAL, 'var(--s-bal)') + '</a>' +
+    fourth;
+  $('ov-attn').innerHTML = HEALTH.filter(function (h) { return h.n; }).sort(function (a, b) { return (b.s === 'crit') - (a.s === 'crit'); }).slice(0, 3).map(function (h) {
+    return '<li><a class="row" href="#data-health" style="text-decoration:none;color:inherit"><span class="count">' + h.n + '</span><span class="grow"><span class="t">' + h.t + '</span><br><span class="d">' + h.d + '</span></span>' + pill(h.s, h.s === 'crit' ? 'Blocks close' : 'Review') + CHEV + '</a></li>';
+  }).join('');
+  var pt = pendingTotals(), at = advTotals();
+  $('ov-owed').innerHTML =
+    '<li><a class="row" href="#maintenance" style="text-decoration:none;color:inherit"><span class="grow"><span class="t">Maintenance pending: ' + L2(pt.total) + '</span><br><span class="d">' + PENDING.length + ' households, oldest ' + Math.max.apply(0, PENDING.map(function (x) { return x.over; })) + ' months past due · about ' + (pt.total / burn).toFixed(1) + ' months of spending</span></span>' + pill('warn', 'Chase') + CHEV + '</a></li>' +
+    '<li><a class="row" href="#advances" style="text-decoration:none;color:inherit"><span class="grow"><span class="t">Advances to recover: ' + inr(at.out) + '</span><br><span class="d">' + at.count + ' employees · ' + at.noPlan + ' with no recovery agreed, ' + at.behind + ' behind schedule</span></span>' + pill('crit', 'Needs a plan') + CHEV + '</a></li>';
+  $('ov-spend-note').textContent = cl ? 'whole year, share of money out' : 'so far this year, share of money out';
+  $('ov-spend').innerHTML = '<div class="sbar" role="img" aria-label="Share of money out by group">' + G.map(function (k) { return '<i style="width:' + (t[k] / t.out * 100) + '%;background:' + GC[k] + '"></i>'; }).join('') + '</div>' +
+    '<div class="spend">' + G.map(function (k) { return '<div><i class="sw" style="background:' + GC[k] + '"></i>' + GN[k] + '<span class="amt">' + L(t[k]) + ' · ' + pct(t[k], t.out) + '</span></div>'; }).join('') + '</div>';
+}
+function renderCash() {
+  var t = yearTotals();
+  $('cf-legend').innerHTML = G.map(function (k) { return '<span><i class="sw" style="background:' + GC[k] + '"></i>' + GN[k] + '</span>'; }).join('');
+  $('cf-sal-note').textContent = 'Salary is ' + pct(t.salary, t.spend) + ' of spending' + (closed() ? ' this year' : ' so far this year') + ', leaving out the sinking fund';
+  $('cf-table').innerHTML = '<table><thead><tr><th>Month</th><th>Maintenance</th><th>Other in</th><th>Salary</th><th>Farm and household</th><th>Projects</th><th>Company</th><th>Sinking fund</th><th>Closing</th></tr></thead><tbody>' +
+    MONTHS.map(function (mo, i) {
+      return '<tr><td>' + monthLabel(i) + '</td><td>' + L(Y.maint[i]) + '</td><td>' + L(Y.other[i]) + '</td>' + G.map(function (k) { return '<td>' + L(GS[k][i]) + '</td>'; }).join('') + '<td>' + L(BAL[i]) + '</td></tr>';
+    }).join('') + '</tbody></table>';
+  $('runway-tiles').innerHTML =
+    '<div class="tile"><span class="label">Runway, bank balance only</span><span class="big num">' + runway.toFixed(1) + ' <small>months</small></span><span class="sub">' + L(BAL[LAST]) + ' ÷ ' + L(burn) + ' a month</span></div>' +
+    '<div class="tile"><span class="label">Runway with the sinking fund</span><span class="big num">' + runwayFd.toFixed(1) + ' <small>months</small></span><span class="sub">' + L(BAL[LAST] + FDS[LAST]) + ' including ' + L(FDS[LAST]) + ' saved</span></div>' +
+    '<div class="tile"><span class="label">Average monthly spending</span><span class="big num">' + burn.toFixed(1) + ' <small>L a month</small></span><span class="sub">' + MONTHS[WIN0] + ' to ' + MONTHS[WIN1] + ', 6 complete months</span></div>';
+  $('runway-note').textContent = 'Runway is the bank balance divided by the average monthly spending over the last six complete months, leaving out transfers to the sinking fund. It ignores money still to come, because maintenance arrives in large lumps.';
+}
+function renderBudget() {
+  var cl = closed(), lines = LINES[fy];
+  $('fy-note').textContent = cl ? 'Closed year: final figures, nothing committed, no estimate.' : 'Current year, to 10 Nov 2026.';
+  var tot = { b: 0, a: 0, c: 0 }; lines.forEach(function (r) { tot.b += r[3]; tot.a += r[4]; tot.c += r[5]; });
+  var over = cl && tot.b - tot.a < 0;
+  $('b-total').innerHTML = [['Budget', tot.b], ['Spent', tot.a], ['Committed', tot.c], [over ? 'Over budget by' : 'Remaining', over ? tot.a - tot.b : tot.b - tot.a - tot.c]].map(function (x) {
+    return '<div class="fig"><div class="k">' + x[0] + '</div><div class="v num" style="font-size:1.3rem">' + L(x[1]) + '</div></div>';
+  }).join('') + '<div class="fig"><div class="k">' + (cl ? 'Year' : 'Year gone') + '</div><div class="v num" style="font-size:1.3rem">' + (cl ? 'Closed' : Math.round(FYFRAC * 100) + '%') + '</div></div>';
+  var html = '';
+  HEADS.forEach(function (hd) {
+    var hl = lines.filter(function (r) { return r[0] === hd; }), hb = sum(hl.map(function (r) { return r[3]; })), ha = sum(hl.map(function (r) { return r[4]; }));
+    html += '<li class="hhead"><span class="hn">' + hd + '</span><span class="small muted num">Budget ' + L(hb) + ' · Spent ' + L(ha) + ' · ' + pct(ha, tot.a) + ' of all spending</span></li>';
+    hl.forEach(function (r) {
+      var run = hd === 'Farm', est = run && !cl ? r[4] / FYFRAC : null, rem = r[3] - r[4] - r[5], sc = Math.max(r[3], r[4] + r[5]) * 1.3, st, lbl;
+      if (cl) { if (r[4] <= r[3]) { st = 'ok'; lbl = 'Within budget'; } else { st = r[4] <= r[3] * 1.1 ? 'warn' : 'crit'; lbl = 'Over by ' + L2(r[4] - r[3]); } }
+      else if (!run) { st = 'neutral'; lbl = 'Not projected'; }
+      else if (est <= r[3]) { st = 'ok'; lbl = 'On track'; } else if (est <= r[3] * 1.1) { st = 'warn'; lbl = 'Watch'; } else { st = 'crit'; lbl = 'Over pace'; }
+      var bar = '<div class="track"><div class="act" style="width:' + (r[4] / sc * 100) + '%"></div>' + (r[5] ? '<div class="com" style="left:' + (r[4] / sc * 100) + '%;width:' + (r[5] / sc * 100) + '%"></div>' : '') +
+        '<div class="bud" style="left:' + (r[3] / sc * 100) + '%"></div>' + (est ? '<div class="est" style="left:' + (Math.min(est, sc) / sc * 100) + '%"></div>' : '') + '</div>';
+      html += '<li class="brow"><div class="head"><span><span style="font-weight:600">' + r[1] + '</span> <span class="small muted">· ' + pct(r[4], tot.a) + ' of spending</span><br><span class="small muted">' + r[2] + '</span></span>' + pill(st, lbl) + '</div>' + bar +
+        '<div class="figs"><div class="fig"><div class="k">Budget</div><div class="v">' + L2(r[3]) + '</div></div><div class="fig"><div class="k">Spent</div><div class="v">' + L2(r[4]) + '</div></div>' +
+        '<div class="fig"><div class="k">Committed</div><div class="v">' + L2(r[5]) + '</div></div><div class="fig"><div class="k">' + (cl ? 'Left unspent' : 'Remaining') + '</div><div class="v">' + (rem < 0 ? '−' + L2(-rem) : L2(rem)) + '</div></div>' +
+        '<div class="fig"><div class="k">Year-end estimate</div><div class="v">' + (est ? L2(est) : cl ? 'Final' : 'n/a') + '</div></div></div></li>';
+    });
+  });
+  $('b-rows').innerHTML = html;
+
+  var inc = INCOME[fy], mt = MAINT[fy], expM = mt.members * mt.per, recM = mt.recAmt, pendM = expM - recM;
+  var incE = sum(inc.map(function (r) { return r[1]; })), incA = sum(inc.map(function (r) { return r[2]; }));
+  var byHead = {}; HEADS.forEach(function (hd) { var hl = lines.filter(function (r) { return r[0] === hd; }); byHead[hd] = [sum(hl.map(function (r) { return r[3]; })), sum(hl.map(function (r) { return r[4]; }))]; });
+  var outE = tot.b, outA = tot.a, inE = incE + expM, inA = incA + recM, cards = '';
+  cards += '<div class="card"><div class="card-head"><h2>Income</h2><span class="small muted">other than maintenance</span></div><div class="tablewrap"><table><thead><tr><th>Stream</th><th>Estimated</th><th>' + (cl ? 'Actual' : 'So far') + '</th></tr></thead><tbody>' +
+    inc.map(function (r) { return '<tr><td>' + r[0] + '</td><td>' + L2(r[1]) + '</td><td>' + L2(r[2]) + '</td></tr>'; }).join('') + '<tr class="total"><td>Total</td><td>' + L2(incE) + '</td><td>' + L2(incA) + '</td></tr></tbody></table></div></div>';
+  cards += '<div class="card"><div class="card-head"><h2>Maintenance collected</h2><a class="small muted" href="#maintenance">Open the view</a></div>' +
+    '<div class="meter" role="img" aria-label="' + pct(recM, expM) + ' of expected maintenance received"><i style="width:' + (recM / expM * 100) + '%"></i></div>' +
+    '<div class="tablewrap"><table><thead><tr><th>' + L2(mt.per) + ' per household</th><th>Households</th><th>Amount</th></tr></thead><tbody><tr><td>Expected</td><td>' + mt.members + '</td><td>' + L2(expM) + '</td></tr><tr><td>Received</td><td>' + mt.paid + ' paid in full</td><td>' + L2(recM) + '</td></tr><tr class="total"><td>Pending</td><td>' + (mt.members - mt.paid) + '</td><td>' + L2(pendM) + '</td></tr></tbody></table></div></div>';
+  cards += '<div class="card"><div class="card-head"><h2>Summary</h2><span class="small muted">' + (cl ? 'the year' : 'to 10 Nov, estimate is the full year') + '</span></div><div class="tablewrap"><table><thead><tr><th>Head</th><th>Estimated</th><th>' + (cl ? 'Actual' : 'So far') + '</th></tr></thead><tbody>' +
+    HEADS.map(function (hd) { return '<tr><td>' + (hd === 'Investment' ? 'Sinking fund' : hd) + '</td><td>' + L2(byHead[hd][0]) + '</td><td>' + L2(byHead[hd][1]) + '</td></tr>'; }).join('') +
+    '<tr class="total"><td>Total outflow</td><td>' + L2(outE) + '</td><td>' + L2(outA) + '</td></tr>' +
+    '<tr class="sub"><td>Incomes</td><td>' + L2(incE) + '</td><td>' + L2(incA) + '</td></tr><tr class="sub"><td>Maintenance</td><td>' + L2(expM) + '</td><td>' + L2(recM) + '</td></tr>' +
+    '<tr class="total"><td>Total inflow</td><td>' + L2(inE) + '</td><td>' + L2(inA) + '</td></tr><tr><td>' + (inA - outA < 0 ? 'Shortfall' : 'Surplus') + '</td><td>' + sL(inE - outE) + '</td><td>' + sL(inA - outA) + '</td></tr></tbody></table></div></div>';
+  cards += '<div class="card"><div class="card-head"><h2>Financial status</h2><span class="small muted">' + (cl ? 'at 31 Mar ' + (2000 + +fy.slice(5)) : 'as on 10 Nov 2026') + '</span></div><div class="tablewrap"><table><tbody>' +
+    '<tr><td>Cash in bank</td><td>' + L2(BAL[LAST]) + '</td></tr><tr><td>Sinking fund</td><td>' + L2(FDS[LAST]) + '</td></tr><tr class="total"><td>Total</td><td>' + L2(BAL[LAST] + FDS[LAST]) + '</td></tr></tbody></table></div></div>';
+  if (!cl && !member()) {
+    var prop = Math.round(tot.b * 1.06 * 10) / 10, ex = 3.0, need = prop - ex;
+    cards += '<div class="card"><div class="card-head"><h2>Maintenance for 2027-28</h2><span class="small muted">draft, from a 6% higher budget</span></div><div class="tablewrap"><table><tbody>' +
+      '<tr><td>Proposed budget</td><td>' + L2(prop) + '</td></tr><tr><td>Existing funds to be used</td><td>' + L2(ex) + '</td></tr><tr class="total"><td>Balance money required</td><td>' + L2(need) + '</td></tr>' +
+      '<tr><td>Contribution per household (' + mt.members + ')</td><td>' + inr(need / mt.members * 100000) + '</td></tr></tbody></table></div><p class="small muted" style="margin-top:8px">Maintenance is the plug: planned spending, less existing funds and other income, shared across households.</p></div>';
+  }
+  $('b-extra').innerHTML = cards;
+}
+function renderMaint() {
+  var cl = closed(), mt = MAINT[fy], expM = mt.members * mt.per, recM = mt.recAmt, pendM = expM - recM, pt = pendingTotals();
+  $('m-note').textContent = cl ? 'Closed year: how collection ended. The household list is only kept for the current year.' : 'Current year to 10 Nov 2026. Yearly contribution per household, ' + DUE + '.';
+  var oldest = Math.max.apply(0, PENDING.map(function (x) { return x.over; }));
+  $('m-tiles').innerHTML =
+    '<div class="tile"><span class="label">Collected</span><span class="big num">' + L(recM).replace(' L', ' <small>L</small>') + '</span><span class="sub">of ' + L(expM) + ' expected · ' + pct(recM, expM) + '</span><div class="meter"><i style="width:' + (recM / expM * 100) + '%"></i></div></div>' +
+    '<div class="tile"><span class="label">Households paid in full</span><span class="big num">' + mt.paid + ' <small>of ' + mt.members + '</small></span><span class="sub">' + (mt.members - mt.paid) + ' still owe something</span></div>' +
+    '<div class="tile"><span class="label">Still pending</span><span class="big num">' + L2(pendM).replace(' L', ' <small>L</small>') + '</span><span class="sub">' + (cl ? 'carried forward' : 'oldest is ' + oldest + ' months past due') + '</span></div>' +
+    '<div class="tile"><span class="label">What it means for cash</span><span class="big num">' + (pendM / burn).toFixed(1) + ' <small>months</small></span><span class="sub">of spending sits in the pending dues</span></div>';
+  var keys = Object.keys(YEARS).sort(), pi = keys.indexOf(fy) - 1;
+  $('m-legend').innerHTML = '<span><i class="sw line" style="background:var(--s-in)"></i>This year</span>' + (pi >= 0 ? '<span><i class="sw dash"></i>Last year</span>' : '') + '<span><i class="sw" style="width:3px;height:12px;background:var(--ink)"></i>Expected in full</span>';
+  $('m-detail').hidden = cl || member(); $('m-list-card').hidden = cl || member(); $('m-mine').hidden = !member();
+  $('m-mine-body').innerHTML = '<div class="row" style="padding:0"><span class="grow"><span class="t">House A-07 · cluster A</span><br><span class="d">Due ' + L2(mt.per) + ' for ' + fy + ' · paid ' + L2(mt.per) + ' on 12 Apr</span></span>' + pill('ok', 'Paid in full') + '</div>' +
+    '<p class="small muted" style="margin-top:10px">Everyone’s dues pay for the same running costs, so the totals below matter to all households. Dues of other households are not shown.</p>';
+  if (cl || member()) return;
+  var buckets = [['Up to 2 months', 0, 2, 'ok'], ['3 to 5 months', 3, 5, 'warn'], ['6 months or more', 6, 99, 'crit']], mx = pt.total;
+  $('m-age').innerHTML = buckets.map(function (b) {
+    var rows = pt.rows.filter(function (r) { return r.over >= b[1] && r.over <= b[2]; }), amt = sum(rows.map(function (r) { return r.bal; }));
+    return '<div class="hbar ' + b[3] + '"><span>' + b[0] + '</span><span class="bar"><i style="width:' + (amt / mx * 100) + '%"></i></span><span class="v">' + L2(amt) + ' · ' + rows.length + '</span></div>';
+  }).join('') + '<p class="small muted" style="margin-top:8px">Amount and number of households in each group. Dues past 6 months are the ones to raise at the next meeting.</p>';
+  $('m-cluster').innerHTML = '<table><thead><tr><th>Cluster</th><th>Expected</th><th>Received</th><th>Paid in full</th></tr></thead><tbody>' + CLUSTERS.map(function (c) {
+    var pend = pt.rows.filter(function (r) { return r.c === c.c; }), pa = sum(pend.map(function (r) { return r.bal; })), exp = c.n * mt.per, full = c.n - pend.length;
+    return '<tr><td>Cluster ' + c.c + '</td><td>' + L2(exp) + '</td><td>' + L2(exp - pa) + '</td><td>' + full + ' of ' + c.n + ' · ' + pct(full, c.n) + '</td></tr>';
+  }).join('') + '<tr class="total"><td>All</td><td>' + L2(expM) + '</td><td>' + L2(recM) + '</td><td>' + mt.paid + ' of ' + mt.members + ' · ' + pct(mt.paid, mt.members) + '</td></tr></tbody></table>';
+  $('m-list').innerHTML = pt.rows.sort(function (a, b) { return b.over - a.over; }).map(function (r) {
+    var s = r.over >= 6 ? 'crit' : r.over >= 3 ? 'warn' : 'ok';
+    return '<li class="row"><span class="grow"><span class="t">House ' + r.h + ' <span class="small muted">· cluster ' + r.c + '</span></span><br><span class="d">' + (r.paid ? 'Paid ' + L2(r.paid) + ' of ' + L2(mt.per) + ' · ' : 'Nothing paid · ') + r.note + '</span></span><span class="num" style="font-weight:650">' + L2(r.bal) + '</span>' + pill(s, r.over + (r.over === 1 ? ' month' : ' months') + ' late') + '</li>';
+  }).join('');
+}
+function renderAdv() {
+  var cl = closed(), at = advTotals();
+  $('a-note').textContent = cl ? 'Closed year: totals only. Each advance is kept in payroll.' : 'Current year to 10 Nov 2026. Recovery means the amount taken back from pay.';
+  $('a-tiles').innerHTML =
+    '<div class="tile"><span class="label">Still to recover</span><span class="big num">' + inr(at.out) + '</span><span class="sub">' + (cl ? 'carried into the next year' : at.count + ' employees') + '</span></div>' +
+    '<div class="tile"><span class="label">Given this year</span><span class="big num">' + inr(at.given) + '</span><span class="sub">money out of the bank, on top of salary</span></div>' +
+    '<div class="tile"><span class="label">Recovered</span><span class="big num">' + inr(at.rec) + '</span><span class="sub">' + pct(at.rec, at.given) + ' of what was given</span></div>' +
+    '<div class="tile"><span class="label">Needs your attention</span><span class="big num">' + (cl ? at.count : at.noPlan + at.behind) + ' <small>' + (cl ? 'carried' : 'advances') + '</small></span><span class="sub">' + (cl ? 'still open at year end' : at.noPlan + ' with no recovery agreed, ' + at.behind + ' behind schedule') + '</span></div>';
+  $('a-chart-card').hidden = cl; $('a-list-card').hidden = cl;
+  if (cl) return;
+  $('a-list').innerHTML = ADV.map(function (a) {
+    var st = advStatus(a);
+    return '<li class="brow"><div class="head"><span><span style="font-weight:600">' + a.e + '</span> <span class="small muted">· ' + a.role + ' · given ' + a.date + '</span></span>' + pill(st.s, st.t) + '</div>' +
+      '<div class="track"><div class="act only" style="width:' + (a.rec / a.amt * 100) + '%;background:var(--s-in)"></div></div>' +
+      '<div class="figs"><div class="fig"><div class="k">Given</div><div class="v">' + inr(a.amt) + '</div></div><div class="fig"><div class="k">Recovered</div><div class="v">' + inr(a.rec) + '</div></div>' +
+      '<div class="fig"><div class="k">Still to recover</div><div class="v">' + inr(st.bal) + '</div></div><div class="fig"><div class="k">Agreed a month</div><div class="v">' + (a.mo ? inr(a.mo) : 'None') + '</div></div>' +
+      '<div class="fig"><div class="k">Clears</div><div class="v">' + (st.bal === 0 ? 'Done' : st.clears || 'Not set') + '</div></div></div></li>';
+  }).join('');
+}
+function renderUpi() {
+  ring();
+  $('upi-flags').innerHTML = FLAGS.map(function (f) {
+    return '<li class="row"><span class="grow"><span class="t">' + f[2] + '</span><br><span class="d">' + f[0] + '</span></span><span class="num" style="font-weight:650">' + inr(f[1]) + '</span></li>';
+  }).join('');
+}
+function renderHealth() {
+  $('dh-list').innerHTML = HEALTH.map(function (h) {
+    return '<li><a class="row" href="#data-health" style="text-decoration:none;color:inherit"><span class="count">' + (h.n === null ? '' : h.n) + '</span><span class="grow"><span class="t">' + h.t + '</span><br><span class="d">' + h.d + '</span></span>' +
+      pill(h.s, h.s === 'ok' ? 'Holds' : h.s === 'crit' ? 'Blocks month close' : 'Review') + CHEV + '</a></li>';
+  }).join('');
+  $('dh-imports').innerHTML = IMPORTS.map(function (i) {
+    return '<li class="row"><span class="grow"><span class="t">' + i.t + '</span><br><span class="d">' + i.d + '</span></span>' + pill(i.s, i.age + ' days ago' + (i.s === 'warn' ? ', import again' : '')) + '</li>';
+  }).join('');
+}
+function renderDecisions() {
+  $('dec').innerHTML = DECISIONS.map(function (d) {
+    return '<div class="dec" style="border-top:1px solid var(--line)"><div class="q">' + d[0] + '</div><div class="rec"><b>Mockup:</b> ' + d[1] + '</div><div class="alt">' + d[2] + '</div></div>';
+  }).join('');
+  $('dec').style.borderTop = '0';
+}
+
+function drawCharts(v) {
+  if (v === 'overview') balanceLines($('ov-bal'), { h: 200, fd: false });
+  if (v === 'cashflow') { barsInOut($('cf-bars')); stacked($('cf-stack')); balanceLines($('cf-bal'), { h: 270, fd: true }); }
+  if (v === 'maintenance') maintCurve($('m-curve'));
+  if (v === 'advances' && !closed()) advChart($('a-chart'));
+  if (v === 'upi-circle') { if (!closed()) upiLine($('upi-line')); upiBars($('upi-bars')); }
+}
+function applyYear() {
+  var cl = closed();
+  $('fy').innerHTML = Object.keys(YEARS).sort().reverse().map(function (k) { return '<button type="button" data-fy="' + k + '" aria-pressed="' + (k === fy) + '">FY ' + k + '</button>'; }).join('');
+  $('meta').textContent = 'Financial year ' + fy + ' · ' + (cl ? 'closed on 31 Mar ' + (2000 + +fy.slice(5)) : 'figures to 10 Nov 2026') + ' · ₹ L = lakh (₹1,00,000)';
+  $('ov-attn-card').hidden = cl || member(); $('ov-owed-card').hidden = cl || member(); $('upi-top').hidden = cl; $('upi-flags-card').hidden = cl; $('dh-note').hidden = !cl;
+  $('upi-bars-title').textContent = cl ? 'Every month of the year' : 'Last six months';
+  renderTiles(); renderCash(); renderBudget(); renderMaint(); renderAdv(); renderUpi();
+  drawCharts(cur);
+}
+var VIEWS = ['overview', 'cashflow', 'budget', 'maintenance', 'advances', 'upi-circle', 'data-health', 'decisions'], cur = 'overview';
+var ADMIN_ONLY = ['advances', 'upi-circle', 'data-health', 'decisions'];
+function applyAud() {
+  Array.prototype.forEach.call($('nav').children, function (b) { b.hidden = member() && b.dataset.aud === 'admin'; });
+  Array.prototype.forEach.call($('aud').children, function (b) { b.setAttribute('aria-pressed', b.dataset.a === AUD ? 'true' : 'false'); });
+  $('aud-note').hidden = !member();
+  if (member() && ADMIN_ONLY.indexOf(cur) >= 0) { cur = 'overview'; location.hash = 'overview'; show('overview'); }
+  applyYear();
+}
+function show(v) {
+  if (VIEWS.indexOf(v) < 0 || (member() && ADMIN_ONLY.indexOf(v) >= 0)) v = 'overview';
+  cur = v;
+  VIEWS.forEach(function (n) { $('v-' + n).hidden = n !== v; });
+  Array.prototype.forEach.call($('nav').children, function (b) { b.setAttribute('aria-pressed', b.dataset.v === v ? 'true' : 'false'); });
+  drawCharts(v);
+}
+$('nav').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b) { location.hash = b.dataset.v; } });
+$('fy').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b && b.dataset.fy !== fy) { fy = b.dataset.fy; setYear(fy); applyYear(); } });
+$('aud').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b && b.dataset.a !== AUD) { AUD = b.dataset.a; applyAud(); } });
+$('theme').addEventListener('click', function (e) {
+  var b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.t === 'auto') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', b.dataset.t);
+  Array.prototype.forEach.call($('theme').children, function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+});
+window.addEventListener('hashchange', function () { show(location.hash.slice(1)); window.scrollTo(0, 0); });
+var rt; window.addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(function () { drawCharts(cur); }, 120); });
+renderHealth(); renderDecisions(); applyYear();
+show(location.hash.slice(1));
+</script>

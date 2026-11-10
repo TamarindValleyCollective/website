@@ -36,7 +36,7 @@ const PAGE_SIZE = 1000;
 // The first three pages are asked for together (each round trip to the database costs 200-500 ms), so up to 3,000 rows take
 // one wait instead of three; anything beyond that is read a page at a time.
 const FIRST_PAGES = 3;
-async function rowsAll(path: string): Promise<Json[]> {
+export async function rowsAll(path: string): Promise<Json[]> {
   const first = await Promise.all(Array.from({ length: FIRST_PAGES }, (_, i) => rows(`${path}&limit=${PAGE_SIZE}&offset=${i * PAGE_SIZE}`)));
   const out: Json[] = [];
   for (const page of first) {
@@ -929,6 +929,12 @@ export async function saveCategory(req: Request, categoryId: string | null, acti
       patch.name = name;
     }
     if (typeof body.active === 'boolean') patch.active = body.active;
+    // The head the dashboards and the budget report a category under (migration 0098); null takes it out of every head.
+    if ('head' in body) {
+      if (body.head !== null && !['company', 'farm', 'projects', 'investment'].includes(body.head)) return fail('Choose Company, Farm, Projects or Investment.');
+      patch.head = body.head;
+    }
+    if (typeof body.isSalary === 'boolean') patch.is_salary = body.isSalary;
     if (!Object.keys(patch).length) return fail('Nothing to change.');
     await audit(auth.staff.id, entity, 'finance.category_changed', categoryId, { fields: Object.keys(patch) });
     const res = await rest(`/fin_categories?id=eq.${categoryId}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(patch) });
