@@ -36,7 +36,7 @@ const PAGE_SIZE = 1000;
 // The first three pages are asked for together (each round trip to the database costs 200-500 ms), so up to 3,000 rows take
 // one wait instead of three; anything beyond that is read a page at a time.
 const FIRST_PAGES = 3;
-async function rowsAll(path: string): Promise<Json[]> {
+export async function rowsAll(path: string): Promise<Json[]> {
   const first = await Promise.all(Array.from({ length: FIRST_PAGES }, (_, i) => rows(`${path}&limit=${PAGE_SIZE}&offset=${i * PAGE_SIZE}`)));
   const out: Json[] = [];
   for (const page of first) {

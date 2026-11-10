@@ -22,6 +22,7 @@ import { lookupIfsc } from '../../scripts/lib/finance-ifsc.mjs';
 import { PARTY_ID, addEvidence, addMissingIfsc, getEvidence, listEvidence, addVendor, addPayeeAccount, createParty, listParties, mergeParty, retirePayeeAccount, revealPayeeAccount, reviewParty, unmergeParty, updateParty, verifyPayeeAccount } from './lib/finance-parties';
 import { REQUEST_ID, addVoucher, cancelOrDecide, listFiles, createRecord, getVoucher, listMine, listRequests, matchRecord, reviewRecord, unmatchRecord } from './lib/finance-requests';
 import { listUpiLines } from './lib/finance-upi-view';
+import { getDashboard } from './lib/finance-dashboard';
 import { setPaymentNote } from './lib/finance-notes';
 import { heldCoverage, reconciliationOf, runImport } from './lib/finance-import';
 import { supabaseImportStore } from './lib/finance-import-store';
@@ -198,6 +199,7 @@ const dispatch = async (req: Request): Promise<Response> => {
   const { pathname } = new URL(req.url);
   const route = pathname.replace('/api/finance-admin', '');
   if (route === '/overview' && req.method === 'GET') return handleOverview(req);
+  if (route === '/dashboard' && req.method === 'GET') return getDashboard(req);
   // Statement import and bank accounts (session 03)
   if (route === '/imports' && req.method === 'GET') return handleImportList(req);
   if (route === '/imports/preview' && req.method === 'POST') return handleImport(req, false);

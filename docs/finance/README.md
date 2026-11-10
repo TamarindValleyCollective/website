@@ -74,4 +74,6 @@ run at any time. Run 13 last.
 | 05 follow-up | BHIM import, origin column, UPI page, branch `finance-upi-circle-bhim` | Migrations `0088` **applied 2026-11-07**, `0089` (payment notes) **applied 2026-11-07**, `0090` (source badges) **applied 2026-11-07** (the ledger reads `fin_upi_lines.app`, so it must stay applied before this merges). See [FINANCE.md](FINANCE.md). |
 | 06 | In progress, branch `worktree-finance-06-history` | The tracker is matched to the bank lines (dry run: 95.3% of rows). Mapping and the apply step are next. See [FINANCE.md](FINANCE.md). |
 | 08 | First slice **merged 2026-11-07 (PR #567)** | Requests and spend logs, requester page, approvals page, matching, purposes pulled into the UPI page and ledger, the one-time history load (186 records, done). Migrations `0092` and `0093` **applied 2026-11-07**. Bill scanner, vision reading and the approver-queue polish are next. See [FINANCE.md](FINANCE.md) and the brief's Done section. |
-| 02, 07, 09-13 | Not started | |
+| 02 | Mockup built and reviewed 2026-11-10, draft PR #586 | Dashboard mockup with invented data (`mockups/dashboards.html`); its decisions are in that brief's Done section. |
+| 07 | First slice built 2026-11-10, draft PR (`finance-07-dashboards`) | Metrics, endpoint and the read-only dashboard page; migration `0098` (budget tables, heads) written, tested rolled back, **not yet applied**. Budget editor and import, member preview, CSV export next. See [FINANCE.md](FINANCE.md), "Dashboards". |
+| 09-13 | Not started | |

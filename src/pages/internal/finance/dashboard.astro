@@ -1,0 +1,1127 @@
+---
+// Finance (internal): the dashboards. Backed by GET /api/finance-admin/dashboard (netlify/functions/lib/finance-dashboard.ts) and the
+// overview's "needs you" counts. Five views for one financial year, switched at the top: Overview (runway, budget used, balance, what
+// needs attention, where the money went), Cashflow (cash view, with runway), Budget vs actual (period view, by head), the UPI circle,
+// and Data health. Every figure is worked out by scripts/lib/finance-metrics.mjs; the charts are drawn by
+// scripts/lib/finance-dashboard-view.mjs from the --tvc-chart-* tokens, so both appearances work. Designed in the session 02 mockup
+// (docs/finance/mockups/dashboards.html). Maintenance collections and advances arrive with sessions 10 and 09.
+//
+// Same shell as the other internal tools: Google Sign-In gated, one sign-in per tab, unlinked, noindex. Everything the server returns
+// is placed with textContent only; the chart markup is built from numbers and fixed words.
+import StaffLayout from '../../../layouts/StaffLayout.astro';
+import SignInGate from '../../../components/SignInGate.astro';
+---
+
+<StaffLayout title="Finance dashboard" description="Finance dashboard." current="finance" currentPage="finance-dashboard">
+  <section class="dash section wrapper">
+    <div class="dash-top">
+      <div>
+        <h1>Dashboard</h1>
+        <p id="intro" class="hint">Sign in to open the dashboard.</p>
+      </div>
+      <div class="segmented" id="fy" role="group" aria-label="Financial year" hidden></div>
+    </div>
+
+    <SignInGate forbiddenWhat="the finance dashboard" />
+
+    <div id="status" aria-live="polite" class="hint" hidden></div>
+
+    <div id="content" hidden>
+      <div class="dash-tabs"><div class="segmented" id="tabs" role="group" aria-label="Dashboard view">
+        <button type="button" data-v="overview">Overview</button>
+        <button type="button" data-v="cashflow">Cashflow</button>
+        <button type="button" data-v="budget">Budget vs actual</button>
+        <button type="button" data-v="upi-circle">UPI circle</button>
+        <button type="button" data-v="data-health">Data health</button>
+      </div></div>
+
+      <p id="closed-note" class="note" hidden></p>
+
+      <div class="dash-view" id="v-overview" hidden>
+        <div class="tiles" id="tiles"></div>
+        <div class="card">
+          <h2>Where the money went</h2>
+          <p class="hint" id="spend-note"></p>
+          <div id="spend"></div>
+        </div>
+        <div class="dash-grid">
+          <div class="card" id="attn-card">
+            <h2>Needs attention</h2>
+            <ul class="list" id="attn"></ul>
+          </div>
+          <div class="card">
+            <h2>Closing balance</h2>
+            <p class="hint">Month end, in lakh rupees.</p>
+            <div class="chart" id="ov-balance"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="dash-view" id="v-cashflow" hidden>
+        <div class="card">
+          <h2>Money in and out</h2>
+          <p class="hint">By month, as it reached the bank.</p>
+          <div class="legend"><span><i class="sw sw-in"></i>Money in</span><span><i class="sw sw-out"></i>Money out</span></div>
+          <div class="chart" id="cf-bars"></div>
+        </div>
+        <div class="card">
+          <h2>Where the money went</h2>
+          <p class="hint" id="cf-salary-note"></p>
+          <div class="legend" id="cf-legend"></div>
+          <div class="chart" id="cf-stack"></div>
+          <details class="dash-details"><summary>Table view</summary><div class="tablewrap" id="cf-table"></div></details>
+        </div>
+        <div class="card">
+          <h2>Closing balance and runway</h2>
+          <div class="legend"><span><i class="sw sw-line"></i>Bank balance</span><span><i class="sw sw-dash"></i>Bank balance plus sinking fund</span></div>
+          <div class="chart" id="cf-balance"></div>
+          <div class="tiles" id="runway-tiles"></div>
+          <p class="hint" id="runway-note"></p>
+        </div>
+      </div>
+
+      <div class="dash-view" id="v-budget" hidden>
+        <div id="budget-empty" class="card" hidden>
+          <h2 id="budget-empty-title">No budget for this year yet</h2>
+          <p class="hint" id="budget-empty-text"></p>
+        </div>
+        <div id="budget-body" hidden>
+          <div class="card dash-totals" id="b-total"></div>
+          <ul class="list" id="b-rows"></ul>
+          <p class="hint" id="b-foot"></p>
+          <div class="dash-grid" id="b-extra"></div>
+        </div>
+      </div>
+
+      <div class="dash-view" id="v-upi-circle" hidden>
+        <div class="dash-grid" id="upi-now" hidden>
+          <div class="card">
+            <h2>This month so far</h2>
+            <p class="hint" id="ring-sub"></p>
+            <div class="ring" id="ring"></div>
+            <div class="ring-notes" id="ring-notes"></div>
+          </div>
+          <div class="card">
+            <h2>Recent months</h2>
+            <p class="hint">Circle spend against the cap.</p>
+            <div class="chart" id="upi-bars-now"></div>
+          </div>
+        </div>
+        <div class="card" id="upi-year" hidden>
+          <h2>Every month of the year</h2>
+          <p class="hint">Circle spend against the cap.</p>
+          <div class="chart" id="upi-bars-year"></div>
+        </div>
+        <p class="hint">The circle is counted per calendar month from the Paytm tag. The UPI page has every row.</p>
+      </div>
+
+      <div class="dash-view" id="v-data-health" hidden>
+        <p id="health-note" class="note" hidden>These checks describe today's books. They do not change with the financial year.</p>
+        <div class="card">
+          <h2>Can I trust the numbers?</h2>
+          <ul class="list" id="health"></ul>
+        </div>
+        <div class="card">
+          <h2>Statements</h2>
+          <ul class="list" id="imports"></ul>
+        </div>
+      </div>
+    </div>
+  </section>
+</StaffLayout>
+
+<script>
+  import { StaffAuthError, clearStepUp, clearToken, decodeTokenEmail, getToken, setToken, staffFetch } from '../../../../scripts/lib/staff-client.mjs';
+  import { clearState, showFailure, showLoading } from '../../../../scripts/lib/staff-states.mjs';
+  import {
+    GROUPS, GROUP_CLASS, GROUP_LABELS, HEAD_LABELS, SPEND_HEADS, STATUS, balanceSvg, barsInOutSvg, circleBarsSvg, healthItems, lakhText, monthsText, percentText, ringSvg, rupeesText,
+    signedLakh, sparkSvg, stackedSvg, tilesOf, toLakh, monthShort,
+  } from '../../../../scripts/lib/finance-dashboard-view.mjs';
+
+  declare const google: any;
+  const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
+  const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+  const VIEWS = ['overview', 'cashflow', 'budget', 'upi-circle', 'data-health'];
+  const GROUP_CLASSES: Record<string, string> = GROUP_CLASS;
+  const GROUP_NAMES: Record<string, string> = GROUP_LABELS;
+  const HEAD_NAMES: Record<string, string> = HEAD_LABELS;
+
+  const gate = $('gate');
+  const gateError = $('gate-error');
+  const forbidden = $('forbidden');
+  const statusEl = $('status');
+  const content = $('content');
+  const intro = $('intro');
+
+  let data: any = null;
+  let attention: any = null;
+  let view = 'overview';
+  let fy: number | null = null;
+
+  const fyLabel = (y: number) => `${y}-${String((y + 1) % 100).padStart(2, '0')}`;
+  const el = (tag: string, className?: string, text?: string): HTMLElement => {
+    const e = document.createElement(tag);
+    if (className) e.className = className;
+    if (text !== undefined) e.textContent = text;
+    return e;
+  };
+  const day = (iso: string) => new Date(`${iso.slice(0, 10)}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+
+  function showGate(message?: string) {
+    gate.hidden = false;
+    forbidden.hidden = true;
+    content.hidden = true;
+    $('fy').hidden = true;
+    clearState(statusEl);
+    intro.hidden = false;
+    intro.textContent = 'Sign in to open the dashboard.';
+    gateError.hidden = !message;
+    if (message) gateError.textContent = message;
+    renderSignInButton();
+  }
+
+  function showForbidden() {
+    gate.hidden = true;
+    content.hidden = true;
+    clearState(statusEl);
+    forbidden.hidden = false;
+    $('forbidden-email').textContent = decodeTokenEmail(getToken() ?? '');
+  }
+
+  // ---- small builders
+  const pill = (tone: string, text: string) => el('span', `pill${tone && tone !== 'neutral' ? ` pill--${tone}` : ''}`, text);
+  function tile(label: string, big: string, small: string | null, sub: string, href?: string, extraSvg?: string): HTMLElement {
+    const t = el(href ? 'a' : 'div', 'dash-tile');
+    if (href) (t as HTMLAnchorElement).href = href;
+    t.append(el('span', 'dash-tile-label', label));
+    const b = el('span', 'dash-tile-big', big);
+    if (small) b.append(el('small', '', ` ${small}`));
+    t.append(b, el('span', 'dash-tile-sub', sub));
+    if (extraSvg) {
+      const holder = el('span', 'dash-spark');
+      holder.innerHTML = extraSvg;
+      t.append(holder);
+    }
+    return t;
+  }
+  function row(title: string, detail: string, opts: { count?: number; tone?: string; href?: string; right?: string } = {}): HTMLElement {
+    const li = el('li');
+    const r = el(opts.href ? 'a' : 'div', 'row');
+    if (opts.href) (r as HTMLAnchorElement).href = opts.href;
+    if (opts.count !== undefined) r.append(el('span', `dash-count${opts.tone === 'crit' ? ' dash-count--crit' : ''}`, String(opts.count)));
+    const grow = el('span', 'grow');
+    grow.append(el('span', 'title', title), el('span', 'detail', detail));
+    r.append(grow);
+    if (opts.right) r.append(el('span', 'dash-right', opts.right));
+    li.append(r);
+    return li;
+  }
+  function table(head: string[], rows: string[][], totalLast = false): HTMLElement {
+    const t = el('table');
+    const thead = el('thead');
+    const hr = el('tr');
+    head.forEach((h) => hr.append(el('th', '', h)));
+    thead.append(hr);
+    const tb = el('tbody');
+    rows.forEach((r, i) => {
+      const tr = el('tr', totalLast && i === rows.length - 1 ? 'total' : '');
+      r.forEach((c) => tr.append(el('td', '', c)));
+      tb.append(tr);
+    });
+    t.append(thead, tb);
+    return t;
+  }
+
+  // ---- views
+  function sums() {
+    const t: Record<string, number> = {};
+    for (const g of GROUPS) t[g] = data.cashflow.reduce((n: number, r: any) => n + r.outByGroup[g], 0);
+    t.out = data.cashflow.reduce((n: number, r: any) => n + r.outPaise, 0);
+    t.spend = t.out - t.sinking;
+    return t;
+  }
+
+  function renderTiles() {
+    const t = tilesOf(data, attention);
+    const closed = data.closed;
+    const tiles: HTMLElement[] = [];
+    tiles.push(tile(closed ? 'Runway at 31 March' : 'Runway', monthsText(t.runway.months), t.runway.months === null ? null : 'months', t.runway.months === null ? 'Not enough spending to work it out yet' : `of spending covered by the bank · ${monthsText(t.runway.withFdMonths)} with the sinking fund`, '#cashflow'));
+    const budgetTile = tile('Budget used', t.budget.usedPct === null ? '–' : percentText(t.budget.spentPaise, t.budget.budgetPaise), null, t.budget.usedPct === null ? 'No budget for this year yet' : closed ? 'Year closed' : `${Math.round(data.budget.yearFraction * 100)}% of the year gone`, '#budget');
+    if (t.budget.usedPct !== null) {
+      const track = el('span', 'track');
+      const act = el('i', 'act');
+      act.style.width = `${Math.min(100, t.budget.usedPct * 100)}%`;
+      const bud = el('i', 'bud');
+      bud.style.left = `${Math.min(100, data.budget.yearFraction * 100)}%`;
+      track.append(act, bud);
+      budgetTile.append(track);
+    }
+    tiles.push(budgetTile);
+    tiles.push(tile(closed ? 'Bank balance at 31 March' : 'Bank balance', lakhText(t.balance.paise).replace(' L', ''), 'L', closed ? `Year ${signedLakh(t.balance.netPaise)}` : `This month ${signedLakh(t.balance.netPaise)} so far`, '#cashflow', sparkSvg(t.balance.series)));
+    tiles.push(closed
+      ? tile('Net for the year', signedLakh(t.balance.netPaise).replace(' L', ''), 'L', 'Money in less money out', '#cashflow')
+      : tile('Needs attention', String(t.attention.count), t.attention.count === 1 ? 'item' : 'items', 'Lines to explain, requests to match, payees to check', '#data-health'));
+    $('tiles').replaceChildren(...tiles);
+
+    const s = sums();
+    $('spend-note').textContent = `${closed ? 'The whole year' : 'So far this year'}: ${lakhText(s.out)} out, shared by group.`;
+    const bar = el('div', 'sbar');
+    bar.setAttribute('role', 'img');
+    bar.setAttribute('aria-label', 'Share of money out by group');
+    const list = el('div', 'spend');
+    for (const g of GROUPS) {
+      if (s.out > 0 && s[g] > 0) {
+        const seg = el('i', GROUP_CLASSES[g]);
+        seg.style.width = `${(s[g] / s.out) * 100}%`;
+        bar.append(seg);
+      }
+      const item = el('div');
+      item.append(el('i', `sw ${GROUP_CLASSES[g]}`), el('span', '', GROUP_NAMES[g]), el('span', 'amt', `${lakhText(s[g])} · ${percentText(s[g], s.out)}`));
+      if (s[g] > 0 || g !== 'other') list.append(item);
+    }
+    $('spend').replaceChildren(bar, list);
+
+    const items = healthItems(data, attention).slice(0, 3);
+    $('attn-card').hidden = closed;
+    $('attn').replaceChildren(...(items.length ? items.map((i) => row(i.title, i.detail, { count: i.count, tone: i.tone, href: i.href })) : [row('Nothing needs you right now', 'Every line is explained and the statements are up to date.')]));
+  }
+
+  function renderCashflowText() {
+    const s = sums();
+    $('cf-salary-note').textContent = `Salary is ${percentText(s.salary, s.spend)} of spending ${data.closed ? 'this year' : 'so far this year'}, leaving out the sinking fund.`;
+    $('cf-legend').replaceChildren(...GROUPS.filter((g) => g !== 'other' || s.other > 0).map((g) => {
+      const span = el('span');
+      span.append(el('i', `sw ${GROUP_CLASSES[g]}`), document.createTextNode(GROUP_NAMES[g]));
+      return span;
+    }));
+    const head = ['Month', 'Money in', 'of which maintenance', ...GROUPS.map((g) => GROUP_NAMES[g]), 'Closing balance'];
+    $('cf-table').replaceChildren(table(head, data.cashflow.map((r: any) => [`${monthShort(r.month)}${r.partial ? ' (so far)' : ''}`, lakhText(r.inPaise), lakhText(r.inMaintenancePaise), ...GROUPS.map((g) => lakhText(r.outByGroup[g])), lakhText(r.closingPaise)])));
+    const r = data.runway;
+    $('runway-tiles').replaceChildren(
+      tile('Runway, bank balance only', monthsText(r.runwayMonths), r.runwayMonths === null ? null : 'months', `${lakhText(r.balancePaise)} ÷ ${lakhText(r.averageSpendPaise)} a month`),
+      tile('Runway with the sinking fund', monthsText(r.runwayWithFdMonths), r.runwayWithFdMonths === null ? null : 'months', `${lakhText(r.balancePaise + r.fdPaise)} including ${lakhText(r.fdPaise)} saved`),
+      tile('Average monthly spending', lakhText(r.averageSpendPaise).replace(' L', ''), 'L a month', `Over the last ${r.monthsUsed} complete ${r.monthsUsed === 1 ? 'month' : 'months'}`),
+    );
+    $('runway-note').textContent = 'Runway is the bank balance divided by the average monthly spending over the last six complete months, leaving out transfers to the sinking fund. It ignores money still to come, because maintenance arrives in large lumps.';
+  }
+
+  function trackFor(l: any, scaleTo: number): HTMLElement {
+    const track = el('div', 'track');
+    const act = el('i', 'act');
+    act.style.width = `${Math.min(100, (Math.max(0, l.actualPaise) / scaleTo) * 100)}%`;
+    const bud = el('i', 'bud');
+    bud.style.left = `${Math.min(100, (l.budgetPaise / scaleTo) * 100)}%`;
+    track.append(act, bud);
+    if (l.estimatePaise !== null) {
+      const est = el('i', 'est');
+      est.style.left = `${Math.min(100, (l.estimatePaise / scaleTo) * 100)}%`;
+      track.append(est);
+    }
+    return track;
+  }
+
+  function renderBudget() {
+    const b = data.budget;
+    $('budget-empty').hidden = b.hasBudget;
+    $('budget-body').hidden = !b.hasBudget;
+    if (!b.hasBudget) {
+      $('budget-empty-title').textContent = `No budget for ${fyLabel(data.fy)} yet`;
+      $('budget-empty-text').textContent = `Nothing has been planned for this year in the system, so there is nothing to compare with. The ledger shows ${lakhText(b.totals.outflowActualPaise)} spent and ${lakhText(b.totals.inflowActualPaise)} received so far.`;
+      return;
+    }
+    const t = b.totals;
+    const remaining = t.outflowBudgetPaise - t.outflowActualPaise - b.committedPaise;
+    const fig = (k: string, v: string) => {
+      const d = el('div', 'fig');
+      d.append(el('div', 'k', k), el('div', 'v', v));
+      return d;
+    };
+    $('b-total').replaceChildren(
+      fig('Budget for spending', lakhText(t.outflowBudgetPaise)), fig('Spent', lakhText(t.outflowActualPaise)),
+      fig('Approved, not yet paid', lakhText(b.committedPaise)), fig(data.closed && remaining < 0 ? 'Over budget by' : 'Remaining', lakhText(Math.abs(remaining))),
+      fig(data.closed ? 'Year' : 'Year gone', data.closed ? 'Closed' : percentText(b.yearFraction, 1)),
+    );
+    const out: HTMLElement[] = [];
+    const heads = ['company', 'farm', 'projects', 'investment'];
+    for (const h of heads) {
+      const lines = b.lines.filter((l: any) => l.head === h);
+      const extra = b.notBudgeted.filter((n: any) => n.head === h);
+      if (!lines.length && !extra.length) continue;
+      const hd = b.heads[h];
+      const head = el('li', 'hhead');
+      head.append(el('span', 'hn', HEAD_NAMES[h]), el('span', 'small', `Budget ${lakhText(hd.budgetPaise)} · Spent ${lakhText(hd.actualPaise)} · ${percentText(hd.actualPaise, t.outflowActualPaise)} of all spending`));
+      out.push(head);
+      for (const l of lines) {
+        const li = el('li', 'brow');
+        const top = el('div', 'brow-head');
+        const name = el('span');
+        name.append(el('strong', '', l.label), el('span', 'small', ` · ${percentText(l.actualPaise, t.outflowActualPaise)} of spending`));
+        if (l.comment) name.append(el('br'), el('span', 'small', l.comment));
+        const st = (STATUS as any)[l.status];
+        top.append(name, pill(st.tone, l.status === 'over' || l.status === 'over_slight' ? `${st.label} by ${lakhText(l.actualPaise - l.budgetPaise, 2)}` : st.label));
+        const figs = el('div', 'figs');
+        figs.append(fig('Budget', lakhText(l.budgetPaise, 2)), fig('Spent', lakhText(l.actualPaise, 2)), fig(data.closed ? 'Left unspent' : 'Remaining', lakhText(l.remainingPaise, 2)), fig('Year-end estimate', l.estimatePaise === null ? (data.closed ? 'Final' : 'n/a') : lakhText(l.estimatePaise, 2)));
+        li.append(top, trackFor(l, Math.max(l.budgetPaise, l.actualPaise, l.estimatePaise ?? 0) * 1.25 || 1), figs);
+        out.push(li);
+      }
+      for (const n of extra) {
+        const li = el('li', 'brow');
+        li.append(row('Not in the budget', 'Spending under this head that has no budget line', { right: lakhText(n.actualPaise, 2) }).firstElementChild!);
+        out.push(li);
+      }
+    }
+    const loose = b.notBudgeted.filter((n: any) => !n.head);
+    if (loose.length) {
+      const head = el('li', 'hhead');
+      head.append(el('span', 'hn', 'Not in any head'), el('span', 'small', 'Spending in a category that has no head yet'));
+      const li = el('li', 'brow');
+      li.append(row('Not in the budget', 'Give the category a head so it is counted in one', { right: lakhText(loose.reduce((n: number, x: any) => n + x.actualPaise, 0), 2) }).firstElementChild!);
+      out.push(head, li);
+    }
+    $('b-rows').replaceChildren(...out);
+    $('b-foot').textContent = 'Period view: an expense counts in the month it belongs to, not the month it was paid. Estimates assume spending continues at the pace so far and are shown for the farm\'s running costs only, since company fees, projects and the sinking fund arrive in lumps.';
+
+    // Summary and income: the tables the yearly presentation shows.
+    const inc = b.lines.filter((l: any) => l.head === 'income');
+    const maint = b.lines.filter((l: any) => l.head === 'maintenance');
+    const card = (title: string, node: HTMLElement) => {
+      const c = el('div', 'card');
+      c.append(el('h2', '', title), el('div', 'tablewrap'));
+      c.lastElementChild!.append(node);
+      return c;
+    };
+    const sumRows = heads.map((h) => [h === 'investment' ? 'Sinking fund' : HEAD_NAMES[h], lakhText(b.heads[h].budgetPaise, 2), lakhText(b.heads[h].actualPaise, 2)]);
+    sumRows.push(['Total outflow', lakhText(t.outflowBudgetPaise, 2), lakhText(t.outflowActualPaise, 2)]);
+    sumRows.push(['Income', lakhText(b.heads.income.budgetPaise, 2), lakhText(b.heads.income.actualPaise, 2)], ['Maintenance', lakhText(b.heads.maintenance.budgetPaise, 2), lakhText(b.heads.maintenance.actualPaise, 2)]);
+    sumRows.push(['Total inflow', lakhText(t.inflowBudgetPaise, 2), lakhText(t.inflowActualPaise, 2)], [t.surplusPaise < 0 ? 'Shortfall' : 'Surplus', lakhText(t.inflowBudgetPaise - t.outflowBudgetPaise, 2), lakhText(t.surplusPaise, 2)]);
+    const cards: HTMLElement[] = [card('Summary', table(['Head', 'Budget', data.closed ? 'Actual' : 'So far'], sumRows))];
+    if (inc.length || maint.length) {
+      cards.unshift(card('Income and maintenance', table(['Stream', 'Budget', data.closed ? 'Actual' : 'So far'], [...inc, ...maint].map((l: any) => [l.label, lakhText(l.budgetPaise, 2), lakhText(l.actualPaise, 2)]))));
+    }
+    const status = el('div', 'card');
+    status.append(el('h2', '', 'Financial status'), el('div', 'tablewrap'));
+    status.lastElementChild!.append(table(['', data.closed ? 'At 31 March' : `As on ${day(data.asOf)}`], [['Cash in bank', lakhText(data.runway.balancePaise, 2)], ['Sinking fund', lakhText(data.runway.fdPaise, 2)], ['Total', lakhText(data.runway.balancePaise + data.runway.fdPaise, 2)]], true));
+    cards.push(status);
+    $('b-extra').replaceChildren(...cards);
+  }
+
+  function renderUpi() {
+    $('upi-now').hidden = data.closed;
+    $('upi-year').hidden = !data.closed;
+    if (data.closed) return;
+    const c = data.circle;
+    $('ring').innerHTML = ringSvg(c);
+    $('ring-sub').textContent = `Cap resets on the 1st: ${rupeesText(c.capPaise)} a calendar month.`;
+    const notes = [el('div', '', '')];
+    notes[0].append(pill(c.pct > 0.9 ? 'crit' : c.pct > 0.6 ? 'warn' : 'ok', `${Math.round(c.pct * 100)}% used, ${Math.round((c.day / c.daysInMonth) * 100)}% of the month gone`));
+    const extra = [el('span', 'small', `Left: ${rupeesText(c.leftPaise)}`)];
+    if (c.runsOutOnDay !== null) extra.push(el('span', 'small', `At this month's pace the cap runs out around day ${c.runsOutOnDay} (an estimate)`));
+    extra.push(el('span', 'small', 'The tick on the ring marks an even pace.'));
+    $('ring-notes').replaceChildren(...notes, ...extra);
+  }
+
+  function renderHealth() {
+    $('health-note').hidden = !data.closed;
+    const items = healthItems(data, attention);
+    $('health').replaceChildren(...(items.length ? items.map((i) => row(i.title, i.detail, { count: i.count, tone: i.tone, href: i.href, right: i.tone === 'crit' ? 'Blocks month close' : 'Review' })) : [row('Nothing is waiting', 'Every line is explained, every request is matched and no payee in use is unchecked.')]));
+    const a = attention ?? {};
+    const rows: HTMLElement[] = [];
+    rows.push(row('Last statement line', data.lastLineDate ? day(data.lastLineDate) : 'Nothing imported yet', { href: '/internal/finance/import/' }));
+    if (a.lastImportAt) rows.push(row('Last import', day(a.lastImportAt), { href: '/internal/finance/import/' }));
+    for (const g of a.statementGaps ?? []) rows.push(row(`${g.label} has a gap`, `No statement from ${day(g.from)} to ${day(g.to)}`, { href: '/internal/finance/import/' }));
+    $('imports').replaceChildren(...rows);
+  }
+
+  // ---- charts, drawn at the width they have
+  const widthOf = (id: string) => Math.max(280, Math.floor($(id).getBoundingClientRect().width) || 600);
+  const chart = (id: string, markup: string) => {
+    const host = $(id);
+    host.innerHTML = markup;
+    let tip = host.querySelector('.tip') as HTMLElement | null;
+    if (!tip) {
+      tip = el('div', 'tip');
+      tip.hidden = true;
+      host.append(tip);
+    }
+  };
+  function drawCharts() {
+    if (!data) return;
+    if (view === 'overview') chart('ov-balance', balanceSvg(data.cashflow, widthOf('ov-balance'), { height: 200 }));
+    if (view === 'cashflow') {
+      chart('cf-bars', barsInOutSvg(data.cashflow, widthOf('cf-bars')));
+      chart('cf-stack', stackedSvg(data.cashflow, widthOf('cf-stack')));
+      chart('cf-balance', balanceSvg(data.cashflow, widthOf('cf-balance'), { withFd: true }));
+    }
+    if (view === 'upi-circle') {
+      const id = data.closed ? 'upi-bars-year' : 'upi-bars-now';
+      const history = data.closed ? data.circleHistory : data.circleHistory.slice(-6);
+      chart(id, circleBarsSvg(history, data.circleCapPaise, widthOf(id)));
+    }
+  }
+  // One tooltip handler for every chart on the page.
+  document.addEventListener('pointermove', (e) => {
+    const target = (e.target as Element | null)?.closest?.('.chart [data-tip]') as SVGElement | null;
+    document.querySelectorAll('.chart .tip').forEach((t) => ((t as HTMLElement).hidden = true));
+    if (!target) return;
+    const host = target.closest('.chart') as HTMLElement;
+    const tip = host.querySelector('.tip') as HTMLElement;
+    const r = host.getBoundingClientRect();
+    tip.textContent = target.getAttribute('data-tip');
+    tip.hidden = false;
+    const half = tip.offsetWidth / 2;
+    tip.style.left = `${Math.max(half + 4, Math.min(r.width - half - 4, e.clientX - r.left))}px`;
+    tip.style.top = `${Math.max(tip.offsetHeight + 8, e.clientY - r.top - 12)}px`;
+  });
+
+  function renderAll() {
+    $('closed-note').hidden = !data.closed;
+    if (data.closed) $('closed-note').textContent = `${fyLabel(data.fy)} is closed: these are its final figures. Runway is as at 31 March.`;
+    renderTiles();
+    renderCashflowText();
+    renderBudget();
+    renderUpi();
+    renderHealth();
+    drawCharts();
+  }
+
+  function renderFy() {
+    const box = $('fy');
+    box.hidden = data.fyOptions.length < 2;
+    box.replaceChildren(...data.fyOptions.map((y: number) => {
+      const b = el('button', '', `FY ${fyLabel(y)}`) as HTMLButtonElement;
+      b.type = 'button';
+      b.setAttribute('aria-pressed', String(y === data.fy));
+      b.addEventListener('click', () => { if (y !== data.fy) load(y); });
+      return b;
+    }));
+  }
+
+  function show(v: string) {
+    view = VIEWS.includes(v) ? v : 'overview';
+    VIEWS.forEach((n) => { $(`v-${n}`).hidden = n !== view; });
+    $('tabs').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String((b as HTMLElement).dataset.v === view)));
+    drawCharts();
+  }
+  $('tabs').addEventListener('click', (e) => {
+    const b = (e.target as Element).closest('button');
+    if (b) location.hash = (b as HTMLElement).dataset.v!;
+  });
+  window.addEventListener('hashchange', () => show(location.hash.slice(1)));
+  let timer: number | undefined;
+  window.addEventListener('resize', () => { clearTimeout(timer); timer = window.setTimeout(drawCharts, 120); });
+
+  async function load(year?: number) {
+    gate.hidden = true;
+    forbidden.hidden = true;
+    showLoading(statusEl);
+    try {
+      const q = year ?? fy;
+      const [dash, over] = await Promise.all([
+        staffFetch(`/api/finance-admin/dashboard${q ? `?fy=${q}` : ''}`),
+        staffFetch('/api/finance-admin/overview').catch(() => ({ status: 0, data: null })),
+      ]);
+      if (dash.status !== 200) throw new Error('load failed');
+      data = dash.data;
+      attention = over.status === 200 ? over.data?.attention ?? null : null;
+      fy = data.fy;
+      clearState(statusEl);
+      intro.textContent = data.hasData ? `Figures to ${day(data.asOf)}. ₹ L means lakh rupees (₹1,00,000).` : 'No bank statement has been imported yet, so there is nothing to show. Import one from the Import page.';
+      content.hidden = false;
+      // The figures arrived. If drawing them fails, say so, and log why: it is not the server's fault.
+      try {
+        renderFy();
+        renderAll();
+        show(location.hash.slice(1));
+      } catch (renderErr) {
+        console.error('[finance dashboard] could not draw the figures', renderErr);
+        content.hidden = true;
+        showFailure(statusEl, { title: "Couldn't show these figures", text: 'The figures arrived but something went wrong drawing them. Nothing was changed. Tell a super admin; the browser console has the detail.', onRetry: () => load() });
+      }
+    } catch (err) {
+      if (err instanceof StaffAuthError) {
+        if (err.kind === 'unauthorized') showGate('Your session expired. Sign in again.');
+        else showForbidden();
+        return;
+      }
+      content.hidden = true;
+      showFailure(statusEl, { title: "Couldn't load the dashboard", text: "The server didn't answer. Nothing was changed. Check your connection and try again; if it keeps failing, tell a super admin.", onRetry: () => load() });
+    }
+  }
+
+  function handleCredentialResponse(response: { credential: string }) {
+    setToken(response.credential);
+    load();
+  }
+  function renderSignInButton() {
+    if (typeof google === 'undefined') return;
+    google.accounts.id.initialize({ client_id: CLIENT_ID, callback: handleCredentialResponse });
+    google.accounts.id.renderButton(document.getElementById('g_id_signin'), { theme: (window as any).tvcGsiTheme?.() ?? 'outline', size: 'large' });
+  }
+  $('use-different-account').addEventListener('click', () => {
+    clearToken();
+    clearStepUp();
+    if (typeof google !== 'undefined') google.accounts.id.disableAutoSelect();
+    showGate();
+  });
+
+  if (getToken()) load();
+  else showGate();
+</script>
+<script is:inline src="https://accounts.google.com/gsi/client"></script>
+
+<style is:global>
+  .dash.section.wrapper {
+    padding-top: 32px;
+    padding-bottom: 48px;
+  }
+
+  .dash h2 {
+    margin: 0 0 4px;
+    font-size: var(--text-lg);
+  }
+
+  .dash .hint {
+    margin: 0 0 10px;
+  }
+
+  .dash-top {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 24px;
+    align-items: flex-end;
+    justify-content: space-between;
+  }
+
+  .dash-tabs {
+    margin: 18px 0 16px;
+    overflow-x: auto;
+  }
+
+  .dash-view {
+    display: grid;
+    gap: 16px;
+  }
+
+  .dash-view[hidden] {
+    display: none;
+  }
+
+  .dash-grid {
+    display: grid;
+    gap: 16px;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+  }
+
+  .dash .card {
+    min-width: 0;
+  }
+
+  /* Tiles */
+  .dash .tiles {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  }
+
+  .dash-tile {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+    padding: 14px;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    background: var(--tvc-white);
+    color: inherit;
+    text-decoration: none;
+  }
+
+  a.dash-tile:hover {
+    background: var(--tvc-cream);
+  }
+
+  .dash-tile-label {
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--tvc-ink-soft);
+  }
+
+  .dash-tile-big {
+    font-size: 1.85rem;
+    line-height: 1.1;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .dash-tile-big small {
+    font-size: var(--text-md);
+    font-weight: 600;
+    letter-spacing: 0;
+    color: var(--tvc-ink-soft);
+  }
+
+  .dash-tile-sub {
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  .dash-spark svg {
+    display: block;
+    width: 100%;
+    height: 30px;
+  }
+
+  .dash .spark {
+    fill: none;
+    stroke: var(--tvc-chart-balance);
+    stroke-width: 2;
+    stroke-linejoin: round;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .dash-count {
+    min-width: 3rem;
+    font-size: var(--text-2xl);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .dash-count--crit {
+    color: var(--tvc-error-text);
+  }
+
+  .dash-right {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  /* Bars: budget used, a line's progress */
+  .dash .track {
+    position: relative;
+    display: block;
+    height: 14px;
+    border-radius: 7px;
+    background: var(--tvc-cream);
+  }
+
+  .dash .track i {
+    position: absolute;
+    top: 0;
+    display: block;
+    height: 100%;
+  }
+
+  .dash .track .act {
+    left: 0;
+    border-radius: 7px;
+    background: var(--tvc-chart-in);
+  }
+
+  .dash .track .bud {
+    top: -4px;
+    bottom: -4px;
+    width: 2px;
+    height: auto;
+    border-radius: 1px;
+    background: var(--tvc-ink);
+  }
+
+  .dash .track .est {
+    top: -2px;
+    width: 0;
+    height: 0;
+    margin-left: -5px;
+    border-top: 7px solid var(--tvc-ink-soft);
+    border-right: 5px solid transparent;
+    border-left: 5px solid transparent;
+  }
+
+  /* Budget lines */
+  .dash .hhead {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 16px;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 12px 14px;
+    background: var(--tvc-cream);
+  }
+
+  .dash .hhead .hn {
+    font-weight: 700;
+  }
+
+  .dash .brow {
+    display: grid;
+    gap: 8px;
+    padding: 14px;
+  }
+
+  .dash .brow-head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    align-items: baseline;
+    justify-content: space-between;
+  }
+
+  .dash .small {
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  .dash .figs {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    gap: 6px 12px;
+  }
+
+  .dash .fig .k {
+    font-size: var(--text-xs);
+    color: var(--tvc-ink-soft);
+  }
+
+  .dash .fig .v {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .dash-totals {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 28px;
+  }
+
+  .dash-totals .fig .v {
+    font-size: var(--text-xl);
+  }
+
+  /* Tables */
+  .dash .tablewrap {
+    margin-top: 8px;
+    overflow-x: auto;
+  }
+
+  .dash table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-base);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .dash th,
+  .dash td {
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--tvc-line);
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .dash th:first-child,
+  .dash td:first-child {
+    text-align: left;
+  }
+
+  .dash th {
+    font-weight: 600;
+    color: var(--tvc-ink-soft);
+  }
+
+  .dash tr.total td {
+    border-top: 1px solid var(--tvc-line-strong);
+    font-weight: 700;
+  }
+
+  .dash-details {
+    margin-top: 12px;
+  }
+
+  .dash-details summary {
+    cursor: pointer;
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  /* Where the money went */
+  .dash .sbar {
+    display: flex;
+    gap: 2px;
+    height: 18px;
+    overflow: hidden;
+    border-radius: 9px;
+  }
+
+  .dash .sbar i {
+    display: block;
+    height: 100%;
+  }
+
+  .dash .spend {
+    display: grid;
+    gap: 4px 24px;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    margin-top: 12px;
+  }
+
+  .dash .spend div {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    font-size: var(--text-base);
+  }
+
+  .dash .spend .amt {
+    margin-left: auto;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Groups and legend swatches */
+  .dash .sw {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+  }
+
+  .dash .sw-in {
+    background: var(--tvc-chart-in);
+  }
+
+  .dash .sw-out {
+    background: var(--tvc-chart-out);
+  }
+
+  .dash .sw-line {
+    width: 16px;
+    height: 3px;
+    background: var(--tvc-chart-balance);
+  }
+
+  .dash .sw-dash {
+    width: 16px;
+    height: 0;
+    border-top: 2px dashed var(--tvc-ink-soft);
+    border-radius: 0;
+  }
+
+  .dash i.g-salary,
+  .dash .g-salary {
+    background: var(--tvc-chart-salary);
+    fill: var(--tvc-chart-salary);
+  }
+
+  .dash i.g-farm,
+  .dash .g-farm {
+    background: var(--tvc-chart-farm);
+    fill: var(--tvc-chart-farm);
+  }
+
+  .dash i.g-projects,
+  .dash .g-projects {
+    background: var(--tvc-chart-projects);
+    fill: var(--tvc-chart-projects);
+  }
+
+  .dash i.g-company,
+  .dash .g-company {
+    background: var(--tvc-chart-company);
+    fill: var(--tvc-chart-company);
+  }
+
+  .dash i.g-saved,
+  .dash .g-saved {
+    background: var(--tvc-ink-soft);
+    fill: var(--tvc-ink-soft);
+  }
+
+  .dash i.g-other,
+  .dash .g-other {
+    background: var(--tvc-line-strong);
+    fill: var(--tvc-line-strong);
+  }
+
+  .dash .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 16px;
+    margin-bottom: 8px;
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  .dash .legend span {
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+  }
+
+  /* Charts: drawn by finance-dashboard-view.mjs; every mark has a class, coloured here from the tokens. */
+  .dash .chart {
+    position: relative;
+    width: 100%;
+  }
+
+  .dash .chart svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+  }
+
+  .dash .chart .grid {
+    stroke: var(--tvc-line);
+  }
+
+  .dash .chart .axis {
+    stroke: var(--tvc-line-strong);
+  }
+
+  .dash .chart .tick,
+  .dash .chart .strong {
+    fill: var(--tvc-ink-soft);
+    font-size: var(--text-xs);
+  }
+
+  .dash .chart .strong {
+    fill: var(--tvc-ink);
+    font-weight: 600;
+  }
+
+  .dash .chart .bar-in {
+    fill: var(--tvc-chart-in);
+  }
+
+  .dash .chart .bar-in.over,
+  .dash .chart .bar-out {
+    fill: var(--tvc-chart-out);
+  }
+
+  .dash .chart .partial {
+    opacity: 0.55;
+  }
+
+  .dash .chart .line-balance {
+    fill: none;
+    stroke: var(--tvc-chart-balance);
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .dash .chart .line-fd {
+    fill: none;
+    stroke: var(--tvc-ink-soft);
+    stroke-width: 2;
+    stroke-dasharray: 5 4;
+    stroke-linejoin: round;
+  }
+
+  .dash .chart .dot-balance {
+    fill: var(--tvc-chart-balance);
+    stroke: var(--tvc-white);
+    stroke-width: 2;
+  }
+
+  .dash .chart .dot-fd {
+    fill: var(--tvc-ink-soft);
+    stroke: var(--tvc-white);
+    stroke-width: 2;
+  }
+
+  .dash .chart .cap {
+    stroke: var(--tvc-ink);
+    stroke-width: 1.5;
+  }
+
+  .dash .chart .hit {
+    fill: transparent;
+    cursor: crosshair;
+  }
+
+  .dash .tip {
+    position: absolute;
+    z-index: 5;
+    padding: 7px 10px;
+    border-radius: var(--radius-sm);
+    background: var(--tvc-ink);
+    box-shadow: var(--shadow-soft);
+    color: var(--tvc-cream);
+    font-size: var(--text-sm);
+    line-height: 1.35;
+    white-space: pre;
+    pointer-events: none;
+    transform: translate(-50%, -100%);
+  }
+
+  /* The ring */
+  .dash .ring {
+    display: grid;
+    place-items: center;
+  }
+
+  .dash .ring svg {
+    width: 220px;
+    max-width: 100%;
+    height: auto;
+  }
+
+  .dash .ring-track {
+    fill: none;
+    stroke: var(--tvc-cream);
+    stroke-width: 16;
+  }
+
+  .dash .ring-fill {
+    fill: none;
+    stroke-width: 16;
+    stroke-linecap: round;
+  }
+
+  .dash .ring-ok {
+    stroke: var(--tvc-green);
+  }
+
+  .dash .ring-warn {
+    stroke: var(--tvc-orange-text);
+  }
+
+  .dash .ring-crit {
+    stroke: var(--tvc-error-text);
+  }
+
+  .dash .ring-pace {
+    stroke: var(--tvc-ink);
+    stroke-width: 2.5;
+    stroke-linecap: round;
+  }
+
+  .dash .ring-big {
+    fill: var(--tvc-ink);
+    font-size: 1.75rem;
+    font-weight: 700;
+  }
+
+  .dash .ring-small {
+    fill: var(--tvc-ink-soft);
+    font-size: var(--text-sm);
+  }
+
+  .dash .ring-notes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 20px;
+    justify-content: center;
+    margin-top: 8px;
+  }
+
+  @media (max-width: 560px) {
+    .dash-tile-big {
+      font-size: 1.6rem;
+    }
+  }
+</style>

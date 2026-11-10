@@ -41,6 +41,7 @@ broke, so statement files are the primary path); paying money directly from the 
 | Nature of expense | Every allocation carries a plain-language **nature**. | Auditors ask for it on listed payments. |
 | Category type | The type (opex, capex, ...) belongs to the **category**, not the row. | Today "Farm Expenses" appears as Opex, Capex and blank. |
 | Budget buckets | An allocation is in one bucket: **Project** if it names a project, else its category's type (Opex, Capex, revenue ...). | Matches how the yearly budget is built: Capex, Opex and approved Projects, reported against budget. |
+| Budget heads | The budget and the dashboards report by the heads of the community's yearly presentation: **Company, Farm, Projects, Investment** (the sinking fund), plus income and maintenance on the inflow side. A category belongs to one head (`fin_categories.head`); an allocation that names a project is always under Projects. Salary is flagged (`is_salary`) so it can be shown on its own. The category *type* above stays as a second view. | Confirmed 2026-11-10: it is how the budget is presented to members, so the dashboards match what they have already seen. |
 | Projects | A project is its own record: an owner (a name only), approval date, financial year and a **breakdown** of planned amounts, each under a category. Several per year. | Projects are planned, presented to the community and approved before the budget; actuals are reported per project and per component. |
 | Events | Tracked for **profit and loss only** (receipts against costs); no owner, approval or breakdown. | Confirmed by Sharath. |
 | Revenue projections | Each revenue stream is budgeted with a projected amount, and the year ends with actual vs projected. Maintenance is the plug: planned spend minus projected non-maintenance income = maintenance to collect. | Maintenance collections fill the gap between earnings and spending. |
@@ -267,9 +268,11 @@ without `close-period`, and every override is logged with its reason.
 Defined once so the numbers match across screens. "Cash view" groups by `tran_date`; "period view"
 by `period`.
 
-- **Cashflow** (cash view): monthly inflow and outflow by category group, closing balance, and
-  **runway** = latest balance ÷ the average monthly net outflow of the last six months, excluding
-  transfers to the sinking fund; shown with and without fixed deposits.
+- **Cashflow** (cash view): monthly inflow and outflow by group (salary, farm and household, projects,
+  company, sinking fund, and money not yet explained), closing balance, and **runway** = latest balance ÷ the
+  average monthly *spending* of the last six complete months, excluding transfers to the sinking fund; shown
+  with and without the sinking fund. *Changed 2026-11-10 (confirmed by the owner): this was net outflow, which
+  swings with every maintenance collection, because maintenance arrives in lumps.*
 - **Budget vs actual** (period view): per category for the chosen financial year: budget, actual,
   committed (approved requests not yet paid), remaining, and a run-rate projection labelled as an estimate.
 - **Maintenance**: due, collected, outstanding, percent of households paid, ageing by months overdue,

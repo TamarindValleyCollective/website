@@ -18,7 +18,9 @@ model are in [DESIGN.md](DESIGN.md); how to build it is in [README.md](README.md
 | 06 History load | **Loaded on 2026-11-05** (PR #530, migration `0084` applied): 1,031 allocations on 783 bank lines. Still open: the 2023-24 tracker tab, party on the history rows with none (the "No party" chip lists them), project details for the Farm Project placeholders (issue #531). |
 | 05/06 follow-up: the new ledger | **Draft PR #532.** The ledger page is rebuilt (TanStack Table and Virtual; every line fetched once, searched and sorted in the browser; cards on phones; saved drafts; undo; a line sheet that can set a maintenance unit and year) and replaces the first version at `/internal/finance/ledger/`; faster list, Paytm line, "No party" chip and flags. Critique 22 → 26 → 30 → 27 / 40 over four rounds (reviewers vary by about 3). No migration. Not yet tried on the real ledger. |
 | 08 Payment requests & bills | First slice **merged (PR #567, 2026-11-07)**. Migrations `0092` and `0093` **applied 2026-11-07**; the old sheet's 186 records are loaded. See "Payment requests and spend logs" below. |
-| 02, 07, 09-13 | Not started |
+| 02 Dashboard mockup | Reviewed by the owner; draft PR #586 (`docs/finance/mockups/dashboards.html`, invented data). |
+| 07 Dashboards & budget | **In progress, draft PR.** Migration `0098` **not yet applied** (tested rolled back on 2026-11-10). Metrics, endpoint and the read-only dashboard page are built; the budget editor, the budget import and the member preview are next. See "Dashboards" below. |
+| 09-13 | Not started |
 
 ## Access
 
@@ -735,3 +737,47 @@ Running it again adds nothing. Checked against the real sheet read-only (parse o
 **Not built yet (next):** the bill scanner (edge detection, crop, multi-page) and the vision reading of vendor, date, amount and UPI reference off a bill or screenshot (the files are
 attached as plain photos today, and the reference is typed); approver-queue polish; per-delegate spend limits (who paid is recorded: `requester_id` and `paid_via`); a vendor bulk file;
 payment links from the ledger's Paypro/bank lines to a request. **Not verified:** the pages in a browser on a real phone, the upload to R2, the approval email, and the loader's `--apply`.
+
+## Dashboards (session 07, migration `0098_finance_budget.sql`, **not yet applied**)
+
+Page `/internal/finance/dashboard/` (Finance › Dashboard), five views for one financial year switched at the top: **Overview**, **Cashflow**,
+**Budget vs actual**, **UPI circle**, **Data health**. Designed in the session 02 mockup (`docs/finance/mockups/dashboards.html`).
+Every figure comes from `GET /api/finance-admin/dashboard?fy=2026` (`lib/finance-dashboard.ts`; needs `finance` / `view`; an auditor's visit is
+written to `fin_audit_log` as `finance.dashboard_viewed` and refused if it cannot be). The formulas live once, in `scripts/lib/finance-metrics.mjs`;
+the page draws from `scripts/lib/finance-dashboard-view.mjs` (pure, tested) using the `--tvc-chart-*` tokens.
+
+- **Two views, never mixed on a screen.** *Cash view* (Cashflow) groups by the bank line's date. *Period view* (Budget vs actual) groups by the
+  allocation's `period`, so a March salary paid in April is March's. Only **posted** allocations count; a draft explains nothing yet.
+- **Cashflow.** Per month: money in and out as the bank saw it, the closing balance (each account's opening implied by its first line, plus every
+  movement, summed), maintenance against other money in, and money out split into salary, farm and household, projects, company, sinking fund and
+  *not yet explained* (the part of a line nobody has allocated), so the groups always add up to the bank's figure. A refund is money in here; the period
+  view nets it against the spending.
+- **Groups and heads.** `groupOf`: the sinking fund first, then anything naming a project (a project's pay counts under the project), then salary, then
+  the category's head. `fin_categories.head` (`company`, `farm`, `projects`, `investment`) and `is_salary` are set by `0098` for the seeded categories by
+  name; a category with no head shows as "Not in any head". There is no screen to change a head yet (the Rules page needs a select).
+- **Runway** = bank balance ÷ the average monthly *spending* (out, less the sinking fund) of the last six complete months, with the sinking fund
+  added as a second figure. It deliberately ignores money still to come: maintenance arrives in lumps, so a net figure would swing with every
+  collection. Fewer than six months uses what exists; no spending gives "not enough yet". A closed year's runway is as at 31 March, and the window may
+  reach back into the previous year.
+- **Budget vs actual.** Lines come from the live (approved) version of the year's budget, or the newest draft when none is approved. Actuals net refunds.
+  A category line counts only allocations that name no project; a project line counts the ones that name it. Spending with no line is listed as *not
+  budgeted* and still counted in the totals. Only the farm's running costs get a year-end estimate (actual ÷ share of the year gone), labelled as an
+  estimate; status: on track up to the budget, watch to 110%, over pace beyond; a closed year says within, slightly over or over. **Committed** (approved
+  requests the bank has not shown yet) is one total, not per line: a payment request has no category.
+- **UPI circle.** The spend rule is `finance-upi-circle.mjs` (a circle payment out, per calendar month, against the ₹15,000 cap); the dashboard adds
+  how much of the month is gone, and an estimate of the day the cap runs out at this month's pace.
+- **Data health.** Counts and dates only: bank lines not fully explained, approved requests waiting for a bank line, plus the overview's counts (payees
+  to verify, entries held for review, statement gaps). It always describes today and says so on a closed year.
+- **Budget tables (`0098`).** `fin_budget_years` (one row per year and version: draft → approved → superseded; at most one approved per year) and
+  `fin_budget_lines` (a category or a project, an annual amount, optional 12-month phasing that must add up, a comment). Lines of an approved
+  version are frozen; `fin_approve_budget` approves a draft and supersedes the previous live version in one step. All RLS-on, service role only.
+  Tested on 2026-11-10 against the real database inside a transaction that was rolled back: heads set on 21 categories and none left without one among
+  the spending categories, an empty or malformed budget refused, an approved budget frozen, a second version superseding the first, anonymous
+  reads refused. The dashboard tolerates a database without `0098` (a year with no budget, every category's spending under "other").
+- **Tests:** `finance-metrics` (the formulas), `finance-dashboard-view` (formatting, charts, tiles), `finance-dashboard-endpoint` (the real function
+  through `requireStaff` with Supabase stubbed: access, drafts not counted, a year with no budget, a database without `0098`, auditor logging, no names in
+  the response). The page's client script was also run in a DOM against a mocked response for an open and a closed year, all five views.
+- **Not built yet:** the budget editor (for `configure`) and the import of the existing plan (a dry-run script, run by the operator from the private
+  sheet); the Maintenance and Advances views (sessions 10 and 09: the mockup shows their shape); the member-portal preview of some of these figures (to be
+  a preview feature for chosen homes, not open to everyone); CSV export of a table. **Not verified:** the page in a browser with a real sign-in, on a phone,
+  and against the real ledger.
