@@ -3,6 +3,14 @@ title: "Why You Can Never Become a Farmer"
 date: 2027-01-23
 endDate: 2027-01-24
 excerpt: "An overnight experience-sharing workshop for people who'd like to get into farming — production, markets, value addition and technology, and the economics, behavioural science and spirituality behind them. Stay, food and activities included."
+coverImage: "/images/events/2027-01-23-why-you-can-never-become-a-farmer/hero.jpeg"
+coverImageAlt: "An illustration of a person with a backpack walking from a city skyline along a path toward sunlit farm terraces, with three badges floating above them: a rupee sign for economics, a brain for behavioural science and a lotus for spirituality."
+coverImagePosition: "center top"
+coverImageWidth: 1920
+coverImageHeight: 1280
+shareImage: "/images/events/2027-01-23-why-you-can-never-become-a-farmer/poster.jpeg"
+shareImageWidth: 1080
+shareImageHeight: 1350
 organizer: "Ramesh Agarwal & Venky Ramachandran"
 tags: ["workshop", "farming", "overnight"]
 draft: false
@@ -21,6 +29,14 @@ stayTypes: ["malabar-hut", "banyan-hut", "bamboo-hut", "portable-tent"]
 An experience-sharing workshop for enthusiasts who would like to get into farming. There are a lot of preconceived notions that farming is suffering because farmers are uneducated and don't understand technology and markets. That can give you a false sense of understanding. Like any other domain, farming demands a deep understanding of the domain, physical effort and mental strength.
 
 The workshop brings to the forefront some of the blind spots that come from lacking that domain knowledge — across production, markets, value addition and technology — and leaves room on the second day for motivations, life questions, family constraints and whatever else comes up.
+
+<figure class="poster">
+
+![Event poster for Why You Can Never Become a Farmer, 23 to 24 January 2027: the five topics, the two hosts, and the ₹6,000 per participant fee](/images/events/2027-01-23-why-you-can-never-become-a-farmer/poster.jpeg)
+
+<figcaption>The event poster</figcaption>
+
+</figure>
 
 ## Hosts
 
