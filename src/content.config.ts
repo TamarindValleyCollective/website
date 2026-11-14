@@ -24,6 +24,12 @@ const events = defineCollection({
     // matched. Get the real numbers with `sips -g pixelWidth -g pixelHeight
     // <file>`. Omit only alongside coverImage itself (no custom image, no
     // custom dimensions needed).
+    // CSS object-position for the hero background (PageHero's imagePosition).
+    // The hero is a fixed full-viewport backdrop with the content card over
+    // its middle, so art that must stay in view (not hidden behind the card)
+    // should be pinned with e.g. "center top" and composed for the band above
+    // the card. Omit for the default center crop.
+    coverImagePosition: z.string().optional(),
     coverImageWidth: z.number().int().positive().optional(),
     coverImageHeight: z.number().int().positive().optional(),
     // Overrides coverImage for the social-preview (og:image/twitter:image)
