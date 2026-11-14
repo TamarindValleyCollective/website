@@ -3,6 +3,13 @@
   publish = "dist"
   functions = "netlify/functions"
 
+[build.environment]
+  # FIN_REQUESTS_SHEET_ID is a spreadsheet ID, not a secret, and UPI-SYNC.md
+  # cites it on purpose. Netlify's secret scan fails the build when an env var's
+  # value appears in the repo, so exempt this key (it broke every build on
+  # 2026-11-14).
+  SECRETS_SCAN_OMIT_KEYS = "FIN_REQUESTS_SHEET_ID"
+
 [functions]
   node_bundler = "esbuild"
 
