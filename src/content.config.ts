@@ -36,6 +36,13 @@ const events = defineCollection({
     shareImage: z.string().optional(),
     shareImageWidth: z.number().int().positive().optional(),
     shareImageHeight: z.number().int().positive().optional(),
+    // Shows the "Where you'll stay" and "Facilities" (toilets) galleries on an
+    // upcoming event's page, just above its booking form - the same blocks
+    // 3bs1h editions always get. List the accommodationTypes to show, by file
+    // slug (e.g. ["portable-tent", "bamboo-hut"]); the shared facilities always
+    // come with them. Omit for events with no stay, or ones that render their
+    // own (3bs1h). See _template.md.
+    stayTypes: z.array(z.string()).optional(),
     organizer: z.string().optional(),
     tags: z.array(z.string()).default([]),
     // Groups editions of the same recurring event under one visual identity

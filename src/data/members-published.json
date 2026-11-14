@@ -1,5 +1,310 @@
 {
-  "generatedAt": null,
-  "cards": [],
-  "hidden": []
+  "generatedAt": "2026-11-14T14:52:52.159Z",
+  "cards": [
+    {
+      "name": "Rajiv & Kritika",
+      "bio": "Rajiv moved out of corporate & now engages with Deshpande Foundation and Rainmatter Foundation in their journeys. Krithika leads the marketing division at Saahas Zero Waste.",
+      "photo": "/images/members/rajiv-and-kritika.jpg"
+    },
+    {
+      "name": "Ramesh & Sarika",
+      "bio": "Ramesh runs Food Safety Works, a food safety regulatory and compliance company. Sarika is a Food Technologist who works with him there.",
+      "photo": "/images/members/ramesh-and-sarika.jpg",
+      "family": "Ramesh and Sarika have two daughters: Isika, a lawyer, and Chhavi, who is studying Culinary Science.",
+      "whyTVC": "Started TVC to build a community of like minded individuals who would like to lead a life that takes less from the planet.",
+      "social": [
+        "https://www.linkedin.com/in/notagarwal/"
+      ]
+    },
+    {
+      "name": "Divya & Sudhir",
+      "bio": "Divya is working as an independent consultant in Sustainable Waste Management, currently focussing on municipal reforms. Sudhir is with Thoughtworks for close to two decades, currently Global Head of Digital Engineering Centre.",
+      "photo": "/images/members/divya-and-sudhir.jpg",
+      "family": "Divya and Sudhir have two daughters: Arukshita, pursuing her Master's in Bioinformatics at the University of Michigan, Ann Arbor, and Aarna, in class 11. As a family they enjoy late-night car rides and road trips. Sudhir and Aarna are trained yoga teachers; Arukshita is a long-distance swimmer and the most hands-on with gardening. Divya is a Sudoku buff, while Sudhir loves quizzing.",
+      "whyTVC": "TVC was a dream come true, we wanted to live amidst greenery and in simplicity but getting to do that with a like minded community was a big attraction.",
+      "social": [
+        "https://www.linkedin.com/in/divya-tiwari-3019296",
+        "https://www.linkedin.com/in/sudhirtiwari"
+      ]
+    },
+    {
+      "name": "Swami & Vidhya",
+      "bio": "Swami worked for Capgemini, Srividya quit her IT career and is currently a montessorian & special educator.",
+      "photo": "/images/members/swami-and-vidhya.jpg"
+    },
+    {
+      "name": "Swayambhu & Mukthi",
+      "bio": "Swayambhu is working with McAfee. Mukti teaches in an engineering college.",
+      "photo": "/images/members/swayambhu-and-mukthi.jpg"
+    },
+    {
+      "name": "Shalini & Amit Jain",
+      "bio": "Amit is a Program Manager at HPE. Shalini enjoys baking, gardening, and anything that challenges her creative mind.",
+      "photo": "/images/members/shalini-and-amit-jain.jpg"
+    },
+    {
+      "name": "Ramjee & Harshadha",
+      "bio": "Ramjee is a tech enthusiast, runs his AI/ML startup. Harshada is a civil/env engineer.",
+      "photo": "/images/members/ramjee-and-harshadha.jpg",
+      "familyNames": [
+        "Aashrita"
+      ]
+    },
+    {
+      "name": "Reva & Ranjan",
+      "bio": "Reva and Ranjan run Primalise, a firm that works in the area of socio-cultural and natural systems.",
+      "photo": "/images/members/reva-and-ranjan.jpg"
+    },
+    {
+      "name": "Ananth & Manasa",
+      "bio": "Ananth is a program manager with Amazon. Manasa is a marketing manager with Citrix, with interests in traveling, fitness among other things.",
+      "photo": "/images/members/ananth-and-manasa.jpg"
+    },
+    {
+      "name": "Kiran & Zainab",
+      "bio": "Kiran likes to think of himself as a tool maker. In the course of his life's journey, Kiran founded Hasgeek, steered the volunteer-led Save The Internet (STI) movement on Net Neutrality, registered his dissent against Aadhaar, and continues his experiments with hardware projects. Zainab is learning what it takes to build & sustain communities at Hasgeek & TVC.",
+      "photo": "/images/members/kiran-and-zainab.jpg",
+      "family": "Kiran and Zainab are married in life and sometimes at work, and in jointly raising their venture Amal Zaiki. Amal enjoys practising head stands and building models with clay. Kiran builds lots of boxes including video cubes and a CNC mill. Zainab is currently interested in learning how to grow food, and how children learn.",
+      "whyTVC": "Because communities will be the anchors of our lives increasingly, in the times to come.",
+      "social": [
+        "https://x.com/jackerhack",
+        "https://factordaily.com/meet-indiasgeekiest-couplekiran-jonnalagadda-and-zainab-bawa/"
+      ]
+    },
+    {
+      "name": "Amit & Jayashree",
+      "bio": "Jayashree is a Curriculum Developer, designing tech courses and certifications. Amit is an Engineering Manager.",
+      "photo": "/images/members/amit-and-jayashree.jpg",
+      "family": "Their daughter Gargi is pursuing undergrad at UT Austin.",
+      "whyTVC": "Wanted a place to grow our own food and live close to nature."
+    },
+    {
+      "name": "Sundar & Anitha",
+      "bio": "Sundar is a Software Engineer at Indeed, who likes to deal with text. Anitha is a Japanese expert at Fuso Tech Centre in Chennai.",
+      "photo": "/images/members/sundar-and-anitha.jpg",
+      "family": "Sundar and Anitha are married with one son, Mugil (17). Sundar is into languages; Anitha enjoys listening to songs. Mugil likes watching football, Jetlag, or Physics explainers.",
+      "whyTVC": "We like the idea of a little home in green space, with a like-minded community, subsisting on a community farm, not too far away from wildlife, without much of a negative footprint.",
+      "social": [
+        "https://www.linkedin.com/in/oligoglot/"
+      ]
+    },
+    {
+      "name": "Anu & Balu",
+      "bio": "Balu is a techie, works with Aurascape in the cloud security space. Anu is a freelance editor and works with nonprofits and a few other clients.",
+      "photo": "/images/members/up-anu-and-balu-4c5086c1.jpg",
+      "family": "Siddharth is 23, doing his master's in Electromobility and Jay is 18, doing his Engg. in Comp. Science.",
+      "whyTVC": "We would love to have a place to stay for longer periods of time, closer to the land, and work with it in a meaningful way.",
+      "photoFull": "/images/members/up-anu-and-balu-4c5086c1-full.jpg"
+    },
+    {
+      "name": "Sanket & Surabhi",
+      "bio": "Sanket works in software, and aspires to be a writer. Surabhi works for HP, also busy dealing with kids and pursuing her hobbies.",
+      "photo": "/images/members/sanket-and-surabhi.jpg"
+    },
+    {
+      "name": "Vij & Piya",
+      "bio": "Vij is a software engineer, currently with Google, Bangalore. Piya graduated from the School of Architecture and Planning (SPA). She runs a startup in the financial inclusion space that publishes an app called MeraBills.",
+      "photo": "/images/members/vij-and-piya.jpg"
+    },
+    {
+      "name": "Abhinav & Divya",
+      "bio": "Divya is a home baker and chef, focusing on healthy food. Abhinav is a product manager with VMware by Broadcom, working on software networking products.",
+      "photo": "/images/members/abhinav-and-divya.jpg",
+      "family": "Divya and Abhinav live in south Bangalore and are married with one son, Pranav (15).",
+      "whyTVC": "Aligned with the concept and philosophy of TVC, and staying for the lovely people and community.",
+      "social": [
+        "https://linkedin.com/in/abhinavmodi",
+        "https://www.instagram.com/divya.pics"
+      ]
+    },
+    {
+      "name": "Harishri Babuji",
+      "bio": "Harishri works at Schneider Electric in the Customer Experience space. She has traversed across Telecom, IT, and Energy industries over the span of her career.",
+      "photo": "/images/members/harishri-babuji.jpg",
+      "family": "Harishri joined TVC with her late husband, Elvin. She now considers the TVC family as her own extended one!",
+      "whyTVC": "Being with like-minded people in a community with purpose",
+      "social": [
+        "https://linkedin.com/in/harishri"
+      ]
+    },
+    {
+      "name": "Sharath & Deepa",
+      "bio": "[**Sharath**](https://www.linkedin.com/in/sharathjeppu/) works for Shell as a Principal Software Engineer and is a firm believer in sustainable living; outside of work, he spends his time actively participating in the growth and development of the Tamarind Valley Collective. [**Deepa**](https://www.linkedin.com/in/deepaalex/) works for Sobis Software and heads their Global Helpdesk.",
+      "photo": "/images/members/up-sharath-and-deepa-7c6506e4.jpg",
+      "family": "Sharath and Deepa are parents to two children: [**Deesha**](https://www.linkedin.com/in/deesha-jeppu-135281309/), who is currently pursuing a Master’s in Ecology and Evolutionary Biology at the University of Helsinki, and [**Aryaan**](https://www.linkedin.com/in/aryaanjeppu/), who recently completed his undergraduate degree with a major in Mathematics. They also have a 10-year-old cat named Thalia.",
+      "familyNames": [
+        "Aryaan",
+        "Deesha"
+      ],
+      "whyTVC": "We joined TVC because we wanted to create something of lasting value that money simply cannot buy, while fostering a deeper connection with the land and a like-minded community.",
+      "photos": [
+        "/images/members/up-sharath-and-deepa-7c6506e4.jpg",
+        "/images/members/up-sharath-and-deepa-e7177c8f.jpg"
+      ],
+      "photosFull": [
+        "/images/members/up-sharath-and-deepa-7c6506e4-full.jpg",
+        "/images/members/up-sharath-and-deepa-e7177c8f-full.jpg"
+      ]
+    },
+    {
+      "name": "Udhay & Lavanya",
+      "bio": "Udhay helps startup founders navigate strategy, marketing, and fundraising. Lavanya manages too many things, including the sanitation aspects of their apartment association.",
+      "photo": "/images/members/udhay-and-lavanya.jpg",
+      "family": "Udhay and Lavanya have one daughter, Apsara, a recent graduate in Psychology and Journalism.",
+      "whyTVC": "It’s important to us to have a Plan B outside the city.",
+      "social": [
+        "https://linkedin.com/in/udhay"
+      ]
+    },
+    {
+      "name": "Sandeep & Supriya",
+      "bio": "Sandeep runs a Sales Enablement SaaS startup. Supriya after a corporate career in Finance, is running her own food biz now.",
+      "photo": "/images/members/sandeep-and-supriya.jpg"
+    },
+    {
+      "name": "Shubh & Ranjini",
+      "bio": "Shubh is a techie, works for RJT. Ranjini is a teacher at COMMITS (by day) and a writer (by night.)",
+      "photo": "/images/members/shubh-and-ranjini.jpg"
+    },
+    {
+      "name": "Akash & Toshal",
+      "bio": "Akash runs his startup Instamojo. Toshal is a software professional.",
+      "photo": "/images/members/akash-gehani.jpg"
+    },
+    {
+      "name": "Shashi & Shobha",
+      "bio": "Sashi works as a Salesforce consultant for Digile. Shobha is a lawyer by education and an artist by choice.",
+      "photo": "/images/members/shashi-and-shobha.jpg"
+    },
+    {
+      "name": "Shameek & Gitanjali",
+      "bio": "Shameek and Gitanjali run the venture Farmizen. Gitanjali also runs an urban gardening business - GreenMyLife.",
+      "photo": "/images/members/shameek-and-gitanjali.jpg"
+    },
+    {
+      "name": "Ankur & Kavitha",
+      "bio": "Ankur and Kavitha are faculty at IIM Ahmedabad in Public Policy and Computer Science respectively.",
+      "photo": "/images/members/ankur-and-kavitha.jpg"
+    },
+    {
+      "name": "Sree & Prameela",
+      "bio": "Sree is a Practice Director, helping customers define their SAP and cloud transformation journey. Prameela is a UX designer at TCS in New Jersey, shaping how people experience digital products.",
+      "photo": "/images/members/sree-and-prameela.jpg",
+      "family": "Sree and Prameela are married with one son, Sumant (23). Sree is a movie buff; Prameela enjoys gardening and word/board games. Sumant practically lives online.",
+      "whyTVC": [
+        "Wanted to be away from the crowded city life and live close to the nature during retirement years.",
+        "I loved the idea of doing my part to give back to the earth, and being part of a community gives me the chance to do it alongside people who actually walk the talk."
+      ],
+      "social": [
+        "https://linkedin.com/in/pbsreedhar",
+        "https://linkedin.com/in/prameelajeppu"
+      ]
+    },
+    {
+      "name": "Arun & Uthara",
+      "bio": "Arun heads the strategy division in Grameen Koota (MFI.) Uthara is discovering social change through 2 NGOs - Buzz Women and Avantika Foundation.",
+      "photo": "/images/members/arun-and-uthara.jpg"
+    },
+    {
+      "name": "Suneetha Krishnaveni",
+      "bio": "Suneetha is making a living in Oslo, while dreaming of getting back to our roots. Iyappan and Krishnaveni are Suneetha’s parents.",
+      "photo": "/images/members/suneetha-krishnaveni.jpg"
+    },
+    {
+      "name": "Om & Pavithra",
+      "bio": "Om works at the intersection of technology, language, culture, and knowledge preservation through Servants of Knowledge, Sanchaya, and Sanchi Foundation. Pavithra is Head of Security Research at Indusface, a cybersecurity startup, while lending immense support to all of Om's adventures along with the little one.",
+      "photo": "/images/members/om-and-pavithra.jpg",
+      "family": "Om, Pavithra, and their 10-year-old Omisha are the three musketeers. Omisha keeps them on their toes with her endless curiosity and love for art, books, adventure, nature, music, gymnastics, and Bharatanatyam.",
+      "whyTVC": "We wanted to be part of a community where living, learning, sharing, and building something meaningful together are part of everyday life.",
+      "social": [
+        "https://www.linkedin.com/in/omshivaprakash",
+        "https://www.linkedin.com/in/pavithrah"
+      ]
+    },
+    {
+      "name": "Renuka & Rajesh",
+      "bio": "Renuka has interests in permaculture, with vast amount of knowledge on trees and plants. Rajesh works for Travelopia.",
+      "photo": "/images/members/rajesh-and-renuka.jpg"
+    },
+    {
+      "name": "Ram & Krishna",
+      "bio": "Ram worked in Philips Software Centre/T P Vision, and right now is exploring other interests in life, including options for a sustainable living. Krishna is with Azim Premji Foundation. She has many other interests as well, and also hosts the podcast New Indian Woman.",
+      "photo": "/images/members/ram-and-krishna.jpg",
+      "family": "Ram and Krishna have two children: Nithya, currently in the Civil Service (IRS), and Varun, pursuing his final year of the BS-MS course at IISER TVM with Physics as major and Bio as minor.",
+      "whyTVC": "A fascination towards mindful and sustainable living, being part of a community with like minded individuals exploring together how to live with nature, and trying to grow/produce something rather than just being a consumer are some of the things that drew us towards TVC."
+    },
+    {
+      "name": "Rajavel & Vidhya",
+      "bio": "Vidhya is an early childhood educator, now focussing on yoga and physical wellness. She is a dancer and a gardener among many other things. Rajavel is a UX design academician and practitioner who likes to insist UX is not just digital. He also likes to weave his average endurance-running hobby into any conversation.",
+      "photo": "/images/members/rajavel-and-vidhya.jpg",
+      "family": "Vidhya and Rajavel are married with one son, Harieshwar (24), a counselling psychologist, and their adopted pet Jarvis (9), who wags her tail more gently toward humans than toward her own species.",
+      "whyTVC": "We wanted to be in and part of a journey that will help us to be close to the soil and learn to be by ourselves."
+    },
+    {
+      "name": "Thejesh & Anjana",
+      "bio": "Thejesh is a technologist from Bangalore. Anjana is a writer and editor from Thrissur. She heads communications at CSEI @Atree.",
+      "photo": "/images/members/thejesh-and-anjana.jpg"
+    },
+    {
+      "name": "Pradeep & Ramya",
+      "bio": "Pradeep is a chip designer by profession, also a public policy enthusiast. Ramya is a Doctor.",
+      "photo": "/images/members/k-b-pradeep.jpg"
+    },
+    {
+      "name": "Nirmal & Shalini",
+      "bio": "Nirmal is now retired from being a System Architect doing R&D for an Aerospace company. Shalini continues to work for a not for profit foundation supporting human rights organizations globally. They now live in Santa Fe, New Mexico (in the US), where Nirmal volunteers with several organizations focused on education. He is also passionate about ways to passively cool homes, extract water from the atmosphere, and create an innovation commons. Shalini is building her network of people working on social justice, and plans to create a Doughnut Economics Action Lab in Santa Fe.",
+      "photo": "/images/members/nirmal-and-shalini.jpg",
+      "family": "Shalini and Nirmal enjoy the numerous music concerts, art and culture offerings of Santa Fe, while also attending talks organized by the Santa Fe Institute — one of the world's leading research centers for complex systems science. Both also enjoy hiking and visiting national parks. They love visits with their grandchildren (two boys, ages 5 and 3) and Shalini's niece's boys (ages 8 and 3).",
+      "whyTVC": "We have always been interested in intentional communities. Having the opportunity to be part of one is exciting."
+    },
+    {
+      "name": "Sameer & Shubha",
+      "bio": "Shubha is a water sustainability expert and advisor to Biome. Sameer is an Ecosystem Fellow trying to bring focus to more urgent climate action. Both have moved to their farm in Coorg and are learning to live off the land to the extent possible.",
+      "photo": "/images/members/sameer-and-shubha.jpg",
+      "family": "Akshat is working in semiconductors and plays Ultimate Frisbee. Alankrita is finishing her B.Sc. Bio (Hons) programme.",
+      "whyTVC": "It was important to find a tribe that believes in a different, more sustainable way of life. The TVC community is exactly that!"
+    },
+    {
+      "name": "Ashirwad & Harshada",
+      "bio": "After hanging up his boots in the IT industry, Ashirwad conducts drum circles combined with intense meditations, and continues to be a student of tabla and guitar. He is exploring endeavours in the education space, connecting those seeking knowledge with those who have already found it. Harshada is a non-practicing Ayurvedic doctor who loves learning the languages of humans and birds. She designs Ashirwad's drum-jamming sessions, which he then executes, and is an expert in diet planning, thriving even in highly constrained cooking environments.",
+      "photo": "/images/members/ashirwad-and-harshadha.jpg",
+      "family": "Ashirwad and Harshada are married with two sons, Chirantan and Arnav. Chirantan (25) is pursuing a Master's in AI of Autonomous Systems in Ingolstadt, Germany, and Arnav (22), an electrical engineer from Monash University, designs earthing systems at ZSE in Melbourne, Australia. Ashirwad is a musician and Harshada an enthusiastic linguist and risk-taking cook; they both love birding and exploring places at a slow pace.",
+      "whyTVC": "We are at TVC to be in the fresh air, to be with the birds, and to work with the soil.",
+      "social": [
+        "https://www.linkedin.com/in/ashirwada/"
+      ]
+    },
+    {
+      "name": "Sameet & Soumya",
+      "bio": "Sameet is a senior consultant at NCR Atleos, working in the ATM and payments domain.",
+      "photo": "/images/members/sameet-and-soumya.jpg",
+      "family": "Sameet and Soumya are married with two teenagers - Savitri and Pramith.",
+      "whyTVC": "Like nature, like the community’s goals and the idea of building something that will do good and outlast me."
+    },
+    {
+      "name": "Shilpa & Aditya",
+      "bio": "Shilpa is a development finance professional with nearly 20 years across institutions like the World Bank and the Reserve Bank Innovation Hub, and a published children's book author. Aditya has nearly 20 years in B2C e-commerce, across Myntra, Amazon, and Cleartrip.",
+      "photo": "/images/members/shilpa-and-aditya.jpg"
+    },
+    {
+      "name": "Vijay & Sunita",
+      "bio": "Vijay is an Electrical Engineer and designs energy efficient solutions for industrial and residential use. Sunita is an artist with many creative learnings.",
+      "photo": "/images/members/vijay-and-sunita.jpg"
+    }
+  ],
+  "hidden": [
+    "Vidya Atherya",
+    "Lakshmi Ratnaparke",
+    "Roopa PN",
+    "Nishant Gupta",
+    "Tarang Puranik",
+    "Anand & Devi",
+    "Aunindo & Manoshi",
+    "Amit Gupta",
+    "Rishi & Renjana",
+    "Vasu Mishra",
+    "Vishnu Kumar Agrawal",
+    "Pradeep Kumar Dileep",
+    "Kaushik Raghunath"
+  ]
 }
