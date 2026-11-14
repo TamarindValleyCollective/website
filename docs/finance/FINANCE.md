@@ -736,7 +736,7 @@ Running it again adds nothing. Checked against the real sheet read-only (parse o
 
 **Daily sync (Netlify scheduled function, 07:00 IST).** `netlify/functions/finance-requests-sheet-sync.mts` runs the same code as the script
 (`scripts/lib/finance-requests-sheet-sync.mjs`, tested with invented rows) every morning, so rows people add to the sheet after the first load keep arriving
-(this supersedes "nothing is read from the sheet at run time": the sheet is still being filled in). **Insert-only:** a row already loaded is skipped (matched by date and amount, counted, since names and purposes are edited after loading; and only rows without a reference dated within 7 days of the latest loaded one are considered, because older sheet rows differ from the database in date or amount in about 44 cases, so a wider match would load duplicates; a late entry dated earlier than that is missed); a row
+(this supersedes "nothing is read from the sheet at run time": the sheet is still being filled in). **Insert-only:** a row already loaded is skipped; a row
 *edited* after it was loaded is not updated, and a row that was pending and later completes is picked up then. Needs `FIN_REQUESTS_SHEET_ID` in Netlify (without
 it the function logs and does nothing) and the sheet shared with the Drive service account. A run that adds rows writes one `finance.requests_sheet_synced`
 audit row (a count); a failed run writes `finance.requests_sheet_sync_failed` (no sheet content) and a 500 in the function log. **Not verified:** a real run

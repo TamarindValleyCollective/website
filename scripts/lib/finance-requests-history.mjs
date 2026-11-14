@@ -118,14 +118,7 @@ export function parseCircleTab(rows, { ownLast4 }) {
  */
 export function planHistory(records, { existing, partyOf, entityId }) {
   const seenRef = new Set(existing.filter((e) => e.upiRef).map((e) => e.upiRef));
-  // A row without a reference is matched to what is already loaded by date and amount alone, counting how many of each are there:
-  // the party link, the name and the purpose are edited after loading (and a link replaces the typed name), so they cannot be compared.
-  const loadedByDateAmount = new Map();
-  for (const e of existing.filter((e) => !e.upiRef)) {
-    const k = `${e.paidOn}|${e.amountPaise}`;
-    loadedByDateAmount.set(k, (loadedByDateAmount.get(k) ?? 0) + 1);
-  }
-  const seenKey = new Set(); // identical rows within the sheet load once
+  const seenKey = new Set(existing.filter((e) => !e.upiRef).map((e) => [e.paidOn, e.amountPaise, norm(e.label), norm(e.purpose)].join('|')));
   const insert = [];
   let duplicates = 0;
   let noName = 0;
@@ -148,12 +141,6 @@ export function planHistory(records, { existing, partyOf, entityId }) {
         continue;
       }
       seenKey.add(key);
-      const da = `${r.date}|${r.amountPaise}`;
-      if ((loadedByDateAmount.get(da) ?? 0) > 0) {
-        loadedByDateAmount.set(da, loadedByDateAmount.get(da) - 1);
-        duplicates += 1;
-        continue;
-      }
     }
     insert.push({
       entity_id: entityId, kind: r.kind, status: 'paid', source: 'history', requester_id: null,
