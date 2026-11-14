@@ -12,6 +12,7 @@ price:
 whatsapp:
   number: "918548065772"
   contactName: "Linger"
+razorpayReferenceId: "farmer-workshop-2027-01-23"
 ---
 
 **Why You Can Never Become a Farmer — without knowing economics, behavioural science and spirituality.**
@@ -77,13 +78,3 @@ The workshop brings to the forefront some of the blind spots that come from lack
 - Stay: shared tent accommodation on the night of 23 January
 - All meals: breakfast, lunch, dinner, then breakfast and lunch on Day 2, plus juice and tea/coffee breaks
 - All workshop sessions and activities, including the sunset hike, bonfire, bird watching and farm tour
-
-<div class="cta card" id="cta">
-
-## Register
-
-₹6,000 per participant. Message Linger on WhatsApp with your name and the number of participants, and they'll confirm your spot and share arrival details.
-
-<a class="button" href="https://wa.me/918548065772?text=Hi%2C%20I'd%20like%20to%20register%20for%20%27Why%20You%20Can%20Never%20Become%20a%20Farmer%27%20on%2023-24%20January%202027.">Register on WhatsApp →</a>
-
-</div>
