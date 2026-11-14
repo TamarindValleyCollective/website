@@ -144,6 +144,7 @@ flowchart TD
         APIFN16["Netlify Function: /api/usage-admin<br/>Deployed with the usage dashboard"]
         APIFN21["Netlify Function: /api/finance-admin<br/>Deployed with the finance module (skeleton)"]
         APIFN17["Netlify Function: usage-alerts<br/>Scheduled (cron, hourly), no HTTP path"]
+        APIFN_FINSYNC["Netlify Function: finance-requests-sheet-sync<br/>Scheduled (cron, daily 07:00 IST), no HTTP path —<br/>adds new rows of the Fund Transfer Request sheet<br/>to payment requests; insert-only, needs FIN_REQUESTS_SHEET_ID"]
         APIFN18["Netlify Function: whatsapp-event-reminders<br/>Scheduled (cron, daily 09:00 IST), no HTTP path —<br/>built, dormant until template approved"]
         APIFN_PLAN["Netlify Function: whatsapp-stays-daily-plan<br/>Scheduled (cron, daily 06:30 IST), no HTTP path —<br/>built, dormant until template approved"]
         BLOBS["Netlify Blobs<br/>'event-interest' store — one JSON record per<br/>past event id, {count, emails[]}, optimistic-<br/>concurrency writes. Reset via netlify blobs:delete<br/>event-interest &lt;id&gt;.<br/>'search-ai-rate-limit' store — per-IP window +<br/>daily Anthropic-fallback budget records.<br/>'chat-rate-limit' store — per-IP window +<br/>global daily message cap for /api/chat"]
@@ -311,6 +312,8 @@ flowchart TD
     USAGEDASH -.->|"Sign in with Google"| GIDTOKEN
     APIFN17 -.->|"read usage data, remember<br/>alerts already sent"| SUPABASE
     APIFN17 -.->|"send alert digest"| RESEND
+    APIFN_FINSYNC -.->|"read transfer-request sheet"| GSHEET
+    APIFN_FINSYNC -.->|"insert new requests / logs"| SUPABASE
     APIFN18 -.->|"bookings for tomorrow,<br/>claim reminder"| SUPABASE
     APIFN18 -.->|"send tvc_event_reminder<br/>template"| WAMETA
     APIFN_PLAN -.->|"today's and tomorrow's stays"| SUPABASE
