@@ -22,8 +22,25 @@ The workshop brings to the forefront some of the blind spots that come from lack
 
 ## Hosts
 
-- **[Ramesh Agarwal](https://www.linkedin.com/in/notagarwal/)**
-- **[Venky Ramachandran](https://www.linkedin.com/in/venkinesis/)**
+<div class="hosts">
+
+<div class="host">
+
+![Ramesh Agarwal, smiling, in a dark blazer and glasses](/images/events/2027-01-23-why-you-can-never-become-a-farmer/ramesh-agarwal.png)
+
+**Ramesh Agarwal**<br>[LinkedIn →](https://www.linkedin.com/in/notagarwal/)
+
+</div>
+
+<div class="host">
+
+![Venky Ramachandran, speaking into a microphone at a talk](/images/events/2027-01-23-why-you-can-never-become-a-farmer/venky-ramachandran.png)
+
+**Venky Ramachandran**<br>[LinkedIn →](https://www.linkedin.com/in/venkinesis/)
+
+</div>
+
+</div>
 
 ## Schedule
 

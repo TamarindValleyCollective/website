@@ -910,6 +910,34 @@ const brand =
     margin: 16px auto 32px;
   }
 
+  /* Host cards: a photo, name and profile link side by side. */
+  .prose :global(.hosts) {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 20px;
+    margin: 16px 0 32px;
+  }
+
+  .prose :global(.host) {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .prose :global(.host img) {
+    width: 96px;
+    height: 96px;
+    margin: 0;
+    border-radius: 50%;
+    object-fit: cover;
+    flex: none;
+    border: 1px solid var(--tvc-line);
+  }
+
+  .prose :global(.host p) {
+    margin: 0;
+  }
+
   /* For a text-heavy poster that has to stay readable at page width. */
   .prose :global(.poster--large) {
     max-width: 560px;
