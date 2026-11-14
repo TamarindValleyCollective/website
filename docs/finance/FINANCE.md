@@ -734,6 +734,14 @@ and is skipped; a row naming no bank is a delegated payment out; references are 
 party by the account number's fingerprint, then by an exact name that is unique; otherwise the typed name is kept. Account numbers are fingerprinted, never stored or printed here.
 Running it again adds nothing. Checked against the real sheet read-only (parse only, no write): the columns and formats are as the parser expects.
 
+**Daily sync (Netlify scheduled function, 07:00 IST).** `netlify/functions/finance-requests-sheet-sync.mts` runs the same code as the script
+(`scripts/lib/finance-requests-sheet-sync.mjs`, tested with invented rows) every morning, so rows people add to the sheet after the first load keep arriving
+(this supersedes "nothing is read from the sheet at run time": the sheet is still being filled in). **Insert-only:** a row already loaded is skipped; a row
+*edited* after it was loaded is not updated, and a row that was pending and later completes is picked up then. Needs `FIN_REQUESTS_SHEET_ID` in Netlify (without
+it the function logs and does nothing) and the sheet shared with the Drive service account. A run that adds rows writes one `finance.requests_sheet_synced`
+audit row (a count); a failed run writes `finance.requests_sheet_sync_failed` (no sheet content) and a 500 in the function log. **Not verified:** a real run
+(the variable is not set yet, and the function deploys with the next merge to main).
+
 **Not built yet (next):** the bill scanner (edge detection, crop, multi-page) and the vision reading of vendor, date, amount and UPI reference off a bill or screenshot (the files are
 attached as plain photos today, and the reference is typed); approver-queue polish; per-delegate spend limits (who paid is recorded: `requester_id` and `paid_via`); a vendor bulk file;
 payment links from the ledger's Paypro/bank lines to a request. **Not verified:** the pages in a browser on a real phone, the upload to R2, the approval email, and the loader's `--apply`.
