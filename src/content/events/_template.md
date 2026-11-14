@@ -37,6 +37,12 @@ draft: true
 # event. Don't also restate any of this in a heading below (e.g.
 # "## What's included — INR 1,900") - the sidebar is the one place price
 # lives now, so the body only needs "## What's included" plus a bullet list.
+# Overnight events only (leave this out for day events): list the accommodation
+# types guests may get so the page shows "Where you'll stay" and "Facilities"
+# (toilets) above the booking form, by slug from src/content/accommodation-types/
+# (malabar-hut, banyan-hut, bamboo-hut, portable-tent). Standard for every
+# event with an overnight stay.
+# stayTypes: ["portable-tent"]
 # price:
 #   - amount: "INR 1,900"
 #     label: "per person"

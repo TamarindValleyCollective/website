@@ -323,6 +323,24 @@ const brand =
               </p>
             </div>
           )}
+          {/* Opt-in stay details for non-3bs1h events (see content.config.ts's
+              stayTypes) - same galleries as the 3bs1h block above. */}
+          {isUpcoming && event.data.series !== '3bs1h' && event.data.stayTypes?.length && (
+            <div>
+              <h2>{c.accommodationHeading}</h2>
+              <p>{c.accommodationHint}</p>
+              <AccommodationGallery
+                items={accommodationTypes
+                  .filter((accType) => event.data.stayTypes!.includes(accType.id))
+                  .map((accType) => accType.data)}
+                lang={lang}
+              />
+
+              <h2>{c.facilitiesHeading}</h2>
+              <p>{c.facilitiesHint}</p>
+              <AccommodationGallery items={facilities.map((facility) => facility.data)} lang={lang} />
+            </div>
+          )}
           {/* The reusable direct-payment flow (see content.config.ts's
               razorpayReferenceId, EventBookingForm.astro,
               netlify/functions/event-booking.mts) - rendered here rather
@@ -908,6 +926,124 @@ const brand =
     width: 100%;
     max-width: 360px;
     margin: 16px auto 32px;
+  }
+
+  /* Day schedule as a timeline: each entry gets an icon badge on the rail.
+     Sessions are highlighted cards with a green badge, meals and breaks
+     stay quiet, outdoor moments take the orange mark. */
+  .prose :global(ol.timeline) {
+    list-style: none;
+    margin: 16px 0 32px;
+    padding: 0;
+    position: relative;
+  }
+
+  .prose :global(ol.timeline)::before {
+    content: '';
+    position: absolute;
+    left: 89px;
+    top: 16px;
+    bottom: 16px;
+    width: 2px;
+    background: var(--tvc-line);
+  }
+
+  .prose :global(.timeline li) {
+    display: grid;
+    grid-template-columns: 68px 1fr;
+    column-gap: 48px;
+    margin: 0;
+    padding: 0 0 14px;
+    position: relative;
+  }
+
+  .prose :global(.timeline .icon) {
+    position: absolute;
+    left: 73px;
+    top: 0;
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    border-radius: 50%;
+    background: var(--tvc-white);
+    border: 2px solid var(--tvc-line-strong);
+    color: var(--tvc-ink-soft);
+  }
+
+  .prose :global(.timeline .icon svg) {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+  }
+
+  .prose :global(.timeline li.session .icon) {
+    background: var(--tvc-green);
+    border-color: var(--tvc-green);
+    color: var(--tvc-white);
+  }
+
+  .prose :global(.timeline li.outdoor .icon) {
+    background: var(--tvc-orange);
+    border-color: var(--tvc-orange);
+    color: var(--tvc-white);
+  }
+
+  .prose :global(.timeline .when) {
+    padding-top: 7px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--tvc-ink-soft);
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .prose :global(.timeline .body) {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 5px 0;
+    min-width: 0;
+  }
+
+  .prose :global(.timeline .what) {
+    font-weight: 600;
+    color: var(--tvc-ink);
+  }
+
+  .prose :global(.timeline .detail) {
+    font-size: 0.92rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .prose :global(.timeline li.session .body) {
+    padding: 10px 16px;
+    border-radius: var(--radius-sm);
+    background: var(--tvc-green-tint);
+  }
+
+  .prose :global(.timeline li.session .what) {
+    font-size: 1.1rem;
+    color: var(--tvc-green-dark);
+  }
+
+  .prose :global(.timeline li.session .detail) {
+    color: var(--tvc-ink);
+  }
+
+  .prose :global(.timeline li.meal .what),
+  .prose :global(.timeline li.break .what),
+  .prose :global(.timeline li.rest .what) {
+    font-weight: 500;
+  }
+
+  @media (max-width: 480px) {
+    .prose :global(ol.timeline)::before { left: 67px; }
+    .prose :global(.timeline li) { grid-template-columns: 46px 1fr; column-gap: 40px; }
+    .prose :global(.timeline .icon) { left: 52px; width: 32px; height: 32px; }
+    .prose :global(.timeline .when) { font-size: 0.75rem; white-space: normal; }
   }
 
   /* Host cards: a photo, name and profile link side by side. */
