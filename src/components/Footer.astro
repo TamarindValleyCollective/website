@@ -16,6 +16,7 @@ const socialLinks = [
   { label: 'Twitter', href: 'https://twitter.com/TVCFarm', icon: 'twitter' },
   { label: 'Instagram', href: 'https://www.instagram.com/tamarindvalleycollective/', icon: 'instagram' },
   { label: 'LinkedIn', href: 'https://www.linkedin.com/company/tvcfarm/', icon: 'linkedin' },
+  { label: 'YouTube', href: 'https://www.youtube.com/@tvcfarm', icon: 'youtube' },
 ] as const;
 
 const year = new Date().getFullYear();
@@ -53,6 +54,12 @@ const year = new Date().getFullYear();
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" aria-hidden="true">
               <rect x="2.5" y="2.5" width="19" height="19" rx="5" stroke="currentColor" stroke-width="1.6" />
               <path d="M7.2 10.2V17M7.2 7.4v.05M11 17v-4.3c0-1.5 1-2.4 2.3-2.4 1.3 0 2.1.9 2.1 2.4V17M11 10.2V17" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          )}
+          {link.icon === 'youtube' && (
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" aria-hidden="true">
+              <rect x="2.5" y="2.5" width="19" height="19" rx="5" stroke="currentColor" stroke-width="1.6" />
+              <path d="M10 8.9v6.2l5.2-3.1L10 8.9Z" fill="currentColor" />
             </svg>
           )}
         </a>
