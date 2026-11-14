@@ -65,7 +65,13 @@ export async function syncRequestsSheet({ sheetId, apply, transferTab = 'Fund Tr
     return null;
   };
 
-  const plan = planHistory([...transfer.records, ...circle.records], {
+  // Rows without a reference cannot be told apart from rows edited since loading (a corrected date or amount looks new), so only rows
+  // dated within a week of the latest loaded one are considered. Rows with a reference are matched exactly and need no cutoff.
+  const latest = existing.map((e) => e.paid_on).sort().at(-1);
+  const cutoff = latest ? new Date(new Date(`${latest}T00:00:00Z`).getTime() - 7 * 86_400_000).toISOString().slice(0, 10) : '';
+  const considered = [...transfer.records, ...circle.records].filter((r) => r.upiRef || r.date >= cutoff);
+
+  const plan = planHistory(considered, {
     entityId: entities[0].id,
     partyOf,
     existing: existing.map((e) => ({ upiRef: e.upi_ref, paidOn: e.paid_on, amountPaise: Number(e.amount_paise), label: e.party_id ? nameOf.get(e.party_id) ?? '' : e.recipient_text ?? '', purpose: e.purpose })),
