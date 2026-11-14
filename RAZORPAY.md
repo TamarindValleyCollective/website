@@ -327,6 +327,7 @@ kept, leaving TVC at −₹0.20.
 | Event | Amount | Base Payment Link | Reference ID |
 |---|---|---|---|
 | Foraging Day (10 Oct 2026) | ₹2,250/person | https://rzp.io/rzp/RjF4hjJ1 | `foraging-day-2026-10-10` |
+| Why You Can Never Become a Farmer (23–24 Jan 2027) | ₹6,000/person | https://rzp.io/rzp/O68TEbz0 | `farmer-workshop-2027-01-23` |
 
 Any new paid event just needs its own base Payment Link + `razorpayReferenceId` (see the
 opt-in steps above) — nothing here is Foraging-Day-specific.
