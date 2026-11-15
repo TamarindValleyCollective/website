@@ -2368,7 +2368,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     if (!data || !sel.length) {
       bar.hidden = true;
       bar.replaceChildren();
-      document.querySelector<HTMLElement>('.ledger')?.style.setProperty('--abar-h', '0px');
+      document.documentElement.style.setProperty('--abar-h', '0px');
       $('selcount').textContent = '';
       return;
     }
@@ -2478,7 +2478,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     );
     bar.hidden = false;
     // Keep the last rows and the hint under the table clear of the docked bar.
-    document.querySelector<HTMLElement>('.ledger')?.style.setProperty('--abar-h', `${bar.offsetHeight}px`);
+    document.documentElement.style.setProperty('--abar-h', `${bar.offsetHeight}px`); // on the root: the toast sits outside .ledger
   }
   $('accept-all').addEventListener('click', () => {
     const todo = lines.filter((l) => editable(l) && hasGhost(l) && isStrong(l));
@@ -3894,11 +3894,11 @@ import SignInGate from '../../../components/SignInGate.astro';
     padding-bottom: calc(32px + var(--abar-h, 0px));
   }
 
-  @media (max-width: 640px) {
-    .abar .abar-step {
-      grid-template-columns: 1fr;
-    }
+  /* The toast (and its Undo) is fixed to the bottom of the screen, where the bar is: lift it above the bar so it never covers Post. */
+  #staff-main .toast {
+    bottom: calc(22px + var(--abar-h, 0px));
   }
+
 
   .abar[hidden] {
     display: none;
@@ -3919,6 +3919,63 @@ import SignInGate from '../../../components/SignInGate.astro';
     font: inherit;
     font-size: var(--text-sm);
     padding: 4px 8px;
+  }
+
+  /* A phone: the bar is compact, so most of the screen stays for the lines. Category and party sit side by side, the helper notes go
+     (the Post step keeps its reason), and the step labels shrink to a line each. */
+  @media (max-width: 640px) {
+    .abar {
+      padding: 6px 12px 8px;
+    }
+
+    #staff-main .toast {
+      bottom: calc(var(--tabbar-h, 64px) + env(safe-area-inset-bottom) + var(--abar-h, 0px) + 14px) !important;
+    }
+
+    .abar .abar-top {
+      padding-bottom: 2px;
+    }
+
+    .abar .abar-step {
+      grid-template-columns: 1fr;
+      gap: 2px;
+      padding-block: 4px;
+    }
+
+    .abar .abar-body {
+      gap: 6px;
+    }
+
+    .abar .abar-body .combo,
+    .abar .abar-body select {
+      flex: 1 1 calc(50% - 6px);
+      width: auto;
+      max-width: none;
+      min-width: 0;
+    }
+
+    .abar .abar-body input[type='text'] {
+      flex: 1 1 100%;
+      max-width: none;
+    }
+
+    .abar .abar-step:not(:last-child) .abar-note {
+      display: none;
+    }
+
+    .abar .abar-step:last-child .abar-body {
+      flex-wrap: nowrap;
+    }
+
+    .abar .abar-step:last-child .abar-note {
+      flex: 1 1 0;
+      min-width: 0;
+    }
+
+    .abar .abar-post {
+      flex: 0 0 auto;
+      min-height: 40px;
+    }
   }
 
   /* A phone: each line is a card (date and amount, the narration, then the three cells with their labels, then its status). */
