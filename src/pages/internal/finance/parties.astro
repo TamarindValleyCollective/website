@@ -726,7 +726,12 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
     if (bankNames(x).length) lines.push(`Name at the bank: ${bankNames(x).join(', ')}`);
     const files = evidenceCount(x);
     lines.push(files ? `${files} evidence ${files === 1 ? 'file' : 'files'}` : 'No evidence attached');
-    lines.push(x.postings ? `${x.postings} ${x.postings === 1 ? 'line' : 'lines'} in the books${x.paidPaise > 0 ? ` · ${rupees(x.paidPaise)} paid` : ''}${x.lastPaid ? ` · last paid ${niceIso(x.lastPaid)}` : ''}` : 'Nothing in the books yet');
+    // Money both ways. `lines`, `receivedPaise` and `lastReceived` arrive with the Received column; until then only the payments-out figures exist,
+    // so each is read defensively and the sheet is right with or without them.
+    const books = x as Party & { lines?: number; receivedPaise?: number; lastReceived?: string | null };
+    const count = books.lines ?? x.postings;
+    const last = [x.lastPaid, books.lastReceived ?? null].filter((d): d is string => Boolean(d)).sort().pop();
+    lines.push(count ? [`${count} ${count === 1 ? 'line' : 'lines'} in the books`, x.paidPaise > 0 ? `${rupees(x.paidPaise)} paid` : '', (books.receivedPaise ?? 0) > 0 ? `${rupees(books.receivedPaise!)} received` : '', last ? `last ${niceIso(last)}` : ''].filter(Boolean).join(' · ') : 'Nothing in the books yet');
     if (x.mergedCount) lines.push(`Already holds ${x.mergedCount} merged ${x.mergedCount === 1 ? 'party' : 'parties'}`);
     return lines;
   }
