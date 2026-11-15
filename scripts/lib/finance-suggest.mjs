@@ -37,6 +37,14 @@ const cleanRemark = (raw) => {
   return s.length < 3 || GENERIC_REMARK.test(s) || BANK_WORDS.test(s) || !/[a-z]{3}/i.test(s) ? null : s;
 };
 
+// The remark typed in the UPI app itself (the BHIM or Paytm report). Unlike a segment of the bank's narration, which can be a bank's
+// name or a branch code, this is the payer's own words, so "bank transfer for the tent" is kept: only an empty, generic or
+// letterless remark is dropped.
+const cleanUpiRemark = (raw) => {
+  const s = String(raw ?? '').replace(/\s+/g, ' ').trim();
+  return s.length < 2 || GENERIC_REMARK.test(s) || !/[a-z]{2}/i.test(s) ? null : s;
+};
+
 /**
  * Read a bank narration. Returns { mode, counterparty, remark } where mode is one of upi, neft, imps, card, charges,
  * charges_tax, interest, cash_out, cash_in, other. The shapes are the real statement's: the name is in a fixed part.
@@ -238,11 +246,12 @@ const fill = (template, upi, parsed) =>
 
 /**
  * The suggestion for one bank line.
- * args: { line, upi, rules, parties, categories, history, requesterPartyIds }
+ * args: { line, upi, rules, parties, categories, history, requesterPartyIds, purpose }
+ * purpose: what a matched payment request or spend log (an Approval) says the payment was for, if one is matched to this line.
  * Returns { categoryId, partyId, nature, newParty: {name, kind} | null, confidence: 'high'|'medium'|'low'|'none', reasons[],
  *           source: 'rule'|'history'|'bank_entry'|'narration'|'none', ruleId, needsReview, reimbursement, mode, amountPaise, period }
  */
-export function suggest({ line, upi, rules, parties, categories, history, requesterPartyIds = /** @type {string[]} */ ([]) }) {
+export function suggest({ line, upi, rules, parties, categories, history, requesterPartyIds = /** @type {string[]} */ ([]), purpose = /** @type {string | null} */ (null) }) {
   const active = categories.filter((c) => c.active);
   const catById = new Map(active.map((c) => [c.id, c]));
   const partyById = new Map(parties.map((p) => [p.id, p]));
@@ -264,7 +273,11 @@ export function suggest({ line, upi, rules, parties, categories, history, reques
     }
   }
   if (out.partyId) reasons.push(how === 'exact' ? `The name matches ${partyById.get(out.partyId)?.name} in the register` : how === 'extended' ? `The bank printed more than the name; it starts with ${partyById.get(out.partyId)?.name}` : `The bank shortened the name; it looks like ${partyById.get(out.partyId)?.name}`);
-  const remark = cleanRemark(upi?.remarks) ?? parsed.remark;
+  // What the wording is taken from, best first: what a matched Approval (payment request or spend log) says, then the UPI app's own
+  // remark (the bank's narration carries only a shortened copy of it), then the bank's narration. A rule with its own wording
+  // template, below, still wins over all three.
+  const approved = cleanUpiRemark(purpose);
+  const remark = approved ?? cleanUpiRemark(upi?.remarks) ?? parsed.remark;
 
   // 1. A rule a director wrote.
   const hit = applyRules(rules, line, upi);
@@ -327,7 +340,7 @@ export function suggest({ line, upi, rules, parties, categories, history, reques
     out.confidence = 'low';
   }
   if (out.source === 'narration' && out.confidence === 'none') out.confidence = 'low';
-  if (remark && out.nature === remark && !reasons.some((r) => r.startsWith('The payer'))) reasons.push(`The payer wrote "${remark}"`);
+  if (remark && out.nature === remark && !reasons.some((r) => r.startsWith('The payer') || r.startsWith('The approved'))) reasons.push(approved ? `The approved request says "${approved}"` : `The payer wrote "${remark}"`);
 
   // A named stranger is offered as a new party; nothing is created until a person says so.
   const stranger = upi?.counterparty ? cleanName(upi.counterparty) : parsed.counterparty;

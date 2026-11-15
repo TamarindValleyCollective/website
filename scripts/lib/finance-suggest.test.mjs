@@ -161,6 +161,36 @@ test('the farm manager\'s own UPI remark is the wording, and a payment to the re
   assert.equal(s.reimbursement, true);
 });
 
+test('the UPI app\'s own remark is the wording even when it has a bank-like word; the bank narration\'s segment keeps its stricter filter', () => {
+  const none = { parties: [], categories: [], history: buildHistory([]), rules: [] };
+  // The payer's own words are kept whole, whatever they contain.
+  const kept = suggest({ line: line('UPI/P2A/123456789012/Test Traders/Okbank/x'), upi: { counterparty: 'Test Traders', remarks: 'Bank transfer for the tent' }, ...none });
+  assert.equal(kept.nature, 'Bank transfer for the tent');
+  // A generic or letterless UPI remark is not a wording; the bank narration's own remark segment is the fallback.
+  assert.equal(suggest({ line: line('UPI/P2A/123456789012/Test Traders/Okbank/Tent poles'), upi: { counterparty: 'Test Traders', remarks: 'NA' }, ...none }).nature, 'Tent poles');
+  assert.equal(suggest({ line: line('UPI/P2A/123456789012/Test Traders/Okbank/x'), upi: { counterparty: 'Test Traders', remarks: '1234' }, ...none }).nature, '');
+  // With no UPI record, a bank-name segment is still not taken as a wording.
+  assert.equal(suggest({ line: line('UPI/P2A/123456789012/Test Traders/Okbank/State Bank'), upi: null, ...none }).nature, '');
+});
+
+test('what a matched Approval says is the suggested wording, ahead of the UPI remark and the bank narration; a rule\'s own template still wins', () => {
+  const none = { parties: [], categories: [], history: buildHistory([]), rules: [] };
+  const l = line('UPI/P2A/123456789012/Test Traders/Okbank/Tent poles');
+  const upi = { counterparty: 'Test Traders', remarks: 'Poles' };
+  const withApproval = suggest({ line: l, upi, ...none, purpose: 'Tent poles for the November workshop' });
+  assert.equal(withApproval.nature, 'Tent poles for the November workshop');
+  assert.ok(withApproval.reasons.some((r) => r.startsWith('The approved request says')));
+  // No Approval matched, or an empty purpose: the UPI remark, as before.
+  assert.equal(suggest({ line: l, upi, ...none, purpose: null }).nature, 'Poles');
+  assert.equal(suggest({ line: l, upi, ...none, purpose: '  ' }).nature, 'Poles');
+  // With no UPI record at all, the Approval still gives the wording.
+  assert.equal(suggest({ line: line('NEFT/123456/123456789012/Test Traders'), upi: null, ...none, purpose: 'Fence repair' }).nature, 'Fence repair');
+  // A rule that has its own wording template keeps it.
+  const rules = [{ id: 'r1', priority: 1, active: true, matcher: { narrationContains: 'Test Traders' }, category_id: 'c1', party_id: null, nature_template: 'Monthly supplies', needs_review: false }];
+  const cats = [{ id: 'c1', name: 'Supplies', type: 'opex', active: true }];
+  assert.equal(suggest({ line: l, upi, parties: [], categories: cats, history: buildHistory([]), rules, purpose: 'Something else' }).nature, 'Monthly supplies');
+});
+
 test('nothing in a suggestion can be a name that is not in the narration, the register or the history', () => {
   const s = suggest({ line: line('Something unfamiliar'), upi: null, rules: [], parties: [], categories: [], history: buildHistory([]) });
   assert.equal(s.partyId, null);

@@ -142,7 +142,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   type Party = { id: string; name: string; kind: string; household_id?: string | null; former_since?: string | null };
   type Project = { id: string; name: string; kind: string; financial_year: number; status: string };
   type Lookups = { categories: Category[]; parties: Party[]; projects: Project[]; requesterPartyId: string | null; closedMonths: string[]; households: { id: string; label: string; people?: string[] }[] };
-  type Filter = 'unallocated' | 'review' | 'noparty' | 'all';
+  type Filter = 'unallocated' | 'review' | 'noparty' | 'noupi' | 'all';
   type Badge = { label: string; short: string; kind: string; logoUrl: string | null };
   type ListData = { canAllocate: boolean; lines: Line[]; lookups: Lookups; badges?: Record<string, Badge> };
   type Field = 'categoryId' | 'partyId' | 'nature';
@@ -167,7 +167,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   let accountCount = 0; // how many distinct bank accounts `all` spans (0 = not counted yet)
   let byId = new Map<string, Line>();
   let lines: Line[] = []; // the ones the chips, search and column conditions leave and that are showing (not inside a closed group), in order
-  let counts: Record<Filter, number> = { unallocated: 0, review: 0, noparty: 0, all: 0 };
+  let counts: Record<Filter, number> = { unallocated: 0, review: 0, noparty: 0, noupi: 0, all: 0 };
   let filterErrors: Record<string, string> = {};
   // The address can name the chip to open on (the Overview links to ?filter=review).
   const startFilter = new URLSearchParams(location.search).get('filter');
@@ -402,6 +402,8 @@ import SignInGate from '../../../components/SignInGate.astro';
     const c = data?.lookups.categories.find((x) => x.id === categoryId);
     return Boolean(c) && !['interest', 'transfer'].includes(c!.type) && !/bank charges/i.test(c!.name);
   };
+  // Paid out by UPI (the bank's narration says so), but no BHIM or Paytm record is linked to it. Money in is not expected to have one.
+  const paidByUpiWithoutRecord = (l: Line) => l.origin === 'upi_unknown' && l.direction === 'debit';
   const isReady = (l: Line) => {
     const d = draftOf(l.id);
     if (!(d.categoryId && d.nature.trim())) return false;
@@ -1234,11 +1236,12 @@ import SignInGate from '../../../components/SignInGate.astro';
         passesWords((l.hay ??= hayOf(l)), typed),
     );
     // The counts say how many lines there are in all, whatever is typed in a search, so "71 left" stays 71; "Showing X of N" says what the search leaves.
-    counts = { unallocated: 0, review: 0, noparty: 0, all: all.length };
+    counts = { unallocated: 0, review: 0, noparty: 0, noupi: 0, all: all.length };
     for (const l of all) {
       if (l.state !== 'allocated') counts.unallocated++;
       if (l.review) counts.review++;
       if (l.missingParty) counts.noparty++;
+      if (paidByUpiWithoutRecord(l)) counts.noupi++;
     }
     markFilled();
     const shown = base.filter((l) => passesChips(l, chips, now));
@@ -1453,6 +1456,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       queue(c.unallocated, 'left to allocate', 'unallocated'),
       queue(c.review, 'to review', 'review'),
       ...(c.noparty ? [queue(c.noparty, 'posted without a party', 'noparty')] : []),
+      ...(c.noupi ? [queue(c.noupi, c.noupi === 1 ? 'UPI payment with no UPI record' : 'UPI payments with no UPI record', 'noupi')] : []),
       ...[`Showing ${matched} of ${all.length}`, postedThisSitting ? `${postedThisSitting} posted this sitting` : '', crumbs.length ? `Searching: ${crumbs.join(', ')}` : '', ...errs].filter(Boolean).map((t) => document.createTextNode(t)),
     ];
     const focused = (document.activeElement as HTMLElement | null)?.closest?.('#progress') ? (document.activeElement as HTMLElement).dataset.opt : undefined;
@@ -1857,7 +1861,10 @@ import SignInGate from '../../../components/SignInGate.astro';
       return node;
     };
     const originNode = h('span', { class: 'badges', attrs: { 'aria-label': `${originText(l)}: ${(l.sources ?? []).map((k) => data?.badges?.[k]?.label ?? k).join(', ')}` } }, ...(l.sources?.length ? l.sources.map(badgeFor) : [document.createTextNode(originText(l))]));
-    r.originSlot.replaceChildren(originNode, ...(multiAccount() ? [h('span', { class: 'origin-account', text: l.account })] : []));
+    const noUpi = paidByUpiWithoutRecord(l);
+    const noUpiPill = noUpi ? pill('No UPI record', 'warn') : null;
+    if (noUpiPill) noUpiPill.title = 'The bank says this was paid by UPI, but no BHIM or Paytm record is linked to it, so there is no UPI remark to suggest from. Import the UPI statement on the UPI page to link it.';
+    r.originSlot.replaceChildren(originNode, ...(multiAccount() ? [h('span', { class: 'origin-account', text: l.account })] : []), ...(noUpiPill ? [noUpiPill] : []));
     r.originSlot.title = l.origin ? ORIGINS[l.origin as keyof typeof ORIGINS]?.hint ?? '' : '';
     const upiSays = [l.counterparty, l.remark ? `“${l.remark}”` : ''].filter(Boolean).join(' · ');
     const error = rowErrors.get(l.id);
@@ -1970,7 +1977,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     // On a phone a line at rest is two lines: the narration and amount, then date, category and party in one grey line.
     const catWords = can ? (d.categoryId ? nameOf(lk.categories, d.categoryId) : ghostOf(l, 'categoryId') ? nameOf(lk.categories, ghostOf(l, 'categoryId')) : '') : l.allocation ? nameOf(lk.categories, l.allocation.categoryId) : '';
     const partyWords = can ? (d.partyId ? nameOf(lk.parties, d.partyId) : '') : l.allocation?.partyId ? nameOf(lk.parties, l.allocation.partyId) : '';
-    r.meta.textContent = (can && (d.categoryId || d.partyId) ? 'Yours: ' : '') + ([catWords, partyWords].filter(Boolean).join(' · ') || 'Nothing chosen yet');
+    r.meta.textContent = (can && (d.categoryId || d.partyId) ? 'Yours: ' : '') + ([catWords, partyWords].filter(Boolean).join(' · ') || 'Nothing chosen yet') + (noUpi ? ' · No UPI record' : '');
   }
   const syncRow = (l: Line) => {
     const el = mounted.get(l.id);
@@ -3529,6 +3536,14 @@ import SignInGate from '../../../components/SignInGate.astro';
     width: 17px;
     height: 17px;
     object-fit: contain;
+  }
+
+  /* The Origin column is narrow: the "No UPI record" marker sits beside the bank badge on one line, so the row keeps its height. */
+  .ledger .gcell--origin .pill--warn {
+    margin-inline-start: 4px;
+    padding-inline: 8px;
+    font-size: var(--text-xs);
+    white-space: nowrap;
   }
 
   .ledger .origin-account {

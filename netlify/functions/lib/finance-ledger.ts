@@ -319,7 +319,9 @@ export async function ledgerAll(req: Request): Promise<Response> {
       const origin = originOf({ narration: l.narration, direction: l.direction as 'debit' | 'credit' }, upi?.app as 'bhim' | 'paytm' | undefined);
       const noteKey = noteKeyOf({ upiRef: upi?.upi_ref as string | undefined, upiRrn: l.upi_rrn ?? undefined, bankLineId: l.id }) as string;
       const summary = postedSummary(allocs);
-      const sg = posted ? null : suggestFor(l, upi, ctx, sc);
+      // What a matched Approval (a payment request or spend log) says the payment was for: it is the wording suggested for the line.
+      const purposeText = purposeOf({ upiRef: (upi?.upi_ref as string | undefined) ?? l.upi_rrn ?? undefined, upiLineId: upi?.id as string | undefined, bankLineId: l.id }) as string | null;
+      const sg = posted ? null : suggestFor(l, upi, ctx, sc, purposeText);
       const effective = summary
         ? { category: categoryById.get(summary.categoryId)?.name ?? '', party: summary.partyId ? partyName.get(summary.partyId) ?? '' : '', nature: summary.nature ?? '' }
         : { category: sg?.categoryId ? categoryById.get(sg.categoryId)?.name ?? '' : '', party: sg?.partyId ? partyName.get(sg.partyId) ?? '' : sg?.newParty?.name ?? '', nature: sg?.nature ?? '' };
@@ -340,7 +342,7 @@ export async function ledgerAll(req: Request): Promise<Response> {
         noteKey,
         note: notes.get(noteKey) ?? null,
         // What the payment was for, from a payment request or a logged spend: the default wording until a note is written.
-        purpose: purposeOf({ upiRef: (upi?.upi_ref as string | undefined) ?? l.upi_rrn ?? undefined, upiLineId: upi?.id as string | undefined, bankLineId: l.id }) as string | null,
+        purpose: purposeText,
         upiRef: (upi?.upi_ref as string | undefined) ?? l.upi_rrn ?? null,
         allocatedPaise: allocs.reduce((n, a) => n + a.amount_paise, 0),
         state,
@@ -389,8 +391,8 @@ async function suggestionContext(lines: LineRow[], byLine: Map<string, Json[]>, 
 }
 type SuggestionContext = Awaited<ReturnType<typeof suggestionContext>>;
 
-const suggestFor = (line: Json, upi: Json | null, ctx: Awaited<ReturnType<typeof lookups>>, sc: SuggestionContext): Json =>
-  suggest({ line, upi, rules: sc.rc.rules, parties: ctx.parties, categories: ctx.categories, history: sc.history, requesterPartyIds: sc.requesterIds }) as Json;
+const suggestFor = (line: Json, upi: Json | null, ctx: Awaited<ReturnType<typeof lookups>>, sc: SuggestionContext, purpose: string | null = null): Json =>
+  suggest({ line, upi, rules: sc.rc.rules, parties: ctx.parties, categories: ctx.categories, history: sc.history, requesterPartyIds: sc.requesterIds, purpose }) as Json;
 
 // The short form shown in the list: no reasons (the line's own sheet has those).
 const postedSummary = (allocs: Json[]) => {
@@ -438,8 +440,10 @@ export async function ledgerLine(req: Request, lineId: string): Promise<Response
     let proposal = null as Json | null;
     let suggestion = null as Json | null;
     let reasons: string[] = [];
+    const purposeOf = await loadPurposes();
+    const purposeText = purposeOf({ upiRef: (upi?.upi_ref as string | undefined) ?? line.upi_rrn ?? undefined, upiLineId: upi?.id as string | undefined, bankLineId: line.id as string }) as string | null;
     if (!posted && allocations.length === 0) {
-      suggestion = suggestFor(line, upi ?? null, ctx, sc);
+      suggestion = suggestFor(line, upi ?? null, ctx, sc, purposeText);
       if (suggestion.categoryId || suggestion.partyId || suggestion.nature) {
         proposal = { categoryId: suggestion.categoryId, partyId: suggestion.partyId, nature: suggestion.nature, amountPaise: line.amount_paise, period: suggestion.period, source: suggestion.source, ruleId: suggestion.ruleId };
       }
@@ -457,7 +461,7 @@ export async function ledgerLine(req: Request, lineId: string): Promise<Response
       upiRef: (upi?.upi_ref as string | undefined) ?? line.upi_rrn ?? null,
       noteKey: noteKeyOf({ upiRef: upi?.upi_ref as string | undefined, upiRrn: line.upi_rrn ?? undefined, bankLineId: line.id as string }),
       note: (await loadNotes()).get(noteKeyOf({ upiRef: upi?.upi_ref as string | undefined, upiRrn: line.upi_rrn ?? undefined, bankLineId: line.id as string }) as string) ?? null,
-      purpose: (await loadPurposes())({ upiRef: (upi?.upi_ref as string | undefined) ?? line.upi_rrn ?? undefined, upiLineId: upi?.id as string | undefined, bankLineId: line.id as string }) as string | null,
+      purpose: purposeText,
       state: posted ? 'allocated' : lineState(line, allocations),
       allocations: allocations.map((a) => ({
         id: a.id,
