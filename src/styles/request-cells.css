@@ -1,0 +1,155 @@
+/* What goes inside the cells of the two Requests tables (finance/requests, finance-requests), which are the shared admin table
+   (data-table.css). The table itself (header, filters, rows, cards on a phone) is not styled here. */
+
+.dt .dim {
+  color: var(--tvc-ink-soft);
+}
+
+.dt .sub {
+  display: block;
+  font-size: var(--text-xs);
+  color: var(--tvc-ink-soft);
+}
+
+/* A record someone has just acted on stays in the list, highlighted. */
+.dt .dt-row.just-done td {
+  background: var(--tvc-green-tint);
+}
+
+.dt .star {
+  margin-left: 2px;
+  color: var(--tvc-ink-soft);
+  text-decoration: none;
+  cursor: help;
+}
+
+.dt .warnsub {
+  color: var(--tvc-orange-text);
+  font-weight: 600;
+}
+
+.dt .tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.dt .acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.dt .acts .button,
+.dt .rq-suggest .button {
+  white-space: nowrap;
+  flex: none;
+}
+
+/* The suggested payments for a record: drawn as part of it, with a green edge. */
+.dt .rq-suggest {
+  padding: 8px 12px 12px;
+  box-shadow: inset 4px 0 0 var(--tvc-green);
+}
+
+.dt .suggest-head {
+  margin-bottom: 4px;
+  font-size: var(--text-xs);
+  color: var(--tvc-ink-soft);
+}
+
+.dt .suggest-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 0;
+}
+
+.dt .suggest-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  align-items: baseline;
+  color: var(--tvc-ink);
+}
+
+.dt .suggest-kind {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--tvc-ink-soft);
+}
+
+/* What the suggestion has in common with the record: the amount, the day, the words of the payee's name. */
+.dt .hl {
+  padding: 0 3px;
+  border-radius: 3px;
+  background: var(--tvc-green-tint);
+  color: var(--tvc-green-dark);
+  font-weight: 600;
+}
+
+.dt .pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  background: var(--tvc-cream);
+  color: var(--tvc-ink);
+  white-space: nowrap;
+}
+
+.dt a.pill--link {
+  text-decoration: none;
+}
+
+.dt a.pill--link:hover,
+.dt a.pill--link:focus-visible {
+  text-decoration: underline;
+}
+
+.dt .pill--ok {
+  background: var(--tvc-green-tint);
+  color: var(--tvc-green-dark);
+}
+
+.dt .pill--warn,
+.dt .pill--crit {
+  background: var(--tvc-orange-tint);
+  color: var(--tvc-orange-text);
+}
+
+.dt .linklike {
+  all: unset;
+  cursor: pointer;
+  white-space: nowrap;
+  font-size: var(--text-sm);
+  color: var(--tvc-ink);
+  text-decoration: underline;
+  text-decoration-color: var(--tvc-line-strong);
+}
+
+.dt .linklike:focus-visible {
+  outline: 2px solid var(--tvc-orange);
+  outline-offset: 2px;
+}
+
+/* A record on a phone: the same cell contents, stacked in a card. */
+.dt .rq-card {
+  display: grid;
+  gap: 6px;
+}
+
+.dt .rq-card-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.dt .rq-card .suggest-row {
+  flex-wrap: wrap;
+}

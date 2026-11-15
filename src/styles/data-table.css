@@ -222,6 +222,28 @@
   white-space: nowrap;
 }
 
+.dt .dt-table td.dt-wrap {
+  min-width: 14rem;
+  max-width: 28rem;
+  white-space: normal;
+}
+
+.dt .dt-detail td {
+  padding: 0;
+  background: var(--tvc-cream);
+}
+
+.dt .dt-has-detail td {
+  border-bottom: 0;
+}
+
+.dt .dt-table .dt-sticky {
+  position: sticky;
+  inset-inline-end: 0;
+  background: var(--tvc-white);
+  box-shadow: -8px 0 8px -8px rgb(0 0 0 / 18%);
+}
+
 .dt .dt-end {
   text-align: end;
 }

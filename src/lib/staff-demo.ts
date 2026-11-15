@@ -338,6 +338,27 @@ function demoFinanceParties() {
   );
   return { kinds: ['member', 'vendor', 'employee', 'customer', 'bank', 'government', 'director', 'other'], canEdit: true, canVerify: true, me: { id: 'demo-1', ready: true, hasPasskey: true, stepUpValid: false }, needsReviewCount: 0, parties: financeParties, suggestions };
 }
+// Invented payment requests and logged spends for /internal/finance/requests/ and /internal/finance-requests/, in every state.
+function demoRequests() {
+  const rec = (n: number, kind: 'request' | 'log', status: string, payee: string, rupees: number, purpose: string, createdAt: string, extra: Record<string, unknown> = {}) => ({
+    id: `r${n}`, kind, status, source: 'app', requester: n % 2 ? 'Demo Requester' : 'Another Requester', requesterId: n % 2 ? 'demo-1' : 'other', payee, amountPaise: rupees * 100, mode: 'upi', purpose,
+    neededBy: null, reimbursement: false, paidOn: kind === 'log' ? createdAt.slice(0, 10) : null, paidVia: kind === 'log' ? 'account' : null, upiRef: null, decidedBy: null, decisionReason: null, reviewFlag: null,
+    vouchers: 0, createdAt, fulfilled: null, matched: null, linked: null, mismatch: false, proposals: [], ownParty: false, ...extra,
+  });
+  const records = [
+    rec(1, 'request', 'submitted', 'Test Electricals', 36700, 'Wiring for the new shed', '2026-11-14T09:00:00Z', { requester: 'Another Requester', requesterId: 'other' }),
+    rec(2, 'request', 'submitted', 'Green Valley Nursery', 18250, 'Mango saplings, 25 nos', '2026-11-13T09:00:00Z', { reimbursement: true }),
+    rec(3, 'request', 'approved', 'Sri Lakshmi Hardware', 4120, 'Pipes and fittings', '2026-11-10T09:00:00Z', {
+      proposals: [{ type: 'upi', targetId: 'u7', reasons: ['same day'], via: 'BHIM', alsoBank: true, date: '2026-11-11', who: 'Sri Lakshmi Hardware' }, { type: 'bank', targetId: 'bl9', reasons: ['2 days apart'], via: null, alsoBank: false, date: '2026-11-12', who: 'UPI/SRI LAKSHMI' }],
+    }),
+    rec(4, 'request', 'paid', 'Ravi Shankar T', 7800, 'Farm wages, week 44', '2026-11-03T09:00:00Z', { matched: 'reference', linked: { upi: true, bank: true, upiRef: '500000000004', bankLineId: 'bl4' }, fulfilled: { method: 'upi', label: 'UPI' }, vouchers: 1 }),
+    rec(5, 'request', 'rejected', 'Asha Nursery', 9000, 'Extra saplings', '2026-10-28T09:00:00Z', { decisionReason: 'Already covered by the earlier order' }),
+    rec(6, 'log', 'paid', 'Test Traders', 2290, 'Cattle feed', '2026-10-17T09:00:00Z', { reviewFlag: 'own_party', ownParty: true }),
+    rec(7, 'request', 'approved', 'BESCOM', 12450, 'Electricity, October', '2026-10-05T09:00:00Z', { mismatch: true, matched: 'accepted', linked: { upi: true, bank: false, upiRef: '500000000010', bankLineId: null } }),
+    rec(8, 'request', 'cancelled', 'Sample Stores', 1260, 'Stationery', '2026-09-22T09:00:00Z', { source: 'history' }),
+  ];
+  return { me: { id: 'demo-1', ready: true, hasPasskey: true, stepUpValid: true }, can: { approve: true, allocate: true }, records, agingCount: 1 };
+}
 // Invented UPI payments for /internal/finance/upi/: BHIM and Paytm rows over two months, direct and delegated, in every bank-statement state.
 function demoUpiLines() {
   const line = (n: number, paidAt: string, time: string, app: string, counterparty: string | null, remark: string | null, rupees: number, extra: Record<string, unknown> = {}) => ({
@@ -494,6 +515,8 @@ export function installStaffDemo(tokenKey: string, kind: string): void {
     }
     if (path === '/api/units-admin/overview') return reply(demoUnits());
     if (path === '/api/finance-admin/upi-lines' && (init?.method ?? 'GET') === 'GET') return reply(demoUpiLines());
+    if (path === '/api/finance-admin/requests' && (init?.method ?? 'GET') === 'GET') return reply(demoRequests());
+    if (path === '/api/finance-admin/requests/mine' && (init?.method ?? 'GET') === 'GET') return reply({ payees: [], today: '2026-11-15', records: demoRequests().records.filter((r: any) => r.requesterId === 'demo-1') });
     if (path === '/api/finance-admin/parties' && (init?.method ?? 'GET') === 'GET') return reply(demoFinanceParties());
     if (path === '/api/finance-admin/parties' && init?.method === 'POST') {
       const body = (() => { try { return JSON.parse(String(init.body ?? '{}')); } catch { return {}; } })();

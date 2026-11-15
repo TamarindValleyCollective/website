@@ -787,6 +787,13 @@ cleared the NEFT placeholder the first load wrote from the 164 requests). Old-sh
 **Pages.** `/internal/finance-requests/` (the requester's, built for a phone: ask for a payment, record a spend, add a vendor, attach a photo, see their
 own records, cancel) and `/internal/finance/requests/` (nav "Approvals": to approve, to match, to review, all; approve behind the unlock, reject with a reason, accept a suggested match, open the files).
 
+**Both tables are the shared admin table** (docs/design-language.md, "Data tables"). Approvals opens on the first view that has something in it (To approve, To
+match or To review; these three are alternatives, so two together show both), and has chips for Requests / Logged spends, Approved / Paid / Rejected /
+Cancelled, Matched / Not matched, Amount differs and From the old sheet; column filters; Group by Month, Status, Payee, Kind or Requester; Favorites per
+account. The suggested payments open as a full-width row under the record; a record just acted on stays, highlighted, until a filter changes; the Actions
+column stays in view while the table scrolls sideways. On a phone each record is a card holding the same cells. The requester's page has the same table
+over their own records (status chips, Needs a bill). Nothing about who may do what changed.
+
 **History load (operator script, run once).** `scripts/load-fin-requests-history.mjs --sheet <id> [--apply]` (dry run by default; counts only are printed):
 the old sheet's "Fund Transfer Request" tab becomes already-paid requests and its "UPI Circle Transactions" tab becomes logs (`source = 'history'`, no requester).
 Rules: failure/expired rows moved no money and are skipped; a row naming a bank account that is not a registered one is skipped; a row naming our bank and CR is money in

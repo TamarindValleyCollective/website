@@ -11,6 +11,10 @@
 // filters: [{ id, label, test(row) }]   chips in the Filters list; all chips in force must pass
 // groups:  [{ id, label, key(row), order? }]   one level, as in the Ledger's Group by
 // bulk:    [{ id, label, run(rows) }]   shown when rows are ticked
+// detail:  (row) -> Node | null   a full-width row under that row (the Requests suggestions); built fresh for the table and for the card
+// onUserFilter: () => void   called when the person changes a chip, the search, a column filter or the grouping (not by setRows or setChips)
+// column extras: sortable: false (no sort button), wrap: true (the cell may wrap, for long text), sticky: true (the last column stays
+//   in view while the table scrolls sideways, for a column of buttons)
 import { buildItems, chipCounts, filterRows, readFavorites, sortRows, withFavorite } from './data-table.mjs';
 import { h } from './finance-ui.mjs';
 
@@ -26,7 +30,7 @@ export function createDataTable(opts) {
   const {
     root, columns, rowId, searchText = () => '', filters = [], groups = [], bulk = [], selectable = bulk.length > 0, onOpen = null, card = null,
     rowClass = () => '', noun = ['row', 'rows'], favoritesKey = null, searchPlaceholder = 'Search every column', toolbarEnd = null, empty = {},
-    defaultGroup = '', defaultSort = null, onChange = () => {}, cap = Infinity,
+    defaultGroup = '', defaultSort = null, onChange = () => {}, onUserFilter = () => {}, detail = null, cap = Infinity,
   } = opts;
   const allowed = { chipIds: filters.map((f) => f.id), groupIds: groups.map((g) => g.id) };
   const state = { rows: [], chips: [], words: [], text: '', group: defaultGroup, sort: defaultSort ?? [null, 1], cols: {}, collapsed: new Set(), sel: new Set(), favs: [], popOpen: false };
@@ -75,9 +79,9 @@ export function createDataTable(opts) {
     const chipEl = (kind, text, remove) =>
       h('span', { class: 'dt-chip' }, h('b', { text: kind }), document.createTextNode(text), h('button', { attrs: { type: 'button', 'aria-label': `Remove ${kind.toLowerCase()} ${text}` }, text: '×', on: { click: remove } }));
     chipBox.replaceChildren(
-      ...state.chips.map((id) => chipEl('Filter', filters.find((f) => f.id === id)?.label ?? id, () => { state.chips = state.chips.filter((x) => x !== id); render(); })),
-      ...state.words.map((w, i) => chipEl('Search', w, () => { state.words.splice(i, 1); render(); })),
-      ...(state.group ? [chipEl('Group by', groupDef()?.label ?? state.group, () => { state.group = ''; render(); })] : []),
+      ...state.chips.map((id) => chipEl('Filter', filters.find((f) => f.id === id)?.label ?? id, () => { onUserFilter(); state.chips = state.chips.filter((x) => x !== id); render(); })),
+      ...state.words.map((w, i) => chipEl('Search', w, () => { onUserFilter(); state.words.splice(i, 1); render(); })),
+      ...(state.group ? [chipEl('Group by', groupDef()?.label ?? state.group, () => { onUserFilter(); state.group = ''; render(); })] : []),
     );
     input.placeholder = state.chips.length || state.words.length || state.group ? '' : searchPlaceholder;
   }
@@ -98,13 +102,13 @@ export function createDataTable(opts) {
     if (filters.length) {
       // A gap where the group changes: chips in one group are alternatives (BHIM or Paytm), groups combine.
       const opts = filters.map((f, i) => {
-        const o = option(f.label, state.chips.includes(f.id), () => { state.chips = state.chips.includes(f.id) ? state.chips.filter((x) => x !== f.id) : [...state.chips, f.id]; render(); }, String(counts[f.id]));
+        const o = option(f.label, state.chips.includes(f.id), () => { onUserFilter(); state.chips = state.chips.includes(f.id) ? state.chips.filter((x) => x !== f.id) : [...state.chips, f.id]; render(); }, String(counts[f.id]));
         if (i > 0 && (f.group ?? f.id) !== (filters[i - 1].group ?? filters[i - 1].id)) o.classList.add('dt-opt--gap');
         return o;
       });
       cols.push(h('section', {}, h('h3', { text: 'Filters' }), ...opts));
     }
-    if (groups.length) cols.push(h('section', {}, h('h3', { text: 'Group by' }), option('None', !state.group, () => { state.group = ''; render(); }), ...groups.map((g) => option(g.label, state.group === g.id, () => { state.group = g.id; render(); }))));
+    if (groups.length) cols.push(h('section', {}, h('h3', { text: 'Group by' }), option('None', !state.group, () => { onUserFilter(); state.group = ''; render(); }), ...groups.map((g) => option(g.label, state.group === g.id, () => { onUserFilter(); state.group = g.id; render(); }))));
     if (favoritesKey) {
       const save = h('button', { class: 'dt-opt', attrs: { type: 'button' }, on: { click: () => {
         const name = nameBox.value.trim();
@@ -131,7 +135,8 @@ export function createDataTable(opts) {
       ...(selectable ? [h('th', { class: 'dt-tick' }, tick(shown.length > 0 && shown.every((r) => state.sel.has(rowId(r))), 'Select all shown', (on) => { for (const r of shown) on ? state.sel.add(rowId(r)) : state.sel.delete(rowId(r)); renderBody(); renderHead(); renderBulk(); }))] : []),
       ...columns.map((c) => {
         const on = state.sort[0] === c.id;
-        const th = h('th', { class: c.align === 'end' ? 'dt-end' : '', attrs: { 'aria-sort': on ? (state.sort[1] > 0 ? 'ascending' : 'descending') : 'none' } },
+        if (c.sortable === false) return h('th', { class: `${c.align === 'end' ? 'dt-end' : ''}${c.sticky ? ' dt-sticky' : ''}`.trim(), text: c.label });
+        const th = h('th', { class: `${c.align === 'end' ? 'dt-end' : ''}${c.sticky ? ' dt-sticky' : ''}`.trim(), attrs: { 'aria-sort': on ? (state.sort[1] > 0 ? 'ascending' : 'descending') : 'none' } },
           h('button', { class: 'dt-sort', attrs: { type: 'button' }, on: { click: () => { state.sort = [c.id, on ? -state.sort[1] : 1]; render(); } } }, c.label, h('span', { class: 'dt-arrow', attrs: { 'aria-hidden': 'true' }, text: on ? (state.sort[1] > 0 ? '▲' : '▼') : '⇕' })));
         if (on) th.classList.add('dt-sorted');
         return th;
@@ -144,10 +149,11 @@ export function createDataTable(opts) {
     filterRow.replaceChildren(
       ...(selectable ? [h('td')] : []),
       ...columns.map((c) => {
-        if (c.filter === 'none' || c.type === 'none') return h('td');
+        if (c.filter === 'none' || c.type === 'none') return h('td', { class: c.sticky ? 'dt-sticky' : '' });
         const [placeholder, title] = HINTS[c.type ?? 'text'];
         const box = h('input', { class: 'dt-colfilter', attrs: { type: 'search', placeholder, title, 'aria-label': `Search the ${c.label} column`, autocomplete: 'off' } });
         box.addEventListener('input', () => {
+          onUserFilter();
           state.cols[c.id] = box.value;
           clearTimeout(colTimer);
           colTimer = setTimeout(() => { compute(); renderBody(); renderHead(); renderBulk(); }, 150);
@@ -183,15 +189,22 @@ export function createDataTable(opts) {
       if (selectable) tr.append(h('td', { class: 'dt-tick' }, tick(sel, 'Select row', (on) => { on ? state.sel.add(id) : state.sel.delete(id); renderBody(); renderHead(); renderBulk(); })));
       for (const c of columns) {
         const out = c.render ? c.render(r) : c.value(r);
-        const td = h('td', { class: c.align === 'end' ? 'dt-end' : '' });
+        const td = h('td', { class: `${c.align === 'end' ? 'dt-end' : ''}${c.wrap ? ' dt-wrap' : ''}${c.sticky ? ' dt-sticky' : ''}`.trim() });
         if (out instanceof Node) td.append(out);
         else td.textContent = out == null || out === '' ? '–' : String(out);
         tr.append(td);
       }
       if (onOpen) tr.addEventListener('click', (e) => { if (!e.target.closest('a,button,input,select,textarea,label')) onOpen(r); });
       trs.push(tr);
+      const more = detail?.(r) ?? null;
+      if (more) {
+        tr.classList.add('dt-has-detail');
+        trs.push(h('tr', { class: 'dt-detail' }, h('td', { attrs: { colspan: String(width) } }, more)));
+      }
       if (card) {
         const c = card(r);
+        const moreCard = detail?.(r) ?? null;
+        if (moreCard) c.append(moreCard);
         c.classList.add('dt-card');
         if (sel) c.classList.add('dt-selected');
         if (selectable) c.prepend(tick(sel, 'Select row', (on) => { on ? state.sel.add(id) : state.sel.delete(id); renderBody(); renderHead(); renderBulk(); }));
@@ -228,6 +241,7 @@ export function createDataTable(opts) {
   }
 
   function clearAll() {
+    onUserFilter();
     state.chips = [];
     state.words = [];
     state.text = '';
@@ -251,6 +265,7 @@ export function createDataTable(opts) {
   // ---- search box behaviour: words typed, Enter turns them into a chip, Backspace on an empty box takes the last chip off
   let textTimer;
   input.addEventListener('input', () => {
+    onUserFilter();
     state.text = input.value.trim();
     clearTimeout(textTimer);
     textTimer = setTimeout(() => { compute(); renderBody(); renderHead(); renderBulk(); }, 120);
