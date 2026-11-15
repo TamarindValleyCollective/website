@@ -659,7 +659,7 @@ var DECISIONS = [
   ['How does the Advances view work?', 'Every advance shows what was given, the agreed monthly recovery, what has been recovered, what is left, and when it clears. An advance with no recovery agreed, or a missed recovery, goes on Data health and the Overview. Recoveries come from payroll once it exists; until then an approver records them against the advance.', 'Alternative: advances only inside the payroll session, with nothing on the dashboard.'],
   ['What would members see on the portal?', 'Overview (with their own household’s maintenance instead of the attention list), Cashflow, Budget vs actual, and Maintenance totals with a card for their own household. Not shown: Advances, which other household owes what, data health, the UPI circle, the draft next-year plan. Use “Member view” in the header to preview.', 'Alternative: members see only Budget vs actual and Maintenance. Or also the Cashflow table view only for the year just closed.'],
   ['Who sees names?', 'The dashboard shows house numbers and employee numbers only. Names stay in the member directory and payroll, so a screenshot of the dashboard is safe to share. The one exception is a UPI Circle delegate, who shows as on the UPI page: their name if one has been set, otherwise their number (decided 2026-11-15).', 'Alternative: show names to approvers.'],
-  ['What does the Channels view show?', 'Only money channels, drawn as a network you can zoom and move around in, like a knowledge graph. Every circle is a channel: the accounts (the current accounts, and the fixed deposits held outside them), the channels money passes through (payment gateway, POS terminal, bulk payments, card, each UPI app, plain bank transfers) and the delegates, who pay through an operator’s UPI app. What the money was for (salary, farm and household, projects, company, sinking fund; maintenance or stays on the way in) is not a channel, so it is a filter, Spent on or Received for: choose one and the same circles show only that money, through the channels it used, and each channel’s panel lists what it was used for. Circles are sized by amount (area), joined by straight links as thick as the money flowing through them, and the figure sits inside a circle where it fits. It starts as simply as it can: Tidy arrangement (columns, with the order found by trying every possibility so as few links as possible cross, none in the default Main links view; drag a circle and the others re-order around it as you carry it, then it settles into the nearest slot that keeps the links uncrossed, staying in its own column; Organic is the freeform alternative, where dragging pulls the others along) and Main links (each circle’s strongest link and the big flows; selecting or hovering a circle shows all of its links, and All links shows everything). Scroll or pinch to zoom, drag the background to move, and Fit arranges everything again; what is written under a circle depends on the zoom. Click a circle for its details; the + or − on a circle opens or closes what hangs off it; Zoom to this focuses on a circle and its connections. A ! badge marks what needs attention. A Money out / Money in switch changes the direction. Other filters: the period (year to date, last three months, this month), one account (including the fixed deposits), needs attention only, hide planned, hide delegates, and a search that highlights matches and zooms to them. The channels add up to the bank statement, and the table view says so and shows what each channel was used for (made-up affinities fitted so every row and column adds up; the real figures would come from the ledger allocations). Fixed deposits are their own green circle: money goes in and the interest comes back by bank transfer; today they are one circle, and each deposit would be its own once deposits are recorded (bank, amount, rate, maturity).', 'Alternative: circles for what the money was for as well (the previous version of this mockup), which mixes things that are not channels into the map; or strict columns with links from side to side, or a Sankey with ribbons only, which mixes money in and out and tangles as channels are added.'],
+  ['What does the Channels view show?', 'Only money channels, drawn as a network you can zoom and move around in, like a knowledge graph. Every circle is a channel: the accounts (the current accounts, and the fixed deposits held outside them), the channels money passes through (payment gateway, POS terminal, bulk payments, card, each UPI app, plain bank transfers) and the delegates, who pay through an operator’s UPI app. What the money was for (salary, farm and household, projects, company, sinking fund; maintenance or stays on the way in) is not a channel, so it is a filter, Spent on or Received for: choose one and the same circles show only that money, through the channels it used, and each channel’s panel lists what it was used for. Circles are sized by amount (area), joined by straight links as thick as the money flowing through them, and the figure sits inside a circle where it fits. It starts as simply as it can: Tidy arrangement (the order of the circles is found by trying every possibility so as few links as possible cross, none in the default Main links view; circles with several links, such as the main account and the UPI apps, sit in the middle with what they link to fanned out around them, which takes less room than plain columns; drag a circle and the others re-order around it as you carry it, then it settles into the nearest slot that keeps the links uncrossed, staying in its own column; Organic is the freeform alternative, where dragging pulls the others along) and Main links (each circle’s strongest link and the big flows; selecting or hovering a circle shows all of its links, and All links shows everything). Scroll or pinch to zoom, drag the background to move, and Fit arranges everything again; what is written under a circle depends on the zoom. Click a circle for its details; the + or − on a circle opens or closes what hangs off it; Zoom to this focuses on a circle and its connections. A ! badge marks what needs attention. A Money out / Money in switch changes the direction. Other filters: the period (year to date, last three months, this month), one account (including the fixed deposits), needs attention only, hide planned, hide delegates, and a search that highlights matches and zooms to them. The channels add up to the bank statement, and the table view says so and shows what each channel was used for (made-up affinities fitted so every row and column adds up; the real figures would come from the ledger allocations). Fixed deposits are their own green circle: money goes in and the interest comes back by bank transfer; today they are one circle, and each deposit would be its own once deposits are recorded (bank, amount, rate, maturity).', 'Alternative: circles for what the money was for as well (the previous version of this mockup), which mixes things that are not channels into the map; or strict columns with links from side to side, or a Sankey with ribbons only, which mixes money in and out and tangles as channels are added.'],
   ['What about channels that are not built yet?', 'They appear as dashed boxes marked Planned (the ICICI account, the POS terminal, Google Pay), so the structure does not change when they arrive. Today a POS terminal would count under Debit card, and a second person’s Paytm cannot be told apart from the first: that needs an operator record.', 'Alternative: show only what exists today and add boxes later.'],
   ['Where does the sinking fund go?', 'It is the Investment head, its own grey segment in the spending chart, and is left out of runway because it is saved, not spent.', 'Alternative: show it as a separate line below spending.'],
   ['What does “committed” mean?', 'Requests that are approved but not yet matched to a bank line.', 'Alternative: also count signed purchase orders, if those exist.'],
@@ -1286,7 +1286,7 @@ function chItemH(n) { return 2 * n.r + 8 + 15 * chWrapName(n.title, 16).length +
    position of what they connect to, swept back and forth, which keeps links from crossing more than they must. Organic: a small force
    simulation, so the circles settle freely and pull each other along when one is dragged. Both are deterministic. ---- */
 function chLayoutIfNeeded() {
-  var key = chArr + '|' + chDir + '|' + chPeriod() + '|' + chF.purpose + '|' + Object.keys(chVis).filter(function (k) { return chVis[k]; }).join(',');
+  var key = chArr + '|' + chDir + '|' + chPeriod() + '|' + chF.purpose + '|' + chF.links + '|' + Object.keys(chVis).filter(function (k) { return chVis[k]; }).join(',');
   if (key === chLastKey && !chForce) return;
   chLastKey = key;
   if (chArr === 'tidy') chTidyLayout(); else chSimLayout(chForce);
@@ -1364,12 +1364,103 @@ function chTidyTargets(pin) {
     at = { id: pin.id, at: cols[layer].filter(function (n) { return n.id !== pin.id && ((chTarget[n.id] || chPos[n.id] || { y: 0 }).y) < pin.y; }).length };
   }
   var order = chBestOrder(cols, at);
+  /* Two ways to place that order: plain columns, or hubs (a circle with several links in the middle, what it links to fanned around it).
+     Candidates: the plain columns, an arc around the hub and a ring around the hub. The fewest crossing links wins; among those, a ring
+     (else an arc) is preferred so that no busy circle is left alone in empty space, unless it would shrink the picture by over 15%. */
+  var cands = [chColumnTargets(order), chHubTargets(order, false), chHubTargets(order, true)].map(function (c, i) { return c ? { t: c, kind: i, x: chCountCrossings(c), k: chFitScale(c) } : null; }).filter(function (c) { return c; });
+  var fewest = Math.min.apply(0, cands.map(function (c) { return c.x; })), ok = cands.filter(function (c) { return c.x === fewest; });
+  var kmax = Math.max.apply(0, ok.map(function (c) { return c.k; }));
+  // a hub layout (a ring, else an arc) gathers each busy circle's links around it; use it unless it shrinks the picture by more than 15%
+  ok.sort(function (a, b) { return (b.kind - a.kind); });
+  var chosen = ok.filter(function (c) { return c.kind > 0 && c.k >= 0.85 * kmax; })[0] || ok.filter(function (c) { return c.k === kmax; })[0];
+  return chosen.t;
+}
+function chColumnTargets(order) {
+  var XS = [-300, 0, 300], out = {};
   order.forEach(function (ids, li) {
     var list = ids.map(chNode), gap = 6, total = list.reduce(function (t, n) { return t + chItemH(n); }, 0) + gap * Math.max(0, list.length - 1), y = -total / 2;
     list.forEach(function (n) { out[n.id] = { x: XS[li], y: y + n.r }; y += chItemH(n) + gap; });
   });
   return out;
 }
+/* The links that are drawn, as pairs of end points, for counting crossings and measuring room. */
+function chDrawnEdges() { return chEdges.filter(function (e) { return chVis[e.a] && chVis[e.b] && (e.main || chF.links === 'all'); }); }
+function chCountCrossings(T) {
+  var es = chDrawnEdges(), n = 0, i, j, p, q, d1, d2, d3, d4;
+  var ccw = function (a, b, c) { return (c.y - a.y) * (b.x - a.x) - (b.y - a.y) * (c.x - a.x); };
+  for (i = 0; i < es.length; i++) for (j = i + 1; j < es.length; j++) {
+    p = es[i]; q = es[j];
+    if (p.a === q.a || p.a === q.b || p.b === q.a || p.b === q.b) continue;      // links that share a circle only touch there
+    d1 = ccw(T[p.a], T[p.b], T[q.a]); d2 = ccw(T[p.a], T[p.b], T[q.b]); d3 = ccw(T[q.a], T[q.b], T[p.a]); d4 = ccw(T[q.a], T[q.b], T[p.b]);
+    if (d1 * d2 < 0 && d3 * d4 < 0) n++;
+  }
+  return n;
+}
+/* How large a layout can be drawn in the canvas (the zoom at which it just fits): the higher, the less empty space. */
+function chFitScale(T) {
+  var x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9, W = $('ch-canvas').clientWidth || 690, H = $('ch-canvas').clientHeight || 640;
+  Object.keys(T).forEach(function (id) { var n = chNode(id); x0 = Math.min(x0, T[id].x - n.r - 50); x1 = Math.max(x1, T[id].x + n.r + 50); y0 = Math.min(y0, T[id].y - n.r - 12); y1 = Math.max(y1, T[id].y + n.r + 64); });
+  return Math.min((W - 40) / (x1 - x0), (H - 40) / (y1 - y0));
+}
+/* Push overlapping circles (with their names) apart, without moving them far from where they were put. */
+function chSeparate(T, keep) {
+  var ids = Object.keys(T), it, i, j, A, B, I, J, dx, dy, ox, oy, sx, sy;
+  for (it = 0; it < 80; it++) {
+    var moved = false;
+    for (i = 0; i < ids.length; i++) for (j = i + 1; j < ids.length; j++) {
+      I = chNode(ids[i]); J = chNode(ids[j]); A = T[ids[i]]; B = T[ids[j]]; dx = B.x - A.x; dy = B.y - A.y;
+      ox = Math.max(I.r, 58) + Math.max(J.r, 58) + 10 - Math.abs(dx); oy = Math.min(A.y + I.r + 54, B.y + J.r + 54) - Math.max(A.y - I.r - 10, B.y - J.r - 10);
+      if (ox > 0 && oy > 0) {
+        var wi = ids[i] === keep ? 0 : 0.5, wj = ids[j] === keep ? 0 : 0.5; if (wi + wj === 0) continue; var tot = wi + wj; wi /= tot; wj /= tot;
+        if (ox < oy) { sx = dx >= 0 ? 1 : -1; A.x -= sx * ox * wi; B.x += sx * ox * wj; } else { sy = dy >= 0 ? 1 : -1; A.y -= sy * oy * wi; B.y += sy * oy * wj; }
+        moved = true;
+      }
+    }
+    if (!moved) break;
+  }
+}
+/* Hub layout: the account with the most links is the hub, and its channels sit on an arc around it in the order that keeps links
+   uncrossed. The other accounts sit just beyond the end of the arc nearest the channels they link to, and each channel's delegates fan
+   out beyond it. Returns null when there is no hub (fewer than two links). */
+function chHubTargets(order, ring) {
+  var acc = order[0].map(chNode), chn = order[1].map(chNode), del = order[2].map(chNode);
+  if (!acc.length || chn.length < 2) return null;
+  var kids = {}; acc.forEach(function (a) { kids[a.id] = chEdges.filter(function (e) { return e.a === a.id && chVis[e.b] && e.main && chIsChan(e.b); }).length; });
+  var hub = acc.slice().sort(function (a, b) { return kids[b.id] - kids[a.id] || (a.id < b.id ? -1 : 1); })[0];
+  if (kids[hub.id] < 2) return null;
+  var T = {}, gap = 14, maxR = Math.max.apply(0, chn.map(function (n) { return n.r; }));
+  var S = chn.reduce(function (t, n) { return t + chItemH(n) + gap; }, 0), half = ring ? Math.PI - 0.35 : 1.6, R = Math.max(hub.r + maxR + 95, S / (2 * half)), spanHalf = Math.min(half, S / (2 * R)), centre = ring ? Math.PI / 2 : 0;
+  T[hub.id] = { x: 0, y: 0 };
+  var cum = 0;
+  chn.forEach(function (n) {
+    var th = centre - spanHalf + 2 * spanHalf * (cum + (chItemH(n) + gap) / 2) / S; cum += chItemH(n) + gap;
+    T[n.id] = { x: R * Math.cos(th), y: R * Math.sin(th) };
+  });
+  var unit = function (v) { var d = Math.sqrt(v.x * v.x + v.y * v.y) || 1; return { x: v.x / d, y: v.y / d }; };
+  acc.forEach(function (a) {   // the other accounts: beyond the arc, next to what they link to
+    if (a.id === hub.id) return;
+    var mine = chEdges.filter(function (e) { return (e.a === a.id || e.b === a.id) && T[e.a === a.id ? e.b : e.a] && chIsChan(e.a === a.id ? e.b : e.a); });
+    var mainOnes = mine.filter(function (e) { return e.main; }), ns = (mainOnes.length ? mainOnes : mine).map(function (e) { return T[e.a === a.id ? e.b : e.a]; });   // placed by its main links, not the hidden ones
+    var c = ns.length ? { x: ns.reduce(function (t, q) { return t + q.x; }, 0) / ns.length, y: ns.reduce(function (t, q) { return t + q.y; }, 0) / ns.length } : { x: -R, y: 0 };
+    var u = unit({ x: c.x - T[hub.id].x, y: c.y - T[hub.id].y });
+    T[a.id] = { x: c.x + u.x * (a.r + 125), y: c.y + u.y * (a.r + 125) };
+  });
+  var byParent = {};
+  del.forEach(function (d) {     // delegates: fanned out beyond their strongest parent
+    var pe = chEdges.filter(function (e) { return e.b === d.id && T[e.a]; }).sort(function (a, b) { return b.flow - a.flow; })[0];
+    var pid = pe ? pe.a : chn[0].id; (byParent[pid] = byParent[pid] || []).push(d);
+  });
+  Object.keys(byParent).forEach(function (pid) {
+    var u = unit({ x: T[pid].x - T[hub.id].x, y: T[pid].y - T[hub.id].y }), t = { x: -u.y, y: u.x }, list = byParent[pid];
+    list.forEach(function (d, k) {
+      var off = (k - (list.length - 1) / 2) * (2 * d.r + 56);
+      T[d.id] = { x: T[pid].x + u.x * (chNode(pid).r + d.r + 115) + t.x * off, y: T[pid].y + u.y * (chNode(pid).r + d.r + 115) + t.y * off };
+    });
+  });
+  chSeparate(T, hub.id);
+  return T;
+}
+function chIsChan(id) { var n = chNode(id); return !!n && n.group === 'chan'; }
 function chTidyLayout() {
   var t = chTidyTargets(null);
   chPos = {}; chVel = {}; chTarget = {};
@@ -1587,7 +1678,7 @@ function chPanel() {
       '<span><i class="ch-sw planned"></i>Dashed means planned: nothing to show yet</span>' +
       '<span><i class="ch-sw mark warn">!</i>Something needs attention. Click the circle to see what</span>' +
       '<span><i class="ch-sw mark">+</i>A + or − opens or closes what hangs off a circle</span></div>' +
-      '<p class="small muted">What the money was for (salary, farm and household, projects, company, sinking fund; maintenance and stays on the way in) is not a channel, so it is a filter: choose it above and the same circles show only that money. Scroll or pinch to zoom and drag the background to move. Tidy puts the circles in columns in the order that makes as few links as possible cross (none with Main links), and when you drag one the others re-order around it to keep it that way; Organic lets them settle freely, and dragging one pulls the others along. Main links draws each circle’s strongest link and the big flows: select or hover a circle to see all of its links, or choose All links. Fit arranges everything again.</p>';
+      '<p class="small muted">What the money was for (salary, farm and household, projects, company, sinking fund; maintenance and stays on the way in) is not a channel, so it is a filter: choose it above and the same circles show only that money. Scroll or pinch to zoom and drag the background to move. Tidy puts the circles in the order that makes as few links as possible cross (none with Main links), with each busy circle in the middle of what it links to, and when you drag one the others re-order around it to keep it that way; Organic lets them settle freely, and dragging one pulls the others along. Main links draws each circle’s strongest link and the big flows: select or hover a circle to see all of its links, or choose All links. Fit arranges everything again.</p>';
     return;
   }
   var h = '<h3>' + n.title + '</h3><p class="small muted">' + n.sub + '</p>';

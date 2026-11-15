@@ -82,8 +82,12 @@ decisions below are the mockup's defaults and are listed on its Decisions tab.
     2026-11-15; an earlier version drew those as circles, which mixed things that are not channels into the map). Each channel's panel
     lists what it was used for, and clicking a row applies the filter. Circles are sized by amount (area), joined by straight links as
     thick as the money flowing through them, with the figure inside where it fits. It starts as simply as it can: **Tidy**
-    arrangement (columns whose order is found by trying every possibility, so as few links as possible cross: none with Main links, and
-    with All links only the one crossing that cannot be avoided, because both UPI apps connect to both accounts; **drag a circle and the
+    arrangement (the order is found by trying every possibility, so as few links as possible cross: none with Main links, and with
+    All links only the one crossing that cannot be avoided, because both UPI apps connect to both accounts. It is then placed three
+    ways, plain columns, an arc around the main account, or a **ring around it**, and the crossing-free layout that gathers each busy
+    circle's links around it wins (the main account in the middle with its channels all around it, the deposits beyond the transfers
+    they feed, the delegates beyond their UPI app), unless that would shrink the picture by more than 15%, which leaves no dead space
+    around the hub; **drag a circle and the
     others re-order around it as you carry it, then it settles into the nearest slot that keeps the links uncrossed**, staying in its own
     column, since accounts, channels and delegates mean different things; Organic is the freeform alternative, where dragging pulls the
     others along and crossings are not prevented), **Main links** (each circle's strongest link and the big flows; selecting or hovering a circle shows all of
