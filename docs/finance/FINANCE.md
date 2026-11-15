@@ -330,7 +330,7 @@ types the importer knows; each batch stores its `source`: `axis_statement`, `pay
   State: *in the ledger* / *waiting for the statement* / *not in the statement*. Delegated spend per calendar month is shown per
   delegate against that delegate's limit (the default is `CIRCLE_CAP_PAISE`, Rs 15,000, a constant), and so is the count of bank UPI
   debits that no BHIM/Paytm row explains. Code and the database still say `is_circle` for "delegated".
-- **Delegates** (migration `0100`, **not yet applied**; `lib/finance-delegates.ts`, pure rules in `finance-delegates.mjs`). Neither the
+- **Delegates** (migration `0100`, **applied 2026-11-15**; `lib/finance-delegates.ts`, pure rules in `finance-delegates.mjs`). Neither the
   Paytm export nor the BHIM file says which delegate paid. The Paytm app's receipt screen does: it shows `Paid for <number>`, the
   delegate's number. So a delegate is known by that **number**, typed once by an admin (`configure`) on the UPI page, with an optional
   name, the date they started, an optional end date and an optional monthly limit (empty = the default). Everywhere a delegate is shown

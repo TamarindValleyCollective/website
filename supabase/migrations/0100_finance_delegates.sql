@@ -1,4 +1,7 @@
--- Finance module: delegates of the UPI circle (docs/finance/FINANCE.md, "Delegates"). NOT yet applied to TVC ERP.
+-- Finance module: delegates of the UPI circle (docs/finance/FINANCE.md, "Delegates").
+-- Applied to TVC ERP on 2026-11-15 (recorded as finance_delegates). Checked afterwards: both tables RLS-on with no anon/authenticated
+-- grants, the constraint present, no delegate or link rows yet, no existing request row changed. Tested the same day inside a transaction
+-- that was rolled back (which caught a NULL-in-CHECK hole in the first draft of the request constraint).
 --
 -- The UPI exports are in the operator's name, so no file says which delegate paid. A delegate is known by the number the UPI app
 -- shows on the receipt ("Paid for <number>"), which an admin types once. A delegated payment is attributed by date (the one
