@@ -444,7 +444,10 @@ categories, the requester); routes in `lib/finance-ledger.ts`. `0083` is applied
 - **Rules** (`finance-rules.mjs`, table `fin_rules`, page Rules). A matcher is a set of conditions that must all hold (narration
   text, any of some remark keywords, direction, amount range); one with no condition never matches. Lowest priority number wins, ties
   go to the older rule. A rule gives party, category, a nature template (`{counterparty}`, `{remark}`) and `needs_review`. With no
-  rule, the farm manager's own UPI remark seeds the nature, and a payment to the requester's own party is a reimbursement. The party
+  rule, the nature (what it was for) is suggested from, best first: what a matched **Approval** (payment request or spend log) says it
+  was for, then the remark typed in the UPI app itself (kept whole: only an empty, generic or letterless remark is dropped), then the
+  remark in the bank's narration (which keeps a stricter filter: bank names and branch codes are not wording). A rule with its own
+  wording template wins over all three. A payment to the requester's own party is a reimbursement. The party
   of a line is guessed only from an exact name match (Paytm counterparty, then the UPI narration); two parties with one name give none.
   A UPI-id condition is in the engine but not offered: the Paytm import keeps no UPI id.
 - **Review flags** (`reviewReasons`): nothing explains the line; a circle payment to the requester's own party; a payment to a party
@@ -533,12 +536,17 @@ Modelled on how ServiceNow lists work, because the sheet's convenience was selec
   *Allocated*.
 - **Drafts.** What you type is a draft that lives in the page only; a warning appears if you try to leave with unposted drafts. Posting
   is the second step: **"Post N ready"** (the bar) asks first, then posts the ready lines, each in full. Two steps by decision: filling
-  cells is reversible, posting is not.
+  cells is reversible, posting is not. Drafts are also kept in the browser and offered back on the next visit; **Fill them in again**
+  restores them, selects the ready ones and turns on the **Filled in, not posted** status filter. That filter and **Needs a reason**
+  (a category or party but no wording yet) are in Filters, so you can see which lines carry something not yet posted. Server-side
+  drafts without wording are not possible yet: the database requires wording on every allocation row. A cell that holds your draft (category, party or wording, typed, applied, accepted or restored) has a white box with a green outline and the tooltip "Yours, not posted yet" (also hidden text in the cell, so a screen reader and a phone get it); suggestions stay grey italic. In the card layout the grey line under a line's date reads "Yours: category · party" instead. The "N lines are filled in but not posted yet" note has **Discard these**: after a confirm it clears every unposted draft (category, party, wording, and the maintenance year/unit picks), on the page and in the browser's saved copy, and offers Undo (toast or Ctrl+Z for two minutes). It only touches drafts: it makes no request to the server, skips any line that has been posted, and leaves posted lines exactly as they are. Two tabs of one account share the browser's drafts: a save keeps what another tab stored and lays its own on top, so neither wipes the other. *Fill N missing parties* is a toolbar button beside *Fill in the confident suggestions* (it writes to the ledger), not a chip in the search box, and the progress line leads with the queues (left to allocate, to review, posted without a party) before "Showing X of N"; each non-empty queue is a button that shows just those lines (press again to show every line). A payment out whose bank narration says UPI but that has no BHIM or Paytm record linked to it is marked **No UPI record** in the Origin cell (in the card layout, at the end of the grey line), counted as "N UPI payments with no UPI record" in the progress line, and has a **UPI, no UPI record** status filter. Money in is not flagged: no UPI app record is expected for it. Column names match everywhere on the page: **Paid to / from**, **Bank narration**, **What it was for** (column search, sort list, Group by and the Rules page).
 - **Selecting.** A checkbox on every editable line; the header checkbox selects the page; shift-click selects the run between two
   lines. Lines that cannot be edited here (already posted, partly allocated, waiting for review) cannot be ticked.
-- **The bar** appears under the table when lines are selected and sticks to the bottom of the screen: *Set category*, *Set party*, *Set
-  wording* (to all selected), *Accept suggestions*, *Fill from first* (copy the first selected line's three cells to the others, the
-  sheet's fill-down), *Post N ready*, *Clear*.
+- **The bar** appears under the table when lines are selected and sticks to the bottom of the screen, as three labelled steps: **1 · Set
+  for all** (category, party and what it was for, then *Apply to N lines*, strong only once a box is filled), **2 · Or use suggestions**
+  (*Accept suggestions*: fills empty cells only, never replaces what you set) and **3 · Post** (*Post N ready*, with why it is off beside
+  it). The top line counts selected, ready and those needing what it was for, with *Show those* (turns on the *Needs a reason* filter),
+  and *Clear*. The bar is a green-tinted band with a green top edge, so it reads as the place to act and not as more table. The page keeps space under the table so the bar never covers the last rows, and a toast (with its Undo) is lifted above the bar. On a phone the bar is compact (category and party side by side, the helper notes hidden except Post's reason and the guess warning). The *Accept suggestions* note says how many of the selected lines rest on a guess.
 - **Apply to the others.** Change a cell on a line that is one of several selected and the bar asks "Apply this to the other N
   selected lines too?" (Apply to all / Only this line).
 - **Keyboard.** Enter in a wording cell moves to the next line's wording cell.
@@ -630,7 +638,7 @@ Modelled on how ServiceNow lists work, because the sheet's convenience was selec
 - **Where it lives:** the pure rules (filters, periods, grouping, favorites) are `scripts/lib/finance-search.mjs`, tested in `finance-search.test.mjs`; the page only draws them.
 - **Quiet rows (the mockup's look).** A line at rest is one row of text: Date, Amount, Category, Paid to / from, Status. The bank's **narration is not a column**: it is the
   evidence the suggestions come from, so it shows on hover (desktop, a short delay, text only), under the fields when a line is open, in the line sheet (click the date), or as
-  a last column if **Columns -> Bank narration** is ticked (kept in this browser). The fields (category and party selects, the ✓ to accept a suggestion, and the wording box on its own
+  a last column if **Columns -> Bank narration** is ticked (kept in this browser). **Columns -> What it was for** adds a column (after Paid to / from, wide table only, off by default, kept in this browser) with the typed, restored or posted wording, or the suggestion in grey italics; it sorts and has a column search like the others. The fields (category and party selects, the ✓ to accept a suggestion, and the wording box on its own
   line) appear when a line is ticked, has an error, or is opened by clicking its category or party; they close again when focus leaves. Filling in suggestions does not open rows. The
   search under each heading is behind **Column search**. On a phone a line is the date and amount, then category and party in one grey line and the status.
 - **Not done:** a Compact toggle and other columns in the picker, Project as a group (a line does not carry its project name), favorites on the server.
@@ -655,7 +663,7 @@ Modelled on how ServiceNow lists work, because the sheet's convenience was selec
   list read after a write, because another warm instance may not have seen it. Anything that writes behind the function's back (the
   history load, a script) shows up within 10 s.
   **The new ledger after the second review (26/40, five P1s fixed):** the status pill sits under the amount (no Status column), so Category,
-  Party and Wording are wide enough to read; below 1,240px the page is a list of cards (the table needs about 1,000px beside the shell);
+  Party and What it was for are wide enough to read; below 1,240px the page is a list of cards (the table needs about 1,000px beside the shell);
   a line under the progress says "a tick only fills a field in; nothing is saved until you tick the lines and press Post", and a note
   says how many lines are filled in but not posted, with a button to tick them; the previous calendar month's status (what is left, or
   Close month when it is done) sits above the table; text boxes and selects have a visible focus ring; sorting and the chips keep focus.

@@ -7,7 +7,7 @@
 import { ORIGINS, originLabel } from './finance-origin.mjs';
 
 // A line here is the page's `Line`: { id, date (ISO), direction ('debit'|'credit'), amountPaise, state, review, missingParty,
-// effective: { category, party }, allocation: { householdLabel, maintenanceYear } | null }.
+// filled, needsWording (set from the page's unposted drafts), effective: { category, party }, allocation: { householdLabel, maintenanceYear } | null }.
 
 export const FILTER_KINDS = {
   status: {
@@ -16,6 +16,11 @@ export const FILTER_KINDS = {
       unallocated: ['To allocate', (l) => l.state !== 'allocated'],
       review: ['To review', (l) => Boolean(l.review)],
       noparty: ['No party', (l) => Boolean(l.missingParty)],
+      // Paid out by UPI (the bank's narration says so) but no BHIM or Paytm record is linked to it. Money in is not expected to have one.
+      noupi: ['UPI, no UPI record', (l) => l.origin === 'upi_unknown' && l.direction === 'debit'],
+      // What has been filled in on the page but not posted yet (the page sets these two flags from its drafts).
+      filled: ['Filled in, not posted', (l) => Boolean(l.filled)],
+      needswording: ['Needs a reason', (l) => Boolean(l.needsWording)],
       allocated: ['Allocated', (l) => l.state === 'allocated'],
     },
   },
@@ -91,7 +96,7 @@ export const passesWords = (hay, words) => words.every((w) => hay.includes(Strin
 const STATUS_WORDS = { review: 'To review', unallocated: 'To allocate', partly_allocated: 'Partly allocated', allocated: 'Allocated' };
 export const GROUP_FIELDS = {
   category: ['Category', (l) => l.effective?.category || 'No category'],
-  party: ['Party', (l) => l.effective?.party || 'No party'],
+  party: ['Paid to / from', (l) => l.effective?.party || 'No party'],
   unit: ['Unit', (l) => l.allocation?.householdLabel || 'No unit'],
   month: ['Month', (l) => l.date.slice(0, 7)],
   account: ['Account', (l) => l.account || 'No account'],

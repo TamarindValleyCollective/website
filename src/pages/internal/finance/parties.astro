@@ -444,7 +444,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
   // Two ticked parties are the same payee: the one without payment details is merged into the other.
   function bulkMerge(rows: Party[]) {
     if (rows.length !== 2) {
-      showToast('Tick the two parties that are one payee.');
+      showToast('Select the two parties that are one payee.');
       return;
     }
     const [a, b] = rows;

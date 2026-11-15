@@ -16,6 +16,30 @@ const LINES = [
 ];
 const NOW = '2026-11-06';
 
+test('filled-in and needs-wording filters read the flags the page sets from its drafts', () => {
+  const some = [
+    line('p', '2026-11-03', 'debit', 100, { filled: true, needsWording: true }),
+    line('q', '2026-11-02', 'debit', 200, { filled: true, needsWording: false }),
+    line('r', '2026-11-01', 'debit', 300),
+  ];
+  const ids = (chips) => some.filter((l) => passesChips(l, chips, NOW)).map((l) => l.id);
+  assert.deepEqual(ids([['status', 'filled']]), ['p', 'q']);
+  assert.deepEqual(ids([['status', 'needswording']]), ['p']);
+  assert.equal(optionCounts(some, NOW).status.filled, 2);
+});
+
+test('the UPI-without-a-record filter shows UPI payments out that have no BHIM or Paytm record, not money in', () => {
+  const some = [
+    line('u', '2026-11-03', 'debit', 100, { origin: 'upi_unknown' }),
+    line('v', '2026-11-02', 'credit', 200, { origin: 'upi_unknown' }),
+    line('w', '2026-11-01', 'debit', 300, { origin: 'bhim' }),
+    line('x', '2026-10-30', 'debit', 400, { origin: 'bank' }),
+  ];
+  const ids = (chips) => some.filter((l) => passesChips(l, chips, NOW)).map((l) => l.id);
+  assert.deepEqual(ids([['status', 'noupi']]), ['u']);
+  assert.equal(optionCounts(some, NOW).status.noupi, 1);
+});
+
 test('options of one kind are alternatives; different kinds all have to hold', () => {
   const ids = (chips) => LINES.filter((l) => passesChips(l, chips, NOW)).map((l) => l.id);
   assert.deepEqual(ids([]), ['a', 'b', 'c', 'd']);

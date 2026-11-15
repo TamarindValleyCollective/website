@@ -239,6 +239,7 @@ export function createDataTable(opts) {
     bulkBar.replaceChildren(
       h('b', { text: `${picked.length} selected` }),
       ...bulk.map((a) => h('button', { class: 'button button--outline', attrs: { type: 'button' }, text: a.label, on: { click: () => a.run(picked, api) } })),
+      h('span', { class: 'dt-bulk-spacer' }),
       h('button', { class: 'button button--outline', attrs: { type: 'button' }, text: 'Clear', on: { click: () => api.clearSelection() } }),
     );
   }
