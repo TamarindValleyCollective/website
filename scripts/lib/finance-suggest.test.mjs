@@ -196,3 +196,13 @@ test('a payee is the same however the bank spells it, and candidates list every 
   assert.deepEqual(candidateParties('Rohan Kumar', two).map((x) => x.id), ['a', 'b']); // several fit: both offered
   assert.equal(proposeMissingParty({ line: upiLine('Rohan Kumar'), parties: two }), null); // but none is certain
 });
+
+test('a bank name with extra trailing words still finds the party whose name it starts with', () => {
+  const parties = [{ id: 'p1', name: 'Green Traders' }, { id: 'p2', name: 'Ravi' }];
+  assert.deepEqual(matchParty('Green Traders AND CO', parties), { partyId: 'p1', how: 'extended' });
+  assert.equal(matchParty('Ravi Kumar Stores', parties), null, 'a one-word short name never claims a longer one');
+  assert.deepEqual(candidateParties('Green Traders AND CO', parties).map((x) => x.id), ['p1']);
+  const s = suggest({ line: line('NEFT/AXOIN123456789/GREEN TRADERS AND CO/UTIB/rent'), upi: null, rules: [], parties, categories: [], history: buildHistory([]) });
+  assert.equal(s.partyId, 'p1');
+  assert.equal(s.newParty, null);
+});
