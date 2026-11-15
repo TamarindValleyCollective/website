@@ -676,7 +676,7 @@ import SignInGate from '../../../components/SignInGate.astro';
 
     const flow = flowOf({ cube: d.cube, accounts: d.accounts, months: ch.months, groupIn: ch.groupIn, groupOut: ch.groupOut, fdHeld: d.fd?.balances?.[ch.months[ch.months.length - 1]] ?? 0 });
     ch.flow = flow;
-    const state = $('ch-state'), svg = chSvg('ch-flow');
+    const state = $('ch-state');
     state.hidden = flow.hasData;
     state.textContent = d.hasData ? 'No money moved in this period. Choose other months.' : 'Nothing to show yet. Import a bank statement first.';
     ch.layout = flow.hasData ? layoutFlow(flow) : null;
