@@ -1435,7 +1435,29 @@ import SignInGate from '../../../components/SignInGate.astro';
     renderMoreLabel();
     const c = counts;
     const errs = Object.entries(filterErrors).map(([col, why]) => `Can't read the ${COLUMN_LABELS[col]} search: ${why}`);
-    $('progress').textContent = [`${c.unallocated} left to allocate`, `${c.review} to review`, c.noparty ? `${c.noparty} posted without a party` : '', `Showing ${matched} of ${all.length}`, postedThisSitting ? `${postedThisSitting} posted this sitting` : '', crumbs.length ? `Searching: ${crumbs.join(', ')}` : '', ...errs].filter(Boolean).join(' · ');
+    // The three queues are the work to do, so each is a button that shows just those lines (press again to show every line). A queue
+    // that is empty is plain text: nothing to open.
+    const queue = (n: number, what: string, option: string): Node => {
+      if (!n) return document.createTextNode(`${n} ${what}`);
+      const on = chips.some((x) => x[0] === 'status' && x[1] === option);
+      const b = h('button', { class: 'qlink', text: `${n} ${what}`, attrs: { type: 'button', 'data-opt': option, 'aria-pressed': String(on), title: on ? 'Showing only these. Press to show every line again.' : 'Show only these lines' } });
+      b.addEventListener('click', () => {
+        const i = chips.findIndex((x) => x[0] === 'status' && x[1] === option);
+        if (i >= 0) chips.splice(i, 1);
+        else chips.push(['status', option]);
+        searchChange();
+      });
+      return b;
+    };
+    const parts: Node[] = [
+      queue(c.unallocated, 'left to allocate', 'unallocated'),
+      queue(c.review, 'to review', 'review'),
+      ...(c.noparty ? [queue(c.noparty, 'posted without a party', 'noparty')] : []),
+      ...[`Showing ${matched} of ${all.length}`, postedThisSitting ? `${postedThisSitting} posted this sitting` : '', crumbs.length ? `Searching: ${crumbs.join(', ')}` : '', ...errs].filter(Boolean).map((t) => document.createTextNode(t)),
+    ];
+    const focused = (document.activeElement as HTMLElement | null)?.closest?.('#progress') ? (document.activeElement as HTMLElement).dataset.opt : undefined;
+    $('progress').replaceChildren(...parts.flatMap((p, i) => (i ? [document.createTextNode(' · '), p] : [p])));
+    if (focused) $('progress').querySelector<HTMLElement>(`[data-opt="${focused}"]`)?.focus(); // the button was rebuilt: keep the keyboard where it was
   }
   const SORTABLE = new Set(['date', 'origin', 'narration', 'amount', 'category', 'party', 'nature', 'status']);
   const columnShown = (id: string) => (id === 'narration' ? showNarration : id === 'nature' ? showWording : true);
@@ -2887,6 +2909,28 @@ import SignInGate from '../../../components/SignInGate.astro';
     margin: 0 0 10px;
     font-size: var(--text-sm);
     color: var(--tvc-ink-soft);
+  }
+
+  /* A queue count in the progress line: a button that shows just those lines. */
+  .ledger .qlink {
+    font: inherit;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--tvc-green-dark);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+  }
+
+  .ledger .qlink[aria-pressed='true'] {
+    font-weight: 700;
+    text-decoration-thickness: 2px;
+  }
+
+  .ledger .qlink:focus-visible {
+    outline: 3px solid var(--tvc-green);
+    outline-offset: 2px;
   }
 
   .ledger .progress {
