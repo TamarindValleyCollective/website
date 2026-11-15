@@ -85,3 +85,22 @@ test('circleMonths per delegate: each has its own limit, and the unidentified ar
     [null, null, 50_000, 1_500_000, false],
   ]);
 });
+
+test('with operators, a payment can only belong to a delegate of its own operator’s circle', () => {
+  const ds = [d('a', '5550100001', '2026-07-04', null, { operatorId: 'op1' }), d('b', '5550100002', '2026-07-04', null, { operatorId: 'op2' })];
+  assert.deepEqual(attribute(circle('2026-08-01', 100, '100000000001', { operatorId: 'op1' }), ds, new Map()), { delegateId: 'a', how: 'auto' });
+  assert.deepEqual(attribute(circle('2026-08-01', 100, '100000000002', { operatorId: 'op2' }), ds, new Map()), { delegateId: 'b', how: 'auto' }, 'each operator’s circle on its own: not ambiguous');
+  assert.equal(attribute(circle('2026-08-01', 100, '100000000003', { operatorId: 'op3' }), ds, new Map()).how, 'none', 'an operator with no delegate active that day');
+  // before operators were recorded, nothing is held back
+  assert.equal(attribute(circle('2026-08-01', 100), ds, new Map()).how, 'ambiguous');
+  assert.equal(attribute(circle('2026-08-01', 100, '100000000004', { operatorId: 'op1' }), [d('x', '5550100003', '2026-07-04'), d('y', '5550100004', '2026-07-04')], new Map()).how, 'ambiguous', 'delegates with no operator are everyone’s');
+  // an explicit pick is still the pick
+  assert.deepEqual(attribute(circle('2026-08-01', 100, '100000000005', { operatorId: 'op1' }), ds, new Map([['100000000005', 'b']])), { delegateId: 'b', how: 'assigned' });
+});
+
+test('validateDelegate: the operator, if given, is an id', () => {
+  const ok = { identifier: '5550100001', activeFrom: '2026-07-04', operatorId: '00000000-0000-0000-0000-000000000001' };
+  assert.equal(validateDelegate(ok, { create: true }).value.operatorId, '00000000-0000-0000-0000-000000000001');
+  assert.equal(validateDelegate({ ...ok, operatorId: '' }, { create: true }).value.operatorId, undefined);
+  assert.match(validateDelegate({ ...ok, operatorId: 'someone' }, { create: true }).error, /operator/);
+});

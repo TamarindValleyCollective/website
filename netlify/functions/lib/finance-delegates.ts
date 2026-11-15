@@ -6,9 +6,10 @@ import { requireStaff } from './staff-access';
 import { rest } from './staff-mfa-store';
 import { logFinanceAction } from './finance-audit';
 import { validateDelegate } from '../../../scripts/lib/finance-delegates.mjs';
+import { loadOperators } from './finance-upi-operators';
 
 type Json = Record<string, any>;
-export type Delegate = { id: string; identifier: string; displayName: string | null; activeFrom: string; activeTo: string | null; capPaise: number | null };
+export type Delegate = { id: string; identifier: string; displayName: string | null; activeFrom: string; activeTo: string | null; capPaise: number | null; operatorId: string | null };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const UPI_REF = /^[0-9]{12}$/;
@@ -21,11 +22,14 @@ async function entityId(): Promise<string> {
   return e[0].id as string;
 }
 
-const shape = (r: Json): Delegate => ({ id: r.id, identifier: r.identifier, displayName: r.display_name ?? null, activeFrom: r.active_from, activeTo: r.active_to ?? null, capPaise: r.cap_paise === null || r.cap_paise === undefined ? null : Number(r.cap_paise) });
+const shape = (r: Json): Delegate => ({ id: r.id, identifier: r.identifier, displayName: r.display_name ?? null, activeFrom: r.active_from, activeTo: r.active_to ?? null, capPaise: r.cap_paise === null || r.cap_paise === undefined ? null : Number(r.cap_paise) , operatorId: r.operator_id ?? null});
 
 // A handful of rows at most (one per person in the circle).
 export async function loadDelegates(): Promise<Delegate[]> {
-  const rows = (await (await rest('/fin_delegates?select=id,identifier,display_name,active_from,active_to,cap_paise&order=active_from.asc,created_at.asc&limit=200')).json()) as Json[];
+  const base = 'id,identifier,display_name,active_from,active_to,cap_paise';
+  const order = 'order=active_from.asc,created_at.asc&limit=200';
+  // operator_id exists once migration 0101 is applied; before that the delegates load without it.
+  const rows = (await (await rest(`/fin_delegates?select=${base},operator_id&${order}`).catch(() => rest(`/fin_delegates?select=${base}&${order}`))).json()) as Json[];
   return rows.map(shape);
 }
 
@@ -54,6 +58,7 @@ const columns = (v: Json) => ({
   active_from: v.activeFrom,
   active_to: v.activeTo,
   cap_paise: v.capPaise,
+  ...(v.operatorId ? { operator_id: v.operatorId } : {}),
 });
 
 // POST /delegates (add) and PATCH /delegates/:id (edit: the number cannot change).
@@ -69,6 +74,16 @@ export async function saveDelegate(req: Request, id: string | null): Promise<Res
     if (id) {
       const found = (await (await rest(`/fin_delegates?id=eq.${id}&select=id`)).json()) as Json[];
       if (!found[0]) return json({ error: 'No such delegate.' }, 404);
+    }
+    // A delegate belongs to one operator's circle. With one operator it is theirs without asking; with several the person must choose.
+    const operators = await loadOperators();
+    if (operators.length) {
+      const chosen = checked.value.operatorId as string | undefined;
+      if (chosen && !operators.some((o) => o.id === chosen)) return json({ error: 'No such operator.' }, 400);
+      if (!chosen && id === null) {
+        if (operators.length === 1) checked.value.operatorId = operators[0].id;
+        else return json({ error: 'Choose whose UPI circle this delegate is in.' }, 400);
+      }
     }
     await logFinanceAction({
       actorId: auth.staff.id,

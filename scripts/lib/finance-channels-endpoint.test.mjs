@@ -360,3 +360,51 @@ test('UPI breakdown: each person’s lines, and a bad delegate is refused', asyn
   assert.deepEqual([direct.count, direct.paise, direct.lines[0].channel], [1, 20000, 'bhim']);
   assert.equal((await callLines('&delegate=somebody')).status, 400);
 });
+
+// ---- UPI by operator, then by person ---------------------------------------------------------------------------------------------------
+
+const OPA = ID(201), OPB = ID(202);
+const withOperators = () => {
+  withUpiPeople();
+  db.data.fin_upi_operators = [{ id: OPA, display_name: 'Test operator A', created_at: '2022-01-01' }, { id: OPB, display_name: 'Test operator B', created_at: '2022-02-01' }];
+  db.data.fin_upi_lines.forEach((u) => { u.operator_id = u.bank_line_id === ID(96) ? OPB : OPA; });   // the BHIM payment is operator B's; the rest are A's
+};
+
+test('UPI by operator: whose UPI each payment went through, adding up to the UPI box, and listed in the answer', async () => {
+  grant('admin');
+  withOperators();
+  const r = await (await callBreakdown('&by=operator&dir=out&channel=upi&fd=exclude')).json();
+  assert.deepEqual(r.rows.map((x) => [x.id, x.name, x.paise]), [[OPA, 'Test operator A', 130000], [OPB, 'Test operator B', 20000]]);
+  const cube = (await (await call()).json());
+  assert.equal(r.paise, sum(cube.cube.filter((c) => ['paytm', 'bhim', 'upi_unknown'].includes(c.c) && c.d === 'out' && c.g !== 'sinking')));
+  assert.deepEqual(cube.operators.map((o) => o.name), ['Test operator A', 'Test operator B']);
+});
+
+test('UPI by operator then by person: inside an operator, Direct and each delegate of their circle, and the lines of one', async () => {
+  grant('admin');
+  withOperators();
+  const inA = await (await callBreakdown(`&by=delegate&dir=out&channel=upi&fd=exclude&operator=${OPA}`)).json();
+  assert.deepEqual(inA.rows.map((x) => [x.id, x.paise]), [['none', 100000], [D1, 30000]], 'operator A: the circle payment before the delegate started, and the delegate');
+  const inB = await (await callBreakdown(`&by=delegate&dir=out&channel=upi&fd=exclude&operator=${OPB}`)).json();
+  assert.deepEqual(inB.rows.map((x) => [x.id, x.name, x.paise]), [['own', 'Direct', 20000]]);
+  const lines = await (await callLines(`&dir=out&channel=upi&fd=exclude&operator=${OPA}&delegate=${D1}`)).json();
+  assert.deepEqual([lines.count, lines.paise], [1, 30000]);
+  assert.equal((await callLines('&operator=somebody')).status, 400);
+});
+
+test('a delegate of one operator’s circle is not matched to a payment through another operator’s UPI', async () => {
+  grant('admin');
+  withOperators();
+  db.data.fin_delegates[0].operator_id = OPB;   // D1 now belongs to operator B's circle, but the circle payment went through A's UPI
+  const inA = await (await callBreakdown(`&by=delegate&dir=out&channel=upi&fd=exclude&operator=${OPA}`)).json();
+  assert.ok(inA.rows.every((x) => x.id === 'none'), 'no delegate of A is active, so it is not B’s delegate');
+});
+
+test('a database without operators opens UPI by person at once, with no operators in the picture’s data', async () => {
+  grant('admin');
+  withUpiPeople();
+  const d = await (await call()).json();
+  assert.deepEqual(d.operators, []);
+  const r = await (await callBreakdown('&by=delegate&dir=out&channel=upi&fd=exclude')).json();
+  assert.equal(r.rows.length, 3);
+});

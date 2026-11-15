@@ -75,58 +75,67 @@ export function layoutFlow(flow) {
   return { width: W, height: height + 34, nodes, links, kept, scale: k };
 }
 
-// ---- the columns beyond the picture: a box's breakdown, and then its lines --------------------------------------------------------------
+// ---- the columns beyond the picture: a box's breakdowns, level by level, and then its lines -------------------------------------------
 
-/** How far the picture slides for each level of drilling in (one column's spacing). */
+/** How far the picture slides for each column it opens (one column's spacing). */
 export const SLIDE = 340;
 const CARD_W = 206, CARD_HEAD = 62, CARD_ROW = 40;
 
 /**
- * Where the extra columns go when a box on the money-out side (or the money-in side) is opened, on the same scale as the picture. The
- * breakdown is a column of boxes beside the opened box, joined to it by bands as wide as their money; below that is a card for the lines of one
- * of them. Out opens to the right and the picture slides left; in opens to the left and the picture slides right.
+ * Where the extra columns go when a box is opened, on the same scale as the picture. Each level is a column of boxes beside the one before it,
+ * joined to the row that was chosen there by bands as wide as their money; after the last, a card for the lines. A box on the money-out side (or the
+ * accounts column) opens to the right and the picture slides left; one on the money-in side opens to the left and the picture slides right.
  *
- * `rows`: the breakdown [{ id, name, paise, n }], null while it loads (no boxes yet), or undefined for a box that has none (its lines come
- * straight after it). `pickId`: the row whose lines are shown, '*' for all of them, null for none yet. `lineCount`: how many lines are listed in
- * the card (0 while loading).
- * Returns { side, level, dx, rows: [{...row, x, y, h, w, band: { d, w }}], card: { x, y, w, h, link: { d, w } } | null, bottom }.
+ * `columns`: one per level opened so far, { rows, pickId }: rows is the breakdown [{ id, name, paise, n }], or null while it loads (nothing to place yet);
+ * pickId is the row chosen there ('*' for every row, null for none yet). A box with no breakdown has no columns and goes straight to its lines
+ * (`direct`). `lineCount`: how many lines the card lists (0 while loading).
+ * Returns { side, level, dx, columns: [{ x, pickId, rows: [{...row, x, y, h, w, band: { d, w }}] }], card: { x, y, w, h, link: { d, w } } | null, bottom }.
  */
-export function layoutDrill(layout, { nodeId, rows, pickId = null, lineCount = 0 }) {
+export function layoutDrill(layout, { nodeId, columns = [], lineCount = 0 }) {
   const parent = layout.nodes.find((n) => n.id === nodeId);
   const out = parent.col !== 0, k = layout.scale;   // the deposits (an account, in the middle) open to the right, like the money-out side
-  const direct = rows === undefined;
-  const level = direct || pickId !== null ? (direct ? 1 : 2) : 1;
-  const colX = out ? parent.x + SLIDE : parent.x - SLIDE;
-  const slots = (rows ?? []).map((r) => ({ ...r, w: NW, h: Math.max(4, r.paise * k) }));
-  const slotH = slots.map((r) => Math.max(r.h, MIN_SLOT));
-  const total = slotH.reduce((a, b) => a + b, 0) + GAP * Math.max(0, slots.length - 1);
-  const mid = parent.y + parent.h / 2;
-  let y = Math.max(0, mid - total / 2);
-  let ys = parent.y;
-  const placed = slots.map((r, i) => {
-    const row = { ...r, x: colX, y: y + (slotH[i] - r.h) / 2 };
-    const w = Math.max(1.5, r.paise * k);
-    row.band = { w, d: out ? curve(parent.x + NW, ys + w / 2, colX, row.y + w / 2) : curve(colX + NW, row.y + w / 2, parent.x, ys + w / 2) };
-    y += slotH[i] + GAP;
-    ys += w;
-    return row;
-  });
+  const step = out ? SLIDE : -SLIDE;
+  const direct = columns.length === 0;
+  const placedColumns = [];
+  let source = parent;            // the box the next column's bands leave from
+  let bottom = 0;
+  for (let c = 0; c < columns.length; c++) {
+    const colX = parent.x + step * (c + 1);
+    const rows = (columns[c].rows ?? []).map((r) => ({ ...r, w: NW, h: Math.max(4, r.paise * k) }));
+    const slotH = rows.map((r) => Math.max(r.h, MIN_SLOT));
+    const total = slotH.reduce((a, b) => a + b, 0) + GAP * Math.max(0, rows.length - 1);
+    let y = Math.max(0, source.y + source.h / 2 - total / 2);
+    let ys = source.y;
+    const placed = rows.map((r, i) => {
+      const row = { ...r, x: colX, y: y + (slotH[i] - r.h) / 2 };
+      const w = Math.max(1.5, r.paise * k);
+      row.band = { w, d: out ? curve(source.x + NW, ys + w / 2, colX, row.y + w / 2) : curve(colX + NW, row.y + w / 2, source.x, ys + w / 2) };
+      y += slotH[i] + GAP;
+      ys += w;
+      return row;
+    });
+    if (rows.length) bottom = Math.max(bottom, y - GAP);
+    placedColumns.push({ x: colX, pickId: columns[c].pickId, rows: placed });
+    const pickId = columns[c].pickId;
+    const picked = pickId !== null && pickId !== '*' ? placed.find((r) => (r.id || 'none') === pickId) : null;
+    if (picked) source = picked;   // the next level opens from the chosen row (a '*' stays on the row before)
+  }
+  const last = placedColumns[placedColumns.length - 1];
   let card = null;
-  if (direct || pickId !== null) {
-    const source = direct ? parent : placed.find((r) => (r.id || 'none') === pickId) ?? null;
+  if (direct || (last && last.pickId !== null)) {
     const cardH = CARD_HEAD + Math.max(1, lineCount) * CARD_ROW;
-    const nodeX = direct ? colX : out ? colX + SLIDE : colX - SLIDE;
+    const nodeX = parent.x + step * (columns.length + 1);
     const x = out ? nodeX : nodeX - CARD_W + NW;
-    const cy = Math.max(0, (source ? source.y + source.h / 2 : mid) - cardH / 2);
-    const w = Math.min(40, Math.max(1.5, source ? (source.paise ?? source.h / k) * k : parent.h));
-    const from = source ?? parent;
+    const cy = Math.max(0, source.y + source.h / 2 - cardH / 2);
+    const w = Math.min(40, Math.max(1.5, source.paise ? source.paise * k : source.h));
     card = {
       x, y: cy, w: CARD_W, h: cardH,
-      link: { w, d: out ? curve(from.x + NW, from.y + from.h / 2, x, cy + 14 + w / 2) : curve(x + CARD_W, cy + 14 + w / 2, from.x, from.y + from.h / 2) },
+      link: { w, d: out ? curve(source.x + NW, source.y + source.h / 2, x, cy + 14 + w / 2) : curve(x + CARD_W, cy + 14 + w / 2, source.x, source.y + source.h / 2) },
     };
+    bottom = Math.max(bottom, cy + cardH);
   }
-  const bottom = Math.max(total ? y - GAP : 0, card ? card.y + card.h : 0);
-  return { side: out ? 'out' : 'in', level, dx: out ? -SLIDE * level : SLIDE * level, rows: placed, card, bottom };
+  const level = columns.length + (card ? 1 : 0);
+  return { side: out ? 'out' : 'in', level, dx: out ? -SLIDE * level : SLIDE * level, columns: placedColumns, card, bottom };
 }
 
 function curve(x0, y0, x1, y1) {
@@ -159,10 +168,10 @@ function stageOf(svg) {
 }
 
 /**
- * Draws the picture into `svg`, and, when `drill` is given, the opened box's breakdown and lines beside it, with the picture slid along to
- * them. `heads`: the three column headings. `fdNote(node)`: extra line under the money moved to the fixed deposits. `drill`:
- * { nodeId, rows (see layoutDrill), pickId, column: the breakdown's heading, lines: null | { state: 'loading' | 'error' | 'ok', title, summary,
- * rows: [{ date, href, sub, amount }] } }. Handlers: onNode(id) for a box, onBand(link) for a band, onRow(id) for a breakdown row.
+ * Draws the picture into `svg`, and, when `drill` is given, the opened box's breakdowns and lines beside it, with the picture slid along to them.
+ * `heads`: the three column headings. `fdNote(node)`: extra line under the deposits' box. `drill`: { nodeId, columns: [{ rows (see layoutDrill), pickId,
+ * title }], lines: null | { state: 'loading' | 'error' | 'ok', title, summary, rows: [{ date, href, sub, amount }] } }.
+ * Handlers: onNode(id) for a box, onBand(link) for a band, onRow(columnIndex, rowId) for a row of a breakdown.
  */
 export function drawFlow(svg, layout, { heads, fdNote, drill, onNode, onBand, onRow }) {
   const { cam, heads: gHeads, layer } = stageOf(svg);
@@ -173,7 +182,7 @@ export function drawFlow(svg, layout, { heads, fdNote, drill, onNode, onBand, on
   const gLinks = svgEl('g'), gNodes = svgEl('g');
   layer.append(gLinks, gNodes);
 
-  const d = drill ? layoutDrill(layout, { nodeId: drill.nodeId, rows: drill.rows === 'error' ? null : drill.rows, pickId: drill.pickId, lineCount: drill.lines?.state === 'ok' ? drill.lines.rows.length : 0 }) : null;
+  const d = drill ? layoutDrill(layout, { nodeId: drill.nodeId, columns: drill.columns.map((c) => ({ rows: Array.isArray(c.rows) ? c.rows : null, pickId: c.pickId })), lineCount: drill.lines?.state === 'ok' ? drill.lines.rows.length : 0 }) : null;
   const opened = drill ? byId.get(drill.nodeId) : null;
   const onPath = (l) => !opened || l.from === opened.id || l.to === opened.id;
 
@@ -195,7 +204,7 @@ export function drawFlow(svg, layout, { heads, fdNote, drill, onNode, onBand, on
     if (n.col === 1) {
       // an account: its name above, and below it what stayed in it (or what the deposits hold). Two levels in, the accounts have slid mostly out
       // of view, so their names are left off rather than showing as clipped fragments at the edge.
-      if (!(d && d.level === 2)) {
+      if (!(d && d.level >= 2)) {
         text(g, tx, n.y - 10, n.label, 'fl-acct halo');
         const diff = n.inPaise - n.outPaise;
         const note = n.kind === 'fd' ? fdNote?.(n) : diff !== 0 ? `${diff > 0 ? 'Kept' : 'Taken from balance'} ${moneyText(Math.abs(diff))}` : '';
@@ -214,32 +223,38 @@ export function drawFlow(svg, layout, { heads, fdNote, drill, onNode, onBand, on
     gNodes.append(g);
   }
 
-  text(gHeads, 234, 12, heads[0], 'fl-head', 'end');
-  text(gHeads, 567, 12, heads[1], 'fl-head', 'middle');
-  text(gHeads, 900, 12, heads[2], 'fl-head');
+  if (!(d && d.level >= 2)) {   // two levels in, the picture's own columns have slid out of view: their headings would show as fragments
+    text(gHeads, 234, 12, heads[0], 'fl-head', 'end');
+    text(gHeads, 567, 12, heads[1], 'fl-head', 'middle');
+    text(gHeads, 900, 12, heads[2], 'fl-head');
+  }
 
   let height = layout.height;
   if (d && opened) {
     const out = d.side === 'out', kind = opened.kind;
-    if (drill.rows === null) text(layer, out ? opened.x + SLIDE : opened.x - SLIDE + NW, opened.y + opened.h / 2, 'Loading…', 'fl-amt fl-fade', out ? 'start' : 'end');
-    if (drill.rows === 'error') text(layer, out ? opened.x + SLIDE : opened.x - SLIDE + NW, opened.y + opened.h / 2, 'Could not load this. Click the box again to retry.', 'fl-amt fl-fade', out ? 'start' : 'end');
-    for (const r of d.rows) {
-      const picked = drill.pickId !== null && (drill.pickId === '*' || drill.pickId === (r.id || 'none'));
-      const dim = drill.pickId !== null && !picked;
-      const band = svgEl('path', { d: r.band.d, 'stroke-width': r.band.w, class: `fl-link fl-${kind}${dim ? ' dim' : ''}` });
-      band.append(svgEl('title', {}, `${r.name}: ${moneyText(r.paise)}`));
-      band.addEventListener('click', () => onRow(r.id || 'none'));
-      gLinks.append(band);
-      const g = svgEl('g', { class: `fl-node fl-fade${dim ? ' dim' : ''}${picked && drill.pickId !== '*' ? ' sel' : ''}`, tabindex: 0, role: 'button', 'aria-label': `${r.name}: ${moneyText(r.paise)}` });
-      g.append(svgEl('rect', { x: r.x, y: r.y, width: r.w, height: r.h, rx: 3, class: `fl-box fl-${kind}` }));
-      const tx = out ? r.x + r.w + 8 : r.x - 8, anchor = out ? 'start' : 'end', mid = r.y + r.h / 2;
-      text(g, tx, mid - 1, r.name, 'fl-name', anchor);
-      text(g, tx, mid + 14, `${moneyText(r.paise)} · ${r.n} ${r.n === 1 ? 'line' : 'lines'}`, 'fl-amt', anchor);
-      g.addEventListener('click', () => onRow(r.id || 'none'));
-      g.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onRow(r.id || 'none'); } });
-      gNodes.append(g);
-    }
-    if (d.rows.length && drill.column) text(gHeads, out ? opened.x + SLIDE : opened.x - SLIDE + NW, 12, drill.column, 'fl-head', out ? 'start' : 'end');
+    drill.columns.forEach((col, ci) => {
+      const placed = d.columns[ci];
+      const x = placed.x;
+      if (col.rows === null) text(layer, out ? x : x + NW, opened.y + opened.h / 2, 'Loading…', 'fl-amt fl-fade', out ? 'start' : 'end');
+      if (col.rows === 'error') text(layer, out ? x : x + NW, opened.y + opened.h / 2, 'Could not load this. Click the box again to retry.', 'fl-amt fl-fade', out ? 'start' : 'end');
+      for (const r of placed.rows) {
+        const picked = col.pickId !== null && (col.pickId === '*' || col.pickId === (r.id || 'none'));
+        const dim = col.pickId !== null && !picked;
+        const band = svgEl('path', { d: r.band.d, 'stroke-width': r.band.w, class: `fl-link fl-${kind}${dim ? ' dim' : ''}` });
+        band.append(svgEl('title', {}, `${r.name}: ${moneyText(r.paise)}`));
+        band.addEventListener('click', () => onRow(ci, r.id || 'none'));
+        gLinks.append(band);
+        const g = svgEl('g', { class: `fl-node fl-fade${dim ? ' dim' : ''}${picked && col.pickId !== '*' ? ' sel' : ''}`, tabindex: 0, role: 'button', 'aria-label': `${r.name}: ${moneyText(r.paise)}` });
+        g.append(svgEl('rect', { x: r.x, y: r.y, width: r.w, height: r.h, rx: 3, class: `fl-box fl-${kind}` }));
+        const tx = out ? r.x + r.w + 8 : r.x - 8, anchor = out ? 'start' : 'end', mid = r.y + r.h / 2;
+        text(g, tx, mid - 1, r.name, 'fl-name', anchor);
+        text(g, tx, mid + 14, `${moneyText(r.paise)} · ${r.n} ${r.n === 1 ? 'line' : 'lines'}`, 'fl-amt', anchor);
+        g.addEventListener('click', () => onRow(ci, r.id || 'none'));
+        g.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onRow(ci, r.id || 'none'); } });
+        gNodes.append(g);
+      }
+      if (placed.rows.length && col.title) text(gHeads, out ? x : x + NW, 12, col.title, 'fl-head', out ? 'start' : 'end');
+    });
     if (d.card && drill.lines) {
       const c = d.card, lines = drill.lines;
       gLinks.append(svgEl('path', { d: c.link.d, 'stroke-width': c.link.w, class: `fl-link fl-${kind}` }));

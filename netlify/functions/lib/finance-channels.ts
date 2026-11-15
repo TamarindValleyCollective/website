@@ -20,6 +20,7 @@ import { attribute, delegateLabel } from '../../../scripts/lib/finance-delegates
 import { fdBalance } from '../../../scripts/lib/finance-metrics.mjs';
 import { UPI_APPS, cellMatches, channelCube, channelPieces, fyMonths, groupPieces, monthsSoFar } from '../../../scripts/lib/finance-channels.mjs';
 import { CIRCLE_CAP_PAISE } from '../../../scripts/lib/finance-upi-circle.mjs';
+import { loadOperators } from './finance-upi-operators';
 
 type Json = Record<string, any>;
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
@@ -32,7 +33,7 @@ async function loadLedger() {
     rowsAll('/fin_allocations?select=bank_line_id,category_id,project_id,party_id,amount_paise&posted_at=not.is.null&order=id.asc'),
     rows('/fin_categories?select=id,name,type,head,is_salary&order=id.asc&limit=500').catch(() => rows('/fin_categories?select=id,name,type&order=id.asc&limit=500')),
     rows('/fin_bank_accounts?select=id,label&order=created_at.asc&limit=50'),
-    rowsAll('/fin_upi_lines?select=bank_line_id,app,paid_at,upi_ref,is_circle&bank_line_id=not.is.null&order=id.asc'),
+    rowsAll('/fin_upi_lines?select=bank_line_id,app,paid_at,upi_ref,is_circle,operator_id&bank_line_id=not.is.null&order=id.asc').catch(() => rowsAll('/fin_upi_lines?select=bank_line_id,app,paid_at,upi_ref,is_circle&bank_line_id=not.is.null&order=id.asc')),
     rowsAll('/fin_parties?select=id,name,merged_into&order=id.asc').catch(() => rowsAll('/fin_parties?select=id,name&order=id.asc')).catch(() => [] as Json[]),
   ]);
   const upiAppByLine = new Map<string, 'bhim' | 'paytm'>(upiJoined.map((u) => [u.bank_line_id as string, u.app as 'bhim' | 'paytm']));
@@ -61,7 +62,7 @@ export async function getChannels(req: Request): Promise<Response> {
     const [ledger, projects, upiCircle, delegates, picks] = await Promise.all([
       loadLedger(),
       rows('/fin_projects?select=id,name,financial_year&order=name.asc&limit=500').catch(() => [] as Json[]),
-      rowsAll('/fin_upi_lines?select=paid_at,app,amount_paise,upi_ref&is_circle=eq.true&direction=eq.debit&ignored=eq.false&order=paid_at.asc,id.asc'),
+      rowsAll('/fin_upi_lines?select=paid_at,app,amount_paise,upi_ref,operator_id&is_circle=eq.true&direction=eq.debit&ignored=eq.false&order=paid_at.asc,id.asc').catch(() => rowsAll('/fin_upi_lines?select=paid_at,app,amount_paise,upi_ref&is_circle=eq.true&direction=eq.debit&ignored=eq.false&order=paid_at.asc,id.asc')),
       loadDelegates().catch(() => []),
       loadDelegateLinks().catch(() => new Map<string, string>()),
     ]);
@@ -85,7 +86,7 @@ export async function getChannels(req: Request): Promise<Response> {
     for (const u of upiCircle) {
       const day = String(u.paid_at);
       if (day < from || day > to) continue;
-      const who = attribute({ isCircle: true, paidAt: day, upiRef: u.upi_ref }, delegates, picks) as { delegateId: string | null };
+      const who = attribute({ isCircle: true, paidAt: day, upiRef: u.upi_ref, operatorId: u.operator_id ?? null }, delegates, picks) as { delegateId: string | null };
       const key = `${day.slice(0, 7)}|${who.delegateId}|${u.app}`;
       const e = payments.get(key) ?? payments.set(key, { m: day.slice(0, 7), d: who.delegateId, app: u.app as string, paise: 0, n: 0 }).get(key)!;
       e.paise += Number(u.amount_paise);
@@ -104,6 +105,7 @@ export async function getChannels(req: Request): Promise<Response> {
       cube,
       delegates: delegates.map((d) => ({ id: d.id, label: delegateLabel(d), number: d.identifier, capPaise: d.capPaise ?? CIRCLE_CAP_PAISE })),
       delegatePayments: [...payments.values()],
+      operators: await loadOperators(),
       fd: { balances },
     });
   } catch (err) {
@@ -131,7 +133,7 @@ async function piecesFor(req: Request, what: string) {
   const fd = q.get('fd');
   if (fd !== null && fd !== 'only' && fd !== 'exclude') return { fail: json({ error: 'Choose only or exclude.' }, 400) };
   const ids: Record<string, string | undefined> = {};
-  for (const key of ['project', 'party', 'category', 'delegate']) {
+  for (const key of ['project', 'party', 'category', 'delegate', 'operator']) {
     const v = q.get(key);
     if (v !== null && v !== 'none' && !(key === 'delegate' && v === 'own') && !UUID.test(v)) return { fail: json({ error: `Choose a ${key}.` }, 400) };
     ids[key] = v ?? undefined;
@@ -142,24 +144,27 @@ async function piecesFor(req: Request, what: string) {
   // The person behind a UPI payment: the delegate active that day, or the one an admin picked (the rule the UPI page uses). 'own' is the accounts' own
   // UPI (not a delegated payment); 'none' a delegated payment with no delegate chosen yet.
   const [delegates, picks] = await Promise.all([loadDelegates().catch(() => []), loadDelegateLinks().catch(() => new Map<string, string>())]);
-  const delegateOf = new Map<string, string>();
+  const delegateOf = new Map<string, string>(), operatorOf = new Map<string, string>();
   for (const u of upiJoined) {
+    if (u.operator_id) operatorOf.set(u.bank_line_id as string, u.operator_id as string);
     if (!u.is_circle) { delegateOf.set(u.bank_line_id as string, 'own'); continue; }
-    const who = attribute({ isCircle: true, paidAt: String(u.paid_at), upiRef: u.upi_ref }, delegates, picks) as { delegateId: string | null };
+    const who = attribute({ isCircle: true, paidAt: String(u.paid_at), upiRef: u.upi_ref, operatorId: (u.operator_id as string | null) ?? null }, delegates, picks) as { delegateId: string | null };
     delegateOf.set(u.bank_line_id as string, who.delegateId ?? 'none');
   }
+  const operators = await loadOperators();
   // A party that was merged into another is that other one.
   const mergedInto = new Map<string, string>(parties.filter((p) => p.merged_into).map((p) => [p.id as string, p.merged_into as string]));
   const canon = (id: string) => { let at = id, hops = 0; while (at && mergedInto.has(at) && hops++ < 8) at = mergedInto.get(at)!; return at; };
   const from = `${fy}-04-01`;
   const to = `${fy + 1}-03-31`;
   const pieces = channelPieces({ lines: lines.filter((l) => l.tran_date >= from && l.tran_date <= to), upiAppByLine, allocations: allocRows, categories })
-    .map((p: Json) => ({ ...p, party: canon(p.party), delegate: UPI_APPS.includes(p.c) ? delegateOf.get(p.lineId) ?? 'own' : '' }))
+    .map((p: Json) => ({ ...p, party: canon(p.party), delegate: UPI_APPS.includes(p.c) ? delegateOf.get(p.lineId) ?? 'own' : '', operator: UPI_APPS.includes(p.c) ? operatorOf.get(p.lineId) ?? '' : '' }))
     .filter((p: Json) => cellMatches(p, spec, months));
   return {
     pieces: pieces as Json[],
     accounts: new Map(accounts.map((a) => [a.id as string, a.label as string])),
     partyNames: new Map(parties.map((p) => [p.id as string, p.name as string])),
+    operatorNames: new Map(operators.map((o) => [o.id, o.name])),
     delegateNames: new Map(delegates.map((d) => [d.id as string, `UPI circle · ${((l: string) => (/^\d+$/.test(l) ? `Number ${l}` : l))(delegateLabel(d))}`])),
     categoryNames: new Map(categories.map((c) => [c.id as string, c.name as string])),
   };
@@ -191,10 +196,10 @@ export async function getChannelLines(req: Request): Promise<Response> {
 export async function getChannelBreakdown(req: Request): Promise<Response> {
   try {
     const by = new URL(req.url).searchParams.get('by');
-    if (by !== 'party' && by !== 'category' && by !== 'delegate') return json({ error: 'Choose party, category or delegate.' }, 400);
+    if (by !== 'party' && by !== 'category' && by !== 'delegate' && by !== 'operator') return json({ error: 'Choose party, category, delegate or operator.' }, 400);
     const r = await piecesFor(req, 'breakdown');
     if ('fail' in r) return r.fail!;
-    const rowsOut = groupPieces(r.pieces, by, by === 'party' ? r.partyNames : by === 'delegate' ? r.delegateNames : r.categoryNames);
+    const rowsOut = groupPieces(r.pieces, by, by === 'party' ? r.partyNames : by === 'delegate' ? r.delegateNames : by === 'operator' ? r.operatorNames : r.categoryNames);
     return json({ by, rows: rowsOut, paise: rowsOut.reduce((t: number, x: Json) => t + x.paise, 0) });
   } catch (err) {
     console.error('[finance-channels] breakdown failed', err);

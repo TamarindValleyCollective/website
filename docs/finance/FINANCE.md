@@ -348,6 +348,22 @@ types the importer knows; each batch stores its `source`: `axis_statement`, `pay
   never the number or name. Not built: reading delegate numbers off receipt screenshots (decided against: nobody will upload each
   receipt), per-delegate rows in the dashboard's circle gauge (it still shows the monthly total), and showing the delegate in the
   ledger.
+- **UPI operators** (migration `0101`, **not yet applied**: tested on the real data inside a transaction that was rolled back on 2026-11-15, which
+  gave all 128 UPI rows and the one delegate the first operator, left the link-only trigger on, locked the table to the service role and refused a
+  batch with no operator; `lib/finance-upi-operators.ts`, pure rules in `finance-upi-operators.mjs`). All UPI payments go out through the UPI setup of
+  one of the account's **operators** (the people who can add the account to their UPI apps); each is either made by the operator **directly** or by a
+  **delegate** in that operator's UPI circle, and either operator may have delegates. Nothing recorded *whose* UPI a payment went through, because the
+  Paytm and BHIM exports are in the operator's name and never say which. So now: an operator is a name an admin types on the UPI page (*Operators*:
+  add, rename; the migration creates one placeholder, "First operator", that every existing UPI row and delegate belongs to, to be renamed); each UPI
+  row carries its operator (`fin_upi_lines.operator_id`, set when its file is imported) and each delegate belongs to one operator's circle
+  (`fin_delegates.operator_id`: filled in when there is one operator, chosen in the dialog when there are several). **The import asks, every time**:
+  once operators exist, each UPI file in the preview has a *Whose UPI is this?* choice and cannot be imported without one (the other files go in).
+  The choice is preselected from a **suggestion** only: a file has a signature (a short hash of what it looks like: the accounts a Paytm export's
+  Summary names, the sender id that pays most of a BHIM history; never the labels themselves), remembered for the operator it was confirmed as, so the
+  next file that looks the same is suggested to them, and with one operator that operator is suggested; with two operators and a layout nobody has
+  had, nothing is suggested. When the operators upload their own files, the same question tells whose file it is. A circle payment can only belong to a
+  delegate of its own operator's circle (`attribute`). Until the migration is applied there are no operators: UPI files import without asking, the
+  UPI page shows no operators, and everything else works as before. Not built: reading the operator off the file itself (neither export names them).
 - **Notes and links between the ledger and the UPI page** (migration `0089`, **applied 2026-11-07**). The bank's or the app's wording is never
   changed. A **note** sits beside it: one per payment, in `fin_payment_notes`, keyed `upi:<12-digit reference>` for a UPI payment (so a UPI
   row and its bank line share one note, before and after they are joined) or `bank:<line id>` otherwise. It is shown and edited in the
@@ -835,15 +851,15 @@ not a channel, so they appear only as the single "Projects" purpose.
 - **Every box opens by its natural breakdown, not by date** (`breakdownOf`): Projects by project, Salary by employee (who it was paid to),
   Maintenance by who paid it, every other purpose by category, a channel by what its money was for, **UPI by the person behind each payment**. Each row shows its lines and
   amount and adds up to the box. Project and purpose breakdowns come from the cube in the browser; person, category and UPI person need the lines, so
-  `GET /channels/breakdown?by=party|category|delegate` groups them on the server (a person merged into another counts as the one they were merged into).
+  `GET /channels/breakdown?by=party|category|delegate|operator` groups them on the server (a person merged into another counts as the one they were merged into).
   That is the one place a name leaves the server, to people who may view finance and, for an auditor, with the visit logged.
-- **UPI is one channel, and its breakdown is by person, not by app.** BHIM, Paytm and UPI-with-the-app-unknown are apps of one UPI channel
-  (`UPI_APPS`, from the channel kind in `finance-origin.mjs`), so the picture has one UPI box. All UPI payments go out through the account
-  holder's UPI setup: some **Direct**, some by the **UPI circle**, the delegates paying under that same UPI ID. Opening the box slides to those: a
-  row *Direct* and a row for each delegate (*UPI circle · <name or number>*, and *UPI circle · no delegate yet* for a circle payment no delegate is
-  chosen for), **whichever app each used**; the app is on the lines. The person behind a payment is worked out as on the UPI page (a circle
-  payment belongs to the delegate active that day, or the one an admin picked; any other UPI payment is Direct), and the rows add up to the box.
-  Today the circle has one delegate. Delegates' payments are also in their own card (below) with their monthly limits.
+- **UPI is one channel, opened as a tree.** BHIM, Paytm and UPI-with-the-app-unknown are apps of one UPI channel (`UPI_APPS`, from the channel
+  kind in `finance-origin.mjs`), so the picture has one UPI box (*UPI (All)*). All UPI payments go out through an operator's UPI setup, so it opens
+  **by operator** (*Whose UPI*), then, inside an operator, **by person**: *Direct* and each delegate of that operator's UPI circle (*UPI circle ·
+  <name or number>*, and *UPI circle · no delegate yet* for a circle payment no delegate is chosen for), **whichever app each used** (the app is on
+  the lines), then the lines. Each row's money rolls up into the one above, so the rows always add up to their parent. Without operators recorded
+  (migration `0101` not applied) it opens by person at once. The drill is as deep as the tree (`drillDims`, `layoutDrill`): one more column and
+  one more slide per level.
 - **Fixed deposits are an account.** They are not money out: putting money into one is a **transfer** from one account to another, and money
   brought back is a transfer the other way. So they are a box in the accounts column, after the bank accounts, as tall as what they hold (the
   balance at the end of the period, from `fdBalance`, or what moved if that is more), with *Held ₹… at <month> end* under it. A transfer is a
@@ -871,7 +887,7 @@ not a channel, so they appear only as the single "Projects" purpose.
   rule: sinking fund, then a project, then salary, then the category's head), so the totals agree with the Cashflow tab. What nobody has
   categorised is `other`, flagged, so each direction always adds up to the bank lines. The browser draws any period and grouping of it without
   asking again (`flowOf`). It carries no narrations, UPI references or party names.
-- **The lines behind a box, band or row.** `GET /api/finance-admin/channels/lines?fy=&months=&dir=&channel=&purpose=&account=&fd=&project=&party=&category=&delegate=`
+- **The lines behind a box, band or row.** `GET /api/finance-admin/channels/lines?fy=&months=&dir=&channel=&purpose=&account=&fd=&project=&party=&category=&delegate=&operator=`
   sums the same pieces (`channelPieces`), so the count and amount agree with the figure on the box (`none` means nothing named; `channel=upi`
   means any UPI app; `delegate=own` is Direct). It returns the number of lines, the amount and the largest eight (date, account, channel, purpose, project, person,
   category, amount and the line's id, which the date links to in the Ledger). No narrations. `specOf` turns a click into the filter and

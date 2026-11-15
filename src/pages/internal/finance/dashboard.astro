@@ -180,7 +180,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   import { StaffAuthError, clearStepUp, clearToken, decodeTokenEmail, getToken, setToken, staffFetch } from '../../../../scripts/lib/staff-client.mjs';
   import { clearState, showFailure, showLoading } from '../../../../scripts/lib/staff-states.mjs';
   import { CHANNELS } from '../../../../scripts/lib/finance-origin.mjs';
-  import { IN_PURPOSES, OUT_PURPOSES, breakdownOf, flowOf, fyMonths, monthBars, monthsSoFar, presetMonths, previousMonths, projectsOf, purposesOf, rangeOf, specOf, totalsOf } from '../../../../scripts/lib/finance-channels.mjs';
+  import { IN_PURPOSES, OUT_PURPOSES, drillDims, flowOf, fyMonths, monthBars, monthsSoFar, presetMonths, previousMonths, projectsOf, purposesOf, rangeOf, specOf, totalsOf } from '../../../../scripts/lib/finance-channels.mjs';
   import { drawFlow, layoutFlow, moneyText, monthName, mountStrip, statusOf } from '../../../../scripts/lib/finance-channels-view.mjs';
   import {
     GROUPS, GROUP_CLASS, GROUP_LABELS, HEAD_LABELS, SPEND_HEADS, STATUS, balanceSvg, barsInOutSvg, circleBarsSvg, healthItems, lakhText, monthsText, percentText, ringSvg, rupeesText,
@@ -562,9 +562,10 @@ import SignInGate from '../../../components/SignInGate.astro';
   // when it is clicked (GET /channels/lines).
   // What is open: a box on the money-out or money-in side, its breakdown (loaded or not; undefined for a box with none), the row chosen in it,
   // and the lines of that.
-  type ChDrill = { nodeId: string; spec: Record<string, string>; dim: string | null; rows: any[] | null | 'error' | undefined; pickId: string | null; lines: any };
-  const ch: { data: any; fy: number | null; months: string[]; groupIn: string; groupOut: string; cmp: boolean; drill: ChDrill | null; strip: any; layout: any; flow: any; loading: boolean; seq: number } = {
-    data: null, fy: null, months: [], groupIn: 'channel', groupOut: 'channel', cmp: false, drill: null, strip: null, layout: null, flow: null, loading: false, seq: 0,
+  type ChLevel = { dim: string; rows: any[] | null | 'error'; pickId: string | null };
+  type ChDrill = { nodeId: string; spec: Record<string, string>; dims: string[]; levels: ChLevel[]; lines: any };
+  const ch: { data: any; fy: number | null; months: string[]; groupIn: string; groupOut: string; cmp: boolean; drill: ChDrill | null; strip: any; layout: any; flow: any; loading: boolean } = {
+    data: null, fy: null, months: [], groupIn: 'channel', groupOut: 'channel', cmp: false, drill: null, strip: null, layout: null, flow: null, loading: false,
   };
   const chMoney = (paise: number) => moneyText(paise);
   const chSoFar = (): string[] => monthsSoFar({ fy: ch.data.fy, today: ch.data.today });
@@ -686,22 +687,37 @@ import SignInGate from '../../../components/SignInGate.astro';
     renderChannelTable();
   }
 
-  // ---- opening a box: its breakdown beside it, then its lines (the picture slides along) ----------------------------------------------
-  // Click a box on the money-out side and the picture slides left, so its breakdown opens to the right; a box on the money-in side slides it
-  // right, opening to the left. Click a row and it slides one more level, to that row's lines. The account, the crumbs, Back and Esc go back.
-  // Every box is broken down the same way (breakdownOf): Projects by project, Salary by employee, Maintenance by who paid, the other purposes
-  // by category, a channel by what it was for; the deposits go straight to their lines.
+  // ---- opening a box: its breakdowns beside it, level by level, then its lines (the picture slides along) ---------------------------------
+  // Click a box on the money-out side and the picture slides left, so its breakdown opens to the right; a box on the money-in side slides it right,
+  // opening to the left. Click a row and it slides one level further: to the next breakdown if there is one (UPI opens by operator, then by person),
+  // else to that row's lines. The account, the crumbs, Back and Esc go back. Every box is broken down the same way (breakdownOf, drillDims): Projects
+  // by project, Salary by employee, Maintenance by who paid, the other purposes by category, a channel by what it was for, UPI by operator and then by
+  // person; the deposits go straight to their lines.
   const purposeName = (dir: string, id: string, uncategorised: boolean) => (uncategorised ? 'Not categorised yet' : ((dir === 'in' ? IN_PURPOSES : OUT_PURPOSES).find((p) => p.id === id)?.label ?? id));
   const projectNames = () => new Map<string, string>((ch.data.projects as any[]).map((p) => [p.id, p.name]));
 
-  /** The breakdown's heading. */
-  function columnTitle(dr: ChDrill) {
-    if (dr.dim === 'project') return 'Project';
-    if (dr.dim === 'purpose') return 'Purpose';
-    if (dr.dim === 'delegate') return 'Paid by';
-    if (dr.dim === 'category') return 'Category';
+  /** A level's heading. */
+  function levelTitle(dr: ChDrill, level: ChLevel) {
+    if (level.dim === 'project') return 'Project';
+    if (level.dim === 'purpose') return 'Purpose';
+    if (level.dim === 'category') return 'Category';
+    if (level.dim === 'operator') return 'Whose UPI';
+    if (level.dim === 'delegate') return 'Paid by';
     return dr.spec.purpose === 'salary' ? 'Employee' : dr.spec.dir === 'in' ? 'Paid by' : 'Paid to';
   }
+
+  /** The filter for the rows of level k: the box's, narrowed by the rows chosen at the levels before it (or, for the lines, at every level). */
+  function specAt(dr: ChDrill, k: number): Record<string, string> {
+    const spec = { ...dr.spec };
+    for (let j = 0; j < k; j++) {
+      const p = dr.levels[j].pickId;
+      if (p && p !== '*') spec[dr.levels[j].dim] = p;
+    }
+    return spec;
+  }
+
+  const deepest = (dr: ChDrill) => dr.levels[dr.levels.length - 1];
+  const rowName = (level: ChLevel | undefined) => (level && Array.isArray(level.rows) && level.pickId && level.pickId !== '*' ? level.rows.find((r: any) => (r.id || 'none') === level.pickId)?.name ?? null : null);
 
   function drawStage() {
     const d = ch.data, svg = chSvg('ch-flow'), dr = ch.drill;
@@ -713,7 +729,7 @@ import SignInGate from '../../../components/SignInGate.astro';
         const at = ch.months[ch.months.length - 1];
         return `Held ${chMoney(d.fd?.balances?.[at] ?? 0)} at ${monthShortName(at)} end`;
       },
-      drill: dr ? { nodeId: dr.nodeId, rows: dr.rows, pickId: dr.pickId, column: columnTitle(dr), lines: dr.lines } : null,
+      drill: dr ? { nodeId: dr.nodeId, columns: dr.levels.map((l) => ({ rows: l.rows, pickId: l.pickId, title: levelTitle(dr, l) })), lines: dr.lines } : null,
       onNode: chNode,
       onBand: (l: any) => chNode(l.transfer ? (l.from.startsWith('A:__fd') ? l.from : l.to) : l.from.startsWith('L:') ? l.from : l.to),   // a transfer opens the deposits
       onRow: chRow,
@@ -721,87 +737,108 @@ import SignInGate from '../../../components/SignInGate.astro';
     paintNav();
   }
 
+  /** The rows of level k: from the picture's own figures for projects and purposes, from the server for people, categories, delegates and operators. */
+  function loadLevel(dr: ChDrill, k: number) {
+    const level = dr.levels[k], spec = specAt(dr, k);
+    if (level.dim === 'project') { level.rows = projectsOf({ cube: ch.data.cube, months: ch.months, spec, projects: ch.data.projects }); return; }
+    if (level.dim === 'purpose') { level.rows = purposesOf({ cube: ch.data.cube, months: ch.months, spec }); return; }
+    level.rows = null;
+    void loadBreakdown(spec, level.dim).then((rows) => {
+      if (ch.drill !== dr || dr.levels[k] !== level) return;   // something else was chosen while this loaded
+      level.rows = rows ?? 'error';
+      drawStage();
+    });
+  }
+
   function openBox(n: any) {
     const spec = specOf({ node: n, nodes: ch.flow.nodes, groupIn: ch.groupIn, groupOut: ch.groupOut }) as Record<string, string>;
-    const dim = breakdownOf(spec);
-    const seq = ++ch.seq;
-    ch.drill = { nodeId: n.id, spec, dim, rows: dim ? null : undefined, pickId: null, lines: null };
-    if (!dim) loadLinesFor();
-    else if (dim === 'project') ch.drill.rows = projectsOf({ cube: ch.data.cube, months: ch.months, spec, projects: ch.data.projects });
-    else if (dim === 'purpose') ch.drill.rows = purposesOf({ cube: ch.data.cube, months: ch.months, spec });    else {
-      void loadBreakdown(spec, dim, seq).then((rows) => {
-        if (seq !== ch.seq || !ch.drill) return;
-        ch.drill.rows = rows ?? 'error';
-        drawStage();
-      });
-    }
+    const dims = drillDims(spec, { operators: ch.data.operators?.length ?? 0 });
+    const dr: ChDrill = { nodeId: n.id, spec, dims, levels: dims.length ? [{ dim: dims[0], rows: null, pickId: null }] : [], lines: null };
+    ch.drill = dr;
+    if (dims.length) loadLevel(dr, 0); else loadLinesFor(dr);
     drawStage();
   }
 
   function chNode(id: string) {
     const n = ch.layout?.nodes.find((x: any) => x.id === id);
     if (!n) return;
-    if (n.kind === 'account' || ch.drill?.nodeId === id) { ch.drill = null; ch.seq++; drawStage(); return; }   // the account, or the same box again: back to the picture
+    if (n.kind === 'account' || ch.drill?.nodeId === id) { ch.drill = null; drawStage(); return; }   // the account, or the same box again: back to the picture
     openBox(n);
   }
 
-  function chRow(id: string) {
-    const dr = ch.drill;
-    if (!dr || !Array.isArray(dr.rows)) return;
-    dr.pickId = dr.pickId === id ? null : id;
+  function chRow(k: number, id: string) {
+    const dr = ch.drill, level = dr?.levels[k];
+    if (!dr || !level || !Array.isArray(level.rows)) return;
+    const same = level.pickId === id;
+    dr.levels.length = k + 1;   // whatever was open beyond this level goes
     dr.lines = null;
-    ch.seq++;
-    if (dr.pickId !== null) loadLinesFor();
+    if (same) level.pickId = null;
+    else {
+      level.pickId = id;
+      if (id !== '*' && k + 1 < dr.dims.length) {
+        dr.levels.push({ dim: dr.dims[k + 1], rows: null, pickId: null });
+        loadLevel(dr, k + 1);
+      } else loadLinesFor(dr);
+    }
     drawStage();
   }
 
-  /** One step back: from a row's lines to the breakdown, from the breakdown to the picture. */
+  /** Back out to `picks` chosen rows (0: the box's first breakdown; a crumb goes to its own depth). */
+  function chTo(picks: number) {
+    const dr = ch.drill;
+    if (!dr) return;
+    let changed = false;
+    for (let j = picks; j < dr.levels.length; j++) if (dr.levels[j].pickId !== null) { dr.levels[j].pickId = null; changed = true; }
+    if (dr.levels.length > Math.max(1, picks + 1)) { dr.levels.length = Math.max(1, picks + 1); changed = true; }
+    if (changed) dr.lines = null;
+    if (changed && dr.levels.length === 0) loadLinesFor(dr);
+    drawStage();
+  }
+
+  /** One step back: from lines to the breakdown they came from, from a breakdown to the one before, from the first to the picture. */
   function chBack(all = false) {
     const dr = ch.drill;
     if (!dr) return;
-    ch.seq++;
-    if (!all && dr.pickId !== null) { dr.pickId = null; dr.lines = null; } else ch.drill = null;
-    drawStage();
+    const last = dr.levels.map((l) => l.pickId !== null).lastIndexOf(true);
+    if (all || last < 0) { ch.drill = null; drawStage(); return; }
+    chTo(last);
   }
 
   /** The lines behind what is open (or the row chosen in it), asked for from the server so the count and amount agree with the picture. */
-  function loadLinesFor() {
-    const dr = ch.drill;
-    if (!dr) return;
-    const seq = ++ch.seq;
+  function loadLinesFor(dr: ChDrill) {
     const node = ch.layout.nodes.find((n: any) => n.id === dr.nodeId);
-    const row = Array.isArray(dr.rows) && dr.pickId && dr.pickId !== '*' ? dr.rows.find((r: any) => (r.id || 'none') === dr.pickId) : null;
-    const title = row ? row.name : node.label;
-    dr.lines = { state: 'loading', title, summary: '', rows: [] };
-    const spec: Record<string, string> = { ...dr.spec };
-    if (dr.dim && dr.pickId && dr.pickId !== '*') spec[dr.dim] = dr.pickId;
+    const title = rowName(deepest(dr)) ?? node.label;
+    const placeholder = { state: 'loading', title, summary: '', rows: [] as any[] };
+    dr.lines = placeholder;
+    const spec = specAt(dr, dr.levels.length);
     const q = new URLSearchParams({ fy: String(ch.data.fy), months: ch.months.join(',') });
     for (const [k, v] of Object.entries(spec)) if (v) q.set(k, v);
+    const dim = deepest(dr)?.dim ?? null;
     void (async () => {
       let res: any;
       try {
         res = await staffFetch(`/api/finance-admin/channels/lines?${q}`);
         if (res.status !== 200) throw new Error('load failed');
       } catch (err) {
-        if (seq !== ch.seq || !ch.drill) return;
+        if (ch.drill !== dr || dr.lines !== placeholder) return;
         if (err instanceof StaffAuthError) {
           if (err.kind === 'unauthorized') showGate('Your session expired. Sign in again.');
           else showForbidden();
           return;
         }
-        ch.drill.lines = { state: 'error', title, summary: '', rows: [] };
+        dr.lines = { state: 'error', title, summary: '', rows: [] };
         drawStage();
         return;
       }
-      if (seq !== ch.seq || !ch.drill) return;   // another box was chosen while this one was loading
+      if (ch.drill !== dr || dr.lines !== placeholder) return;   // another box was chosen while this one was loading
       const r = res.data, names = projectNames();
-      ch.drill.lines = {
+      dr.lines = {
         state: 'ok', title,
         summary: r.count ? `${r.count} ${r.count === 1 ? 'line' : 'lines'} · ${chMoney(r.paise)}${r.lines.length < r.pieces ? ` · largest ${r.lines.length}` : ''}` : 'No lines',
         rows: r.lines.map((l: any) => ({
           date: day(l.date),
           href: `/internal/finance/ledger/?line=${encodeURIComponent(l.id)}`,
-          sub: [(CHANNELS as Record<string, any>)[l.channel]?.label ?? l.channel, l.uncategorised ? 'Not categorised yet' : dr.dim === 'project' ? (l.project ? names.get(l.project) ?? 'Another project' : 'No project named') : dr.dim === 'party' ? l.party : dr.dim === 'category' ? l.category : purposeName(l.dir, l.purpose, false)].filter(Boolean).join(' · '),
+          sub: [(CHANNELS as Record<string, any>)[l.channel]?.label ?? l.channel, l.uncategorised ? 'Not categorised yet' : dim === 'project' ? (l.project ? names.get(l.project) ?? 'Another project' : 'No project named') : dim === 'party' ? l.party : dim === 'category' ? l.category : purposeName(l.dir, l.purpose, false)].filter(Boolean).join(' · '),
           amount: `${l.dir === 'in' ? '+' : '−'}${chMoney(l.paise)}`,
         })),
       };
@@ -809,8 +846,8 @@ import SignInGate from '../../../components/SignInGate.astro';
     })();
   }
 
-  /** Who a box's money was paid to or by, or its categories (the lines are needed for these, so the server groups them). */
-  async function loadBreakdown(spec: Record<string, string>, by: string, seq: number): Promise<any[] | null> {
+  /** Who a box's money was paid to or by, its categories, its UPI operators or its delegates (the lines are needed for these, so the server groups them). */
+  async function loadBreakdown(spec: Record<string, string>, by: string): Promise<any[] | null> {
     const q = new URLSearchParams({ fy: String(ch.data.fy), months: ch.months.join(','), by });
     for (const [k, v] of Object.entries(spec)) if (v) q.set(k, v);
     try {
@@ -818,7 +855,6 @@ import SignInGate from '../../../components/SignInGate.astro';
       if (res.status !== 200) throw new Error('load failed');
       return res.data.rows;
     } catch (err) {
-      if (seq !== ch.seq) return null;
       if (err instanceof StaffAuthError) {
         if (err.kind === 'unauthorized') showGate('Your session expired. Sign in again.');
         else showForbidden();
@@ -841,18 +877,17 @@ import SignInGate from '../../../components/SignInGate.astro';
     crumb('Cashflow', () => chBack(true), !dr);
     if (dr && ch.layout) {
       const node = ch.layout.nodes.find((n: any) => n.id === dr.nodeId);
+      const picks = dr.levels.filter((l) => l.pickId !== null);
       crumb(node.col === 2 ? 'Money out' : node.col === 1 ? 'Accounts' : 'Money in', () => chBack(true), false);
-      crumb(node.label, () => { if (dr.pickId !== null) chBack(); }, dr.pickId === null);
-      const row = Array.isArray(dr.rows) && dr.pickId && dr.pickId !== '*' ? dr.rows.find((r: any) => (r.id || 'none') === dr.pickId) : null;
-      if (dr.pickId === '*') crumb('Every line', null, true);
-      else if (row) crumb(row.name, null, true);
+      crumb(node.label, () => chTo(0), picks.length === 0);
+      picks.forEach((l, j) => crumb(l.pickId === '*' ? 'Every line' : rowName(l) ?? '…', () => chTo(j + 1), j === picks.length - 1));
     }
     $('ch-back').hidden = !dr;
-    $('ch-all').hidden = !(dr && Array.isArray(dr.rows) && dr.pickId === null);
-    const level = !dr ? 0 : dr.pickId !== null || dr.rows === undefined ? 2 : 1;
-    $('ch-hint').textContent = level === 0
+    const last = dr ? deepest(dr) : undefined;
+    $('ch-all').hidden = !(last && Array.isArray(last.rows) && last.pickId === null);
+    $('ch-hint').textContent = !dr
       ? 'Click a box on the money-out side to slide left into its breakdown, or one on the money-in side to slide right. The faded account takes you back.'
-      : level === 1 && dr!.rows !== undefined ? 'Click a row to slide one level further, to its lines.' : 'These are the largest lines. Each date opens that line in the Ledger.';
+      : dr.lines ? 'These are the largest lines. Each date opens that line in the Ledger.' : 'Click a row to slide one level further.';
   }
 
   function renderDelegates() {
@@ -934,11 +969,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   $('ch-back').addEventListener('click', () => chBack());
   $('ch-all').addEventListener('click', () => {
     const dr = ch.drill;
-    if (!dr || !Array.isArray(dr.rows)) return;
-    dr.pickId = '*';
-    ch.seq++;
-    loadLinesFor();
-    drawStage();
+    if (dr && dr.levels.length) chRow(dr.levels.length - 1, '*');
   });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && view === 'channels' && ch.drill) chBack(); });
   for (const [id, key] of [['ch-gin', 'groupIn'], ['ch-gout', 'groupOut']] as const) {

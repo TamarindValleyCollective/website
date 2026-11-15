@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  FD, GROUPINGS, IN_PURPOSES, UPI_APPS, channelGroupOf, OUT_PURPOSES, breakdownOf, cellMatches, channelCube, channelPieces, flowOf, fyMonths, groupPieces, monthBars, monthsSoFar, presetMonths, previousMonths, projectsOf, purposesOf, rangeOf, specOf, totalsOf,
+  FD, GROUPINGS, IN_PURPOSES, UPI_APPS, channelGroupOf, drillDims, OUT_PURPOSES, breakdownOf, cellMatches, channelCube, channelPieces, flowOf, fyMonths, groupPieces, monthBars, monthsSoFar, presetMonths, previousMonths, projectsOf, purposesOf, rangeOf, specOf, totalsOf,
 } from './finance-channels.mjs';
 
 const categories = [
@@ -303,7 +303,7 @@ test('Paytm and BHIM are channels under UPI: one UPI box, opened by the person b
   assert.ok(!node(f, 'R:paytm') && !node(f, 'R:bhim'), 'no box of their own');
   const spec = specOf({ node: box, nodes: f.nodes, groupIn: 'channel', groupOut: 'channel' });
   assert.equal(spec.channel, 'upi');
-  assert.equal(breakdownOf(spec), 'delegate', 'by the person behind the payment, not by app');
+  assert.equal(breakdownOf(spec), 'operator', 'by whose UPI it went through first, not by app');
   assert.equal(breakdownOf({ dir: 'out', channel: 'paypro', fd: 'exclude' }), 'purpose', 'every other channel is broken down by purpose');
   assert.equal(sum(more.filter((c) => cellMatches(c, spec, MONTHS))), box.paise);
   assert.equal(sum(more.filter((c) => cellMatches(c, { ...spec, channel: 'bhim' }, MONTHS))), 25000);
@@ -322,4 +322,27 @@ test('UPI by person: direct, and the UPI circle’s delegates under the same UPI
   assert.equal(hit({ delegate: 'D1' }), 2, 'both apps count for the one person');
   assert.equal(hit({ delegate: 'own' }), 1);
   assert.equal(hit({ delegate: 'none' }), 1);
+});
+
+test('UPI opens as a tree: by operator, then by person (Direct and each delegate of that operator’s circle), then lines', () => {
+  assert.deepEqual(drillDims({ dir: 'out', channel: 'upi', fd: 'exclude' }, { operators: 2 }), ['operator', 'delegate']);
+  assert.deepEqual(drillDims({ dir: 'out', channel: 'upi', fd: 'exclude' }, { operators: 0 }), ['delegate'], 'no operators recorded yet: straight to the people');
+  assert.deepEqual(drillDims({ dir: 'out', purpose: 'salary', fd: 'exclude' }, { operators: 2 }), ['party'], 'every other box has its one level');
+  assert.deepEqual(drillDims({ dir: 'out', channel: 'paypro', fd: 'exclude' }), ['purpose']);
+  assert.deepEqual(drillDims({ fd: 'only' }), [], 'the deposits go straight to their lines');
+  // the pieces of two operators' UPI: operator A directly and through a delegate, operator B directly
+  const ps = [
+    { lineId: 'a', paise: 500, operator: 'OA', delegate: 'own' }, { lineId: 'b', paise: 300, operator: 'OA', delegate: 'D1' },
+    { lineId: 'c', paise: 200, operator: 'OB', delegate: 'own' }, { lineId: 'd', paise: 40, operator: '', delegate: 'own' },
+  ];
+  const ops = groupPieces(ps, 'operator', new Map([['OA', 'Test operator A'], ['OB', 'Test operator B']]));
+  assert.deepEqual(ops.map((r) => [r.id, r.name, r.paise]), [['OA', 'Test operator A', 800], ['OB', 'Test operator B', 200], ['', 'Operator not recorded', 40]]);
+  assert.equal(sum(ops), sum(ps), 'the operators add up to the UPI box');
+  const hit = (spec) => ps.filter((p) => cellMatches({ m: '2026-10', d: 'out', g: 'farm', a: 'A1', p: '', ...p }, spec, ['2026-10']));
+  const inA = hit({ operator: 'OA' });
+  assert.equal(sum(inA), 800);
+  assert.deepEqual(groupPieces(inA, 'delegate', new Map([['D1', 'UPI circle · Number 5550100001']])).map((r) => [r.name, r.paise]), [['Direct', 500], ['UPI circle · Number 5550100001', 300]], 'inside operator A: direct and their delegate');
+  assert.equal(sum(hit({ operator: 'OB' })), 200);
+  assert.equal(sum(hit({ operator: 'none' })), 40);
+  assert.equal(sum(hit({ operator: 'OA', delegate: 'D1' })), 300);
 });

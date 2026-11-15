@@ -243,6 +243,8 @@ export function cellMatches(cell, spec, months) {
   if (spec.category && cell.cat !== (spec.category === 'none' ? '' : spec.category)) return false;
   // The person behind a UPI payment: a delegate's id, 'own' for the accounts' own UPI (no delegate), 'none' for a delegated payment no delegate is chosen for yet.
   if (spec.delegate && cell.delegate !== spec.delegate) return false;
+  // Whose UPI it went through (an operator's id, 'none' when not recorded).
+  if (spec.operator && cell.operator !== (spec.operator === 'none' ? '' : spec.operator)) return false;
   return true;
 }
 
@@ -252,14 +254,14 @@ export function cellMatches(cell, spec, months) {
  * payment, whichever app they used. 'project' and 'purpose' come from the cube in the browser; 'party', 'category' and 'delegate' need the lines, so
  * the server groups them (GET /channels/breakdown). null: an account or the fixed deposits, which go straight to their lines.
  * @param {Record<string, string>} spec as made by specOf
- * @returns {'project' | 'party' | 'category' | 'purpose' | 'delegate' | null}
+ * @returns {'project' | 'party' | 'category' | 'purpose' | 'delegate' | 'operator' | null}
  */
 export function breakdownOf(spec) {
   if (spec.fd === 'only') return null;
   if (spec.purpose === 'projects') return 'project';
   if (spec.purpose === 'salary' || spec.purpose === 'maintenance') return 'party';
   if (spec.purpose) return 'category';
-  if (spec.channel === 'upi') return 'delegate';
+  if (spec.channel === 'upi') return 'operator';
   if (spec.channel) return 'purpose';
   return null;
 }
@@ -279,15 +281,15 @@ export function purposesOf({ cube, months, spec }) {
 }
 
 /**
- * Pieces grouped by party, category or delegate: [{ id ('' when none), name, paise, n: lines }], biggest first. `names`: id -> name; what has none
+ * Pieces grouped by party, category, delegate or operator: [{ id ('' when none), name, paise, n: lines }], biggest first. `names`: id -> name; what has none
  * is 'No one named' / 'No category yet'. All UPI payments go out through the account holder's UPI setup: some **Direct**, some by the **UPI circle**,
  * the delegates paying under that same UPI ID. So for delegates the id 'own' is named Direct, a delegate's name carries "UPI circle · " (from the
  * server), and 'none' is a circle payment that no delegate is chosen for yet.
  */
 export function groupPieces(pieces, by, names) {
-  const field = by === 'party' ? 'party' : by === 'delegate' ? 'delegate' : 'cat';
-  const none = by === 'party' ? 'No one named' : by === 'delegate' ? 'Not a UPI payment' : 'No category yet';
-  const unknown = by === 'party' ? 'Someone no longer listed' : by === 'delegate' ? 'UPI circle · a delegate no longer listed' : 'Another category';
+  const field = by === 'party' ? 'party' : by === 'delegate' ? 'delegate' : by === 'operator' ? 'operator' : 'cat';
+  const none = by === 'party' ? 'No one named' : by === 'delegate' ? 'Not a UPI payment' : by === 'operator' ? 'Operator not recorded' : 'No category yet';
+  const unknown = by === 'party' ? 'Someone no longer listed' : by === 'delegate' ? 'UPI circle · a delegate no longer listed' : by === 'operator' ? 'An operator no longer listed' : 'Another category';
   const fixed = by === 'delegate' ? { own: 'Direct', none: 'UPI circle · no delegate yet' } : {};
   const groups = new Map(), seen = new Set();
   for (const p of pieces) {
@@ -313,4 +315,16 @@ export function projectsOf({ cube, months, spec, projects }) {
     e.n += c.n;
   }
   return [...by.values()].sort((a, b) => b.paise - a.paise || (a.name < b.name ? -1 : 1));
+}
+
+/**
+ * The levels a box opens through, outermost first: [dim, dim, ...], each a breakdown (see breakdownOf) that a row narrows before the next, the lines
+ * coming after the last. All UPI payments go out through an operator's UPI setup, some directly and some by the delegates of that operator's
+ * circle, so the UPI box opens by operator and then by person (Direct, and each delegate); without operators recorded it opens by person at once.
+ * Every other box opens by its one breakdown. @param {Record<string, string>} spec @param {{ operators?: number }} [have]
+ */
+export function drillDims(spec, have = {}) {
+  const first = breakdownOf(spec);
+  if (first === 'operator') return have.operators ? ['operator', 'delegate'] : ['delegate'];
+  return first ? [first] : [];
 }

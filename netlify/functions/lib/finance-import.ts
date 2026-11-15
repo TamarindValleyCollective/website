@@ -13,6 +13,7 @@ import { parsePaytmExport } from '../../../scripts/lib/finance-paytm.mjs';
 import { coverageOf, planBankImport } from '../../../scripts/lib/finance-import-plan.mjs';
 import { isBhimText, parseBhimStatement } from '../../../scripts/lib/finance-bhim.mjs';
 import { linkUpiToBank, planBhimImport, planUpiImport, reconciliationSummary } from '../../../scripts/lib/finance-upi-plan.mjs';
+import { signatureOf, suggestOperator } from '../../../scripts/lib/finance-upi-operators.mjs';
 import { extractText, getDocumentProxy } from 'unpdf';
 
 export type Account = { id: string; label: string; last4: string | null; upiLabel: string | null };
@@ -34,6 +35,9 @@ export interface ImportStore {
   reconciliationData(): Promise<{ upiLines: { paidAt: string; amountPaise: number; bankLineId: string | null }[]; bankLines: { tranDate: string; upiRrn: string | null; linked: boolean; reversed?: boolean }[]; lastBankDate: string | null; firstUpiDate: string | null }>;
   audit(entry: { actorId: string; action: string; entityId: string; detail: Record<string, unknown> }): Promise<void>;
   heldBatchSpans(): Promise<{ accountId: string; from: string; to: string }[]>;
+  // Whose UPI a UPI file is (migration 0101). Optional: a database without the operators yet has none, and a UPI file then asks nothing.
+  operators?(): Promise<{ id: string; name: string; signatures: string[] }[]>;
+  rememberSignature?(operatorId: string, signature: string): Promise<void>;
 }
 
 export type UploadedFile = { name: string; bytes: Uint8Array };
@@ -88,6 +92,8 @@ export type FileResult = {
   ignored?: unknown;
   failed?: unknown[];
   wouldLink?: number;
+  // A UPI file: whose UPI it is. `suggestedId` is a guess from what the file looks like; `chosenId` is what was asked for. Needed once operators exist.
+  operator?: { needed: boolean; suggestedId: string | null; reason: string | null; chosenId: string | null };
   unsuccessful?: { count: number; totalPaise: number };
   stored?: boolean;
   preview?: NewLinesPreview;
@@ -113,8 +119,10 @@ function newLinesPreview(rows: { date: string; text: string; direction: 'debit' 
   return { lines: rows.slice(0, PREVIEW_LINE_CAP), creditPaise, debitPaise, closingPaise, truncated: rows.length > PREVIEW_LINE_CAP };
 }
 
-export async function runImport(args: { store: ImportStore; files: UploadedFile[]; commit: boolean; actorId: string }) {
+export async function runImport(args: { store: ImportStore; files: UploadedFile[]; commit: boolean; actorId: string; operatorChoices?: Record<string, string> }) {
   const { store, files, commit, actorId } = args;
+  const operators = (await store.operators?.()) ?? [];
+  const operatorChoices = args.operatorChoices ?? {};
   const entity = await store.entity();
   const accounts = await store.accounts();
   const results: FileResult[] = files.map((f) => ({ name: safeName(f.name), kind: 'unknown', status: 'unreadable' }));
@@ -184,7 +192,7 @@ export async function runImport(args: { store: ImportStore; files: UploadedFile[
 
   // 3. Paytm exports.
   const accountsWithUpi = accounts.filter((a) => a.upiLabel);
-  const storedUpi: { index: number; plan: any; batchId: string; source: 'paytm_upi' | 'bhim_upi' }[] = [];
+  const storedUpi: { index: number; plan: any; batchId: string; source: 'paytm_upi' | 'bhim_upi'; signature: string | null; operatorId?: string }[] = [];
   const hashHeld = new Set(await store.heldHashes([...paytm, ...bhim].map((p) => p.fileHash)));
   const refsInUpload = [...new Set([...paytm, ...bhim].flatMap((p) => p.parsed.lines.map((l: { upiRef: string | null }) => l.upiRef).filter(Boolean) as string[]))];
   const heldRefs = new Set(await store.heldUpiRefs(refsInUpload));
@@ -209,7 +217,7 @@ export async function runImport(args: { store: ImportStore; files: UploadedFile[
     });
     if (plan.status === 'ok') {
       hashHeld.add(p.fileHash);
-      storedUpi.push({ index: p.index, plan, batchId: randomUUID(), source: 'paytm_upi' });
+      storedUpi.push({ index: p.index, plan, batchId: randomUUID(), source: 'paytm_upi', signature: signatureOf('paytm_upi', p.parsed) });
     }
   }
 
@@ -234,8 +242,18 @@ export async function runImport(args: { store: ImportStore; files: UploadedFile[
     });
     if (plan.status === 'ok') {
       hashHeld.add(b.fileHash);
-      storedUpi.push({ index: b.index, plan, batchId: randomUUID(), source: 'bhim_upi' });
+      storedUpi.push({ index: b.index, plan, batchId: randomUUID(), source: 'bhim_upi', signature: signatureOf('bhim_upi', b.parsed) });
     }
+  }
+
+  // Whose UPI each file is: asked for every UPI file once there are operators, with a suggestion from what the file looks like. A choice that is
+  // not one of the operators counts as none.
+  for (const u of storedUpi) {
+    if (!operators.length) continue;
+    const suggestion = suggestOperator({ signature: u.signature, operators });
+    const picked = operatorChoices[String(u.index)];
+    u.operatorId = operators.some((o) => o.id === picked) ? picked : undefined;
+    results[u.index].operator = { needed: true, suggestedId: suggestion?.operatorId ?? null, reason: suggestion?.reason ?? null, chosenId: u.operatorId ?? null };
   }
 
   // What the new UPI rows would link to right now (shown on the preview; the real linking happens after commit).
@@ -248,7 +266,18 @@ export async function runImport(args: { store: ImportStore; files: UploadedFile[
     results[u.index].wouldLink = linkUpiToBank({ upiLines: kept.map((l: any) => ({ id: l.upiRef, upiRef: l.upiRef, amountPaise: l.amountPaise, direction: l.direction })), bankLines: bank }).links.length;
   }
 
-  if (!commit) return { mode: 'preview' as const, files: results, coverage, reconciliation: null };
+  const operatorList = operators.map((o) => ({ id: o.id, name: o.name }));
+  if (!commit) return { mode: 'preview' as const, files: results, coverage, reconciliation: null, operators: operatorList };
+
+  // A UPI file with no operator chosen is not stored: it is reported, and the other files go through.
+  for (let i = storedUpi.length - 1; i >= 0; i--) {
+    const u = storedUpi[i];
+    if (operators.length && !u.operatorId) {
+      results[u.index].status = 'blocked';
+      results[u.index].message = 'Choose whose UPI this file is before importing it.';
+      storedUpi.splice(i, 1);
+    }
+  }
 
   // 4. Commit. The audit entry comes first: nothing changes in the ledger tables without a record that it was asked for.
   const planned = [...storedBank, ...storedUpi];
@@ -289,10 +318,12 @@ export async function runImport(args: { store: ImportStore; files: UploadedFile[
           id: u.batchId, entity_id: entity.id, source: u.source, file_name: results[u.index].name, file_hash: u.plan.fileHash, r2_key: key, period_from: u.plan.period.from, period_to: u.plan.period.to,
           first_line_date: u.plan.firstDate, last_line_date: u.plan.lastDate, inserted_count: u.plan.counts.new, duplicate_count: u.plan.counts.alreadyHeld,
           ignored_count: u.plan.counts.ignored, ignored_total_paise: u.plan.ignored.totalPaise, failed_count: u.plan.counts.failed, failed_rows: u.plan.failed, imported_by: actorId,
+          ...(u.operatorId ? { operator_id: u.operatorId } : {}),
         },
         u.plan.newLines.map((l: any) => ({ bank_account_id: l.accountId, paid_at: l.paidAt, paid_time: l.time, details: l.details, counterparty: l.counterparty, account_label: l.accountLabel, direction: l.direction, amount_paise: l.amountPaise, upi_ref: l.upiRef, order_id: l.orderId, remarks: l.remarks, tag: l.tag, is_circle: l.isCircle, ignored: l.ignored, ignored_reason: l.ignoredReason, app: l.app ?? 'paytm' })),
       );
       results[u.index].stored = true;
+      if (u.operatorId && u.signature) await store.rememberSignature?.(u.operatorId, u.signature).catch((e) => console.error('[finance-import] could not remember the file signature', e instanceof Error ? e.message : e));
     } catch (err) {
       await store.deleteRaw(key).catch(() => {});
       results[u.index].status = 'blocked';
@@ -310,7 +341,7 @@ export async function runImport(args: { store: ImportStore; files: UploadedFile[
     if (links.length) linked = await store.link(links);
   }
   const reconciliation = { linkedNow: linked, ...(await reconciliationOf(store)) };
-  return { mode: 'commit' as const, files: results, coverage, reconciliation };
+  return { mode: 'commit' as const, files: results, coverage, reconciliation, operators: operatorList };
 }
 
 export async function reconciliationOf(store: ImportStore) {

@@ -23,6 +23,7 @@ import { PARTY_ID, addEvidence, addMissingIfsc, getEvidence, listEvidence, addVe
 import { REQUEST_ID, addVoucher, cancelOrDecide, listFiles, createRecord, getVoucher, listMine, listRequests, matchRecord, reviewRecord, unmatchRecord } from './lib/finance-requests';
 import { listUpiLines } from './lib/finance-upi-view';
 import { assignDelegate, saveDelegate } from './lib/finance-delegates';
+import { saveOperator } from './lib/finance-upi-operators';
 import { getChannelBreakdown, getChannelLines, getChannels } from './lib/finance-channels';
 import { getDashboard } from './lib/finance-dashboard';
 import { BUDGET_ID, approveDraft, discardDraft, getBudget, saveLines, startDraft } from './lib/finance-budget';
@@ -140,7 +141,16 @@ async function handleImport(req: Request, commit: boolean): Promise<Response> {
   }
   try {
     const files = await Promise.all(uploads.map(async (f) => ({ name: f.name, bytes: new Uint8Array(await f.arrayBuffer()) })));
-    return jsonResponse(await runImport({ store: supabaseImportStore(), files, commit, actorId: auth.staff.id }));
+    // Whose UPI each UPI file is: a JSON object from the file's position in the upload to an operator id (the page sends it with a commit).
+    let operatorChoices: Record<string, string> = {};
+    try {
+      const raw = form.get('operators');
+      const parsed = typeof raw === 'string' && raw ? JSON.parse(raw) : {};
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) operatorChoices = Object.fromEntries(Object.entries(parsed).filter(([, v]) => typeof v === 'string')) as Record<string, string>;
+    } catch {
+      return jsonResponse({ error: 'The choice of whose UPI each file is could not be read.' }, 400);
+    }
+    return jsonResponse(await runImport({ store: supabaseImportStore(), files, commit, actorId: auth.staff.id, operatorChoices }));
   } catch (err) {
     console.error('[finance-admin] import failed', err instanceof Error ? err.message : err);
     return jsonResponse({ error: 'Server error' }, 500);
@@ -269,6 +279,9 @@ const dispatch = async (req: Request): Promise<Response> => {
   if (route === '/delegates/assign' && req.method === 'POST') return assignDelegate(req);
   const delegate = /^\/delegates\/([^/]+)$/.exec(route);
   if (delegate && LEDGER_ID.test(delegate[1]) && req.method === 'PATCH') return saveDelegate(req, delegate[1]);
+  if (route === '/upi-operators' && req.method === 'POST') return saveOperator(req, null);
+  const operator = /^\/upi-operators\/([^/]+)$/.exec(route);
+  if (operator && LEDGER_ID.test(operator[1]) && req.method === 'PATCH') return saveOperator(req, operator[1]);
   if (route === '/payment-note' && req.method === 'POST') return setPaymentNote(req);
   if (route === '/ledger' && req.method === 'GET') return listLedger(req);
   if (route === '/ledger/all' && req.method === 'GET') return ledgerAll(req);
@@ -323,6 +336,8 @@ export const config = {
     '/api/finance-admin/channels/breakdown',
     '/api/finance-admin/delegates',
     '/api/finance-admin/delegates/*',
+    '/api/finance-admin/upi-operators',
+    '/api/finance-admin/upi-operators/*',
     '/api/finance-admin/requests',
     '/api/finance-admin/requests/*',
     '/api/finance-admin/vendors',

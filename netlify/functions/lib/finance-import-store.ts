@@ -4,6 +4,7 @@ import { rest } from './staff-mfa-store';
 import { logFinanceAction } from './finance-audit';
 import { deleteFinanceImport, putFinanceImport } from './finance-storage';
 import { pairReversals } from '../../../scripts/lib/finance-reversals.mjs';
+import { withSignature } from '../../../scripts/lib/finance-upi-operators.mjs';
 import type { Account, ImportStore } from './finance-import';
 
 const PAGE = 1000;
@@ -102,6 +103,20 @@ export function supabaseImportStore(): ImportStore {
     },
     async audit(entry) {
       await logFinanceAction({ actorId: entry.actorId, action: entry.action, entityId: entry.entityId ?? entityId ?? undefined, detail: entry.detail });
+    },
+    // Whose UPI a file is (migration 0101). Without the table (not applied yet) there are no operators, and a UPI file is imported as before.
+    async operators() {
+      try {
+        const rows = (await (await rest('/fin_upi_operators?select=id,display_name,signatures&order=created_at.asc&limit=50')).json()) as { id: string; display_name: string; signatures: string[] | null }[];
+        return Array.isArray(rows) ? rows.map((r) => ({ id: r.id, name: r.display_name, signatures: r.signatures ?? [] })) : [];
+      } catch {
+        return [];
+      }
+    },
+    async rememberSignature(operatorId, signature) {
+      const rows = (await (await rest(`/fin_upi_operators?select=signatures&id=eq.${operatorId}`)).json()) as { signatures: string[] | null }[];
+      const next = withSignature(rows[0]?.signatures ?? [], signature);
+      await rest(`/fin_upi_operators?id=eq.${operatorId}`, { method: 'PATCH', body: JSON.stringify({ signatures: next }) });
     },
     async heldBatchSpans() {
       const rows = await all<{ bank_account_id: string; period_from: string; period_to: string }>('/fin_import_batches?select=bank_account_id,period_from,period_to&source=eq.axis_statement&order=period_from.asc');
