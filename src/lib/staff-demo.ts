@@ -360,6 +360,8 @@ function demoRules() {
   return { canConfigure: true, rules, lookups: { categories, parties, requesterPartyId: 'p3' } };
 }
 // Invented payment requests and logged spends for /internal/finance/requests/ and /internal/finance-requests/, in every state.
+// The demo's one automatic match happens when the page asks for it (the first load), and shows as matched automatically after.
+let demoAutoMatched = false;
 function demoRequests() {
   const rec = (n: number, kind: 'request' | 'log', status: string, payee: string, rupees: number, purpose: string, createdAt: string, extra: Record<string, unknown> = {}) => ({
     id: `r${n}`, kind, status, source: 'app', requester: n % 2 ? 'Demo Requester' : 'Another Requester', requesterId: n % 2 ? 'demo-1' : 'other', payee, amountPaise: rupees * 100, mode: 'upi', purpose,
@@ -378,7 +380,11 @@ function demoRequests() {
     rec(7, 'request', 'approved', 'BESCOM', 12450, 'Electricity, October', '2026-10-05T09:00:00Z', { mismatch: true, matched: 'accepted', linked: { upi: true, bank: false, upiRef: '500000000010', bankLineId: null } }),
     rec(8, 'request', 'cancelled', 'Sample Stores', 1260, 'Stationery', '2026-09-22T09:00:00Z', { source: 'history' }),
   ];
-  return { me: { id: 'demo-1', ready: true, hasPasskey: true, stepUpValid: true }, can: { approve: true, allocate: true }, records, agingCount: 1 };
+  // r3 has exactly one candidate payment and nobody else wants it: it is matched automatically once the page asks.
+  const r3 = records.find((r: any) => r.id === 'r3') as any;
+  r3.proposals = r3.proposals.slice(0, 1);
+  if (demoAutoMatched) Object.assign(r3, { status: 'paid', matched: 'auto', proposals: [], linked: { upi: true, bank: true, upiRef: '500000000007', bankLineId: 'bl7' }, fulfilled: { method: 'upi', label: 'UPI, BHIM' } });
+  return { me: { id: 'demo-1', ready: true, hasPasskey: true, stepUpValid: true }, can: { approve: true, allocate: true }, records, agingCount: 1, autoPending: demoAutoMatched ? 0 : 1 };
 }
 // Invented UPI payments for /internal/finance/upi/: BHIM and Paytm rows over two months, direct and delegated, in every bank-statement state.
 function demoUpiLines() {
@@ -538,6 +544,7 @@ export function installStaffDemo(tokenKey: string, kind: string): void {
     if (path === '/api/finance-admin/upi-lines' && (init?.method ?? 'GET') === 'GET') return reply(demoUpiLines());
     if (path === '/api/finance-admin/rules' && (init?.method ?? 'GET') === 'GET') return reply(demoRules());
     if (path === '/api/finance-admin/requests' && (init?.method ?? 'GET') === 'GET') return reply(demoRequests());
+    if (path === '/api/finance-admin/requests/auto-match' && init?.method === 'POST') { demoAutoMatched = true; return reply({ ok: true, matched: 1, skipped: 0 }); }
     if (path === '/api/finance-admin/requests/mine' && (init?.method ?? 'GET') === 'GET') return reply({ payees: [], today: '2026-11-15', records: demoRequests().records.filter((r: any) => r.requesterId === 'demo-1') });
     if (path === '/api/finance-admin/parties' && (init?.method ?? 'GET') === 'GET') return reply(demoFinanceParties());
     if (path === '/api/finance-admin/parties' && init?.method === 'POST') {

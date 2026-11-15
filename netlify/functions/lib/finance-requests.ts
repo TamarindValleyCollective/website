@@ -21,7 +21,7 @@ import { deleteFinanceVoucher, getFinanceVoucher, putFinanceVoucher } from './fi
 import { sendEmail } from './booking-notify';
 import { escapeHtml, renderStaffEmail } from './email-layout';
 import { todayIST } from '../../../scripts/lib/finance-parties.mjs';
-import { VOUCHER_MAX_BYTES, decide, exactMatches, planMatch, deriveLinks, fulfilledVia, proposeMatches, purposeIndex, reviewFlag, sniffVoucher, validateRecord, agingUnmatched } from '../../../scripts/lib/finance-requests.mjs';
+import { VOUCHER_MAX_BYTES, decide, exactMatches, planMatch, deriveLinks, fulfilledVia, proposeMatches, autoMatchPicks, purposeIndex, reviewFlag, sniffVoucher, validateRecord, agingUnmatched } from '../../../scripts/lib/finance-requests.mjs';
 
 type Json = Record<string, any>;
 const PAGE = 1000;
@@ -64,7 +64,7 @@ export async function requesterAuth(req: Request, capability: 'raise' | 'add-ven
   return requireStaff(req, 'finance', 'request');
 }
 
-const COLUMNS = 'id,kind,status,source,requester_id,party_id,recipient_text,amount_paise,mode,purpose,needed_by,reimbursement,paid_on,paid_via,delegate_id,upi_ref,decided_by,decided_at,decision_reason,upi_line_id,bank_line_id,matched_at,review_flag,reviewed_at,created_at';
+const COLUMNS = 'id,kind,status,source,requester_id,party_id,recipient_text,amount_paise,mode,purpose,needed_by,reimbursement,paid_on,paid_via,delegate_id,upi_ref,decided_by,decided_at,decision_reason,upi_line_id,bank_line_id,matched_by,matched_at,review_flag,reviewed_at,created_at';
 
 // The purposes that the UPI page and the ledger show for a payment (a lookup over every live record).
 export async function loadPurposes() {
@@ -305,19 +305,15 @@ export async function listFiles(req: Request, id: string): Promise<Response> {
   }
 }
 
-export async function listRequests(req: Request): Promise<Response> {
-  const auth = await requireStaff(req, 'finance', 'view');
-  if (!auth.ok) return fail(auth.error, auth.status);
-  try {
-    const [records, upi, bank, vouchers, ent] = await Promise.all([
-      all(`/fin_payment_requests?select=${COLUMNS}&order=created_at.desc,id.asc`),
-      all('/fin_upi_lines?select=id,upi_ref,paid_at,amount_paise,direction,counterparty,remarks,app,bank_line_id&ignored=eq.false&direction=eq.debit&order=paid_at.desc,id.asc'),
-      all('/fin_bank_lines?select=id,tran_date,amount_paise,direction,narration,upi_rrn&direction=eq.debit&order=tran_date.desc,id.asc'),
-      voucherCounts(),
-      rows('/fin_entities?select=requester_party_id&order=created_at.asc&limit=1'),
-    ]);
-    const names = await namesFor(records);
-    const shaped = records.map((r) => shape(r, names, vouchers));
+// What is on the statements, what each record is tied to, and the suggested payments for the ones that are not: read together, because
+// both the list and the automatic matching need the same picture.
+async function loadMatchState() {
+  const [records, upi, bank] = await Promise.all([
+    all(`/fin_payment_requests?select=${COLUMNS}&order=created_at.desc,id.asc`),
+    all('/fin_upi_lines?select=id,upi_ref,paid_at,amount_paise,direction,counterparty,remarks,app,bank_line_id&ignored=eq.false&direction=eq.debit&order=paid_at.desc,id.asc'),
+    all('/fin_bank_lines?select=id,tran_date,amount_paise,direction,narration,upi_rrn&direction=eq.debit&order=tran_date.desc,id.asc'),
+  ]);
+  const names = await namesFor(records);
     const upiLines = upi.map((u) => ({ id: u.id as string, upiRef: u.upi_ref as string, paidAt: u.paid_at as string, amountPaise: Number(u.amount_paise), direction: 'debit' as const, counterparty: u.counterparty as string | null, remark: u.remarks as string | null, app: u.app as string, bankLineId: u.bank_line_id as string | null }));
     const bankLines = bank.map((b) => ({ id: b.id as string, tranDate: b.tran_date as string, amountPaise: Number(b.amount_paise), direction: 'debit' as const, narration: b.narration as string, upiRrn: b.upi_rrn as string | null }));
     const live = records.filter((r) => r.status !== 'rejected' && r.status !== 'cancelled');
@@ -335,6 +331,23 @@ export async function listRequests(req: Request): Promise<Response> {
       unmatched.map((r) => ({ id: r.id, mode: r.source === 'history' && r.kind === 'request' ? null : r.mode, amountPaise: Number(r.amount_paise), partyName: r.party_id ? names.party.get(r.party_id) ?? null : null, recipientText: r.recipient_text, purpose: r.purpose, paidOn: r.paid_on, decidedOn: r.decided_at ? String(r.decided_at).slice(0, 10) : null, createdOn: String(r.created_at).slice(0, 10) })),
       upiLines, bankLines, { claimedUpi, claimedBank },
     ) as { recordId: string; type: 'upi' | 'bank'; targetId: string; score: number; reasons: string[] }[];
+  return { records, names, upiLines, bankLines, live, exact, stored, unmatched, derived, upiById, bankById, proposals };
+}
+
+// The suggestions that are safe to make without asking (autoMatchPicks), minus any record a person has unmatched: an unmatched record
+// that still carries matched_by was unmatched by hand, and is never matched automatically again (it can still be matched by hand).
+function autoPicks(state: Awaited<ReturnType<typeof loadMatchState>>) {
+  const byHand = new Set(state.unmatched.filter((r) => r.matched_by).map((r) => r.id as string));
+  return (autoMatchPicks(state.proposals, state.upiLines) as { recordId: string; type: 'upi' | 'bank'; targetId: string }[]).filter((p) => !byHand.has(p.recordId));
+}
+
+export async function listRequests(req: Request): Promise<Response> {
+  const auth = await requireStaff(req, 'finance', 'view');
+  if (!auth.ok) return fail(auth.error, auth.status);
+  try {
+    const [state, vouchers, ent] = await Promise.all([loadMatchState(), voucherCounts(), rows('/fin_entities?select=requester_party_id&order=created_at.asc&limit=1')]);
+    const { records, names, exact, stored, derived, upiById, bankById, proposals } = state;
+    const shaped = records.map((r) => shape(r, names, vouchers));
     const proposalsBy = new Map<string, Json[]>();
     for (const p of proposals) {
       const t = p.type === 'upi' ? upiById.get(p.targetId) : bankById.get(p.targetId);
@@ -348,7 +361,7 @@ export async function listRequests(req: Request): Promise<Response> {
     const out = shaped.map((s, i) => {
       const r = records[i];
       const link = exact.links.get(r.id);
-      const matched = stored(r) ? 'accepted' : link ? 'reference' : null;
+      const matched = stored(r) ? (r.matched_by ? 'accepted' : 'auto') : link ? 'reference' : null;
       const d = derived.get(r.id as string);
       // How it was actually paid, from what it is tied to (a UPI row names its app; a bank line starts with its method).
       const upiTied = d?.upiLineId ? upiById.get(d.upiLineId) : undefined;
@@ -359,50 +372,87 @@ export async function listRequests(req: Request): Promise<Response> {
     const aging = agingUnmatched(records.map((r) => ({ id: r.id, kind: r.kind, status: r.status, decidedOn: r.decided_at ? String(r.decided_at).slice(0, 10) : null, bankLineId: r.bank_line_id, upiLineId: r.upi_line_id })), todayIST()) as Json[];
     const mfa = caps.includes('approve') ? await mfaSummary(auth.staff.id) : null;
     const me = { id: auth.staff.id, ready: mfa?.ready ?? false, hasPasskey: mfa?.passkey ?? false, stepUpValid: stepUpIsValid(req, auth.staff.id) };
-    return json({ me, can: { approve: caps.includes('approve'), allocate: caps.includes('allocate') }, records: out, agingCount: aging.length, today: todayIST() });
+    // How many suggestions could be matched now without asking; the page then calls /requests/auto-match, so a read never writes.
+    const autoPending = caps.includes('allocate') ? autoPicks(state).length : 0;
+    return json({ me, can: { approve: caps.includes('approve'), allocate: caps.includes('allocate') }, records: out, agingCount: aging.length, autoPending, today: todayIST() });
   } catch (err) {
     return serverError(err, 'list requests');
   }
 }
 
-// Accepting a suggested match. The row on the statement is read again here: the amount and direction are checked against it.
+// Tying a record to a payment, by a person accepting a suggestion or automatically. The row on the statement is read again here: the
+// amount and direction are checked against it, and a payment another record already has is refused.
+async function applyMatch(id: string, type: 'upi' | 'bank', targetId: string, actorId: string, how: 'person' | 'auto'): Promise<{ ok: true } | { error: string; status: number }> {
+  const [record] = await rows(`/fin_payment_requests?id=eq.${id}&select=${COLUMNS},entity_id`);
+  if (!record) return { error: 'Not found', status: 404 };
+  if (record.upi_line_id || record.bank_line_id) return { error: 'This record is already matched. Unmatch it first.', status: 409 };
+  let target: Json | null = null;
+  if (type === 'upi') {
+    const [u] = await rows(`/fin_upi_lines?id=eq.${targetId}&select=id,paid_at,amount_paise,direction,bank_line_id`);
+    if (u) target = { id: u.id, direction: u.direction, amountPaise: Number(u.amount_paise), date: u.paid_at, bankLineId: u.bank_line_id };
+  } else {
+    const [l] = await rows(`/fin_bank_lines?id=eq.${targetId}&select=id,tran_date,amount_paise,direction`);
+    if (l) {
+      const [u] = await rows(`/fin_upi_lines?bank_line_id=eq.${l.id}&select=id&limit=1`);
+      target = { id: l.id, direction: l.direction, amountPaise: Number(l.amount_paise), date: l.tran_date, upiLineId: u?.id ?? null };
+    }
+  }
+  if (!target) return { error: 'That payment was not found.', status: 404 };
+  // The payment is one payment: if the other side of it (the UPI row's bank line, or the bank line's UPI row) is already another
+  // record's, so is this.
+  const sides = [target.bankLineId && `bank_line_id=eq.${target.bankLineId}`, target.upiLineId && `upi_line_id=eq.${target.upiLineId}`, type === 'bank' && `bank_line_id=eq.${target.id}`, type === 'upi' && `upi_line_id=eq.${target.id}`].filter(Boolean) as string[];
+  for (const side of sides) {
+    const taken = await rows(`/fin_payment_requests?${side}&status=not.in.(rejected,cancelled)&id=neq.${id}&select=id&limit=1`);
+    if (taken[0]) return { error: 'Another record is already matched to that payment.', status: 409 };
+  }
+  const planned = planMatch({ record: { kind: record.kind, status: record.status, amountPaise: Number(record.amount_paise), bankLineId: record.bank_line_id, upiLineId: record.upi_line_id }, type, target: target as any, now: new Date().toISOString(), actorId });
+  if (planned.error || !planned.patch) return { error: planned.error ?? 'Not allowed.', status: 400 };
+  // An automatic match carries no person (matched_by stays empty), which is how the page tells it from one a person made.
+  const patch = { ...planned.patch, ...(how === 'auto' ? { matched_by: null } : {}), updated_at: new Date().toISOString() };
+  await logFinanceAction({ actorId, entityId: record.entity_id, action: how === 'auto' ? 'finance.request_auto_matched' : 'finance.request_matched', target: id, detail: { to: type } });
+  await rest(`/fin_payment_requests?id=eq.${id}&upi_line_id=is.null&bank_line_id=is.null`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(patch) });
+  return { ok: true };
+}
+
+// Accepting a suggested match.
 export async function matchRecord(req: Request, id: string): Promise<Response> {
   const auth = await requireStaff(req, 'finance', 'allocate');
   if (!auth.ok) return fail(auth.error, auth.status);
   const b = await body(req);
   if (!b || (b.type !== 'upi' && b.type !== 'bank') || typeof b.targetId !== 'string' || !ID.test(b.targetId)) return fail('Choose a payment to match.');
   try {
-    const [record] = await rows(`/fin_payment_requests?id=eq.${id}&select=${COLUMNS},entity_id`);
-    if (!record) return fail('Not found', 404);
-    if (record.upi_line_id || record.bank_line_id) return fail('This record is already matched. Unmatch it first.', 409);
-    let target: Json | null = null;
-    if (b.type === 'upi') {
-      const [u] = await rows(`/fin_upi_lines?id=eq.${b.targetId}&select=id,paid_at,amount_paise,direction,bank_line_id`);
-      if (u) target = { id: u.id, direction: u.direction, amountPaise: Number(u.amount_paise), date: u.paid_at, bankLineId: u.bank_line_id };
-    } else {
-      const [l] = await rows(`/fin_bank_lines?id=eq.${b.targetId}&select=id,tran_date,amount_paise,direction`);
-      if (l) {
-        const [u] = await rows(`/fin_upi_lines?bank_line_id=eq.${l.id}&select=id&limit=1`);
-        target = { id: l.id, direction: l.direction, amountPaise: Number(l.amount_paise), date: l.tran_date, upiLineId: u?.id ?? null };
-      }
-    }
-    if (!target) return fail('That payment was not found.', 404);
-    // The payment is one payment: if the other side of it (the UPI row's bank line, or the bank line's UPI row) is already another
-    // record's, so is this.
-    const sides = [target.bankLineId && `bank_line_id=eq.${target.bankLineId}`, target.upiLineId && `upi_line_id=eq.${target.upiLineId}`, b.type === 'bank' && `bank_line_id=eq.${target.id}`, b.type === 'upi' && `upi_line_id=eq.${target.id}`].filter(Boolean) as string[];
-    for (const side of sides) {
-      const taken = await rows(`/fin_payment_requests?${side}&status=not.in.(rejected,cancelled)&id=neq.${id}&select=id&limit=1`);
-      if (taken[0]) return fail('Another record is already matched to that payment.', 409);
-    }
-    const planned = planMatch({ record: { kind: record.kind, status: record.status, amountPaise: Number(record.amount_paise), bankLineId: record.bank_line_id, upiLineId: record.upi_line_id }, type: b.type, target: target as any, now: new Date().toISOString(), actorId: auth.staff.id });
-    if (planned.error || !planned.patch) return fail(planned.error ?? 'Not allowed.');
-    await logFinanceAction({ actorId: auth.staff.id, entityId: record.entity_id, action: 'finance.request_matched', target: id, detail: { to: b.type } });
-    const res = await rest(`/fin_payment_requests?id=eq.${id}&upi_line_id=is.null&bank_line_id=is.null`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ ...planned.patch, updated_at: new Date().toISOString() }) });
-    void res;
+    const done = await applyMatch(id, b.type, b.targetId, auth.staff.id, 'person');
+    if ('error' in done) return fail(done.error, done.status);
     return json({ ok: true });
   } catch (err) {
     if (err instanceof Error && /duplicate key|23505|409/.test(err.message)) return fail('Another record is already matched to that payment.', 409);
     return serverError(err, 'match');
+  }
+}
+
+// Matching every suggestion that has no competition (autoMatchPicks): a record with one candidate payment that no other record wants.
+// Each is re-checked against the statement by applyMatch, and the unique indexes on the statement lines stop two records taking one
+// payment even if two people run this at once. Counts only come back. A match can be taken back with unmatch.
+export async function autoMatchRecords(req: Request): Promise<Response> {
+  const auth = await requireStaff(req, 'finance', 'allocate');
+  if (!auth.ok) return fail(auth.error, auth.status);
+  try {
+    const picks = autoPicks(await loadMatchState());
+    let matched = 0;
+    let skipped = 0;
+    for (const p of picks) {
+      try {
+        const done = await applyMatch(p.recordId, p.type, p.targetId, auth.staff.id, 'auto');
+        if ('ok' in done) matched += 1;
+        else skipped += 1;
+      } catch (err) {
+        console.error('[finance-admin] auto-match skipped one', err);
+        skipped += 1;
+      }
+    }
+    return json({ ok: true, matched, skipped });
+  } catch (err) {
+    return serverError(err, 'auto-match');
   }
 }
 
@@ -414,9 +464,10 @@ export async function unmatchRecord(req: Request, id: string): Promise<Response>
     if (!record) return fail('Not found', 404);
     if (!record.upi_line_id && !record.bank_line_id) return fail('This record is not matched.', 409);
     await logFinanceAction({ actorId: auth.staff.id, entityId: record.entity_id, action: 'finance.request_unmatched', target: id });
+    // matched_by stays set on a record with no link: that is the mark of "a person unmatched this", so it is never matched automatically again.
     // A request that was marked paid by the match goes back to approved; a log or a history row was always paid.
     const back = record.kind === 'request' && record.source === 'app' && record.status === 'paid' ? { status: 'approved', paid_on: null } : {};
-    await rest(`/fin_payment_requests?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify({ ...back, upi_line_id: null, bank_line_id: null, matched_by: null, matched_at: null, updated_at: new Date().toISOString() }) });
+    await rest(`/fin_payment_requests?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify({ ...back, upi_line_id: null, bank_line_id: null, matched_by: auth.staff.id, matched_at: new Date().toISOString(), updated_at: new Date().toISOString() }) });
     return json({ ok: true });
   } catch (err) {
     return serverError(err, 'unmatch');

@@ -60,11 +60,12 @@ globalThis.fetch = async (url, init = {}) => {
     let list = db.records.map((r) => ({ id: REQ, entity_id: 'ent', ...r }));
     for (const col of ['upi_line_id', 'bank_line_id']) { const v = u.searchParams.get(col); if (v?.startsWith('eq.')) list = list.filter((r) => r[col] === v.slice(3)); }
     const not = u.searchParams.get('id'); if (not?.startsWith('neq.')) list = list.filter((r) => r.id !== not.slice(4));
+    if (not?.startsWith('eq.')) list = list.filter((r) => r.id === not.slice(3));
     return json(list);
   }
   if (table === 'fin_bank_lines') return json(db.bank ?? [{ id: 'bank-1', tran_date: '2026-11-08', amount_paise: 250000, direction: 'debit', narration: 'x', upi_rrn: null }]);
   if (table === 'fin_upi_lines') return json(db.upi ?? [{ id: 'upi-1', paid_at: '2026-11-08', amount_paise: 250000, direction: 'debit', bank_line_id: 'bank-1', app: 'paytm', counterparty: 'x', remarks: null, upi_ref: '1' }]);
-  if (table === 'fin_payment_requests' && method === 'PATCH') { db.patched = JSON.parse(init.body); return new Response(null, { status: 204 }); }
+  if (table === 'fin_payment_requests' && method === 'PATCH') { db.patched = JSON.parse(init.body); db.order.push('patch'); return new Response(null, { status: 204 }); }
   if (table === 'fin_vouchers') return method === 'POST' ? new Response(null, { status: 201 }) : json([]);
   throw new Error(`unexpected fetch ${method} ${url}`);
 };
@@ -254,4 +255,85 @@ test('the list says how a matched request was actually paid: from the bank narra
   assert.deepEqual(byId[ID2].fulfilled, { method: 'upi', label: 'UPI, Paytm' }, 'matched by reference: the UPI row names its app');
   assert.deepEqual(byId[ID2].linked, { upi: true, bank: true, upiRef: '600000000001', bankLineId: 'bank-2' }, 'where it is tied, so the page can link to each place');
   assert.deepEqual(byId[REQ].linked, { upi: false, bank: true, upiRef: null, bankLineId: 'bank-1' });
+});
+
+// ---- automatic matching: a record with one candidate payment that no other record wants is matched without asking
+const UNIQUE = { id: REQ, kind: 'request', status: 'approved', source: 'app', requester_id: 'u9', party_id: P1, amount_paise: 250000, mode: 'upi', purpose: 'Pump repair', decided_at: '2026-11-08T05:00:00Z', created_at: '2026-11-08T04:00:00Z' };
+const ONE_UPI = [{ id: 'upi-1', paid_at: '2026-11-08', amount_paise: 250000, direction: 'debit', bank_line_id: 'bank-1', app: 'paytm', counterparty: 'Acme Pumps', remarks: null, upi_ref: '600000000009' }];
+
+test('auto-match: one candidate payment nobody else wants is matched with no person on it, audited first, and the request becomes paid', async () => {
+  const email = sign([['finance', 'user']]);
+  db.upi = ONE_UPI;
+  db.records.push({ ...UNIQUE });
+  const before = await (await send(email, 'GET', '/requests')).json();
+  assert.equal(before.autoPending, 1, 'the list says one could be matched, and wrote nothing');
+  assert.equal(db.patched, null);
+  const res = await send(email, 'POST', '/requests/auto-match', {});
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), { ok: true, matched: 1, skipped: 0 });
+  assert.equal(db.patched.upi_line_id, 'upi-1');
+  assert.equal(db.patched.matched_by, null, 'an automatic match carries no person: that is how the page tells it from a manual one');
+  assert.equal(db.patched.status, 'paid');
+  assert.ok(db.audit.some((a) => a.action === 'finance.request_auto_matched'), 'its own audit action');
+  assert.ok(db.order.indexOf('audit') >= 0 && db.order.indexOf('audit') < db.order.indexOf('patch'), 'the audit entry is written before the record is changed');
+});
+
+test('auto-match: two records that want the same payment are both left as suggestions', async () => {
+  const email = sign([['finance', 'user']]);
+  db.upi = ONE_UPI;
+  db.records.push({ ...UNIQUE });
+  db.records.push({ ...UNIQUE, id: '55555555-5555-4555-8555-555555555555' });
+  assert.equal((await (await send(email, 'GET', '/requests')).json()).autoPending, 0);
+  const res = await send(email, 'POST', '/requests/auto-match', {});
+  assert.deepEqual(await res.json(), { ok: true, matched: 0, skipped: 0 });
+  assert.equal(db.patched, null, 'nothing written');
+});
+
+test('auto-match: a record with two candidate payments is left for a person', async () => {
+  const email = sign([['finance', 'user']]);
+  db.upi = [...ONE_UPI, { ...ONE_UPI[0], id: 'upi-2', bank_line_id: null, upi_ref: '600000000010' }];
+  db.bank = [{ id: 'bank-1', tran_date: '2026-11-08', amount_paise: 250000, direction: 'debit', narration: 'x', upi_rrn: null }];
+  db.records.push({ ...UNIQUE });
+  assert.equal((await (await send(email, 'GET', '/requests')).json()).autoPending, 0);
+  assert.equal((await (await send(email, 'POST', '/requests/auto-match', {})).json()).matched, 0);
+  assert.equal(db.patched, null);
+});
+
+test('unmatching by hand keeps the person on the record, and that record is never matched automatically again', async () => {
+  const email = sign([['finance', 'user']]);
+  db.upi = ONE_UPI;
+  db.records.push({ ...UNIQUE, status: 'paid', upi_line_id: 'upi-1', bank_line_id: 'bank-1', matched_by: null, matched_at: '2026-11-08T06:00:00Z' });
+  const res = await send(email, 'POST', `/requests/${REQ}/unmatch`, {});
+  assert.equal(res.status, 200);
+  assert.equal(db.patched.upi_line_id, null);
+  assert.equal(db.patched.status, 'approved');
+  assert.equal(db.patched.matched_by, 'u1', 'who unmatched it stays on the record');
+  // the same record now: no link, a person on it, and a perfect candidate: still not matched automatically
+  db.records.length = 0;
+  db.records.push({ ...UNIQUE, matched_by: 'u1', matched_at: '2026-11-08T07:00:00Z' });
+  db.patched = null;
+  assert.equal((await (await send(email, 'GET', '/requests')).json()).autoPending, 0);
+  assert.equal((await (await send(email, 'POST', '/requests/auto-match', {})).json()).matched, 0);
+  assert.equal(db.patched, null);
+  // it is still offered as a suggestion, and a person can match it by hand
+  const list = (await (await send(email, 'GET', '/requests')).json()).records;
+  assert.equal(list[0].proposals.length, 1);
+});
+
+test('auto-match needs allocate: a read-only viewer sees no pending count and is refused', async () => {
+  const email = sign([['finance', 'read_only']]);
+  db.upi = ONE_UPI;
+  db.records.push({ ...UNIQUE });
+  assert.equal((await (await send(email, 'GET', '/requests')).json()).autoPending, 0);
+  assert.equal((await send(email, 'POST', '/requests/auto-match', {})).status, 403);
+  assert.equal(db.patched, null);
+});
+
+test('the list tells an automatic match from one a person made', async () => {
+  const email = sign([['finance', 'user']]);
+  db.upi = ONE_UPI;
+  db.records.push({ ...UNIQUE, status: 'paid', upi_line_id: 'upi-1', bank_line_id: 'bank-1', matched_by: null });
+  assert.equal((await (await send(email, 'GET', '/requests')).json()).records[0].matched, 'auto');
+  db.records[0].matched_by = 'u1';
+  assert.equal((await (await send(email, 'GET', '/requests')).json()).records[0].matched, 'accepted');
 });
