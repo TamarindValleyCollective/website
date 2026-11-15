@@ -56,6 +56,7 @@ import SignInGate from '../../../components/SignInGate.astro';
         <button type="button" id="colsearch-toggle" class="button button--outline button--small colsearch-toggle" aria-expanded="false">Column search</button>
         <button type="button" id="tips-toggle" class="button button--outline button--small" aria-expanded="false" aria-controls="tips">Help and shortcuts</button>
         <button type="button" id="accept-all" class="button button--outline" hidden>Fill in the confident suggestions</button>
+        <button type="button" id="fill-parties" class="button button--outline button--small" hidden></button>
       </div>
       <div id="tips" class="tips" hidden>
         <h3 class="tips-title">How a line is described</h3>
@@ -244,6 +245,18 @@ import SignInGate from '../../../components/SignInGate.astro';
 
   // ---- drafts: what you have typed but not posted. They live in this page only.
   const drafts = new Map<string, Draft>();
+  // Lines this tab cleared (undone, posted, emptied): a save must not bring back the copy another tab stored.
+  const cleared = new Set<string>();
+  const dropDraft = drafts.delete.bind(drafts);
+  drafts.delete = (id: string) => {
+    cleared.add(id);
+    return dropDraft(id);
+  };
+  const putDraft = drafts.set.bind(drafts);
+  drafts.set = (id: string, d: Draft) => {
+    cleared.delete(id);
+    return putDraft(id, d);
+  };
   const rowErrors = new Map<string, string>();
   const draftOf = (id: string): Draft => drafts.get(id) ?? { categoryId: '', partyId: '', nature: '' };
   const setDraft = (id: string, patch: Partial<Draft>) => {
@@ -259,7 +272,18 @@ import SignInGate from '../../../components/SignInGate.astro';
     clearTimeout(draftsTimer);
     try {
       const kept: Record<string, Draft> = {};
+      // Two tabs of the same account share this key: start from what is stored (another tab's drafts), then lay this tab's on top.
+      try {
+        const stored = JSON.parse(localStorage.getItem(draftsKey()) ?? 'null') as { drafts?: Record<string, Draft> } | null;
+        for (const [id, d] of Object.entries(stored?.drafts ?? {})) if (!cleared.has(id) && !drafts.has(id)) kept[id] = d;
+      } catch {
+        // unreadable: this tab's drafts alone are kept
+      }
       for (const [id, d] of drafts) if (d.categoryId || d.partyId || d.nature) kept[id] = d;
+      for (const id of Object.keys(kept)) {
+        const l = byId.get(id);
+        if (l && !editable(l)) delete kept[id]; // posted since (here or in another tab): nothing left to keep
+      }
       if (Object.keys(kept).length) localStorage.setItem(draftsKey(), JSON.stringify({ at: Date.now(), drafts: kept }));
       else localStorage.removeItem(draftsKey());
     } catch {
@@ -1304,20 +1328,25 @@ import SignInGate from '../../../components/SignInGate.astro';
       applyView();
     }, 'button button--outline button--small');
   }
-  // Offered while some posted lines have no party (the "posted without a party" count) and the person may allocate.
-  function fillPartiesButton(): HTMLElement | null {
-    if (!data?.canAllocate || !counts.noparty) return null;
-    return button(`Fill ${counts.noparty} missing ${counts.noparty === 1 ? 'party' : 'parties'}`, () => void openFillParties(), 'button button--outline button--small');
+  // Offered while some posted lines have no party (the "posted without a party" count) and the person may allocate. It writes to the ledger,
+  // so it sits in the toolbar with the other bulk fills, not among the view controls inside the search box.
+  function renderFillParties() {
+    const btn = $('fill-parties');
+    const on = Boolean(data?.canAllocate && counts.noparty);
+    btn.hidden = !on;
+    if (on) btn.textContent = `Fill ${counts.noparty} missing ${counts.noparty === 1 ? 'party' : 'parties'}`;
   }
+  $('fill-parties').addEventListener('click', () => void openFillParties());
   function renderSearch() {
     const now = today();
     $('schips').replaceChildren(
       ...chips.map(([k, o], i) => chipEl(kindLabel(k), optionLabel(k, o, now), () => chips.splice(i, 1))),
       ...words.map((w, i) => chipEl('Search', w, () => words.splice(i, 1))),
       ...groupBy.map((g, i) => chipEl('Group by', groupLabel(g), () => groupBy.splice(i, 1), true)),
-      ...([foldAllButton(), fillPartiesButton()].filter(Boolean) as Node[]),
+      ...([foldAllButton()].filter(Boolean) as Node[]),
     );
     $<HTMLInputElement>('q').placeholder = chips.length || words.length || groupBy.length ? '' : 'Search every column';
+    renderFillParties();
     if (!$('spop').hidden) renderPopover();
   }
   function renderPopover() {
@@ -1406,7 +1435,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     renderMoreLabel();
     const c = counts;
     const errs = Object.entries(filterErrors).map(([col, why]) => `Can't read the ${COLUMN_LABELS[col]} search: ${why}`);
-    $('progress').textContent = [`Showing ${matched} of ${all.length}`, `${c.unallocated} left to allocate`, `${c.review} to review`, c.noparty ? `${c.noparty} posted without a party` : '', postedThisSitting ? `${postedThisSitting} posted this sitting` : '', crumbs.length ? `Searching: ${crumbs.join(', ')}` : '', ...errs].filter(Boolean).join(' · ');
+    $('progress').textContent = [`${c.unallocated} left to allocate`, `${c.review} to review`, c.noparty ? `${c.noparty} posted without a party` : '', `Showing ${matched} of ${all.length}`, postedThisSitting ? `${postedThisSitting} posted this sitting` : '', crumbs.length ? `Searching: ${crumbs.join(', ')}` : '', ...errs].filter(Boolean).join(' · ');
   }
   const SORTABLE = new Set(['date', 'origin', 'narration', 'amount', 'category', 'party', 'nature', 'status']);
   const columnShown = (id: string) => (id === 'narration' ? showNarration : id === 'nature' ? showWording : true);
@@ -2824,6 +2853,17 @@ import SignInGate from '../../../components/SignInGate.astro';
     background: var(--tvc-white);
   }
 
+  /* The shell gives every .hint a -8px top margin (it tucks under a heading); under the table that put the text on top of the last row. */
+  .ledger #ledger-end,
+  .ledger #empty {
+    margin-top: 12px;
+  }
+
+  /* The same shell margin made the second sentence of a note ("They are selected: press Post…") float above the first. */
+  .ledger .postnote .hint {
+    margin: 0;
+  }
+
   /* Working: the table dims and a bar runs along its top while the lines are fetched. */
   .ledger .grid {
     position: relative;
@@ -3797,8 +3837,9 @@ import SignInGate from '../../../components/SignInGate.astro';
     font-weight: 700;
   }
 
-  .ledger {
-    padding-bottom: var(--abar-h, 0px);
+  /* Beats the shell's own 32px bottom padding on every page section (StaffLayout: main .section.wrapper). */
+  #staff-main .ledger.section {
+    padding-bottom: calc(32px + var(--abar-h, 0px));
   }
 
   @media (max-width: 640px) {
