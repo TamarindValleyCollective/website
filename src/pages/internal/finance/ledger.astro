@@ -1959,28 +1959,78 @@ import SignInGate from '../../../components/SignInGate.astro';
   }
   // Lines that are filled in but not posted, with the one step that is left. Rebuilt only when what it says changes.
   let draftNoteKey = '';
+  // Every line that holds something filled in and not posted, wherever it is in the list (the note counts these, not only the ready ones).
+  const unpostedLines = () => all.filter((l) => {
+    const d = drafts.get(l.id);
+    return editable(l) && Boolean(d && (d.categoryId || d.partyId || d.nature));
+  });
   function renderDraftNote() {
     const box = $('draftnote');
+    const mine = unpostedLines();
     const ready = lines.filter((l) => editable(l) && isReady(l));
     const unticked = ready.filter((l) => !tstate.rowSelection[l.id]);
-    const key = `${ready.length}:${unticked.length}`;
+    const key = `${mine.length}:${ready.length}:${unticked.length}`;
     if (key === draftNoteKey) return;
     draftNoteKey = key;
-    if (!ready.length) {
+    if (!mine.length) {
       box.hidden = true;
       return;
     }
     box.replaceChildren(
-      h('span', { text: `${ready.length} ${ready.length === 1 ? 'line is' : 'lines are'} filled in but not posted yet.` }),
+      h('span', { text: `${mine.length} ${mine.length === 1 ? 'line is' : 'lines are'} filled in but not posted yet.` }),
       unticked.length
         ? button(`Select ${unticked.length === ready.length ? 'them' : `the other ${unticked.length}`} to post`, () => {
             const next = { ...tstate.rowSelection };
             for (const l of ready) next[l.id] = true;
             table.setRowSelection(next);
           }, 'button button--small')
-        : h('span', { class: 'hint', text: 'They are selected: press Post in the bar at the bottom.' }),
+        : ready.length
+          ? h('span', { class: 'hint', text: 'They are selected: press Post in the bar at the bottom.' })
+          : null,
+      button('Discard these', () => void discardDrafts(), 'button button--outline button--small'),
     );
     box.hidden = false;
+  }
+  // Throws away everything filled in and not posted, here and in the browser's saved copy. Posted lines are never touched. It asks first and
+  // can be undone (the toast, or Ctrl+Z for two minutes): the drafts and the maintenance year/unit picks are kept and put back.
+  async function discardDrafts() {
+    const mine = unpostedLines();
+    if (!mine.length) return;
+    const n = mine.length;
+    const ok = await askSheet({
+      title: `Discard what you filled in on ${n} ${n === 1 ? 'line' : 'lines'}?`,
+      text: 'This clears only the category, party and wording you filled in and have not posted, here and in the copy this browser keeps. Lines already posted stay exactly as they are, and nothing is sent to the ledger. You can undo it for two minutes.',
+      actions: [{ label: 'Discard', value: true, kind: 'primary' }, { label: 'Keep them', value: false }],
+    });
+    if (!ok) return;
+    // Only drafts: this never calls the server and never touches a line that is posted. A line that was posted while the sheet was open
+    // (so it is no longer editable) is dropped from the list here, and what a line was posted as is read from the ledger, not from a draft.
+    const stillDrafts = new Set(unpostedLines().map((l) => l.id));
+    mine.splice(0, mine.length, ...mine.filter((l) => stillDrafts.has(l.id)));
+    const draftsBefore = new Map(mine.map((l) => [l.id, { ...draftOf(l.id) }]));
+    const extrasBefore = new Map(mine.map((l) => [l.id, extras.has(l.id) ? { ...extraOf(l.id) } : null]));
+    for (const l of mine) {
+      drafts.delete(l.id);
+      extras.delete(l.id);
+      rowErrors.delete(l.id);
+    }
+    saveDraftsNow();
+    for (const l of mine) syncRow(l);
+    const undo = () => {
+      if (lastUndo?.run === undo) lastUndo = null;
+      for (const [id, d] of draftsBefore) {
+        const l = byId.get(id);
+        if (l && !editable(l)) continue; // posted since: leave it alone
+        drafts.set(id, d);
+        const x = extrasBefore.get(id);
+        if (x) extras.set(id, x);
+        if (l) syncRow(l);
+      }
+      persistDrafts();
+      renderDraftNote();
+    };
+    lastUndo = { at: Date.now(), run: undo };
+    showToast(`Discarded ${n} ${n === 1 ? 'line' : 'lines'}. Nothing was posted.`, undo);
   }
   function edit(l: Line, field: Field, value: string) {
     setDraft(l.id, { [field]: value } as Partial<Draft>);
