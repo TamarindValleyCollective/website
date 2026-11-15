@@ -62,6 +62,12 @@ site-wide "Email notification" rule (Site configuration → Forms → Form notif
 per-form `form_name` set), pointed at `core-team@tvc.farm` (moved from `contact@tvc.farm` on
 2026-08-19 — see the Forms/WhatsApp section below).
 
+**Builds.** Every merge to `main` is a Netlify production build (15 credits), except one that changes only documentation: `netlify.toml`'s
+`ignore` command (`scripts/netlify-ignore-build.mjs`, rule in `scripts/lib/netlify-ignore.mjs`, tested) skips it when every file changed since
+the last deploy is under `CHANGELOG/`, under `docs/` (but not `docs/site-map/`, which `src/lib/staff-demo.ts` imports), or a root-level `*.md`.
+It is an allowlist, so site content markdown in `src/content/`, code, config and anything unexpected still build, and it builds whenever it cannot
+compare the commits. Deploy previews and failed builds cost nothing either way.
+
 ## Diagram
 
 ```mermaid
