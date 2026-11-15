@@ -37,6 +37,8 @@ const { default: handler } = await import(pathToFileURL(out).href);
 
 const P1 = '11111111-1111-4111-8111-111111111111';
 const REQ = '22222222-2222-4222-8222-222222222222';
+const D1 = '33333333-3333-4333-8333-333333333333';
+const D2 = '44444444-4444-4444-8444-444444444444';
 let db, calls;
 globalThis.fetch = async (url, init = {}) => {
   const u = new URL(url);
@@ -48,6 +50,10 @@ globalThis.fetch = async (url, init = {}) => {
   if (table === 'staff_module_roles') return json(db.roles.filter((r) => r.staff_id === u.searchParams.get('staff_id')?.slice(3) && r.module === u.searchParams.get('module')?.slice(3)));
   if (table === 'fin_audit_log') { db.audit.push(JSON.parse(init.body)); db.order.push('audit'); return new Response(null, { status: 201 }); }
   if (table === 'fin_entities') return json([{ id: 'ent', requester_party_id: null }]);
+  if (table === 'fin_delegates' && method === 'POST') { const b = JSON.parse(init.body); db.order.push('delegate'); db.saved = b; return json([{ id: D1, ...b }], 201); }
+  if (table === 'fin_delegates' && method === 'PATCH') { const b = JSON.parse(init.body); db.order.push('delegate'); db.saved = b; return json([{ id: D1, identifier: '5550100001', ...b }]); }
+  if (table === 'fin_delegates') return json(db.delegates ?? [{ id: D1 }].filter(() => u.searchParams.has('id')));
+  if (table === 'fin_upi_delegate_links') { db.order.push(`links:${method}`); db.links = init.body ? JSON.parse(init.body) : u.search; return new Response(null, { status: method === 'POST' ? 201 : 204 }); }
   if (table === 'fin_parties') return json([{ id: P1, name: 'Acme Pumps', active: true, merged_into: null }]);
   if (table === 'fin_payment_requests' && method === 'POST') { const b = JSON.parse(init.body); db.records.push(b); db.order.push('record'); return json([{ id: REQ, kind: b.kind, status: b.status }], 201); }
   if (table === 'fin_payment_requests' && method === 'GET') {
@@ -90,6 +96,71 @@ test('a log is stored as already paid, with the delegate and reference', async (
   assert.equal(db.records[0].status, 'paid');
   assert.equal(db.records[0].paid_via, 'delegate');
   assert.equal(db.records[0].mode, 'upi');
+});
+
+const delegate = (id, from, to = null) => ({ id, identifier: '5550100001', display_name: null, active_from: from, active_to: to, cap_paise: null });
+const log = { kind: 'log', partyId: P1, amountPaise: 12000, purpose: 'Onions', paidOn: '2026-11-01', paidVia: 'delegate', upiRef: '600000000001' };
+
+test('a delegated log names the one delegate who was active that day', async () => {
+  const email = sign([['finance-requests', 'user']]);
+  db.delegates = [delegate(D1, '2026-07-04')];
+  assert.equal((await send(email, 'POST', '/requests', log)).status, 201);
+  assert.equal(db.records[0].delegate_id, D1);
+});
+
+test('with two delegates active the log names the one picked, and a stranger is refused', async () => {
+  const email = sign([['finance-requests', 'user']]);
+  db.delegates = [delegate(D1, '2026-07-04'), delegate(D2, '2026-10-01')];
+  assert.equal((await send(email, 'POST', '/requests', log)).status, 201);
+  assert.equal(db.records[0].delegate_id, null); // ambiguous: left open, not guessed
+  assert.equal((await send(email, 'POST', '/requests', { ...log, upiRef: '600000000002', delegateId: D2 })).status, 201);
+  assert.equal(db.records[1].delegate_id, D2);
+  assert.equal((await send(email, 'POST', '/requests', { ...log, upiRef: '600000000003', delegateId: '55555555-5555-4555-8555-555555555555' })).status, 400);
+  assert.equal(db.records.length, 2);
+});
+
+test('a direct payment never carries a delegate', async () => {
+  const email = sign([['finance-requests', 'user']]);
+  db.delegates = [delegate(D1, '2026-07-04')];
+  assert.equal((await send(email, 'POST', '/requests', { ...log, paidVia: 'direct', delegateId: D1 })).status, 201);
+  assert.equal(db.records[0].delegate_id, null);
+});
+
+test('adding a delegate needs an admin, is audited before it is written, and the audit never carries the number or name', async () => {
+  const body = { identifier: '5550100001', displayName: 'Test Person', activeFrom: '2026-07-04' };
+  assert.equal((await send(sign([['finance', 'user']]), 'POST', '/delegates', body)).status, 403);
+  assert.equal(db.saved, undefined);
+  const res = await send(sign([['finance', 'admin']]), 'POST', '/delegates', body);
+  assert.equal(res.status, 201);
+  assert.deepEqual(db.order, ['audit', 'delegate']);
+  assert.equal(db.saved.identifier, '5550100001');
+  assert.ok(!JSON.stringify(db.audit).includes('5550100001') && !JSON.stringify(db.audit).includes('Test Person'));
+  assert.equal((await send(sign([['finance', 'admin']]), 'POST', '/delegates', { ...body, identifier: 'abc' })).status, 400);
+  assert.equal(db.saved, undefined);
+});
+
+test('editing a delegate cannot change its number', async () => {
+  const email = sign([['finance', 'admin']]);
+  const res = await send(email, 'PATCH', `/delegates/${D1}`, { identifier: '5550100009', displayName: 'Test Person', activeFrom: '2026-07-04', activeTo: '2026-12-31' });
+  assert.equal(res.status, 200);
+  assert.equal(db.saved.identifier, undefined);
+  assert.equal(db.saved.active_to, '2026-12-31');
+});
+
+test('picking a delegate for payments needs allocate, is audited first, and a null delegate takes the picks back', async () => {
+  const refs = ['600000000001', '600000000002'];
+  assert.equal((await send(sign([['finance', 'read_only']]), 'POST', '/delegates/assign', { delegateId: D1, upiRefs: refs })).status, 403);
+  const email = sign([['finance', 'user']]);
+  const res = await send(email, 'POST', '/delegates/assign', { delegateId: D1, upiRefs: refs });
+  assert.equal(res.status, 200);
+  assert.deepEqual(db.order, ['audit', 'links:POST']);
+  assert.deepEqual(db.links.map((l) => [l.upi_ref, l.delegate_id]), [[refs[0], D1], [refs[1], D1]]);
+  assert.equal(db.audit[0].detail.payments, 2);
+  assert.equal((await send(sign([['finance', 'user']]), 'POST', '/delegates/assign', { delegateId: D1, upiRefs: ['12'] })).status, 400);
+  assert.equal((await send(sign([['finance', 'user']]), 'POST', '/delegates/assign', { delegateId: 'nope', upiRefs: refs })).status, 400);
+  const back = await send(sign([['finance', 'user']]), 'POST', '/delegates/assign', { delegateId: null, upiRefs: refs });
+  assert.equal(back.status, 200);
+  assert.ok(db.order.includes('links:DELETE'));
 });
 
 test('nothing is written for a bad request, or for someone with no grant', async () => {

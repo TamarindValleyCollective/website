@@ -326,10 +326,28 @@ types the importer knows; each batch stores its `source`: `axis_statement`, `pay
   filters by app, paid by and state. *Paid by* is **Direct** (an operator of the account paid in their own app) or **Delegate**
   (a delegated payment, "UPI Circle": a delegate pays with a spend right and limit the operator gave them; only the account's
   operators can add the account to their UPI apps, and there can be several delegates, each with their own limit). Every download
-  is in the operator's name, so a file never says *which* delegate paid; today there is one, and a delegate field would be needed
-  for more. State: *in the ledger* / *waiting for the statement* / *not in the statement*. Delegated spend per calendar month is
-  shown against the Rs 15,000 allowance (`CIRCLE_CAP_PAISE`, a constant; it is not yet per delegate), and so is the count of bank UPI
+  is in the operator's name, so a file never says *which* delegate paid: see **Delegates** below for how that is worked out.
+  State: *in the ledger* / *waiting for the statement* / *not in the statement*. Delegated spend per calendar month is shown per
+  delegate against that delegate's limit (the default is `CIRCLE_CAP_PAISE`, Rs 15,000, a constant), and so is the count of bank UPI
   debits that no BHIM/Paytm row explains. Code and the database still say `is_circle` for "delegated".
+- **Delegates** (migration `0100`, **applied 2026-11-15**; `lib/finance-delegates.ts`, pure rules in `finance-delegates.mjs`). Neither the
+  Paytm export nor the BHIM file says which delegate paid. The Paytm app's receipt screen does: it shows `Paid for <number>`, the
+  delegate's number. So a delegate is known by that **number**, typed once by an admin (`configure`) on the UPI page, with an optional
+  name, the date they started, an optional end date and an optional monthly limit (empty = the default). Everywhere a delegate is shown
+  it is the **name when there is one, otherwise the number**; adding a name later changes every record. A delegated payment is
+  attributed in this order: (1) an explicit pick an admin made for that payment (`fin_upi_delegate_links`, keyed by the 12-digit UPI
+  reference like payment notes, because `fin_upi_lines` is link-only and never edited); (2) the one delegate who was **active that
+  day**, automatically (so today, with one delegate, every delegated payment from their start date is theirs without anyone doing
+  anything); (3) otherwise it is left open: **ambiguous** when two or more were active (the UPI page's *Needs a delegate* filter and a
+  banner list them, and the Paid by cell becomes a select, `allocate`), or **none** when nobody was active that day (shown as "no
+  delegate yet", counted in its own bucket in the monthly gauge). A pick can be taken back ("Let the dates decide"). The picks and the
+  dates are never copied onto the UPI row, so changing a delegate's dates re-attributes every payment that was not picked by hand. A
+  spend logged on the Requests page as paid by a delegate names one too (`fin_payment_requests.delegate_id`, only allowed when
+  `paid_via` is `delegate`): the one picked, else the only one active on that day. The number and name are personal data: they live in
+  the database only (the tables are service-role only), never in the repository, and the audit entries carry counts and field names,
+  never the number or name. Not built: reading delegate numbers off receipt screenshots (decided against: nobody will upload each
+  receipt), per-delegate rows in the dashboard's circle gauge (it still shows the monthly total), and showing the delegate in the
+  ledger.
 - **Notes and links between the ledger and the UPI page** (migration `0089`, **applied 2026-11-07**). The bank's or the app's wording is never
   changed. A **note** sits beside it: one per payment, in `fin_payment_notes`, keyed `upi:<12-digit reference>` for a UPI payment (so a UPI
   row and its bank line share one note, before and after they are joined) or `bank:<line id>` otherwise. It is shown and edited in the
@@ -750,7 +768,7 @@ audit row (a count); a failed run writes `finance.requests_sheet_sync_failed` (n
 (the variable is not set yet, and the function deploys with the next merge to main).
 
 **Not built yet (next):** the bill scanner (edge detection, crop, multi-page) and the vision reading of vendor, date, amount and UPI reference off a bill or screenshot (the files are
-attached as plain photos today, and the reference is typed); approver-queue polish; per-delegate spend limits (who paid is recorded: `requester_id` and `paid_via`); a vendor bulk file;
+attached as plain photos today, and the reference is typed); approver-queue polish; per-delegate spend limits (built with the delegates, see **Delegates** under the UPI page); a vendor bulk file;
 payment links from the ledger's Paypro/bank lines to a request. **Not verified:** the pages in a browser on a real phone, the upload to R2, the approval email, and the loader's `--apply`.
 
 ## Dashboards (session 07, migration `0098_finance_budget.sql`, **applied 2026-11-10**)

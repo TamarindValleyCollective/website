@@ -15,6 +15,8 @@ import { stepUpIsValid } from './staff-admin-guard';
 import { mfaSummary, rest } from './staff-mfa-store';
 import { capabilitiesForRole } from './staff-registry';
 import { logFinanceAction } from './finance-audit';
+import { loadDelegates } from './finance-delegates';
+import { activeOn, delegateLabel } from '../../../scripts/lib/finance-delegates.mjs';
 import { deleteFinanceVoucher, getFinanceVoucher, putFinanceVoucher } from './finance-storage';
 import { sendEmail } from './booking-notify';
 import { escapeHtml, renderStaffEmail } from './email-layout';
@@ -62,7 +64,7 @@ export async function requesterAuth(req: Request, capability: 'raise' | 'add-ven
   return requireStaff(req, 'finance', 'request');
 }
 
-const COLUMNS = 'id,kind,status,source,requester_id,party_id,recipient_text,amount_paise,mode,purpose,needed_by,reimbursement,paid_on,paid_via,upi_ref,decided_by,decided_at,decision_reason,upi_line_id,bank_line_id,matched_at,review_flag,reviewed_at,created_at';
+const COLUMNS = 'id,kind,status,source,requester_id,party_id,recipient_text,amount_paise,mode,purpose,needed_by,reimbursement,paid_on,paid_via,delegate_id,upi_ref,decided_by,decided_at,decision_reason,upi_line_id,bank_line_id,matched_at,review_flag,reviewed_at,created_at';
 
 // The purposes that the UPI page and the ledger show for a payment (a lookup over every live record).
 export async function loadPurposes() {
@@ -71,15 +73,21 @@ export async function loadPurposes() {
 }
 
 // ------------------------------------------------------------------ shaping
-type Names = { staff: Map<string, string>; party: Map<string, string> };
+type Names = { staff: Map<string, string>; party: Map<string, string>; delegate: Map<string, string> };
 async function namesFor(records: Json[]): Promise<Names> {
   const staffIds = [...new Set(records.flatMap((r) => [r.requester_id, r.decided_by]).filter(Boolean))] as string[];
   const partyIds = [...new Set(records.map((r) => r.party_id).filter(Boolean))] as string[];
-  const [staff, parties] = await Promise.all([
+  const hasDelegate = records.some((r) => r.delegate_id);
+  const [staff, parties, delegates] = await Promise.all([
     staffIds.length ? rows(`/staff_users?id=in.(${staffIds.join(',')})&select=id,name,email`) : Promise.resolve([]),
     partyIds.length ? all(`/fin_parties?select=id,name&id=in.(${partyIds.join(',')})&order=id.asc`) : Promise.resolve([]),
+    hasDelegate ? loadDelegates() : Promise.resolve([]),
   ]);
-  return { staff: new Map(staff.map((s) => [s.id as string, (s.name || s.email) as string])), party: new Map(parties.map((p) => [p.id as string, p.name as string])) };
+  return {
+    staff: new Map(staff.map((s) => [s.id as string, (s.name || s.email) as string])),
+    party: new Map(parties.map((p) => [p.id as string, p.name as string])),
+    delegate: new Map(delegates.map((d) => [d.id, delegateLabel(d)])),
+  };
 }
 const shape = (r: Json, n: Names, vouchers: Map<string, number>) => ({
   id: r.id as string,
@@ -98,6 +106,8 @@ const shape = (r: Json, n: Names, vouchers: Map<string, number>) => ({
   reimbursement: Boolean(r.reimbursement),
   paidOn: r.paid_on as string | null,
   paidVia: r.paid_via as string | null,
+  delegate: r.delegate_id ? n.delegate.get(r.delegate_id) ?? null : null,
+  delegateId: r.delegate_id as string | null,
   upiRef: r.upi_ref as string | null,
   decidedBy: r.decided_by ? n.staff.get(r.decided_by) ?? null : null,
   decidedAt: r.decided_at as string | null,
@@ -157,10 +167,22 @@ export async function createRecord(req: Request): Promise<Response> {
     const ent = await rows(`/fin_entities?id=eq.${entity}&select=requester_party_id`);
     const flag = reviewFlag({ partyId: v.partyId }, ent[0]?.requester_party_id ? [ent[0].requester_party_id] : []);
     const isLog = v.kind === 'log';
+    // A delegated spend names its delegate: the one picked, else the only one active that day (none, if it is ambiguous).
+    let delegateId: string | null = null;
+    if (isLog && v.paidVia === 'delegate') {
+      const delegates = await loadDelegates();
+      if (v.delegateId) {
+        if (!delegates.some((d) => d.id === v.delegateId)) return fail('Choose the delegate from the list.');
+        delegateId = v.delegateId as string;
+      } else {
+        const active = activeOn(delegates, v.paidOn as string);
+        if (active.length === 1) delegateId = active[0].id;
+      }
+    }
     const record = {
       entity_id: entity, kind: v.kind, status: isLog ? 'paid' : 'submitted', source: 'app', requester_id: auth.staff.id,
       party_id: v.partyId, recipient_text: v.recipientText, amount_paise: v.amountPaise, mode: v.mode, purpose: v.purpose,
-      needed_by: v.neededBy, reimbursement: v.reimbursement, paid_on: v.paidOn, paid_via: v.paidVia, upi_ref: v.upiRef, review_flag: flag,
+      needed_by: v.neededBy, reimbursement: v.reimbursement, paid_on: v.paidOn, paid_via: v.paidVia, delegate_id: delegateId, upi_ref: v.upiRef, review_flag: flag,
     };
     // The audit entry first: the record does not exist without a record that it was asked for.
     await logFinanceAction({ actorId: auth.staff.id, entityId: entity, action: isLog ? 'finance.spend_logged' : 'finance.request_raised', detail: { mode: v.mode, reimbursement: v.reimbursement, flagged: Boolean(flag) } });

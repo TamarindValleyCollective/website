@@ -6,6 +6,8 @@ import { rest } from './staff-mfa-store';
 import { capabilitiesForRole } from './staff-registry';
 import { loadNotes } from './finance-notes';
 import { loadPurposes } from './finance-requests';
+import { loadDelegateLinks, loadDelegates } from './finance-delegates';
+import { attribute, delegateLabel } from '../../../scripts/lib/finance-delegates.mjs';
 import { pairReversals } from '../../../scripts/lib/finance-reversals.mjs';
 import { CIRCLE_CAP_PAISE, bankWithoutUpiRow, circleMonths, matchState } from '../../../scripts/lib/finance-upi-circle.mjs';
 
@@ -26,13 +28,15 @@ export async function listUpiLines(req: Request): Promise<Response> {
   const auth = await requireStaff(req, 'finance', 'view');
   if (!auth.ok) return json({ error: auth.error }, auth.status);
   try {
-    const [upi, bank, last, accounts, notes, purposeOf] = await Promise.all([
+    const [upi, bank, last, accounts, notes, purposeOf, delegates, picks] = await Promise.all([
       all('/fin_upi_lines?select=id,paid_at,paid_time,app,counterparty,remarks,tag,amount_paise,direction,is_circle,upi_ref,bank_account_id,bank_line_id&ignored=eq.false&order=paid_at.desc,paid_time.desc.nullslast,id.asc'),
       all('/fin_bank_lines?select=id,bank_account_id,tran_date,direction,amount_paise,upi_rrn&upi_rrn=not.is.null&order=tran_date.asc,id.asc'),
       rest('/fin_bank_lines?select=tran_date&order=tran_date.desc&limit=1').then((r) => r.json() as Promise<Json[]>),
       all('/fin_bank_accounts?select=id,label&order=created_at.asc'),
       loadNotes(),
       loadPurposes(),
+      loadDelegates(),
+      loadDelegateLinks(),
     ]);
     const lastBankDate: string | null = last[0]?.tran_date ?? null;
     // A UPI app can pay from any linked account, so a row's account is its own when the file named it, else the account of
@@ -44,7 +48,14 @@ export async function listUpiLines(req: Request): Promise<Response> {
       counterparty: u.counterparty as string | null, remark: u.remarks as string | null, amountPaise: Number(u.amount_paise), direction: u.direction as 'debit' | 'credit',
       isCircle: Boolean(u.is_circle), upiRef: u.upi_ref as string, note: notes.get(`upi:${u.upi_ref}`) ?? null, purpose: purposeOf({ upiRef: u.upi_ref, upiLineId: u.id, bankLineId: u.bank_line_id }) as string | null, account: accountName.get((u.bank_account_id ?? bankAccount.get(u.bank_line_id)) as string) ?? null, bankLineId: u.bank_line_id as string | null,
     }));
-    const withState = lines.map((l) => ({ ...l, state: matchState(l, lastBankDate) as 'matched' | 'waiting' | 'unmatched' }));
+    // Who each delegated payment belongs to: a pick, else the one delegate active that day (scripts/lib/finance-delegates.mjs).
+    const byId = new Map(delegates.map((d) => [d.id, d]));
+    const attributed = lines.map((l) => {
+      const a = attribute(l, delegates, picks) as { delegateId: string | null; how: 'assigned' | 'auto' | 'ambiguous' | 'none' | null };
+      const d = a.delegateId ? byId.get(a.delegateId) : undefined;
+      return { ...l, delegateId: a.delegateId, delegate: d ? delegateLabel(d) : null, delegateHow: a.how };
+    });
+    const withState = attributed.map((l) => ({ ...l, state: matchState(l, lastBankDate) as 'matched' | 'waiting' | 'unmatched' }));
     const linkedIds = new Set(lines.map((l) => l.bankLineId).filter(Boolean) as string[]);
     const firstUpiDate = lines.reduce<string | null>((m, l) => (m === null || l.paidAt < m ? l.paidAt : m), null);
     const bankLines = bank.map((b) => ({ id: b.id as string, tranDate: b.tran_date as string, direction: b.direction as 'debit' | 'credit', amountPaise: Number(b.amount_paise), upiRrn: b.upi_rrn as string }));
@@ -52,8 +63,13 @@ export async function listUpiLines(req: Request): Promise<Response> {
     const reversed = pairReversals(bankLines.map((b) => ({ id: b.id, date: b.tranDate, direction: b.direction, amountPaise: b.amountPaise, upiRrn: b.upiRrn }))).byLine;
     return json({
       canEdit: (capabilitiesForRole('finance', auth.staff.role) as string[]).includes('allocate'),
+      canConfigure: (capabilitiesForRole('finance', auth.staff.role) as string[]).includes('configure'),
       lines: withState,
-      months: circleMonths(lines),
+      delegates,
+      // Delegated payments no delegate could be worked out for: two were active (pick one) or none was (add the delegate, or their dates).
+      needsDelegate: attributed.filter((l) => l.delegateHow === 'ambiguous').length,
+      notIdentified: attributed.filter((l) => l.delegateHow === 'none').length,
+      months: circleMonths(attributed, CIRCLE_CAP_PAISE, delegates),
       capPaise: CIRCLE_CAP_PAISE,
       lastBankDate,
       bankWithoutRow: bankWithoutUpiRow(bankLines, linkedIds, firstUpiDate, new Set(reversed.keys())),
