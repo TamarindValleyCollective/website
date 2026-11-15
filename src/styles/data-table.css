@@ -358,18 +358,22 @@
   font-size: var(--text-sm);
 }
 
+/* The bar of ticked rows sticks to the bottom of the screen inside the table's own column, so it never slides under the admin shell's
+   left rail (a bar fixed to the whole window hid its first buttons there). */
 .dt .dt-bulk {
-  position: fixed;
-  inset-inline: 0;
+  position: sticky;
   bottom: 0;
   z-index: 20;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  padding: 10px 16px;
-  border-top: 1px solid var(--tvc-line-strong);
+  margin-block-start: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--tvc-line-strong);
+  border-radius: var(--radius);
   background: var(--tvc-surface);
+  box-shadow: 0 -4px 16px rgb(0 0 0 / 12%);
 }
 
 .dt .dt-cards {
