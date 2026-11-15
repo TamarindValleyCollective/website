@@ -174,35 +174,53 @@ tr.sub td { color: var(--ink-soft); }
 .dec .alt { font-size: 0.85rem; color: var(--ink-soft); }
 @media (max-width: 560px) { h1 { font-size: 1.55rem; } .tile .big { font-size: 1.6rem; } }
 
-/* Channels: banks, the channels money passes through, and the delegates who pay through an operator's UPI app. */
-.ch-map { position: relative; display: grid; grid-template-columns: minmax(190px, 230px) minmax(250px, 1fr) minmax(220px, 270px); gap: 24px 72px; align-items: start; }
-.ch-col { display: grid; gap: 12px; align-content: start; min-width: 0; }
-.ch-col h3 { margin: 0; font-size: 0.76rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+/* Channels: circles sized by amount (area), joined by thin lines; a click opens the details. */
+.ch-wrap { display: grid; gap: 16px 24px; grid-template-columns: minmax(0, 1fr) minmax(250px, 300px); align-items: start; }
+.ch-map { position: relative; display: grid; grid-template-columns: auto auto auto; gap: 16px 36px; align-items: stretch; justify-content: space-between; min-width: 0; }
+.ch-col { display: grid; grid-template-rows: auto 1fr; gap: 10px; min-width: 0; }
+.ch-body { display: grid; gap: 12px; align-content: center; justify-items: start; }
+.ch-col h3 { margin: 0 0 4px; font-size: 0.76rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
 .ch-edges { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
-.ch-edge { fill: none; stroke: var(--line-strong); stroke-width: 1.5; opacity: 0.75; }
-.ch-edge.planned { stroke-dasharray: 4 4; opacity: 0.5; }
+.ch-edge { fill: none; stroke: var(--line-strong); stroke-width: 1.25; opacity: 0.6; }
+.ch-edge.planned { stroke-dasharray: 4 4; opacity: 0.4; }
 .ch-edge.on { stroke: var(--accent); stroke-width: 2.5; opacity: 1; stroke-dasharray: none; }
-.ch-map.focus .ch-edge:not(.on) { opacity: 0.1; }
-.ch-node { position: relative; z-index: 1; width: 100%; min-width: 0; text-align: left; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: grid; gap: 5px; font: inherit; color: inherit; }
-button.ch-node { cursor: pointer; }
-button.ch-node:hover { background: var(--soft); }
-.ch-node[aria-pressed='true'] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--ok-bg); }
-.ch-node.planned { border-style: dashed; background: transparent; }
-.ch-node.zero .ch-amt { color: var(--ink-soft); font-weight: 600; }
-.ch-map.focus .ch-node.dim { opacity: 0.38; }
-.ch-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; min-width: 0; }
-.ch-t { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
-.ch-s { font-size: 0.78rem; color: var(--ink-soft); min-width: 0; overflow-wrap: anywhere; }
-.ch-amt { font-size: 1.15rem; font-weight: 700; font-variant-numeric: tabular-nums; }
-.ch-bar { display: block; height: 6px; border-radius: 3px; background: var(--soft); overflow: hidden; }
-.ch-bar i { display: block; height: 100%; border-radius: 3px; background: var(--s-out); }
-.ch-bar.in i { background: var(--s-in); }
-.ch-bar.meter-ok i { background: var(--ok-text); } .ch-bar.meter-warn i { background: var(--warn-text); } .ch-bar.meter-crit i { background: var(--crit-text); }
-.ch-pills { display: flex; flex-wrap: wrap; gap: 4px; }
-.ch-nest { display: none; list-style: none; margin: 0; padding: 0; gap: 14px; }
-.ch-nest ul { list-style: none; margin: 8px 0 0 12px; padding: 0 0 0 12px; border-left: 2px solid var(--line); display: grid; gap: 8px; }
-.ch-nest ul ul { margin-top: 6px; }
-@media (max-width: 820px) { .ch-map { display: none; } .ch-nest { display: grid; } }
+.ch-map.focus .ch-edge:not(.on) { opacity: 0.08; }
+.ch-item { position: relative; z-index: 1; display: flex; align-items: center; gap: 10px; width: 100%; min-width: 0; padding: 4px 6px; border: 0; border-radius: 12px; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.ch-item:hover { background: var(--soft); }
+.ch-item[aria-pressed='true'] { background: var(--soft); box-shadow: inset 0 0 0 2px var(--accent); }
+.ch-map.focus .ch-item.dim { opacity: 0.35; }
+.ch-c { position: relative; flex: none; display: block; border-radius: 50%; border: 2px solid var(--s-out); background: color-mix(in srgb, var(--s-out) 24%, var(--card)); }
+.ch-c.d-in { border-color: var(--s-in); background: color-mix(in srgb, var(--s-in) 24%, var(--card)); }
+.ch-c.bank { border-color: var(--line-strong); background: var(--soft); }
+.ch-c.st-ok { border-color: var(--ok-text); background: var(--ok-bg); }
+.ch-c.st-warn { border-color: var(--warn-text); background: var(--warn-bg); }
+.ch-c.st-crit { border-color: var(--crit-text); background: var(--crit-bg); }
+.ch-c.planned { border-style: dashed; border-color: var(--line-strong); background: transparent; }
+.ch-c.zero { border-width: 1px; background: transparent; }
+.ch-badge { position: absolute; top: -7px; right: -7px; width: 17px; height: 17px; border-radius: 50%; display: grid; place-items: center; font-size: 0.72rem; font-weight: 700; line-height: 1; background: var(--warn-bg); color: var(--warn-text); border: 1.5px solid var(--warn-text); }
+.ch-badge.crit { background: var(--crit-bg); color: var(--crit-text); border-color: var(--crit-text); }
+.ch-more { position: absolute; bottom: -7px; right: -7px; width: 17px; height: 17px; border-radius: 50%; display: grid; place-items: center; font-size: 0.8rem; font-weight: 700; line-height: 1; background: var(--card); color: var(--ink); border: 1.5px solid var(--line-strong); }
+.ch-hint { margin: 0; font-size: 0.82rem; color: var(--ink-soft); max-width: 26ch; }
+.ch-lab { display: grid; gap: 1px; min-width: 0; }
+.ch-t { font-weight: 600; font-size: 0.9rem; line-height: 1.2; overflow-wrap: anywhere; }
+.ch-a { font-size: 0.85rem; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.ch-panel { position: sticky; top: 12px; background: var(--soft); border-radius: 14px; padding: 16px; display: grid; gap: 12px; min-width: 0; }
+.ch-panel h3 { margin: 0; font-size: 1.05rem; font-weight: 650; }
+.ch-panel .figs { grid-template-columns: 1fr 1fr; }
+.ch-panel .k2 { font-size: 0.78rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-soft); }
+.ch-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.ch-panel a { color: var(--accent); }
+.ch-chip { min-height: 30px; padding: 3px 11px; border: 1px solid var(--line-strong); border-radius: 99px; background: var(--card); font-size: 0.82rem; cursor: pointer; }
+.ch-chip:hover { background: var(--bg); }
+.ch-key { display: grid; gap: 8px; font-size: 0.88rem; }
+.ch-key span { display: flex; align-items: center; gap: 10px; }
+.ch-key .ch-c { width: 18px; height: 18px; }
+@media (max-width: 1000px) { .ch-wrap { grid-template-columns: minmax(0, 1fr); } .ch-panel { position: static; } }
+@media (max-width: 820px) {
+  .ch-map { grid-template-columns: minmax(0, 1fr); gap: 20px; justify-content: stretch; }
+  .ch-edges { display: none; }
+  .ch-body { align-content: start; justify-items: stretch; }
+}
 @media (prefers-reduced-motion: no-preference) { .segmented button { transition: background 150ms ease-out, color 150ms ease-out; } }
 </style>
 
@@ -339,17 +357,23 @@ button.ch-node:hover { background: var(--soft); }
     <div class="card">
       <div class="card-head">
         <h2>How money moves</h2>
-        <div class="segmented" role="group" aria-label="Direction" id="ch-dir">
-          <button type="button" data-d="out" aria-pressed="true">Money out</button>
-          <button type="button" data-d="in" aria-pressed="false">Money in</button>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          <div class="segmented" role="group" aria-label="Open or close everything" id="ch-exp">
+            <button type="button" data-e="none" aria-pressed="false">Collapse all</button>
+            <button type="button" data-e="all" aria-pressed="false">Expand all</button>
+          </div>
+          <div class="segmented" role="group" aria-label="Direction" id="ch-dir">
+            <button type="button" data-d="out" aria-pressed="true">Money out</button>
+            <button type="button" data-d="in" aria-pressed="false">Money in</button>
+          </div>
         </div>
       </div>
-      <p class="small muted" id="ch-lead" style="margin-bottom:12px"></p>
-      <div class="ch-map" id="ch-map"></div>
-      <ul class="ch-nest" id="ch-nest"></ul>
+      <div class="ch-wrap">
+        <div class="ch-map" id="ch-map"></div>
+        <aside class="ch-panel" id="ch-panel" aria-live="polite"></aside>
+      </div>
       <details><summary>Table view of money in and out by channel</summary><div class="tablewrap" id="ch-table"></div></details>
     </div>
-    <p class="small muted">Click a box to see only what connects to it. A dashed box is something planned that has no data yet. The lines are connections, not amounts; the figure in each box is the amount.</p>
   </section>
 
   <section class="view" id="v-upi-circle" hidden>
@@ -561,7 +585,7 @@ var DECISIONS = [
   ['How does the Advances view work?', 'Every advance shows what was given, the agreed monthly recovery, what has been recovered, what is left, and when it clears. An advance with no recovery agreed, or a missed recovery, goes on Data health and the Overview. Recoveries come from payroll once it exists; until then an approver records them against the advance.', 'Alternative: advances only inside the payroll session, with nothing on the dashboard.'],
   ['What would members see on the portal?', 'Overview (with their own household’s maintenance instead of the attention list), Cashflow, Budget vs actual, and Maintenance totals with a card for their own household. Not shown: Advances, which other household owes what, data health, the UPI circle, the draft next-year plan. Use “Member view” in the header to preview.', 'Alternative: members see only Budget vs actual and Maintenance. Or also the Cashflow table view only for the year just closed.'],
   ['Who sees names?', 'The dashboard shows house numbers and employee numbers only. Names stay in the member directory and payroll, so a screenshot of the dashboard is safe to share. The one exception is a UPI Circle delegate, who shows as on the UPI page: their name if one has been set, otherwise their number (decided 2026-11-15).', 'Alternative: show names to approvers.'],
-  ['What does the Channels view show?', 'A map in the shape of the money paths: bank accounts, the channels money passes through (gateway, POS, bulk payments, card, each UPI app, plain bank transfers), and delegates under the UPI app they pay through. Each box carries its figure for the year and a small bar; a pill says what needs attention. A Money out / Money in switch changes the direction. Click a box to see only its connections. The channels add up to the bank statement, and a table view says so. On a phone it becomes a nested list.', 'Alternative: a Sankey with ribbons sized by amount. It mixes money in and out and gets tangled once channels are added.'],
+  ['What does the Channels view show?', 'A map of the money paths drawn as circles whose area is the amount: bank accounts on the left, the channels money passes through in the middle (payment gateway, POS, bulk payments, card, each UPI app, plain bank transfers), and delegates on the right under the UPI app they pay through. Banks and channels share one scale; delegates have their own. Only the name and the figure sit beside each circle; clicking one opens a panel with the figures, what needs attention and what it connects to. A ! badge marks what needs attention. A Money out / Money in switch changes the direction. The channels add up to the bank statement, and a table view says so. It starts closed except the live bank: clicking a circle opens what is behind it (a bank shows its channels, a UPI app shows its delegates) and shows its details, and Expand all opens everything. On a phone the circles stack in three groups and the panel opens below.', 'Alternative: boxes with all the figures inside (the first version of this mockup), or a Sankey with ribbons sized by amount, which mixes money in and out and tangles as channels are added.'],
   ['What about channels that are not built yet?', 'They appear as dashed boxes marked Planned (the ICICI account, the POS terminal, Google Pay), so the structure does not change when they arrive. Today a POS terminal would count under Debit card, and a second person’s Paytm cannot be told apart from the first: that needs an operator record.', 'Alternative: show only what exists today and add boxes later.'],
   ['Where does the sinking fund go?', 'It is the Investment head, its own grey segment in the spending chart, and is left out of runway because it is saved, not spent.', 'Alternative: show it as a separate line below spending.'],
   ['What does “committed” mean?', 'Requests that are approved but not yet matched to a bank line.', 'Alternative: also count signed purchase orders, if those exist.'],
@@ -949,35 +973,36 @@ function renderUpi() {
   }).join('');
 }
 /* ---------- channels: how money moves ----------
-   Banks on the left, the channels money passes through in the middle, delegates on the right under the operator's UPI app they
-   pay through. Shares are invented; they add up to the bank figures so the channels reconcile to the statement.
-   A delegate shows as their name when they have one, otherwise their number, the same as the UPI page. */
+   Circles sized by amount (area), banks and channels on one scale, delegates on their own. Banks on the left, the channels money
+   passes through in the middle, delegates on the right under the operator's UPI app they pay through. Shares are invented and add
+   up to the bank figures so the channels reconcile to the statement. A delegate shows as their name when they have one,
+   otherwise their number, the same as the UPI page. */
 var BANKS = [
   { id: 'axis', name: 'Axis current account', sub: 'Statements imported', live: true },
   { id: 'icici', name: 'ICICI account', sub: 'Statement import not built yet', live: false }
 ];
 var CHS = [
-  { id: 'gateway', name: 'Payment gateway', sub: 'Razorpay: stays and events', bank: ['axis'], inS: 0.035, outS: 0, tIn: 0.12, tOut: 0, live: true },
-  { id: 'pos', name: 'POS terminal', sub: 'No terminal set up yet', bank: ['axis'], inS: 0, outS: 0, live: false },
-  { id: 'bulk', name: 'Bulk payments', sub: 'PayPro file: salaries and vendors', bank: ['axis'], inS: 0, outS: 0.55, tIn: 0, tOut: 0.09, live: true },
-  { id: 'card', name: 'Debit card', sub: 'Card and online purchases', bank: ['axis'], inS: 0, outS: 0.03, tIn: 0, tOut: 0.012, live: true },
-  { id: 'paytm', name: 'Paytm', sub: 'Operator A · UPI app', bank: ['axis', 'icici'], inS: 0.04, outS: 0.07, tIn: 0.03, tOut: 0.004, live: true },
-  { id: 'bhim', name: 'BHIM', sub: 'Operator A · UPI app', bank: ['axis', 'icici'], inS: 0.025, outS: 0.02, tIn: 0.03, tOut: 0.004, live: true },
-  { id: 'gpay', name: 'Google Pay', sub: 'Operator B · no importer yet', bank: ['icici'], inS: 0, outS: 0, live: false },
-  { id: 'bank', name: 'Bank transfers and charges', sub: 'NEFT, IMPS, net banking, fees', bank: ['axis'], inS: 0.9, outS: 0.33, tIn: 0.4, tOut: 0.15, live: true }
+  { id: 'gateway', name: 'Payment gateway', sub: 'Razorpay: stays and events', bank: ['axis'], inS: 0.035, outS: 0, tIn: 0.12, tOut: 0, live: true, plan: '' },
+  { id: 'pos', name: 'POS terminal', sub: 'No terminal set up yet', bank: ['axis'], inS: 0, outS: 0, live: false, plan: 'There is no card terminal yet. Until there is, card payments count under Debit card.' },
+  { id: 'bulk', name: 'Bulk payments', sub: 'PayPro file: salaries and vendors', bank: ['axis'], inS: 0, outS: 0.55, tIn: 0, tOut: 0.09, live: true, plan: '' },
+  { id: 'card', name: 'Debit card', sub: 'Card and online purchases', bank: ['axis'], inS: 0, outS: 0.03, tIn: 0, tOut: 0.012, live: true, plan: '' },
+  { id: 'paytm', name: 'Paytm', sub: 'Operator A · UPI app', bank: ['axis', 'icici'], inS: 0.04, outS: 0.07, tIn: 0.03, tOut: 0.004, live: true, plan: '' },
+  { id: 'bhim', name: 'BHIM', sub: 'Operator A · UPI app', bank: ['axis', 'icici'], inS: 0.025, outS: 0.02, tIn: 0.03, tOut: 0.004, live: true, plan: '' },
+  { id: 'gpay', name: 'Google Pay', sub: 'Operator B · no importer yet', bank: ['icici'], inS: 0, outS: 0, live: false, plan: 'A second person’s UPI app on the ICICI account. It needs an importer for Google Pay and a record of which operator owns which app.' },
+  { id: 'bank', name: 'Bank transfers and charges', sub: 'NEFT, IMPS, net banking, fees', bank: ['axis'], inS: 0.9, outS: 0.33, tIn: 0.4, tOut: 0.15, live: true, plan: '' }
 ];
 var DELS = [
-  { id: 'd1', name: '5550100001', number: '5550100001', since: 'Jul 2026', capRs: 15000, capNote: 'default limit', split: { paytm: 1, bhim: 0 }, via: ['paytm'] },
-  { id: 'd2', name: 'Test Person', number: '5550100002', since: 'Oct 2026', capRs: 5000, capNote: 'own limit', split: { paytm: 0.7, bhim: 0.3 }, via: ['paytm', 'bhim'] }
+  { id: 'd1', name: '5550100001', number: '5550100001', since: 'Jul 2026', capRs: 15000, capNote: 'the default limit', split: { paytm: 1, bhim: 0 }, via: ['paytm'] },
+  { id: 'd2', name: 'Test Person', number: '5550100002', since: 'Oct 2026', capRs: 5000, capNote: 'their own limit', split: { paytm: 0.7, bhim: 0.3 }, via: ['paytm', 'bhim'] }
 ];
 var DELFY = {
   '2026-27': { d1: { fy: 96700, month: 5200, label: 'November so far' }, d2: { fy: 9050, month: 4250, label: 'November so far' } },
   '2025-26': { d1: { fy: sum(UPIFY['2025-26']), month: Math.max.apply(0, UPIFY['2025-26']), label: 'busiest month' } },
   '2024-25': { d1: { fy: sum(UPIFY['2024-25']), month: Math.max.apply(0, UPIFY['2024-25']), label: 'busiest month' } }
 };
-var CHHEALTH = { paytm: [['warn', '2 waiting for the statement']], bank: [['warn', '14 lines with no category']] };
+var CHHEALTH = { paytm: [['warn', '2 payments are waiting for the statement']], bank: [['warn', '14 bank lines have no category']] };
+var chDir = 'out', chSel = null, chHover = null, chEdges = [], chNodes = [], chOpen = { axis: true };
 function plural(n, one) { return n + ' ' + one + (n === 1 ? '' : 's'); }
-var chDir = 'out', chPin = null, chHover = null, chEdges = [];
 function amt(v) { return v >= 0.1 ? L2(v) : inr(v * 100000); }
 function chData() {
   var tIn = sum(INN), tOut = sum(OUT), dels = DELS.filter(function (d) { return DELFY[fy][d.id]; });
@@ -988,97 +1013,148 @@ function chData() {
   });
   return { tIn: tIn, tOut: tOut, chans: chans, dels: dels };
 }
-function chNodeHtml(o) {
-  return '<span class="ch-row"><span class="ch-t">' + o.title + '</span>' + (o.planned ? pill('neutral', 'Planned') : '') + '</span>' +
-    '<span class="ch-s">' + o.sub + '</span>' +
-    (o.planned ? '' : '<span class="ch-row"><span class="ch-amt num">' + o.amtText + '</span><span class="ch-s num">' + o.count + '</span></span><span class="ch-bar ' + (o.barClass || '') + '"><i style="width:' + Math.round(Math.max(0, Math.min(1, o.share)) * 100) + '%"></i></span>') +
-    (o.extra ? '<span class="ch-s">' + o.extra + '</span>' : '') +
-    (o.pills && o.pills.length ? '<span class="ch-pills">' + o.pills.join('') + '</span>' : '');
+/* One list of nodes (banks, channels, delegates) with everything both the map and the details panel need. */
+function chModel() {
+  var d = chData(), dirIn = chDir === 'in', total = dirIn ? d.tIn : d.tOut, cur = !closed(), RMAX = 40, RMIN = 16;
+  var hl = function (id) { return cur && CHHEALTH[id] ? CHHEALTH[id].map(function (h) { return { s: h[0], t: h[1] }; }) : []; };
+  var nIn = d.chans.reduce(function (n, x) { return n + x.nIn; }, 0), nOut = d.chans.reduce(function (n, x) { return n + x.nOut; }, 0);
+  var nodes = [];
+  BANKS.forEach(function (b) {
+    nodes.push({ id: b.id, group: 'bank', title: b.name, sub: b.sub, planned: !b.live, v: b.live ? total : 0, inn: b.live ? d.tIn : 0, out: b.live ? d.tOut : 0, nIn: b.live ? nIn : 0, nOut: b.live ? nOut : 0, r: b.live ? RMAX : 20, pills: [], plan: 'Statement import for this account is not built yet.' });
+  });
+  d.chans.forEach(function (x) {
+    var v = dirIn ? x.inn : x.out;
+    nodes.push({ id: x.c.id, group: 'chan', title: x.c.name, sub: x.c.sub, planned: !x.c.live, zero: x.c.live && v <= 0, v: v, inn: x.inn, out: x.out, nIn: x.nIn, nOut: x.nOut, viaDel: x.viaDel, share: total ? v / total : 0,
+      r: !x.c.live ? 18 : v > 0 ? Math.max(RMIN, RMAX * Math.sqrt(v / total)) : RMIN, pills: x.c.live ? hl(x.c.id) : [], plan: x.c.plan });
+  });
+  var maxD = Math.max.apply(0, d.dels.map(function (x) { return DELFY[fy][x.id].fy; }));
+  d.dels.forEach(function (x) {
+    var r = DELFY[fy][x.id], used = r.month / x.capRs, st = used > 1 ? 'crit' : used >= 0.8 ? 'warn' : 'ok';
+    nodes.push({ id: x.id, group: 'del', title: x.name, sub: (x.name !== x.number ? 'Number ' + x.number + ' · ' : '') + 'since ' + x.since, zero: dirIn, v: dirIn ? 0 : r.fy, r: dirIn ? RMIN : Math.max(RMIN, 32 * Math.sqrt(r.fy / maxD)), st: st, del: x, rec: r, used: used,
+      pills: st === 'ok' ? [] : [{ s: st, t: (st === 'crit' ? 'Over' : 'Close to') + ' the monthly limit' }] });
+  });
+  return { nodes: nodes, d: d, total: total, dirIn: dirIn, cur: cur };
 }
-function chItems() {
-  var d = chData(), dirIn = chDir === 'in', total = dirIn ? d.tIn : d.tOut, cur = !closed();
-  var hl = function (id) { return cur && CHHEALTH[id] ? CHHEALTH[id].map(function (h) { return pill(h[0], h[1]); }) : []; };
-  var banks = BANKS.map(function (b) {
-    return { id: b.id, kind: 'bank', planned: !b.live, title: b.name, sub: b.sub, amtText: amt(total), count: (dirIn ? d.chans.reduce(function (n, x) { return n + x.nIn; }, 0) : d.chans.reduce(function (n, x) { return n + x.nOut; }, 0)) + ' payments', share: 1, barClass: dirIn ? 'in' : '', pills: b.live ? hl(b.id) : [] };
-  });
-  var chans = d.chans.map(function (x) {
-    var v = dirIn ? x.inn : x.out, extra = '';
-    if (!dirIn && x.viaDel > 0) extra = 'Includes ' + amt(x.viaDel) + ' paid by delegates';
-    return { id: x.c.id, kind: 'chan', planned: !x.c.live, zero: x.c.live && v <= 0, title: x.c.name, sub: x.c.sub, amtText: v > 0 ? amt(v) : 'None', count: v > 0 ? (dirIn ? x.nIn : x.nOut) + ' payments' : (x.c.live ? (dirIn ? 'No money in' : 'No money out') : ''), share: total ? v / total : 0, barClass: dirIn ? 'in' : '', extra: extra, pills: x.c.live ? hl(x.c.id) : [] };
-  });
-  var dels = d.dels.map(function (x) {
-    var r = DELFY[fy][x.id], pctUsed = r.month / x.capRs, st = pctUsed > 1 ? 'crit' : pctUsed >= 0.8 ? 'warn' : 'ok';
-    return { id: x.id, kind: 'del', zero: dirIn, title: x.name, sub: (x.name !== x.number ? 'Number ' + x.number + ' · ' : '') + 'since ' + x.since + ' · via ' + x.via.map(function (v) { return v === 'paytm' ? 'Paytm' : 'BHIM'; }).join(', '),
-      amtText: dirIn ? 'None' : inr(r.fy), count: dirIn ? 'No money in' : 'this year', share: pctUsed, barClass: 'meter-' + st,
-      extra: inr(r.month) + ' of ' + inr(x.capRs) + ' (' + x.capNote + '), ' + r.label,
-      pills: [pill(st, st === 'ok' ? 'Within limit' : st === 'warn' ? 'Near limit' : 'Over limit')] };
-  });
-  return { banks: banks, chans: chans, dels: dels, d: d, total: total };
+function chText(n, dirIn) {
+  if (n.planned) return 'Planned';
+  if (n.zero) return 'None';
+  return n.group === 'del' ? inr(n.v) : amt(n.v);
 }
+function chHasKids(id) { return chEdges.some(function (e) { return e.a === id; }); }
+/* A bank is always shown; its channels when it is open; a channel's delegates when its bank and the channel are both open. */
+function chVisible() {
+  var v = {};
+  BANKS.forEach(function (b) { v[b.id] = true; });
+  chEdges.forEach(function (e) { if (v[e.a] && chOpen[e.a] && BANKS.some(function (b) { return b.id === e.a; })) v[e.b] = true; });
+  chEdges.forEach(function (e) { if (v[e.a] && chOpen[e.a] && !BANKS.some(function (b) { return b.id === e.a; })) v[e.b] = true; });
+  return v;
+}
+function chReveal(id) { chEdges.forEach(function (e) { if (e.b === id && !chOpen[e.a]) { chOpen[e.a] = true; chReveal(e.a); } }); }
 function renderChannels() {
-  var it = chItems(), cur = !closed(), dirIn = chDir === 'in';
-  $('ch-note').textContent = 'Where the ' + (dirIn ? 'money that came in' : 'money that went out') + ' passed through, for FY ' + fy + (cur ? ' to 10 Nov' : '') + '. Follows the financial year selector.';
-  $('ch-lead').textContent = dirIn ? 'Everything that came into the bank, by the channel it arrived through.' : 'Everything that left the bank, by the channel it went through. Delegates pay through an operator’s UPI app, so their spend is part of that app’s figure.';
-  var flagged = function (x) { return (x.pills || []).filter(function (h) { return /pill (warn|crit)/.test(h); }).length; };
-  var needs = cur ? it.chans.concat(it.dels).reduce(function (n, x) { return n + flagged(x); }, 0) + 1 : 0; // +1: payments that need a delegate
-  var dSpend = it.d.dels.reduce(function (n, x) { return n + DELFY[fy][x.id].fy; }, 0);
+  var m = chModel(), cur = m.cur, dirIn = m.dirIn;
+  chNodes = m.nodes;
+  $('ch-note').textContent = 'Where the ' + (dirIn ? 'money that came in' : 'money that went out') + ' passed through, for FY ' + fy + (cur ? ' to 10 Nov' : '') + '. Circle area is the amount. Click a circle to open what is behind it and see its details.';
+  var flagged = m.nodes.reduce(function (n, x) { return n + x.pills.length; }, 0) + (cur ? 1 : 0); // +1: payments that need a delegate
+  var dSpend = m.d.dels.reduce(function (n, x) { return n + DELFY[fy][x.id].fy; }, 0);
   $('ch-tiles').innerHTML =
-    '<div class="tile"><span class="label">Money in</span><span class="big num">' + L(it.d.tIn) + '</span><span class="sub">through ' + it.d.chans.filter(function (y) { return y.inn > 0; }).length + ' channels</span></div>' +
-    '<div class="tile"><span class="label">Money out</span><span class="big num">' + L(it.d.tOut) + '</span><span class="sub">through ' + it.d.chans.filter(function (y) { return y.out > 0; }).length + ' channels</span></div>' +
-    '<div class="tile"><span class="label">Paid by delegates</span><span class="big num">' + inr(dSpend) + '</span><span class="sub">' + plural(it.d.dels.length, 'delegate') + (cur ? ', each against their own limit' : '') + '</span></div>' +
-    '<div class="tile"><span class="label">Needs attention</span><span class="big num">' + needs + '</span><span class="sub">' + (cur ? 'on this map; details in Data health' : 'a closed year has none') + '</span></div>';
+    '<div class="tile"><span class="label">Money in</span><span class="big num">' + L(m.d.tIn) + '</span><span class="sub">through ' + m.d.chans.filter(function (y) { return y.inn > 0; }).length + ' channels</span></div>' +
+    '<div class="tile"><span class="label">Money out</span><span class="big num">' + L(m.d.tOut) + '</span><span class="sub">through ' + m.d.chans.filter(function (y) { return y.out > 0; }).length + ' channels</span></div>' +
+    '<div class="tile"><span class="label">Paid by delegates</span><span class="big num">' + inr(dSpend) + '</span><span class="sub">' + plural(m.d.dels.length, 'delegate') + '</span></div>' +
+    '<div class="tile"><span class="label">Needs attention</span><span class="big num">' + flagged + '</span><span class="sub">' + (cur ? 'click a circle with a ! badge' : 'a closed year has none') + '</span></div>';
 
-  /* edges: bank -> channel, and channel (the operator's app) -> delegate */
   chEdges = [];
   CHS.forEach(function (c) { c.bank.forEach(function (b) { chEdges.push({ a: b, b: c.id, planned: !c.live || !BANKS.filter(function (x) { return x.id === b; })[0].live }); }); });
-  it.d.dels.forEach(function (x) { x.via.forEach(function (v) { chEdges.push({ a: v, b: x.id, planned: false }); }); });
+  m.d.dels.forEach(function (x) { x.via.forEach(function (v) { chEdges.push({ a: v, b: x.id, planned: false }); }); });
 
-  var node = function (o) {
-    return '<button type="button" class="ch-node' + (o.planned ? ' planned' : '') + (o.zero ? ' zero' : '') + '" data-id="' + o.id + '" aria-pressed="false">' + chNodeHtml(o) + '</button>';
+  var vis = chVisible();
+  var item = function (n) {
+    var cls = 'ch-c' + (n.planned ? ' planned' : '') + (n.zero ? ' zero' : '') + (n.group === 'del' ? ' st-' + n.st : n.group === 'bank' ? ' bank' : dirIn ? ' d-in' : '');
+    var bad = n.pills.some(function (h) { return h.s === 'crit'; });
+    var kids = chHasKids(n.id);
+    return '<button type="button" class="ch-item" data-id="' + n.id + '" aria-pressed="false"' + (kids ? ' aria-expanded="' + !!chOpen[n.id] + '"' : '') + ' aria-label="' + n.title + ', ' + chText(n) + (n.pills.length ? ', needs attention' : '') + '">' +
+      '<span class="' + cls + '" style="width:' + (2 * n.r).toFixed(0) + 'px;height:' + (2 * n.r).toFixed(0) + 'px">' + (n.pills.length ? '<span class="ch-badge' + (bad ? ' crit' : '') + '" aria-hidden="true">!</span>' : '') + (kids ? '<span class="ch-more" aria-hidden="true">' + (chOpen[n.id] ? '−' : '+') + '</span>' : '') + '</span>' +
+      '<span class="ch-lab"><span class="ch-t">' + n.title + '</span><span class="ch-a num">' + chText(n) + '</span></span></button>';
   };
-  var delHead = cur ? pill('warn', '2 payments need a delegate') : '';
-  $('ch-map').innerHTML = '<svg class="ch-edges" id="ch-edges" aria-hidden="true"></svg>' +
-    '<div class="ch-col"><h3>Bank accounts</h3>' + it.banks.map(node).join('') + '</div>' +
-    '<div class="ch-col"><h3>Channels</h3>' + it.chans.map(node).join('') + '</div>' +
-    '<div class="ch-col"><h3>Delegates ' + delHead + '</h3>' + (it.dels.length ? it.dels.map(node).join('') : '<p class="small muted">No delegates this year.</p>') + '</div>';
+  var hints = { chan: 'Click a bank account to open the channels money passes through.', del: m.d.dels.length ? 'Click Paytm or BHIM to see the delegates who pay through them.' : 'No delegates this year.' };
+  var col = function (head, g) { var list = m.nodes.filter(function (n) { return n.group === g && vis[n.id]; }); return '<div class="ch-col"><h3>' + head + '</h3><div class="ch-body">' + (list.length ? list.map(item).join('') : '<p class="ch-hint">' + (hints[g] || '') + '</p>') + '</div></div>'; };
+  $('ch-map').innerHTML = '<svg class="ch-edges" id="ch-edges" aria-hidden="true"></svg>' + col('Bank accounts', 'bank') + col('Channels', 'chan') + col('Delegates', 'del');
 
-  /* phones: the same thing as a nested list, bank > channel > delegate */
-  var div = function (o) { return '<div class="ch-node' + (o.planned ? ' planned' : '') + (o.zero ? ' zero' : '') + '">' + chNodeHtml(o) + '</div>'; };
-  var kids = function (c) {
-    var ds = it.dels.filter(function (x) { return DELS.filter(function (y) { return y.id === x.id; })[0].via[0] === c.id; }); // once, under the app they mainly use
-    return '<li>' + div(c) + (ds.length ? '<ul>' + ds.map(function (x) { return '<li>' + div(x) + '</li>'; }).join('') + '</ul>' : '') + '</li>';
-  };
-  $('ch-nest').innerHTML = it.banks.map(function (b, i) {
-    var mine = it.chans.filter(function (c) { return CHS.filter(function (y) { return y.id === c.id; })[0].bank[0] === b.id; });
-    return '<li>' + div(b) + (mine.length ? '<ul>' + mine.map(kids).join('') + '</ul>' : '') + '</li>';
-  }).join('');
-
-  var rows = it.d.chans.filter(function (x) { return x.c.live; }).map(function (x) {
+  var rows = m.d.chans.filter(function (x) { return x.c.live; }).map(function (x) {
     return '<tr><td>' + x.c.name + '</td><td>' + (x.inn > 0 ? L2(x.inn) : '–') + '</td><td>' + (x.nIn || '–') + '</td><td>' + (x.out > 0 ? L2(x.out) : '–') + '</td><td>' + (x.nOut || '–') + '</td></tr>';
   }).join('');
   $('ch-table').innerHTML = '<table><thead><tr><th>Channel</th><th>In</th><th>Payments in</th><th>Out</th><th>Payments out</th></tr></thead><tbody>' + rows +
-    '<tr class="total"><td>All channels = the bank statement</td><td>' + L2(it.d.tIn) + '</td><td>' + it.d.chans.reduce(function (n, x) { return n + x.nIn; }, 0) + '</td><td>' + L2(it.d.tOut) + '</td><td>' + it.d.chans.reduce(function (n, x) { return n + x.nOut; }, 0) + '</td></tr></tbody></table>';
-  if (chPin && !$('ch-map').querySelector('[data-id="' + chPin + '"]')) chPin = null;
+    '<tr class="total"><td>All channels = the bank statement</td><td>' + L2(m.d.tIn) + '</td><td>' + nInTotal(m) + '</td><td>' + L2(m.d.tOut) + '</td><td>' + nOutTotal(m) + '</td></tr></tbody></table>';
+  if (chSel && !(chNodes.some(function (n) { return n.id === chSel; }) && vis[chSel])) chSel = null;
+  var kidIds = chNodes.filter(function (n) { return chHasKids(n.id); }).map(function (n) { return n.id; });
+  var openN = kidIds.filter(function (id) { return chOpen[id]; }).length;
+  Array.prototype.forEach.call($('ch-exp').children, function (b) { b.setAttribute('aria-pressed', String((b.dataset.e === 'all' && openN === kidIds.length) || (b.dataset.e === 'none' && openN === 0))); });
+  chPanel();
 }
-function chFocusId() { return chHover || chPin; }
+function nInTotal(m) { return m.d.chans.reduce(function (n, x) { return n + x.nIn; }, 0); }
+function nOutTotal(m) { return m.d.chans.reduce(function (n, x) { return n + x.nOut; }, 0); }
+function chNeighbours(id) { var o = []; chEdges.forEach(function (e) { if (e.a === id) o.push(e.b); if (e.b === id) o.push(e.a); }); return o; }
+function chPanel() {
+  var el = $('ch-panel'), n = chNodes.filter(function (x) { return x.id === chSel; })[0], cur = !closed();
+  if (!n) {
+    el.innerHTML = '<h3>How to read this</h3><div class="ch-key">' +
+      '<span><i class="ch-c"></i>Circle area is the amount, banks and channels on one scale and delegates on their own</span>' +
+      '<span><i class="ch-c d-in"></i>Orange is money out, blue is money in</span>' +
+      '<span><i class="ch-c planned"></i>Dashed means planned: nothing to show yet</span>' +
+      '<span><i class="ch-badge" style="position:static;flex:none">!</i>Something needs attention. Click the circle to see what</span>' +
+      '<span><i class="ch-more" style="position:static;flex:none">+</i>Click a circle with a + to open what is behind it, and a − to close it</span></div>' +
+      '<p class="small muted">Very small amounts are drawn at a minimum size so they can still be clicked.</p>';
+    return;
+  }
+  var h = '<h3>' + n.title + '</h3><p class="small muted">' + n.sub + '</p>';
+  if (n.planned) {
+    h += '<p>' + pill('neutral', 'Planned') + '</p><p class="small">' + n.plan + '</p>';
+  } else if (n.group === 'del') {
+    var pctUsed = Math.min(100, Math.round(n.used * 100));
+    h += '<div class="figs"><div class="fig"><div class="k">Paid this year</div><div class="v">' + inr(n.rec.fy) + '</div></div><div class="fig"><div class="k">Number</div><div class="v">' + n.del.number + '</div></div></div>' +
+      '<div><div class="small muted">' + n.rec.label + ': ' + inr(n.rec.month) + ' of ' + inr(n.del.capRs) + ' (' + n.del.capNote + ')</div><div class="meter"><i style="width:' + pctUsed + '%;background:var(--' + (n.st === 'ok' ? 'ok-text' : n.st === 'warn' ? 'warn-text' : 'crit-text') + ')"></i></div></div>';
+  } else {
+    h += '<div class="figs"><div class="fig"><div class="k">Money in</div><div class="v">' + (n.inn > 0 ? amt(n.inn) : 'None') + '</div></div><div class="fig"><div class="k">Payments in</div><div class="v">' + (n.nIn || '–') + '</div></div>' +
+      '<div class="fig"><div class="k">Money out</div><div class="v">' + (n.out > 0 ? amt(n.out) : 'None') + '</div></div><div class="fig"><div class="k">Payments out</div><div class="v">' + (n.nOut || '–') + '</div></div></div>';
+    if (n.group === 'chan' && n.v > 0) h += '<p class="small muted">' + Math.round(n.share * 100) + '% of all money ' + (chDir === 'in' ? 'in' : 'out') + '.</p>';
+    if (n.viaDel > 0 && !(chDir === 'in')) h += '<p class="small">Includes ' + amt(n.viaDel) + ' paid by delegates.</p>';
+  }
+  if (n.pills.length || (cur && n.group === 'del' && n.rec && false)) {
+    h += '<div><div class="k2">Needs attention</div>' + n.pills.map(function (p) { return '<p style="margin-top:6px">' + pill(p.s, p.t) + '</p>'; }).join('') + '<p class="small muted" style="margin-top:6px"><a href="#data-health">Open Data health</a></p></div>';
+  }
+  if (cur && n.group === 'del') {
+    // the UPI page's queue: shown on the delegate who is affected when two were active at once
+    if (n.id === 'd2') h += '<div><div class="k2">Needs attention</div><p style="margin-top:6px">' + pill('warn', '2 payments need a delegate') + '</p><p class="small muted" style="margin-top:6px">Two delegates were active on those days, so the dates cannot say who paid. Choose on the UPI page.</p></div>';
+  }
+  var near = chNeighbours(n.id);
+  if (near.length) {
+    h += '<div><div class="k2">Connected to</div><div class="ch-chips" style="margin-top:6px">' + near.map(function (id) {
+      var t = chNodes.filter(function (x) { return x.id === id; })[0]; return '<button type="button" class="ch-chip" data-go="' + id + '">' + t.title + '</button>';
+    }).join('') + '</div></div>';
+  }
+  h += '<p><button type="button" class="ch-chip" data-clear>Clear selection</button></p>';
+  h += '<p class="small muted">' + (n.group === 'del' ? 'In the real page this opens the UPI page filtered to this delegate.' : n.planned ? '' : 'In the real page this opens the ledger filtered to this ' + (n.group === 'bank' ? 'account' : 'channel') + '.') + '</p>';
+  el.innerHTML = h;
+}
+function chFocusId() { return chHover || chSel; }
 function chApplyFocus() {
   var map = $('ch-map'), f = chFocusId(), ok = {};
-  if (f) { ok[f] = true; chEdges.forEach(function (e) { if (e.a === f) ok[e.b] = true; if (e.b === f) ok[e.a] = true; }); }
+  if (f) { ok[f] = true; chNeighbours(f).forEach(function (id) { ok[id] = true; }); }
   map.classList.toggle('focus', !!f);
-  Array.prototype.forEach.call(map.querySelectorAll('.ch-node'), function (n) {
+  Array.prototype.forEach.call(map.querySelectorAll('.ch-item'), function (n) {
     n.classList.toggle('dim', !!f && !ok[n.dataset.id]);
-    n.setAttribute('aria-pressed', n.dataset.id === chPin ? 'true' : 'false');
+    n.setAttribute('aria-pressed', n.dataset.id === chSel ? 'true' : 'false');
   });
   Array.prototype.forEach.call(map.querySelectorAll('.ch-edge'), function (e) { e.classList.toggle('on', !!f && (e.dataset.a === f || e.dataset.b === f)); });
 }
 function chDrawEdges() {
   var map = $('ch-map'), svg = $('ch-edges');
-  if (!map || !svg || !map.offsetWidth) return;
+  if (!map || !svg || !map.offsetWidth || getComputedStyle(svg).display === 'none') return;
   var box = map.getBoundingClientRect(), s = '';
   chEdges.forEach(function (e) {
-    var a = map.querySelector('[data-id="' + e.a + '"]'), b = map.querySelector('[data-id="' + e.b + '"]');
-    if (!a || !b) return;
-    var ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
+    var a = map.querySelector('[data-id="' + e.a + '"] .ch-lab'), b = map.querySelector('[data-id="' + e.b + '"] .ch-c');
+    var ia = map.querySelector('[data-id="' + e.a + '"]'), ib = map.querySelector('[data-id="' + e.b + '"]');
+    if (!ia || !ib) return;
+    var ra = ia.getBoundingClientRect(), rb = (b || ib).getBoundingClientRect();
     var x1 = ra.right - box.left, y1 = ra.top + ra.height / 2 - box.top, x2 = rb.left - box.left, y2 = rb.top + rb.height / 2 - box.top, mx = (x1 + x2) / 2;
     s += '<path class="ch-edge' + (e.planned ? ' planned' : '') + '" data-a="' + e.a + '" data-b="' + e.b + '" d="M' + x1.toFixed(1) + ' ' + y1.toFixed(1) + 'C' + mx.toFixed(1) + ' ' + y1.toFixed(1) + ' ' + mx.toFixed(1) + ' ' + y2.toFixed(1) + ' ' + x2.toFixed(1) + ' ' + y2.toFixed(1) + '"/>';
   });
@@ -1086,16 +1162,33 @@ function chDrawEdges() {
   svg.innerHTML = s;
   chApplyFocus();
 }
+function chClick(id) {
+  if (chHasKids(id)) chOpen[id] = !chOpen[id];
+  chSel = id;
+  renderChannels(); chDrawEdges();
+  var again = $('ch-map').querySelector('[data-id="' + id + '"]'); if (again) again.focus({ preventScroll: true });
+  if (window.innerWidth <= 1000 && !chHasKids(id)) $('ch-panel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
 $('ch-dir').addEventListener('click', function (e) {
   var b = e.target.closest('button'); if (!b) return; chDir = b.dataset.d;
   Array.prototype.forEach.call($('ch-dir').children, function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
   renderChannels(); chDrawEdges();
 });
-$('ch-map').addEventListener('click', function (e) { var n = e.target.closest('.ch-node'); if (!n) return; chPin = chPin === n.dataset.id ? null : n.dataset.id; chApplyFocus(); });
-$('ch-map').addEventListener('pointerover', function (e) { var n = e.target.closest('.ch-node'); var id = n ? n.dataset.id : null; if (id !== chHover) { chHover = id; chApplyFocus(); } });
+$('ch-map').addEventListener('click', function (e) { var n = e.target.closest('.ch-item'); if (n) chClick(n.dataset.id); });
+$('ch-exp').addEventListener('click', function (e) {
+  var b = e.target.closest('button'); if (!b) return;
+  chOpen = {}; if (b.dataset.e === 'all') chNodes.forEach(function (n) { if (chHasKids(n.id)) chOpen[n.id] = true; });
+  renderChannels(); chDrawEdges();
+});
+$('ch-map').addEventListener('pointerover', function (e) { var n = e.target.closest('.ch-item'); var id = n ? n.dataset.id : null; if (id !== chHover) { chHover = id; chApplyFocus(); } });
 $('ch-map').addEventListener('pointerleave', function () { chHover = null; chApplyFocus(); });
-$('ch-map').addEventListener('focusin', function (e) { var n = e.target.closest('.ch-node'); if (n) { chHover = n.dataset.id; chApplyFocus(); } });
+$('ch-map').addEventListener('focusin', function (e) { var n = e.target.closest('.ch-item'); if (n) { chHover = n.dataset.id; chApplyFocus(); } });
 $('ch-map').addEventListener('focusout', function () { chHover = null; chApplyFocus(); });
+$('ch-panel').addEventListener('click', function (e) {
+  var b = e.target.closest('[data-go]');
+  if (b) { chSel = b.dataset.go; chReveal(chSel); renderChannels(); chDrawEdges(); return; }
+  if (e.target.closest('[data-clear]')) { chSel = null; chApplyFocus(); chPanel(); }
+});
 
 function renderHealth() {
   $('dh-list').innerHTML = HEALTH.map(function (h) {
