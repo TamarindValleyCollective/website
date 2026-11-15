@@ -102,7 +102,20 @@ export function matchParty(name, parties) {
       return true;
     });
   });
-  return fits.length === 1 ? { partyId: fits[0].id, how: 'shortened' } : null;
+  if (fits.length === 1) return { partyId: fits[0].id, how: 'shortened' };
+  if (fits.length > 1) return null;
+  const longer = partiesStartingNarration(n, parties);
+  return longer.length === 1 ? { partyId: longer[0].id, how: 'extended' } : null;
+}
+
+// The bank sometimes prints more than the name ("MOHAN ELECTRCIALS AND CO"): parties whose whole name opens the narration's
+// name. The party needs two words, or one long one, so "Ravi" never claims "Ravi Kumar Stores".
+function partiesStartingNarration(n, parties) {
+  return parties.filter((p) => {
+    const theirs = normaliseName(p.name);
+    if (!theirs || theirs === n || !n.startsWith(`${theirs} `)) return false;
+    return theirs.includes(' ') || theirs.length >= 6;
+  });
 }
 
 // ---- what was posted before
@@ -151,6 +164,7 @@ export function candidateParties(name, parties, max = 3) {
   const exact = parties.filter((p) => normaliseName(p.name) === n);
   const words = n.split(' ');
   if (words.length < 2 && words[0].length < 6) return exact.slice(0, max);
+  const longer = partiesStartingNarration(n, parties);
   const fits = parties.filter((p) => {
     if (exact.includes(p)) return false;
     const theirs = normaliseName(p.name).split(' ');
@@ -163,7 +177,7 @@ export function candidateParties(name, parties, max = 3) {
       return true;
     });
   });
-  return [...exact, ...fits].slice(0, max);
+  return [...exact, ...fits, ...longer.filter((p) => !fits.includes(p))].slice(0, max);
 }
 
 /**
@@ -249,7 +263,7 @@ export function suggest({ line, upi, rules, parties, categories, history, reques
       break;
     }
   }
-  if (out.partyId) reasons.push(how === 'exact' ? `The name matches ${partyById.get(out.partyId)?.name} in the register` : `The bank shortened the name; it looks like ${partyById.get(out.partyId)?.name}`);
+  if (out.partyId) reasons.push(how === 'exact' ? `The name matches ${partyById.get(out.partyId)?.name} in the register` : how === 'extended' ? `The bank printed more than the name; it starts with ${partyById.get(out.partyId)?.name}` : `The bank shortened the name; it looks like ${partyById.get(out.partyId)?.name}`);
   const remark = cleanRemark(upi?.remarks) ?? parsed.remark;
 
   // 1. A rule a director wrote.

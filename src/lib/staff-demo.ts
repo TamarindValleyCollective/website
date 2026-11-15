@@ -11,6 +11,7 @@
 
 import { ACCOMMODATION_UNITS, ACCOMMODATION_TYPES } from '../../scripts/lib/accommodation.mjs';
 import { VERIFY_METHODS, findSimilarParties } from '../../scripts/lib/finance-parties.mjs';
+import { suggestChanges } from '../../scripts/lib/finance-party-suggestions.mjs';
 import { shapeAlignment, validateAlignment } from '../../scripts/lib/site-map-align.mjs';
 import planLines from '../../docs/site-map/plan-plot-lines.json';
 import plotOutlines from '../../docs/site-map/plot-outlines.json';
@@ -316,14 +317,94 @@ const DEMO_PAYEE_DETAILS: Record<string, { method: string; account?: string; ifs
 let financeParties: any[] | null = null;
 function demoFinanceParties() {
   const account = (id: string, method: string, shown: string, status: string) => ({ id, method, shown, status, shared: false, validFrom: null, retiredOn: null, payableNow: status === 'verified', review: [], createdAt: '2026-11-01T00:00:00Z', verifiedAt: null, verification: null, evidence: { payment: 0, name_check: 0, other: 0 } });
-  const party = (id: string, name: string, accounts: any[]) => ({ id, name, kind: 'vendor', active: true, householdId: null, formerSince: null, accounts, earlierAccounts: 0, needsReview: false, mergedCount: 0 });
+  const party = (id: string, name: string, accounts: any[], extra: Record<string, unknown> = {}) => ({ id, name, kind: 'vendor', active: true, householdId: null, formerSince: null, accounts, earlierAccounts: 0, needsReview: false, mergedCount: 0, lastPaid: null, paidPaise: 0, postings: 0, ...extra });
+  const verified = (id: string, method: string, shown: string, files: number, name: string) => ({ ...account(id, method, shown, 'verified'), evidence: { payment: 0, name_check: files, other: 0 }, verification: { at: '2026-11-03T00:00:00Z', by: 'Demo Admin', method: 'bank_name_check', methodLabel: "Bank's payee-name check (screenshot)", note: null, name } });
   financeParties ??= [
     party('p1', 'Test Traders', [account('a1', 'bank', 'ending 0001', 'unverified')]),
     party('p2', 'Sample Stores', [account('a2', 'upi', 'ending ores', 'unverified')]),
     party('p3', 'Example Hardware', [{ ...account('a3', 'bank', 'ending 0003', 'verified'), evidence: { payment: 0, name_check: 1, other: 0 }, verification: { at: '2026-11-03T00:00:00Z', by: 'Demo Admin', method: 'bank_name_check', methodLabel: "Bank's payee-name check (screenshot)", note: null, name: 'EXAMPLE HARDWARE PRIVATE LIMITED' } }]),
     party('p4', 'Imported Stores (Milk)', [{ ...account('a4', 'bank', 'ending 0004', 'unverified'), review: ['missing_ifsc'] }]),
+    party('p5', 'Test Electricals', [], { kind: 'other' }),
+    party('p6', 'TEST ELECTRCIALS', [verified('a6', 'bank', 'ending 4821', 1, 'TEST ELECTRICALS')], { lastPaid: '2026-11-14', paidPaise: 3670000, postings: 3 }),
+    party('p7', 'Sri Lakshmi Hardware', [verified('a7', 'upi', 'ending 0192', 1, 'SRI LAKSHMI HARDWARE AND PAINTS')], { kind: 'other', lastPaid: '2026-10-28', paidPaise: 4120000, postings: 4 }),
+    party('p8', 'Asha Nursery', [], { kind: 'other', lastPaid: '2026-11-09', paidPaise: 1825000, postings: 3 }),
   ];
-  return { kinds: ['vendor', 'employee', 'customer', 'other'], canEdit: true, canVerify: true, me: { id: 'demo-1', ready: true, hasPasskey: true, stepUpValid: false }, needsReviewCount: 0, parties: financeParties };
+  // What the posted payments were booked under, for the kind suggestions (the real list reads it from the books).
+  const stat = (postings: number, categoryName: string, categoryType: string) => ({ postings, direction: 'debit', categoryName, categoryType, categoryShare: 1 });
+  const demoStats: Record<string, any> = { p6: stat(3, 'Structures and infrastructure', 'capex'), p7: stat(4, 'Structures and infrastructure', 'capex'), p8: stat(3, 'Operational and miscellaneous', 'opex') };
+  const suggestions = suggestChanges(
+    financeParties.map((x: any) => ({ id: x.id, name: x.name, kind: x.kind, active: x.active, householdId: x.householdId, accounts: x.accounts.map((a: any) => ({ verifiedName: a.verification?.name ?? null })), stats: demoStats[x.id] ?? null })),
+    { kindLabels: { vendor: 'Vendor', employee: 'Employee', customer: 'Customer', government: 'Government' } },
+  );
+  return { kinds: ['member', 'vendor', 'employee', 'customer', 'bank', 'government', 'director', 'other'], canEdit: true, canVerify: true, me: { id: 'demo-1', ready: true, hasPasskey: true, stepUpValid: false }, needsReviewCount: 0, parties: financeParties, suggestions };
+}
+// Invented rules and categories for /internal/finance/rules/.
+function demoRules() {
+  const categories = [
+    { id: 'c1', name: 'Utility bills', type: 'opex', active: true },
+    { id: 'c2', name: 'Bank charges', type: 'opex', active: true },
+    { id: 'c3', name: 'Structures and infrastructure', type: 'capex', active: true },
+    { id: 'c4', name: 'Event income', type: 'revenue', active: true },
+    { id: 'c5', name: 'Old petty cash', type: 'opex', active: false },
+    { id: 'c6', name: 'Maintenance', type: 'member_contribution', active: true },
+  ];
+  const parties = [{ id: 'p1', name: 'BESCOM', kind: 'government' }, { id: 'p2', name: 'Axis Bank', kind: 'bank' }, { id: 'p3', name: 'Test Electricals', kind: 'vendor' }];
+  const rule = (n: number, priority: number, matcher: Record<string, unknown>, categoryId: string, extra: Record<string, unknown> = {}) => ({ id: `ru${n}`, priority, matcher, partyId: null, categoryId, natureTemplate: '', needsReview: false, hitCount: 0, active: true, ...extra });
+  const rules = [
+    rule(1, 10, { narrationContains: 'BESCOM' }, 'c1', { partyId: 'p1', natureTemplate: 'Electricity {remark}', hitCount: 14 }),
+    rule(2, 20, { narrationContains: 'chrg', direction: 'debit', maxPaise: 50000 }, 'c2', { partyId: 'p2', natureTemplate: 'Bank charges', hitCount: 31 }),
+    rule(3, 100, { remarkKeywords: ['wiring', 'switch'], direction: 'debit' }, 'c3', { partyId: 'p3', needsReview: true, hitCount: 3 }),
+    rule(4, 100, { narrationContains: 'workshop', direction: 'credit', minPaise: 100000 }, 'c4', { hitCount: 0 }),
+    rule(5, 150, { narrationContains: 'petty' }, 'c5', { active: false, hitCount: 9 }),
+  ];
+  return { canConfigure: true, rules, lookups: { categories, parties, requesterPartyId: 'p3' } };
+}
+// Invented payment requests and logged spends for /internal/finance/requests/ and /internal/finance-requests/, in every state.
+function demoRequests() {
+  const rec = (n: number, kind: 'request' | 'log', status: string, payee: string, rupees: number, purpose: string, createdAt: string, extra: Record<string, unknown> = {}) => ({
+    id: `r${n}`, kind, status, source: 'app', requester: n % 2 ? 'Demo Requester' : 'Another Requester', requesterId: n % 2 ? 'demo-1' : 'other', payee, amountPaise: rupees * 100, mode: 'upi', purpose,
+    neededBy: null, reimbursement: false, paidOn: kind === 'log' ? createdAt.slice(0, 10) : null, paidVia: kind === 'log' ? 'account' : null, upiRef: null, decidedBy: null, decisionReason: null, reviewFlag: null,
+    vouchers: 0, createdAt, fulfilled: null, matched: null, linked: null, mismatch: false, proposals: [], ownParty: false, ...extra,
+  });
+  const records = [
+    rec(1, 'request', 'submitted', 'Test Electricals', 36700, 'Wiring for the new shed', '2026-11-14T09:00:00Z', { requester: 'Another Requester', requesterId: 'other' }),
+    rec(2, 'request', 'submitted', 'Green Valley Nursery', 18250, 'Mango saplings, 25 nos', '2026-11-13T09:00:00Z', { reimbursement: true }),
+    rec(3, 'request', 'approved', 'Sri Lakshmi Hardware', 4120, 'Pipes and fittings', '2026-11-10T09:00:00Z', {
+      proposals: [{ type: 'upi', targetId: 'u7', reasons: ['same day'], via: 'BHIM', alsoBank: true, date: '2026-11-11', who: 'Sri Lakshmi Hardware' }, { type: 'bank', targetId: 'bl9', reasons: ['2 days apart'], via: null, alsoBank: false, date: '2026-11-12', who: 'UPI/SRI LAKSHMI' }],
+    }),
+    rec(4, 'request', 'paid', 'Ravi Shankar T', 7800, 'Farm wages, week 44', '2026-11-03T09:00:00Z', { matched: 'reference', linked: { upi: true, bank: true, upiRef: '500000000004', bankLineId: 'bl4' }, fulfilled: { method: 'upi', label: 'UPI' }, vouchers: 1 }),
+    rec(5, 'request', 'rejected', 'Asha Nursery', 9000, 'Extra saplings', '2026-10-28T09:00:00Z', { decisionReason: 'Already covered by the earlier order' }),
+    rec(6, 'log', 'paid', 'Test Traders', 2290, 'Cattle feed', '2026-10-17T09:00:00Z', { reviewFlag: 'own_party', ownParty: true }),
+    rec(7, 'request', 'approved', 'BESCOM', 12450, 'Electricity, October', '2026-10-05T09:00:00Z', { mismatch: true, matched: 'accepted', linked: { upi: true, bank: false, upiRef: '500000000010', bankLineId: null } }),
+    rec(8, 'request', 'cancelled', 'Sample Stores', 1260, 'Stationery', '2026-09-22T09:00:00Z', { source: 'history' }),
+  ];
+  return { me: { id: 'demo-1', ready: true, hasPasskey: true, stepUpValid: true }, can: { approve: true, allocate: true }, records, agingCount: 1 };
+}
+// Invented UPI payments for /internal/finance/upi/: BHIM and Paytm rows over two months, direct and delegated, in every bank-statement state.
+function demoUpiLines() {
+  const line = (n: number, paidAt: string, time: string, app: string, counterparty: string | null, remark: string | null, rupees: number, extra: Record<string, unknown> = {}) => ({
+    id: `u${n}`, operatorId: 'o1', paidAt, time, app, counterparty, remark, amountPaise: rupees * 100, direction: 'debit', isCircle: false, upiRef: `5${String(n).padStart(11, '0')}`, note: null, purpose: null,
+    bankLineId: n % 3 === 0 ? null : `bl${n}`, account: n % 5 === 0 ? null : 'Demo bank ending 0001', delegateId: null, delegate: null, delegateHow: null, state: n % 3 === 0 ? 'waiting' : 'matched', ...extra,
+  });
+  const lines = [
+    line(1, '2026-11-14', '10:12', 'bhim', 'Test Electricals', 'Wiring', 36700),
+    line(2, '2026-11-12', '18:40', 'paytm', 'Green Valley Nursery', 'Saplings', 18250),
+    line(3, '2026-11-09', '09:05', 'bhim', 'Sample Stores', null, 1260),
+    line(4, '2026-11-07', '16:20', 'paytm', 'Ravi Shankar T', 'Farm wages', 7800, { isCircle: true, delegate: 'Demo Delegate', delegateId: 'd1', delegateHow: 'auto' }),
+    line(5, '2026-11-05', '11:00', 'bhim', null, null, 450, { state: 'unmatched', bankLineId: null }),
+    line(6, '2026-11-03', '13:30', 'paytm', 'Example Hardware', 'Pipes', 4120, { isCircle: true, delegateHow: 'ambiguous' }),
+    line(7, '2026-10-28', '08:15', 'bhim', 'Sri Lakshmi Hardware', 'Paint', 4120),
+    line(8, '2026-10-22', '19:45', 'bhim', 'Asha Nursery', null, 1825, { direction: 'credit', note: 'Refund for the extra saplings' }),
+    line(9, '2026-10-17', '12:10', 'paytm', 'Test Traders', 'Feed', 2290),
+    line(10, '2026-10-02', '10:00', 'bhim', 'BESCOM', 'Electricity', 12450),
+  ];
+  return {
+    lines, lastBankDate: '2026-11-14', canEdit: true, canConfigure: true, capPaise: 1000000,
+    operators: [{ id: 'o1', name: 'Demo Operator' }],
+    delegates: [{ id: 'd1', identifier: '+91 90000 00001', displayName: 'Demo Delegate', activeFrom: '2026-09-01', activeTo: null, capPaise: 500000, operatorId: 'o1' }],
+    months: [{ month: '2026-11', paise: 1190000, capPaise: 1000000, count: 2, over: true, byDelegate: [] }],
+    bankWithoutRow: { count: 0, totalPaise: 0 }, reversedCount: 0, notIdentified: 0, needsDelegate: 1,
+  };
 }
 // Invented branch directory: one code that exists, every other is "no such branch".
 const demoIfsc = (code: string) => (code === 'ABCD0123456' ? { found: true, bank: 'Test Bank', branch: 'Main Road', city: 'Sample City', state: 'Sample State' } : { found: false });
@@ -454,6 +535,10 @@ export function installStaffDemo(tokenKey: string, kind: string): void {
       });
     }
     if (path === '/api/units-admin/overview') return reply(demoUnits());
+    if (path === '/api/finance-admin/upi-lines' && (init?.method ?? 'GET') === 'GET') return reply(demoUpiLines());
+    if (path === '/api/finance-admin/rules' && (init?.method ?? 'GET') === 'GET') return reply(demoRules());
+    if (path === '/api/finance-admin/requests' && (init?.method ?? 'GET') === 'GET') return reply(demoRequests());
+    if (path === '/api/finance-admin/requests/mine' && (init?.method ?? 'GET') === 'GET') return reply({ payees: [], today: '2026-11-15', records: demoRequests().records.filter((r: any) => r.requesterId === 'demo-1') });
     if (path === '/api/finance-admin/parties' && (init?.method ?? 'GET') === 'GET') return reply(demoFinanceParties());
     if (path === '/api/finance-admin/parties' && init?.method === 'POST') {
       const body = (() => { try { return JSON.parse(String(init.body ?? '{}')); } catch { return {}; } })();

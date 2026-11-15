@@ -10,7 +10,8 @@
 // Same shell as the other internal tools: Google Sign-In gated, unlinked, noindex. Everything the server returns is
 // placed with textContent only, never as HTML.
 import StaffLayout from '../../../layouts/StaffLayout.astro';
-import '../../../styles/request-table.css';
+import '../../../styles/data-table.css';
+import '../../../styles/request-cells.css';
 import SignInGate from '../../../components/SignInGate.astro';
 import StepUpSheet from '../../../components/StepUpSheet.astro';
 ---
@@ -27,28 +28,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
     <div id="status" aria-live="polite" class="hint" hidden></div>
 
     <div id="content" hidden>
-      <div class="filters">
-        <div class="segmented" id="chips" role="group" aria-label="Show"></div>
-        <label class="field"><span class="visually-hidden">Search</span><input id="q" type="search" placeholder="Search by payee, purpose or reference" autocomplete="off" /></label>
-      </div>
-      <div class="rq-table-scroll">
-        <table class="rq-table">
-          <thead>
-            <tr id="head">
-              <th data-sort="date" aria-sort="descending"><button type="button" class="sorthead">Date</button></th>
-              <th data-sort="payee"><button type="button" class="sorthead">Payee</button></th>
-              <th data-sort="purpose"><button type="button" class="sorthead">Purpose</button></th>
-              <th data-sort="amountPaise" class="num"><button type="button" class="sorthead">Amount</button></th>
-              <th data-sort="method"><button type="button" class="sorthead">Method</button></th>
-              <th data-sort="status"><button type="button" class="sorthead">Status</button></th>
-              <th>Match</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody id="records"></tbody>
-        </table>
-      </div>
-      <p id="empty" class="hint" hidden>Nothing here.</p>
+      <div id="rq-table"></div>
       <p id="footnote" class="hint" hidden>* From the old transfer-request sheet.</p>
     </div>
     <StepUpSheet />
@@ -60,6 +40,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
   import { matchWords } from '../../../../scripts/lib/finance-requests.mjs';
   import { initStepUpLock } from '../../../../scripts/lib/staff-stepup-ui.mjs';
   import { clearState, showFailure, showLoading } from '../../../../scripts/lib/staff-states.mjs';
+  import { createDataTable } from '../../../../scripts/lib/data-table-ui.mjs';
 
   declare const google: any;
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
@@ -78,8 +59,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
     vouchers: number; createdAt: string; fulfilled: { method: string; label: string } | null; matched: 'reference' | 'accepted' | null; linked: { upi: boolean; bank: boolean; upiRef: string | null; bankLineId: string | null } | null; mismatch: boolean; proposals: Proposal[]; ownParty: boolean;
   };
   let data: { me: { id: string; ready: boolean; hasPasskey: boolean; stepUpValid: boolean }; can: { approve: boolean; allocate: boolean }; records: Rec[]; agingCount: number } | null = null;
-  const filter = { chip: 'waiting', q: '' };
-  let chosenByUser = false;
+  let defaulted = false; // the first view with something in it opens once; after that the person's own choice stays
 
   const rupees = (paise: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(paise / 100);
   const day = (iso: string | null) => (iso ? new Date(`${iso.slice(0, 10)}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) : '');
@@ -91,11 +71,10 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
     rejected: { text: 'Rejected', kind: 'crit' },
     cancelled: { text: 'Cancelled', kind: 'dim' },
   };
-  const CHIPS: { id: string; label: string; test: (r: Rec) => boolean }[] = [
+  const VIEWS: { id: string; label: string; test: (r: Rec) => boolean }[] = [
     { id: 'waiting', label: 'To approve', test: (r) => r.kind === 'request' && r.status === 'submitted' },
     { id: 'tomatch', label: 'To match', test: (r) => !r.matched && r.status !== 'rejected' && r.status !== 'cancelled' && (r.kind === 'log' || r.status === 'approved' || r.status === 'paid') },
     { id: 'review', label: 'To review', test: (r) => Boolean(r.reviewFlag) },
-    { id: 'all', label: 'All', test: () => true },
   ];
 
   function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string): HTMLElementTagNameMap[K] {
@@ -143,10 +122,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
       if (status === 403 && out?.code === 'STEP_UP_REQUIRED') return void (showToast(data?.me?.ready ? 'Unlock first.' : 'Set up two second factors first (see Security).'), lock.open());
       if (status >= 400) return void showToast(out?.error ?? 'Could not do that.');
       showToast(done);
-      if (id) {
-        recent.add(id);
-        chosenByUser = true; // stay on this tab rather than jumping to another
-      }
+      if (id) recent.add(id);
       await load();
     } catch (err) {
       if (!fail(err)) showToast('Could not do that.');
@@ -160,14 +136,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
     window.open(URL.createObjectURL(await res.blob()), '_blank', 'noopener');
   }
 
-  const cell = (text: string, cls?: string) => el('td', cls, text);
   const pill = (text: string, kind = '') => el('span', `pill${kind ? ` pill--${kind}` : ''}`, text);
-
-  // On a narrow screen each row is stacked, and each value carries the name of its column.
-  const labelRow = (tr: HTMLElement) => {
-    const heads = Array.from($('head').querySelectorAll('th')).map((th) => th.textContent ?? '');
-    Array.from(tr.children).forEach((td, i) => ((td as HTMLElement).dataset.label = heads[i] ?? ''));
-  };
 
   // Words to light up where they appear in a suggested payment: the payee's name and what the record says it was for.
   function highlighted(text: string, words: string[]): HTMLElement {
@@ -180,35 +149,50 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
 
   const openIds = new Set<string>(); // records whose suggested payments are showing
 
-  function rowsOf(r: Rec): HTMLElement[] {
-    const tr = el('tr', recent.has(r.id) ? 'just-done' : undefined);
-    const st = STATUS[r.status] ?? { text: r.status, kind: 'dim' };
-    const when = r.kind === 'log' ? r.paidOn : r.paidOn ?? r.createdAt;
-    const date = cell(day(when), 'nowrap');
+  const whenOf = (r: Rec) => (r.kind === 'log' ? r.paidOn : r.paidOn ?? r.createdAt);
+  const methodText = (r: Rec) => r.fulfilled?.label ?? (r.mode ? MODE[r.mode] ?? r.mode : '');
+  const matchText = (r: Rec) => (r.mismatch ? 'Amount differs' : r.matched ? 'Matched' : r.proposals.length ? `${r.proposals.length} ${r.proposals.length === 1 ? 'suggestion' : 'suggestions'}` : '');
+
+  function dateCell(r: Rec): HTMLElement {
+    const out = el('span', 'nowrap', day(whenOf(r)));
     if (r.source === 'history') {
       // Loaded from the old transfer-request sheet: a small asterisk, explained by the footnote under the table.
       const star = el('abbr', 'star', '*');
       star.title = 'From the old transfer-request sheet';
-      date.append(star);
-    } else if (r.requester) date.append(el('span', 'sub', `by ${r.requester}`));
-    const payee = cell(r.payee ?? 'Unknown');
+      out.append(star);
+    } else if (r.requester) out.append(el('span', 'sub', `by ${r.requester}`));
+    return out;
+  }
+  function payeeCell(r: Rec): HTMLElement {
+    const out = el('span', undefined, r.payee ?? 'Unknown');
     // A request is the usual case and says nothing; only a spend already made is marked, since it was never approved.
-    if (r.kind === 'log') payee.append(el('span', 'sub', `Logged spend${r.paidVia ? `, ${r.paidVia === 'delegate' ? 'by a delegate' : 'from the account'}` : ''}`));
-    // How it was paid, in its own column: the method of the payment it is tied to; until then what was asked for, in grey.
+    if (r.kind === 'log') out.append(el('span', 'sub', `Logged spend${r.paidVia ? `, ${r.paidVia === 'delegate' ? 'by a delegate' : 'from the account'}` : ''}`));
+    return out;
+  }
+  function purposeCell(r: Rec): HTMLElement {
+    const out = el('span', undefined, r.purpose);
+    if (r.decisionReason) out.append(el('span', 'sub', `${r.status === 'rejected' ? 'Rejected' : 'Note'}: ${r.decisionReason}`));
+    return out;
+  }
+  // How it was paid, in its own column: the method of the payment it is tied to; until then what was asked for, in grey.
+  function methodCell(r: Rec): HTMLElement {
     const f = r.fulfilled;
-    const method = el('td', f ? undefined : 'dim', f ? f.label : r.mode ? MODE[r.mode] ?? r.mode : '—');
-    if (!f && r.mode) method.title = `Asked for ${MODE[r.mode] ?? r.mode}. How it was paid shows once a payment is matched.`;
-    if (f && r.kind === 'request' && r.mode && f.method !== r.mode && !(['bank', 'ift'].includes(f.method) && ['neft', 'imps', 'rtgs'].includes(r.mode))) method.append(el('span', 'sub warnsub', `asked for ${MODE[r.mode] ?? r.mode}`));
-    const purpose = cell(r.purpose, 'purpose');
-    if (r.decisionReason) purpose.append(el('span', 'sub', `${r.status === 'rejected' ? 'Rejected' : 'Note'}: ${r.decisionReason}`));
-    const status = el('td');
+    const out = el('span', f ? undefined : 'dim', f ? f.label : r.mode ? MODE[r.mode] ?? r.mode : '—');
+    if (!f && r.mode) out.title = `Asked for ${MODE[r.mode] ?? r.mode}. How it was paid shows once a payment is matched.`;
+    if (f && r.kind === 'request' && r.mode && f.method !== r.mode && !(['bank', 'ift'].includes(f.method) && ['neft', 'imps', 'rtgs'].includes(r.mode))) out.append(el('span', 'sub warnsub', `asked for ${MODE[r.mode] ?? r.mode}`));
+    return out;
+  }
+  function statusCell(r: Rec): HTMLElement {
+    const st = STATUS[r.status] ?? { text: r.status, kind: 'dim' };
     const tags = el('div', 'tags');
     tags.append(pill(r.kind === 'log' ? 'Paid' : st.text, st.kind));
     if (r.reviewFlag) tags.append(pill('Own party', 'warn'));
     if (r.reimbursement) tags.append(pill(r.vouchers ? 'Reimbursement' : 'Reimbursement: no bill', r.vouchers ? '' : 'warn'));
-    status.append(tags);
-    const payment = el('td');
-    if (r.mismatch) payment.append(pill('Amount differs', 'crit'));
+    return tags;
+  }
+  function matchCell(r: Rec): HTMLElement {
+    const out = el('span');
+    if (r.mismatch) out.append(pill('Amount differs', 'crit'));
     else if (r.matched) {
       // One pill for each place the payment is tied (the UPI payment, the bank line), each a link to it. One link is enough: the
       // other side is derived. Hover says whether it was matched by reference or by a person.
@@ -223,9 +207,8 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
       if (r.linked?.upi && r.linked.upiRef) link('UPI', `/internal/finance/upi/?ref=${r.linked.upiRef}`, 'Open this payment on the UPI page');
       if (r.linked?.bank && r.linked.bankLineId) link('Bank', `/internal/finance/ledger/?line=${r.linked.bankLineId}`, 'Open this line in the ledger');
       if (!pills.children.length) pills.append(pill('Matched', 'ok'));
-      payment.append(pills);
-    }
-    else if (r.proposals.length && data?.can.allocate) {
+      out.append(pills);
+    } else if (r.proposals.length && data?.can.allocate) {
       const open = openIds.has(r.id);
       const t = el('button', 'linklike', `${r.proposals.length} ${r.proposals.length === 1 ? 'suggestion' : 'suggestions'} ${open ? '▴' : '▾'}`);
       t.type = 'button';
@@ -233,12 +216,13 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
       t.addEventListener('click', () => {
         if (open) openIds.delete(r.id);
         else openIds.add(r.id);
-        render();
+        table.render();
       });
-      payment.append(t);
-    }
-    else payment.append(el('span', 'dim', '—'));
-    const acts = el('td');
+      out.append(t);
+    } else out.append(el('span', 'dim', '—'));
+    return out;
+  }
+  function actionsCell(r: Rec): HTMLElement {
     const box = el('div', 'acts');
     const btn = (label: string, fn: () => void, primary = false) => {
       const b = el('button', `button button--small${primary ? ' button--primary' : ''}`, label);
@@ -264,91 +248,105 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
         for (const f of res.data.files ?? []) await openVoucher(f.id);
       });
     if (data?.can.allocate && r.matched === 'accepted') btn('Unmatch', () => confirm('Remove the match?') && void act(`/api/finance-admin/requests/${r.id}/unmatch`, {}, 'Unmatched.', r.id));
-    acts.append(box);
-    tr.append(date, payee, purpose, cell(rupees(r.amountPaise), 'num'), method, status, payment, acts);
-    labelRow(tr);
-    const out = [tr];
-    if (data?.can.allocate && !r.matched && r.proposals.length && openIds.has(r.id)) {
-      // Opened from the record's own "suggestions" link, and drawn as part of it: a green edge down both rows.
-      tr.classList.add('has-suggest');
-      const sub = el('tr', 'suggest');
-      const td = el('td');
-      td.colSpan = 8;
-      td.append(el('div', 'suggest-head', `Possible payments for ${r.payee ?? 'this record'}, ${rupees(r.amountPaise)} (the same amount in each)`));
-      const words = matchWords(r.payee, r.purpose) as string[];
-      for (const p of r.proposals) {
-        const row = el('div', 'suggest-row');
-        const line = el('div', 'suggest-line');
-        line.append(el('span', 'suggest-kind', `${p.via ?? (p.type === 'upi' ? 'UPI' : 'Bank')}${p.alsoBank ? ' + bank statement' : ''}`));
-        const gap = p.reasons.find((x) => /apart|same day/.test(x));
-        const when = el('span', 'nowrap', `${day(p.date)}${gap && gap !== 'same day' ? ` (${gap.replace(' apart', ' off')})` : ''}`);
-        if (gap === 'same day') when.classList.add('hl');
-        line.append(when);
-        if (p.who) line.append(highlighted(p.who.slice(0, 80), words));
-        const b = el('button', 'button button--small', 'Match');
-        b.type = 'button';
-        b.setAttribute('aria-label', `Match ${r.payee ?? 'this record'} to the ${p.type === 'upi' ? 'UPI payment' : 'bank line'} of ${day(p.date)}`);
-        b.addEventListener('click', () => act(`/api/finance-admin/requests/${r.id}/match`, { type: p.type, targetId: p.targetId }, 'Matched.', r.id));
-        row.append(line, b);
-        td.append(row);
-      }
-      sub.append(td);
-      out.push(sub);
+    return box;
+  }
+  // The suggested payments for a record, opened from its own "suggestions" link and drawn as part of it.
+  function suggestBlock(r: Rec): HTMLElement | null {
+    if (!(data?.can.allocate && !r.matched && r.proposals.length && openIds.has(r.id))) return null;
+    const box = el('div', 'rq-suggest');
+    box.append(el('div', 'suggest-head', `Possible payments for ${r.payee ?? 'this record'}, ${rupees(r.amountPaise)} (the same amount in each)`));
+    const words = matchWords(r.payee, r.purpose) as string[];
+    for (const p of r.proposals) {
+      const row = el('div', 'suggest-row');
+      const line = el('div', 'suggest-line');
+      line.append(el('span', 'suggest-kind', `${p.via ?? (p.type === 'upi' ? 'UPI' : 'Bank')}${p.alsoBank ? ' + bank statement' : ''}`));
+      const gap = p.reasons.find((x) => /apart|same day/.test(x));
+      const when = el('span', 'nowrap', `${day(p.date)}${gap && gap !== 'same day' ? ` (${gap.replace(' apart', ' off')})` : ''}`);
+      if (gap === 'same day') when.classList.add('hl');
+      line.append(when);
+      if (p.who) line.append(highlighted(p.who.slice(0, 80), words));
+      const b = el('button', 'button button--small', 'Match');
+      b.type = 'button';
+      b.setAttribute('aria-label', `Match ${r.payee ?? 'this record'} to the ${p.type === 'upi' ? 'UPI payment' : 'bank line'} of ${day(p.date)}`);
+      b.addEventListener('click', () => act(`/api/finance-admin/requests/${r.id}/match`, { type: p.type, targetId: p.targetId }, 'Matched.', r.id));
+      row.append(line, b);
+      box.append(row);
     }
-    return out;
+    return box;
   }
 
-  const sort = { key: 'date', dir: 'desc' as 'asc' | 'desc' };
-  const sortValue = (r: Rec, key: string): string | number => {
-    if (key === 'date') return (r.kind === 'log' ? r.paidOn : r.paidOn ?? r.createdAt)?.slice(0, 10) ?? '';
-    if (key === 'payee') return (r.payee ?? '').toLowerCase();
-    if (key === 'purpose') return r.purpose.toLowerCase();
-    if (key === 'amountPaise') return r.amountPaise;
-    if (key === 'method') return (r.fulfilled?.label ?? (r.mode ? MODE[r.mode] ?? r.mode : '')).toLowerCase();
-    return r.status;
-  };
-  for (const th of Array.from($('head').querySelectorAll<HTMLElement>('th[data-sort]'))) {
-    th.querySelector('button')!.addEventListener('click', () => {
-      const key = th.dataset.sort!;
-      sort.dir = sort.key === key ? (sort.dir === 'asc' ? 'desc' : 'asc') : key === 'amountPaise' || key === 'date' ? 'desc' : 'asc';
-      sort.key = key;
-      render();
-    });
-  }
+  const statusText = (r: Rec) => (r.kind === 'log' ? 'Paid' : (STATUS[r.status] ?? { text: r.status }).text);
+  const monthOf = (r: Rec) => whenOf(r)?.slice(0, 7) ?? 'No date';
+  const monthName = (m: string) => (/^\d{4}-\d{2}$/.test(m) ? new Date(`${m}-01T00:00:00Z`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' }) : m);
+  const table = createDataTable({
+    root: $('rq-table'),
+    rowId: (r: Rec) => r.id,
+    noun: ['record', 'records'],
+    cap: 300,
+    searchPlaceholder: 'Search payee, purpose, reference, requester…',
+    favoritesKey: `tvc-requests-favorites:${decodeTokenEmail(getToken() ?? '')}`,
+    defaultGroup: 'month',
+    defaultSort: ['date', -1],
+    searchText: (r: Rec) => [r.payee, r.purpose, r.upiRef, r.requester, r.decisionReason].join(' '),
+    empty: { title: 'No requests yet', text: 'Requests and logged spends show here.' },
+    // A record someone has just acted on stays in the list, highlighted, until the filters change.
+    rowClass: (r: Rec) => (recent.has(r.id) ? 'just-done' : ''),
+    onUserFilter: () => recent.clear(),
+    onChange: (shown: Rec[]) => { $('footnote').hidden = !shown.some((r) => r.source === 'history'); },
+    detail: suggestBlock,
+    columns: [
+      { id: 'date', label: 'Date', type: 'date', value: (r: Rec) => whenOf(r)?.slice(0, 10) ?? '', render: dateCell },
+      { id: 'payee', label: 'Payee', value: (r: Rec) => r.payee ?? 'Unknown', render: payeeCell },
+      { id: 'purpose', label: 'Purpose', wrap: true, value: (r: Rec) => r.purpose, render: purposeCell },
+      { id: 'amount', label: 'Amount', type: 'amount', align: 'end', value: (r: Rec) => r.amountPaise, render: (r: Rec) => rupees(r.amountPaise) },
+      { id: 'method', label: 'Method', value: methodText, render: methodCell },
+      { id: 'status', label: 'Status', value: statusText, render: statusCell },
+      { id: 'match', label: 'Match', sortable: false, value: matchText, render: matchCell },
+      { id: 'actions', label: 'Actions', sortable: false, sticky: true, filter: 'none', value: () => '', render: actionsCell },
+    ],
+    // Chips of one group are alternatives: "To approve" and "To match" together show both.
+    filters: [
+      ...VIEWS.map((v) => ({ id: v.id, group: 'view', label: v.label, test: (r: Rec) => v.test(r) || recent.has(r.id) })),
+      { id: 'requests', group: 'kind', label: 'Requests', test: (r: Rec) => r.kind === 'request' },
+      { id: 'logs', group: 'kind', label: 'Logged spends', test: (r: Rec) => r.kind === 'log' },
+      { id: 'approved', group: 'status', label: 'Approved', test: (r: Rec) => r.status === 'approved' },
+      { id: 'paid', group: 'status', label: 'Paid', test: (r: Rec) => r.status === 'paid' || r.kind === 'log' },
+      { id: 'rejected', group: 'status', label: 'Rejected', test: (r: Rec) => r.status === 'rejected' },
+      { id: 'cancelled', group: 'status', label: 'Cancelled', test: (r: Rec) => r.status === 'cancelled' },
+      { id: 'matched', group: 'match', label: 'Matched', test: (r: Rec) => Boolean(r.matched) },
+      { id: 'unmatched', group: 'match', label: 'Not matched', test: (r: Rec) => !r.matched },
+      { id: 'differs', group: 'amount', label: 'Amount differs', test: (r: Rec) => r.mismatch },
+      { id: 'history', group: 'source', label: 'From the old sheet', test: (r: Rec) => r.source === 'history' },
+    ],
+    groups: [
+      { id: 'month', label: 'Month', key: monthOf, descending: true, format: monthName },
+      { id: 'status', label: 'Status', key: statusText },
+      { id: 'payee', label: 'Payee', key: (r: Rec) => r.payee ?? 'No payee' },
+      { id: 'kind', label: 'Kind', key: (r: Rec) => (r.kind === 'log' ? 'Logged spends' : 'Requests') },
+      { id: 'requester', label: 'Requester', key: (r: Rec) => r.requester ?? 'No requester' },
+    ],
+    // On a phone each record is a card holding the same cells.
+    card: (r: Rec) => {
+      const c = el('div', 'rq-card');
+      const top = el('div', 'rq-card-top');
+      top.append(el('span', undefined, r.payee ?? 'Unknown'), el('span', undefined, rupees(r.amountPaise)));
+      c.append(top, dateCell(r), purposeCell(r), statusCell(r), matchCell(r), actionsCell(r));
+      if (recent.has(r.id)) c.classList.add('just-done');
+      return c;
+    },
+  });
 
   function render() {
     if (!data) return;
-    // Open on the first view that has something in it, until the person picks one.
-    if (!chosenByUser) filter.chip = CHIPS.find((c) => data!.records.some(c.test))?.id ?? 'all';
-    const chips = $('chips');
-    chips.replaceChildren(
-      ...CHIPS.map((c) => {
-        const n = data!.records.filter(c.test).length;
-        const b = el('button', 'chip', c.id === 'all' ? c.label : `${c.label} (${n})`);
-        b.type = 'button';
-        b.setAttribute('aria-pressed', String(filter.chip === c.id));
-        b.addEventListener('click', () => ((chosenByUser = true), recent.clear(), (filter.chip = c.id), render()));
-        return b;
-      }),
-    );
-    const test = CHIPS.find((c) => c.id === filter.chip)!.test;
-    const q = filter.q.trim().toLowerCase();
-    const shown = data.records.filter((r) => (test(r) || recent.has(r.id)) && (!q || [r.payee, r.purpose, r.upiRef, r.requester].join(' ').toLowerCase().includes(q)));
-    const cap = 200;
-    shown.sort((a, b) => {
-      const [x, y] = [sortValue(a, sort.key), sortValue(b, sort.key)];
-      const c = x < y ? -1 : x > y ? 1 : 0;
-      return (sort.dir === 'asc' ? c : -c) || (a.id < b.id ? -1 : 1);
-    });
-    $('records').replaceChildren(...shown.slice(0, cap).flatMap(rowsOf));
-    for (const th of Array.from($('head').querySelectorAll<HTMLElement>('th[data-sort]'))) th.setAttribute('aria-sort', th.dataset.sort === sort.key ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none');
-    $('footnote').hidden = !shown.slice(0, cap).some((r) => r.source === 'history');
-    $('empty').hidden = shown.length > 0 && shown.length <= cap;
-    if (shown.length === 0) $('empty').textContent = 'Nothing here.';
-    if (shown.length > cap) $('empty').textContent = `Showing the first ${cap} of ${shown.length}. Search to narrow them.`;
+    table.setRows(data.records);
+    // Open on the first view that has something in it, once; after that the person's own choice stays.
+    if (!defaulted) {
+      defaulted = true;
+      const first = VIEWS.find((v) => data!.records.some(v.test));
+      if (first) table.setChips([first.id]);
+    }
     lock.render();
   }
-  $<HTMLInputElement>('q').addEventListener('input', (ev) => ((filter.q = (ev.target as HTMLInputElement).value), recent.clear(), render()));
 
   async function load() {
     gate.hidden = true;
@@ -391,16 +389,3 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
   else showGate();
 </script>
 <script is:inline src="https://accounts.google.com/gsi/client"></script>
-
-<style is:global>
-  .finance-appr .filters {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    margin: 14px 0;
-  }
-
-  .finance-appr .segmented {
-    flex-wrap: wrap;
-  }
-</style>

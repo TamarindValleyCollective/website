@@ -38,6 +38,14 @@ test('a new vendor with bank details becomes a party with one unverified account
   assert.equal(p.parties[0].accounts[0].fingerprint, fingerprint(A1));
 });
 
+test('an existing party registered as a different kind is matched, not duplicated', () => {
+  const existing = [{ id: 'p1', name: 'Test Traders', kind: 'other', fingerprints: [] }];
+  const p = plan(`name,kind,account,ifsc\nTEST  TRADERS,vendor,${A1},ABCD0123456\n`, existing);
+  assert.equal(p.parties.length, 0);
+  assert.equal(p.addToExisting.length, 1);
+  assert.equal(p.addToExisting[0].partyId, 'p1');
+});
+
 test('rows for the same name and kind merge; the same account twice is kept once', () => {
   const p = plan(`name,kind,account,ifsc,upi\nTest Traders,vendor,${A1},ABCD0123456,\ntest  traders,Vendor,${A1},ABCD0123456,\nTest Traders,vendor,,,tt@okbank\n`);
   assert.equal(p.parties.length, 1);

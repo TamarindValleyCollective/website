@@ -8,7 +8,8 @@
 // photo from the camera or a file. Everything the server returns is placed with textContent only, never as HTML.
 import StaffLayout from '../../layouts/StaffLayout.astro';
 import SignInGate from '../../components/SignInGate.astro';
-import '../../styles/request-table.css';
+import '../../styles/data-table.css';
+import '../../styles/request-cells.css';
 ---
 
 <StaffLayout title="Finance requests" description="Finance requests." current="finance-requests" currentPage="finance-requests">
@@ -126,23 +127,7 @@ import '../../styles/request-table.css';
       </form>
 
       <h2 class="list-title">Your requests and records</h2>
-      <div class="rq-table-scroll">
-        <table class="rq-table">
-          <thead>
-            <tr id="head">
-              <th data-sort="date" aria-sort="descending"><button type="button" class="sorthead">Date</button></th>
-              <th data-sort="payee"><button type="button" class="sorthead">Payee</button></th>
-              <th data-sort="purpose"><button type="button" class="sorthead">Purpose</button></th>
-              <th data-sort="amountPaise" class="num"><button type="button" class="sorthead">Amount</button></th>
-              <th data-sort="status"><button type="button" class="sorthead">Status</button></th>
-              <th>Files</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody id="records"></tbody>
-        </table>
-      </div>
-      <p id="records-empty" class="hint" hidden>Nothing yet.</p>
+      <div id="my-table"></div>
       <input id="late-file" type="file" accept="image/*,application/pdf" multiple hidden />
     </div>
   </section>
@@ -151,6 +136,7 @@ import '../../styles/request-table.css';
 <script>
   import { StaffAuthError, clearStepUp, clearToken, decodeTokenEmail, getToken, setToken, showToast, staffFetch } from '../../../scripts/lib/staff-client.mjs';
   import { clearState, showFailure, showLoading } from '../../../scripts/lib/staff-states.mjs';
+  import { createDataTable } from '../../../scripts/lib/data-table-ui.mjs';
 
   declare const google: any;
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
@@ -226,73 +212,96 @@ import '../../styles/request-table.css';
     return ((await res.json().catch(() => ({}))) as { error?: string }).error ?? 'The file could not be saved.';
   }
 
-  const sort = { key: 'date', dir: 'desc' as 'asc' | 'desc' };
-  const sortValue = (r: Rec, key: string): string | number => {
-    if (key === 'date') return (r.kind === 'log' ? r.paidOn : r.createdAt)?.slice(0, 10) ?? '';
-    if (key === 'payee') return (r.payee ?? '').toLowerCase();
-    if (key === 'purpose') return r.purpose.toLowerCase();
-    if (key === 'amountPaise') return r.amountPaise;
-    return r.status;
-  };
-  for (const th of Array.from($('head').querySelectorAll<HTMLElement>('th[data-sort]'))) {
-    th.querySelector('button')!.addEventListener('click', () => {
-      const key = th.dataset.sort!;
-      sort.dir = sort.key === key ? (sort.dir === 'asc' ? 'desc' : 'asc') : key === 'amountPaise' || key === 'date' ? 'desc' : 'asc';
-      sort.key = key;
-      renderRecords();
-    });
+  const whenOf = (r: Rec) => (r.kind === 'log' ? r.paidOn : r.createdAt);
+  const statusText = (r: Rec) => (r.kind === 'log' ? 'Recorded' : (STATUS[r.status] ?? { text: r.status }).text);
+  const needsBill = (r: Rec) => r.kind === 'request' && r.reimbursement && !r.vouchers && r.status !== 'rejected' && r.status !== 'cancelled';
+  const monthName = (m: string) => (/^\d{4}-\d{2}$/.test(m) ? new Date(`${m}-01T00:00:00Z`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' }) : m);
+
+  function purposeCell(r: Rec): HTMLElement {
+    const out = el('span', undefined, r.purpose);
+    if (r.status === 'rejected' && r.decisionReason) out.append(el('span', 'sub', `Reason: ${r.decisionReason}`));
+    return out;
+  }
+  function statusCell(r: Rec): HTMLElement {
+    const st = STATUS[r.status] ?? { text: r.status, kind: 'dim' };
+    return el('span', `pill pill--${r.kind === 'log' ? 'ok' : st.kind}`, statusText(r));
+  }
+  function actionsCell(r: Rec): HTMLElement {
+    const box = el('div', 'acts');
+    if (r.status !== 'rejected' && r.status !== 'cancelled') {
+      const attach = el('button', 'linklike', r.kind === 'log' ? 'Add the payment photo' : r.reimbursement && !r.vouchers ? 'Add the bill (needed)' : 'Add a file');
+      attach.type = 'button';
+      attach.addEventListener('click', () => {
+        lateFor = r.id;
+        $<HTMLInputElement>('late-file').click();
+      });
+      box.append(attach);
+    }
+    if (r.kind === 'request' && (r.status === 'submitted' || r.status === 'approved')) {
+      const cancel = el('button', 'linklike', 'Cancel');
+      cancel.type = 'button';
+      cancel.addEventListener('click', async () => {
+        if (!confirm('Cancel this request?')) return;
+        try {
+          const { status: code, data } = await staffFetch(`/api/finance-admin/requests/${r.id}/decide`, { method: 'POST', body: { action: 'cancel' } });
+          if (code !== 200) throw new Error(data.error ?? 'failed');
+          showToast('Cancelled.');
+          await load();
+        } catch (err) {
+          if (!fail(err)) showToast(err instanceof Error && err.message !== 'failed' ? err.message : 'Could not cancel it.');
+        }
+      });
+      box.append(cancel);
+    }
+    return box;
   }
 
+  // The same shared table as the approvals page (docs/design-language.md, "Data tables"), over the person's own records.
+  const table = createDataTable({
+    root: $('my-table'),
+    rowId: (r: Rec) => r.id,
+    noun: ['record', 'records'],
+    cap: 300,
+    searchPlaceholder: 'Search payee or purpose…',
+    favoritesKey: `tvc-my-requests-favorites:${decodeTokenEmail(getToken() ?? '')}`,
+    defaultSort: ['date', -1],
+    searchText: (r: Rec) => [r.payee, r.purpose, r.decisionReason].join(' '),
+    empty: { title: 'Nothing yet', text: 'Ask for a payment, or record one already made, with the buttons above.' },
+    columns: [
+      { id: 'date', label: 'Date', type: 'date', value: (r: Rec) => whenOf(r)?.slice(0, 10) ?? '', render: (r: Rec) => day(whenOf(r)) },
+      { id: 'payee', label: 'Payee', value: (r: Rec) => r.payee ?? 'Unknown' },
+      { id: 'purpose', label: 'Purpose', wrap: true, value: (r: Rec) => r.purpose, render: purposeCell },
+      { id: 'amount', label: 'Amount', type: 'amount', align: 'end', value: (r: Rec) => r.amountPaise, render: (r: Rec) => rupees(r.amountPaise) },
+      { id: 'status', label: 'Status', value: statusText, render: statusCell },
+      { id: 'files', label: 'Files', type: 'count', value: (r: Rec) => r.vouchers, render: (r: Rec) => (r.vouchers ? String(r.vouchers) : '—') },
+      { id: 'actions', label: 'Actions', sortable: false, sticky: true, filter: 'none', value: () => '', render: actionsCell },
+    ],
+    filters: [
+      { id: 'submitted', group: 'status', label: 'Waiting for approval', test: (r: Rec) => r.status === 'submitted' },
+      { id: 'approved', group: 'status', label: 'Approved', test: (r: Rec) => r.status === 'approved' },
+      { id: 'paid', group: 'status', label: 'Paid', test: (r: Rec) => r.status === 'paid' },
+      { id: 'rejected', group: 'status', label: 'Not approved', test: (r: Rec) => r.status === 'rejected' },
+      { id: 'cancelled', group: 'status', label: 'Cancelled', test: (r: Rec) => r.status === 'cancelled' },
+      { id: 'requests', group: 'kind', label: 'Requests', test: (r: Rec) => r.kind === 'request' },
+      { id: 'logs', group: 'kind', label: 'Recorded payments', test: (r: Rec) => r.kind === 'log' },
+      { id: 'bill', label: 'Needs a bill', test: needsBill },
+    ],
+    groups: [
+      { id: 'month', label: 'Month', key: (r: Rec) => whenOf(r)?.slice(0, 7) ?? 'No date', descending: true, format: monthName },
+      { id: 'status', label: 'Status', key: statusText },
+      { id: 'payee', label: 'Payee', key: (r: Rec) => r.payee ?? 'No payee' },
+    ],
+    card: (r: Rec) => {
+      const c = el('div', 'rq-card');
+      const top = el('div', 'rq-card-top');
+      top.append(el('span', undefined, r.payee ?? 'Unknown'), el('span', undefined, rupees(r.amountPaise)));
+      c.append(top, el('span', 'sub', day(whenOf(r))), purposeCell(r), statusCell(r), actionsCell(r));
+      return c;
+    },
+  });
+
   function renderRecords() {
-    $('records-empty').hidden = records.length > 0;
-    const sorted = [...records].sort((a, b) => {
-      const [x, y] = [sortValue(a, sort.key), sortValue(b, sort.key)];
-      const c = x < y ? -1 : x > y ? 1 : 0;
-      return (sort.dir === 'asc' ? c : -c) || (a.id < b.id ? -1 : 1);
-    });
-    for (const th of Array.from($('head').querySelectorAll<HTMLElement>('th[data-sort]'))) th.setAttribute('aria-sort', th.dataset.sort === sort.key ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none');
-    $('records').replaceChildren(
-      ...sorted.map((r) => {
-        const tr = el('tr');
-        const st = STATUS[r.status] ?? { text: r.status, kind: 'dim' };
-        const purpose = el('td', 'purpose', r.purpose);
-        if (r.status === 'rejected' && r.decisionReason) purpose.append(el('span', 'sub', `Reason: ${r.decisionReason}`));
-        const status = el('td');
-        status.append(el('span', `pill pill--${r.kind === 'log' ? 'ok' : st.kind}`, r.kind === 'log' ? 'Recorded' : st.text));
-        const acts = el('td');
-        const box = el('div', 'acts');
-        if (r.status !== 'rejected' && r.status !== 'cancelled') {
-          const attach = el('button', 'linklike', r.kind === 'log' ? 'Add the payment photo' : r.reimbursement && !r.vouchers ? 'Add the bill (needed)' : 'Add a file');
-          attach.type = 'button';
-          attach.addEventListener('click', () => {
-            lateFor = r.id;
-            $<HTMLInputElement>('late-file').click();
-          });
-          box.append(attach);
-        }
-        if (r.kind === 'request' && (r.status === 'submitted' || r.status === 'approved')) {
-          const cancel = el('button', 'linklike', 'Cancel');
-          cancel.type = 'button';
-          cancel.addEventListener('click', async () => {
-            if (!confirm('Cancel this request?')) return;
-            try {
-              const { status: code, data } = await staffFetch(`/api/finance-admin/requests/${r.id}/decide`, { method: 'POST', body: { action: 'cancel' } });
-              if (code !== 200) throw new Error(data.error ?? 'failed');
-              showToast('Cancelled.');
-              await load();
-            } catch (err) {
-              if (!fail(err)) showToast(err instanceof Error && err.message !== 'failed' ? err.message : 'Could not cancel it.');
-            }
-          });
-          box.append(cancel);
-        }
-        acts.append(box);
-        const amount = el('td', 'num', rupees(r.amountPaise));
-        tr.append(el('td', 'nowrap', day(r.kind === 'log' ? r.paidOn : r.createdAt)), el('td', undefined, r.payee ?? 'Unknown'), purpose, amount, status, el('td', 'dim', r.vouchers ? String(r.vouchers) : '—'), acts);
-        Array.from(tr.children).forEach((td, i) => ((td as HTMLElement).dataset.label = ['Date', 'Payee', 'Purpose', 'Amount', 'Status', 'Files', ''][i] ?? ''));
-        return tr;
-      }),
-    );
+    table.setRows(records);
   }
 
   $<HTMLInputElement>('late-file').addEventListener('change', async (ev) => {

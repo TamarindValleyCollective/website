@@ -113,7 +113,9 @@ export function normalizeName(name) {
   else if (HONORIFICS.has(tokens[0]) && tokens.length > 1) tokens.shift();
   return tokens.map((t) => SUFFIX[t] ?? t).join(' ');
 }
-const partyKey = (name, kind) => `${normalizeName(name)}|${kind}`;
+// Name only, never the kind: a payee already registered as another kind (the sheet says vendor, the directory says
+// other) is the same payee, and keying on the kind created a second party for them.
+const partyKey = (name) => normalizeName(name);
 
 // What goes into the shared-account check and the stored fingerprint: the account number alone (an IFSC difference
 // should not hide a shared account) or the UPI id.
@@ -126,7 +128,7 @@ export const fingerprintText = (details) => (details.method === 'bank' ? details
 // summarizeImport() for anything printed.
 export function planImport(records, { households, existing, fingerprint }) {
   const anomalies = [];
-  const existingByKey = new Map(existing.map((p) => [partyKey(p.name, p.kind), p]));
+  const existingByKey = new Map(existing.map((p) => [partyKey(p.name), p]));
   const parties = new Map();
   const addToExisting = new Map();
   let unchanged = 0;
@@ -148,7 +150,7 @@ export function planImport(records, { households, existing, fingerprint }) {
       else householdId = households.get(unit);
     }
 
-    const key = partyKey(rec.name, kind);
+    const key = partyKey(rec.name);
     const known = existingByKey.get(key);
     let party = parties.get(key);
     if (!known && !party) {
@@ -198,7 +200,7 @@ export function planImport(records, { households, existing, fingerprint }) {
   }
 
   // Existing accounts count towards "shared" too, but only when this file touches the same account.
-  for (const p of existing) for (const fp of p.fingerprints) seenFingerprints.get(fp)?.keys.add(partyKey(p.name, p.kind));
+  for (const p of existing) for (const fp of p.fingerprints) seenFingerprints.get(fp)?.keys.add(partyKey(p.name));
   for (const { keys, lines } of seenFingerprints.values()) {
     if (keys.size > 1) anomalies.push({ kind: 'shared_account', lines: [...lines].sort((a, b) => a - b) });
   }

@@ -168,9 +168,25 @@ for esbuild, and Node 22.18+ or newer, which imports the registry `.ts` directly
   payees needing review, statement gaps, Paytm payments with no bank line and Paytm payments waiting, the last import date and
   counts of parties and bank accounts. Counts and labels only: no names, numbers or fingerprints. Each row links into the
   filtered Parties list (`?filter=unverified|review|verified`) or Import.
-- **The Parties list.** Status chips with counts (All / Needs review / Unverified / Verified) filter the list; a quiet dot shows each
-  payee's state so "Needs review" is the one loud signal; the kind is changed in place (the list also has it on phones, in the
-  sheet). Add party defaults to Vendor.
+- **The Parties list.** Now the shared admin table, in the Ledger's format (`scripts/lib/data-table.mjs` logic, `data-table-ui.mjs` DOM,
+  `src/styles/data-table.css`; see docs/design-language.md, "Data tables"): a search box that holds chips, with Filters (Needs review,
+  Unverified, Verified, No payment details, No evidence attached, Bank's name differs, Possible duplicate, Kind is Other, Inactive), Group by
+  (Kind by default, Status, First letter) and Favorites (kept in the browser, per account); a filter box under every column header in the Ledger's
+  syntax (`^word`, `=word`, `!word`, `>1000`, `2026-10`); sortable columns Name, Kind (changed in place), Accounts, Status, Name at the bank
+  (orange when it differs from ours), Evidence (files attached), Last paid, Paid in total; cards on phones. Everything is searched and sorted in the
+  browser. Last paid and Paid in total come from posted, non-reversal allocations (a failure there only blanks those columns). Ticking rows
+  opens a bulk bar: Set kind, Merge (exactly two ticked: the one without payment details merges into the other, through the usual merge
+  sheet and its step-up), Mark inactive, Mark active; each is a loop over the existing `PATCH /parties/:id`. A dot shows each payee's state so
+  "Needs review" is the one loud signal. Add party defaults to Vendor.
+- **Suggested changes** (`GET /parties` returns `suggestions`; rules in `scripts/lib/finance-party-suggestions.mjs`, pure and tested). Only
+  typed or booked evidence is used, never a screenshot: the name the bank showed when an account was verified (`verified_name`), the other
+  parties' names, and what a party's posted payments were booked under. *Merge* (names match allowing one slip per eight letters, or one bank
+  name fits both; never two members, never a member linked to a household away), *Rename* (our label is a spelling or a shortening of the
+  verified bank name; never a member, never to a name another party has), *Kind* (only "Other", and only when at least two payments and 80% of
+  them agree: Salaries to Employee, opex/capex to Vendor, revenue receipts to Customer, tax to Government). Accepting a rename or a kind calls
+  `PATCH /parties/:id`; accepting a merge opens the normal merge sheet. Dismissals are remembered in the browser. Reading screenshots with a
+  vision model was considered and left out (it would send payee images to an external model); it is the natural next step if typed names are
+  too few.
 - **Merging (migration `0081_finance_party_merge.sql`, applied to TVC ERP on 2026-11-02).** Two parties that are really one payee (often a bank merger: an old
   and a new account) are merged by a director with the step-up: `POST /parties/:id/merge {into}`. Nothing is moved or deleted,
   because account rows are immutable: the duplicate gets `merged_into = main party`, is hidden from the list, and the main party
@@ -372,6 +388,11 @@ types the importer knows; each batch stores its `source`: `axis_statement`, `pay
   ledger the Origin of a BHIM or Paytm payment links to that payment in the UPI table (`/internal/finance/upi/?ref=<reference>`, and the
   line sheet has the same link); in the UPI table a payment joined to a bank line has *Open in the ledger*
   (`/internal/finance/ledger/?line=<line id>`, which opens the line sheet). The UPI table also has its own **Debit / credit** column.
+  The UPI payments table is the shared admin table (docs/design-language.md, "Data tables"): the old App / Paid by / Bank statement buttons are
+  chips in the search box's Filters list (chips of one group are alternatives, so BHIM and Paytm shows both; groups combine), every column has a filter
+  box, Group by defaults to Month (also App, Paid by, Account, Bank statement), Favorites are kept per account in the browser, and it shows cards on
+  a phone. A `?ref=` link fills the search box. The list is cut at 500 rows with a note; filters narrow it. "Show them" on the delegate queue turns on
+  the *Needs a delegate* chip. Choosing the delegate and writing a note still happen in the row, as before.
   Other channels (Paypro, gateway, card) have no page of their own to link to yet.
 - **Source badges** (migration `0090`, **applied 2026-11-07**). The Origin column shows small badges for the records that vouch for a line:
   its bank (always), then the BHIM or Paytm app when a UPI row is joined, Paypro or Razorpay when the narration says so
@@ -429,6 +450,10 @@ categories, the requester); routes in `lib/finance-ledger.ts`. `0083` is applied
   bill capture yet, so every reimbursement is flagged until session 08); a rule marked always-review. Flags are worked out by the
   server when rows are saved, from the same rules the screen showed. The person who entered a flagged row cannot mark it checked
   (a director can).
+- **The Rules page tables** (rules, and categories) are the shared admin table (docs/design-language.md, "Data tables"). Rules stay in the order they run
+  (Priority, lowest first) and show When, the category, party, wording, how often each was used and On / Off; chips for On / Off, Payments out / Money in,
+  Always reviewed, Names a party, Not used yet; Group by Category, Party, State or Direction. Categories group by Kind as before, with a Rules count and a
+  "No rule uses it" chip. Clicking a row (or Change) opens the same sheets as before; Turn on / Turn off is unchanged. Only a director can change either.
 - **The requester** is `fin_entities.requester_party_id`, set on the Rules page by a director.
 - **Categories can be merged or split later.** Rename, add and retire work at any time. `fin_merge_category` moves every allocation,
   rule and project line to another category of the **same type** (so no budget figure changes) and retires the old one.
@@ -765,6 +790,13 @@ cleared the NEFT placeholder the first load wrote from the 164 requests). Old-sh
 
 **Pages.** `/internal/finance-requests/` (the requester's, built for a phone: ask for a payment, record a spend, add a vendor, attach a photo, see their
 own records, cancel) and `/internal/finance/requests/` (nav "Approvals": to approve, to match, to review, all; approve behind the unlock, reject with a reason, accept a suggested match, open the files).
+
+**Both tables are the shared admin table** (docs/design-language.md, "Data tables"). Approvals opens on the first view that has something in it (To approve, To
+match or To review; these three are alternatives, so two together show both), and has chips for Requests / Logged spends, Approved / Paid / Rejected /
+Cancelled, Matched / Not matched, Amount differs and From the old sheet; column filters; Group by Month, Status, Payee, Kind or Requester; Favorites per
+account. The suggested payments open as a full-width row under the record; a record just acted on stays, highlighted, until a filter changes; the Actions
+column stays in view while the table scrolls sideways. On a phone each record is a card holding the same cells. The requester's page has the same table
+over their own records (status chips, Needs a bill). Nothing about who may do what changed.
 
 **History load (operator script, run once).** `scripts/load-fin-requests-history.mjs --sheet <id> [--apply]` (dry run by default; counts only are printed):
 the old sheet's "Fund Transfer Request" tab becomes already-paid requests and its "UPI Circle Transactions" tab becomes logs (`source = 'history'`, no requester).
