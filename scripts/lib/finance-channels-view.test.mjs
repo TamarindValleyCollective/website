@@ -4,7 +4,7 @@
 // layout in the page.) Every figure is invented.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { layoutFlow, moneyText, monthName, statusOf } from './finance-channels-view.mjs';
+import { SLIDE, layoutDrill, layoutFlow, moneyText, monthName, statusOf } from './finance-channels-view.mjs';
 import { channelCube, flowOf } from './finance-channels.mjs';
 
 const line = (id, tran_date, direction, amount_paise, narration, bank_account_id = 'A1') => ({ id, tran_date, direction, amount_paise, narration, bank_account_id });
@@ -75,20 +75,37 @@ test('the bands on a box fit inside it, none on top of another', () => {
   }
 });
 
-test('the fixed deposits are last in their column, whichever grouping is chosen', () => {
-  for (const l of layouts) for (const col of [0, 2]) {
-    const box = l.nodes.filter((n) => n.col === col).sort((a, b) => a.y - b.y);
-    assert.equal(box.at(-1).kind, 'fd', `column ${col}`);
+test('the fixed deposits are an account: last in the accounts column, whichever grouping is chosen, and the outer columns have none', () => {
+  for (const l of layouts) {
+    const accounts = l.nodes.filter((n) => n.col === 1).sort((a, b) => a.y - b.y);
+    assert.equal(accounts.at(-1).kind, 'fd');
+    assert.ok(l.nodes.filter((n) => n.col !== 1).every((n) => n.kind !== 'fd'));
   }
 });
 
-test('every band is a curve from the right edge of its source to the left edge of its target', () => {
+test('every band is a curve from the right edge of its source to the left edge of its target; a transfer is a loop beside the two accounts', () => {
   const byId = new Map(L.nodes.map((n) => [n.id, n]));
   for (const x of L.links) {
     const a = byId.get(x.from), b = byId.get(x.to);
+    if (x.transfer) {
+      const into = b.kind === 'fd', edge = into ? a.x + a.w : a.x;
+      assert.ok(x.d.startsWith(`M${edge},${x.sy + x.w / 2}`), x.d);
+      assert.ok(x.d.endsWith(`${edge},${x.ty + x.w / 2}`), x.d);
+      assert.ok(into ? x.d.includes(`C${edge + 70},`) : x.d.includes(`C${edge - 70},`), 'bulges to the right going in, to the left coming back');
+      continue;
+    }
     assert.ok(x.d.startsWith(`M${a.x + a.w},`), x.d);
     assert.ok(x.d.endsWith(`${b.x},${x.ty + x.w / 2}`), x.d);
   }
+});
+
+test('the deposits open to the right, straight to their lines, like a box on the money-out side', () => {
+  const fd = L.nodes.find((n) => n.kind === 'fd');
+  const d = layoutDrill(L, { nodeId: fd.id, rows: undefined, lineCount: 2 });
+  assert.equal(d.side, 'out');
+  assert.equal(d.dx, -SLIDE);
+  assert.equal(d.card.x, fd.x + SLIDE);
+  assert.equal(L.kept.some((k) => k.account === fd.id), false, 'a strip of what stayed is for the bank accounts only');
 });
 
 test('what an account kept is a strip beside it, on the side that has the room', () => {
@@ -105,4 +122,69 @@ test('an empty period has nothing to lay out and does not fail', () => {
   const empty = layoutFlow(flowOf({ cube, accounts, months: ['2026-01'], groupIn: 'channel', groupOut: 'channel' }));
   assert.equal(empty.nodes.length, 0);
   assert.equal(empty.links.length, 0);
+});
+
+// ---- the columns beyond the picture: a box's breakdown, and then its lines -----------------------------------------------------------
+
+const outBox = L.nodes.find((n) => n.col === 2 && n.kind === 'out' && n.paise > 1_000_000);
+const inBox = L.nodes.find((n) => n.col === 0 && n.kind === 'in');
+const split = (box, shares) => shares.map(([id, name, s], i) => ({ id, name, paise: Math.round(box.paise * s), n: i + 1 }));
+const outRows = split(outBox, [['p1', 'Asha', 0.58], ['p2', 'Ravi', 0.42]]);
+const inRows = split(inBox, [['u1', 'Unit 12', 0.5], ['u2', 'Unit 7', 0.3], ['u3', 'Unit 3', 0.2]]);
+
+test('opening a money-out box slides the picture left one column and puts its breakdown to the right of it', () => {
+  const d = layoutDrill(L, { nodeId: outBox.id, rows: outRows });
+  assert.equal(d.side, 'out');
+  assert.equal(d.level, 1);
+  assert.equal(d.dx, -SLIDE);
+  assert.ok(d.rows.every((r) => r.x === outBox.x + SLIDE), 'one column to the right');
+  assert.equal(d.card, null, 'no lines until a row is chosen');
+  // the same scale as the picture: a band is as wide as its money, and the bands fit the box they leave
+  for (const r of d.rows) assert.ok(Math.abs(r.band.w - Math.max(1.5, r.paise * L.scale)) < 1e-6);
+  assert.ok(d.rows.reduce((t, r) => t + r.band.w, 0) <= outBox.h + 1.5 * d.rows.length);
+});
+
+test('opening a money-in box slides the picture right and puts its breakdown to the left', () => {
+  const d = layoutDrill(L, { nodeId: inBox.id, rows: inRows });
+  assert.equal(d.side, 'in');
+  assert.equal(d.dx, SLIDE);
+  assert.ok(d.rows.every((r) => r.x === inBox.x - SLIDE));
+  assert.ok(d.rows[0].band.d.startsWith(`M${inBox.x - SLIDE + 14},`), 'bands run from the row into the box');
+});
+
+test('choosing a row slides one column further and shows its lines, a column on from the breakdown', () => {
+  const out = layoutDrill(L, { nodeId: outBox.id, rows: outRows, pickId: 'p2', lineCount: 6 });
+  assert.equal(out.level, 2);
+  assert.equal(out.dx, -2 * SLIDE);
+  assert.equal(out.card.x, outBox.x + 2 * SLIDE);
+  assert.equal(out.card.h, 62 + 6 * 40);
+  assert.ok(out.bottom >= out.card.y + out.card.h);
+  const inn = layoutDrill(L, { nodeId: inBox.id, rows: inRows, pickId: 'u1', lineCount: 4 });
+  assert.equal(inn.dx, 2 * SLIDE);
+  assert.ok(inn.card.x + inn.card.w <= inBox.x - 2 * SLIDE + 14 + 1e-6, 'the card ends at the column, to the left');
+});
+
+test('what has no breakdown (the deposits, an account) goes straight to its lines, in the breakdown column', () => {
+  const direct = layoutDrill(L, { nodeId: outBox.id, rows: undefined, lineCount: 3 });
+  assert.equal(direct.level, 1);
+  assert.equal(direct.dx, -SLIDE);
+  assert.equal(direct.rows.length, 0);
+  assert.equal(direct.card.x, outBox.x + SLIDE);
+  const fromIn = layoutDrill(L, { nodeId: inBox.id, rows: undefined, lineCount: 3 });
+  assert.equal(fromIn.dx, SLIDE);
+  assert.equal(fromIn.card.x + fromIn.card.w, inBox.x - SLIDE + 14, 'the card ends at the column, on the left');
+});
+
+test('while the breakdown loads there is nothing to place yet, and the picture has already slid', () => {
+  const d = layoutDrill(L, { nodeId: outBox.id, rows: null });
+  assert.deepEqual([d.rows.length, d.card, d.level, d.dx], [0, null, 1, -SLIDE]);
+});
+
+test('the breakdown rows never overlap, stay on the page, and many of them make the picture taller', () => {
+  const many = Array.from({ length: 14 }, (_, i) => ({ id: `r${i}`, name: `Row ${i}`, paise: Math.round(outBox.paise / 14), n: 1 }));
+  const d = layoutDrill(L, { nodeId: outBox.id, rows: many });
+  const rs = d.rows.slice().sort((a, b) => a.y - b.y);
+  for (let i = 1; i < rs.length; i++) assert.ok(rs[i].y >= rs[i - 1].y + rs[i - 1].h, 'overlap');
+  assert.ok(rs[0].y >= 0);
+  assert.ok(d.bottom > 14 * 34, 'room for 14 rows');
 });

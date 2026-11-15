@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  FD, GROUPINGS, IN_PURPOSES, OUT_PURPOSES, breakdownOf, cellMatches, channelCube, channelPieces, flowOf, fyMonths, groupPieces, monthBars, monthsSoFar, presetMonths, previousMonths, projectsOf, purposesOf, rangeOf, specOf, totalsOf,
+  FD, GROUPINGS, IN_PURPOSES, UPI_APPS, channelGroupOf, OUT_PURPOSES, breakdownOf, cellMatches, channelCube, channelPieces, flowOf, fyMonths, groupPieces, monthBars, monthsSoFar, presetMonths, previousMonths, projectsOf, purposesOf, rangeOf, specOf, totalsOf,
 } from './finance-channels.mjs';
 
 const categories = [
@@ -113,24 +113,24 @@ test('the strip: received and spent for each month, without the deposits', () =>
   assert.deepEqual(bars.find((b) => b.m === '2026-12'), { m: '2026-12', in: 0, out: 0 });
 });
 
-test('by channel: channels in, the accounts, channels out, each ordered and labelled', () => {
+test('by channel: channels in, the accounts (the fixed deposits too), channels out, each ordered and labelled', () => {
   const f = flow();
-  assert.deepEqual(f.nodes.filter((n) => n.col === 0).map((n) => n.id).sort(), ['L:__fd', 'L:bank', 'L:gateway']);
-  assert.deepEqual(f.nodes.filter((n) => n.col === 1).map((n) => n.id), ['A:A1', 'A:A2'], 'an account with no money in the months is left out');
-  assert.deepEqual(f.nodes.filter((n) => n.col === 2).map((n) => n.id).sort(), ['R:__fd', 'R:bank', 'R:card', 'R:paypro', 'R:paytm']);
-  assert.equal(node(f, 'R:paytm').label, 'Paytm');
-  assert.equal(node(f, 'R:bank').paise, 40000, 'the bank direct line to the deposits is in the deposits, not here');
+  assert.deepEqual(f.nodes.filter((n) => n.col === 0).map((n) => n.id).sort(), ['L:bank', 'L:gateway']);
+  assert.deepEqual(f.nodes.filter((n) => n.col === 1).map((n) => n.id), ['A:A1', 'A:A2', 'A:__fd'], 'an account with no money in the months is left out; the deposits come last');
+  assert.deepEqual(f.nodes.filter((n) => n.col === 2).map((n) => n.id).sort(), ['R:bank', 'R:card', 'R:paypro', 'R:upi']);
+  assert.equal(node(f, 'R:upi').label, 'UPI');
+  assert.equal(node(f, 'R:upi').paise, 100000, 'Paytm and BHIM are apps of the one UPI channel');
+  assert.equal(node(f, 'R:bank').paise, 40000, 'the bank direct line to the deposits is a transfer, not money out');
 });
 
-test('by purpose: what the money was for, with the deposits still apart', () => {
+test('by purpose: what the money was for, with the deposits still an account and not a purpose', () => {
   const f = flow({ groupIn: 'purpose', groupOut: 'purpose' });
-  assert.deepEqual(f.nodes.filter((n) => n.col === 0).map((n) => n.id).sort(), ['L:__fd', 'L:maintenance', 'L:other']);
-  assert.deepEqual(f.nodes.filter((n) => n.col === 2).map((n) => n.id).sort(), ['R:__fd', 'R:farm', 'R:other', 'R:projects', 'R:salary']);
+  assert.deepEqual(f.nodes.filter((n) => n.col === 0).map((n) => n.id).sort(), ['L:maintenance', 'L:other']);
+  assert.deepEqual(f.nodes.filter((n) => n.col === 2).map((n) => n.id).sort(), ['R:farm', 'R:other', 'R:projects', 'R:salary']);
   assert.equal(node(f, 'R:salary').paise, 70000);
   assert.equal(node(f, 'R:farm').paise, 30000 + 10000, 'money that names a project counts under projects, not farm');
-  assert.equal(node(f, 'R:__fd').label, 'To fixed deposits');
-  assert.equal(node(f, 'L:__fd').label, 'From fixed deposits');
-  assert.equal(node(f, 'R:__fd').kind, 'fd');
+  assert.equal(node(f, 'A:__fd').label, 'Fixed deposits');
+  assert.equal(node(f, 'A:__fd').kind, 'fd');
 });
 
 test('the two sides can be grouped differently', () => {
@@ -138,27 +138,38 @@ test('the two sides can be grouped differently', () => {
   assert.ok(node(f, 'L:gateway') && node(f, 'R:salary') && !node(f, 'R:paytm'));
 });
 
-test('every box and band adds up: the money into an account and out of it, and what each side shows', () => {
+test('every box and band adds up: the money into an account and out of it, the transfers, and what each side shows', () => {
   for (const [groupIn, groupOut] of [['channel', 'channel'], ['purpose', 'purpose'], ['channel', 'purpose'], ['purpose', 'channel']]) {
     const f = flow({ groupIn, groupOut });
     for (const n of f.nodes.filter((x) => x.col === 1)) {
       assert.equal(sum(f.links.filter((l) => l.to === n.id)), n.inPaise);
       assert.equal(sum(f.links.filter((l) => l.from === n.id)), n.outPaise);
-      assert.equal(n.paise, Math.max(n.inPaise, n.outPaise));
+      if (n.kind === 'account') assert.equal(n.paise, Math.max(n.inPaise, n.outPaise));
+      else assert.ok(n.paise >= Math.max(n.inPaise, n.outPaise), 'the deposits box is at least as tall as what moved');
     }
     for (const n of f.nodes.filter((x) => x.col === 0)) assert.equal(sum(f.links.filter((l) => l.from === n.id)), n.paise);
     for (const n of f.nodes.filter((x) => x.col === 2)) assert.equal(sum(f.links.filter((l) => l.to === n.id)), n.paise);
-    assert.equal(sum(f.nodes.filter((n) => n.col === 0)), sum(cell({ d: 'in' }).filter((c) => MONTHS.includes(c.m))));
-    assert.equal(sum(f.nodes.filter((n) => n.col === 2)), sum(cell({ d: 'out' }).filter((c) => MONTHS.includes(c.m))));
+    const noDeposits = (c) => c.g !== 'sinking' && MONTHS.includes(c.m);
+    assert.equal(sum(f.nodes.filter((n) => n.col === 0)), sum(cell({ d: 'in' }).filter(noDeposits)));
+    assert.equal(sum(f.nodes.filter((n) => n.col === 2)), sum(cell({ d: 'out' }).filter(noDeposits)));
     assert.ok(f.links.every((l) => l.paise > 0));
   }
 });
 
-test('the deposits are green links, and the rest follow the money: in is blue, out is orange', () => {
+test('transfers to and from the deposits are green bands between accounts; the rest follow the money: in is blue, out is orange', () => {
   const f = flow();
-  assert.ok(f.links.filter((l) => l.from === 'L:__fd' || l.to === 'R:__fd').every((l) => l.kind === 'fd'));
-  assert.ok(f.links.filter((l) => l.from.startsWith('L:') && l.from !== 'L:__fd').every((l) => l.kind === 'in'));
-  assert.ok(f.links.filter((l) => l.to.startsWith('R:') && l.to !== 'R:__fd').every((l) => l.kind === 'out'));
+  const transfers = f.links.filter((l) => l.transfer);
+  assert.deepEqual(transfers.map((l) => [l.from, l.to, l.paise, l.kind]), [['A:A1', 'A:__fd', 400000, 'fd'], ['A:__fd', 'A:A1', 150000, 'fd']]);
+  assert.ok(f.links.filter((l) => !l.transfer && l.from.startsWith('L:')).every((l) => l.kind === 'in'));
+  assert.ok(f.links.filter((l) => !l.transfer && l.to.startsWith('R:')).every((l) => l.kind === 'out'));
+});
+
+test('the deposits box is as tall as what they hold, or what moved if that is more, and is left out when nothing is held or moved', () => {
+  assert.equal(node(flow({ fdHeld: 1_000_000 }), 'A:__fd').paise, 1_000_000);
+  assert.equal(node(flow({ fdHeld: 0 }), 'A:__fd').paise, 400000, 'what moved in is more than what is held');
+  assert.equal(node(flow({ fdHeld: 1_000_000 }), 'A:__fd').held, 1_000_000);
+  assert.ok(!node(flow({ months: ['2026-12'], fdHeld: 0 }), 'A:__fd'));
+  assert.ok(node(flow({ months: ['2026-12'], fdHeld: 500 }), 'A:__fd'), 'they are held even if nothing moved');
 });
 
 test('the accounts keep what came in beyond what went out', () => {
@@ -177,7 +188,7 @@ test('the period: only the months asked for are counted', () => {
 test('lines with no category are counted on their box', () => {
   assert.equal(node(flow(), 'R:bank').noCategory, 1);
   assert.equal(node(flow({ groupOut: 'purpose' }), 'R:other').noCategory, 1);
-  assert.equal(node(flow(), 'R:paytm').noCategory, 0);
+  assert.equal(node(flow(), 'R:upi').noCategory, 0);
 });
 
 test('clicking a box or band: the lines behind it add up to the figure on it', () => {
@@ -186,7 +197,7 @@ test('clicking a box or band: the lines behind it add up to the figure on it', (
     const behind = (spec) => sum(cube.filter((c) => cellMatches(c, spec, MONTHS)));
     for (const n of f.nodes) {
       const spec = specOf({ node: n, nodes: f.nodes, groupIn, groupOut });
-      assert.equal(behind(spec), n.kind === 'account' ? n.inPaise + n.outPaise : n.paise, `${n.id} (${groupIn}/${groupOut})`);
+      assert.equal(behind(spec), n.col === 1 ? n.inPaise + n.outPaise : n.paise, `${n.id} (${groupIn}/${groupOut})`);
     }
     for (const l of f.links) {
       const spec = specOf({ link: l, nodes: f.nodes, groupIn, groupOut });
@@ -195,11 +206,13 @@ test('clicking a box or band: the lines behind it add up to the figure on it', (
   }
 });
 
-test('the deposits box means the sinking-fund money in that direction, and a channel box leaves it out', () => {
+test('the deposits mean the lines moved between an account and them, and a channel box leaves those out', () => {
   const f = flow();
-  assert.deepEqual(specOf({ node: node(f, 'R:__fd'), nodes: f.nodes, groupIn: 'channel', groupOut: 'channel' }), { dir: 'out', fd: 'only' });
+  assert.deepEqual(specOf({ node: node(f, 'A:__fd'), nodes: f.nodes, groupIn: 'channel', groupOut: 'channel' }), { fd: 'only' });
+  assert.deepEqual(specOf({ link: f.links.find((l) => l.to === 'A:__fd'), nodes: f.nodes, groupIn: 'channel', groupOut: 'channel' }), { fd: 'only', dir: 'out', account: 'A1' }, 'into the deposits');
+  assert.deepEqual(specOf({ link: f.links.find((l) => l.from === 'A:__fd'), nodes: f.nodes, groupIn: 'channel', groupOut: 'channel' }), { fd: 'only', dir: 'in', account: 'A1' }, 'back out of them');
   assert.deepEqual(specOf({ node: node(f, 'R:bank'), nodes: f.nodes, groupIn: 'channel', groupOut: 'channel' }), { dir: 'out', channel: 'bank', fd: 'exclude' });
-  assert.deepEqual(specOf({ node: node(f, 'R:salary') ?? { kind: 'out', col: 2, key: 'salary' }, nodes: f.nodes, groupIn: 'channel', groupOut: 'purpose' }), { dir: 'out', purpose: 'salary', fd: 'exclude' });
+  assert.deepEqual(specOf({ node: { kind: 'out', col: 2, key: 'salary' }, nodes: f.nodes, groupIn: 'channel', groupOut: 'purpose' }), { dir: 'out', purpose: 'salary', fd: 'exclude' });
   assert.equal(FD, '__fd');
 });
 
@@ -248,7 +261,7 @@ test('every purpose breaks down the same way: projects by project, salary and ma
 
 test('a channel is broken down by what its money was for, adding up to the box', () => {
   const f = flow();
-  const box = node(f, 'R:paytm');
+  const box = node(f, 'R:upi');
   const spec = specOf({ node: box, nodes: f.nodes, groupIn: 'channel', groupOut: 'channel' });
   const rows = purposesOf({ cube, months: MONTHS, spec });
   assert.deepEqual(rows.map((r) => [r.id, r.name, r.paise]), [['salary', 'Salary', 70000], ['farm', 'Farm and household', 30000]]);
@@ -277,4 +290,36 @@ test('a person or category narrows the lines behind a box, and none means nobody
   assert.equal(hit({ category: 'C1' }), 2);
   assert.equal(hit({ category: 'none' }), 0);
   assert.equal(hit({ party: 'P1', category: 'C1' }), 1);
+});
+
+test('Paytm and BHIM are channels under UPI: one UPI box, opened by the person behind each payment whichever app they used', () => {
+  assert.deepEqual([...UPI_APPS].sort(), ['bhim', 'paytm', 'upi_unknown']);
+  assert.equal(channelGroupOf('paytm'), 'upi');
+  assert.equal(channelGroupOf('paypro'), 'paypro', 'the other channels are their own');
+  const more = channelCube({ lines: [...lines, line('u2', '2026-10-21', 'debit', 25000, 'UPI/P2A/600000000002/Shop/Bank')], upiAppByLine: new Map([['l1', 'paytm'], ['u2', 'bhim']]), allocations: [...allocations, alloc('u2', 'c-farm', 25000)], categories });
+  const f = flowOf({ cube: more, accounts, months: MONTHS });
+  const box = node(f, 'R:upi');
+  assert.equal(box.paise, 100000 + 25000);
+  assert.ok(!node(f, 'R:paytm') && !node(f, 'R:bhim'), 'no box of their own');
+  const spec = specOf({ node: box, nodes: f.nodes, groupIn: 'channel', groupOut: 'channel' });
+  assert.equal(spec.channel, 'upi');
+  assert.equal(breakdownOf(spec), 'delegate', 'by the person behind the payment, not by app');
+  assert.equal(breakdownOf({ dir: 'out', channel: 'paypro', fd: 'exclude' }), 'purpose', 'every other channel is broken down by purpose');
+  assert.equal(sum(more.filter((c) => cellMatches(c, spec, MONTHS))), box.paise);
+  assert.equal(sum(more.filter((c) => cellMatches(c, { ...spec, channel: 'bhim' }, MONTHS))), 25000);
+  assert.equal(sum(more.filter((c) => cellMatches(c, { ...spec, channel: 'paypro' }, MONTHS))), 50000);
+});
+
+test('UPI by person: direct, and the UPI circle’s delegates under the same UPI ID, whichever app each used', () => {
+  const ps = [
+    { lineId: 'a', paise: 500, delegate: 'own', c: 'paytm' }, { lineId: 'b', paise: 300, delegate: 'D1', c: 'paytm' }, { lineId: 'c', paise: 100, delegate: 'D1', c: 'bhim' },
+    { lineId: 'd', paise: 50, delegate: 'none', c: 'paytm' }, { lineId: 'e', paise: 20, delegate: 'D9', c: 'bhim' },
+  ];
+  const rows = groupPieces(ps, 'delegate', new Map([['D1', 'UPI circle · Number 5550100001']]));
+  assert.deepEqual(rows.map((r) => [r.id, r.name, r.paise, r.n]), [['own', 'Direct', 500, 1], ['D1', 'UPI circle · Number 5550100001', 400, 2], ['none', 'UPI circle · no delegate yet', 50, 1], ['D9', 'UPI circle · a delegate no longer listed', 20, 1]]);
+  assert.equal(sum(rows), sum(ps), 'the people add up to the UPI box');
+  const hit = (spec) => ps.filter((p) => cellMatches({ m: '2026-10', d: 'out', g: 'farm', a: 'A1', p: '', ...p }, spec, ['2026-10'])).length;
+  assert.equal(hit({ delegate: 'D1' }), 2, 'both apps count for the one person');
+  assert.equal(hit({ delegate: 'own' }), 1);
+  assert.equal(hit({ delegate: 'none' }), 1);
 });

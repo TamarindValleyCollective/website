@@ -3,8 +3,8 @@
 // origin: BHIM, Paytm, Paypro, the payment gateway, the debit card, the bank directly) or by PURPOSE (what the money was for). Pure and
 // I/O-free (finance-channels.test.mjs).
 //
-// The fixed deposits are a holding outside the accounts, so money moved to or from them is neither received nor spent: it is drawn as its
-// own pair of boxes, whichever grouping is chosen, and counted apart from Received and Spent.
+// The fixed deposits are an account of their own, so money moved to or from them is a transfer between accounts, neither received nor spent: it
+// is drawn as a band between the accounts, whichever grouping is chosen, and counted apart from Received and Spent.
 //
 // The server sums the ledger once into a small "cube" (channelCube: one cell per month, account, channel, direction and purpose); the
 // browser then draws any period and grouping of it without asking again (flowOf).
@@ -123,28 +123,45 @@ export function monthBars(cube, months) {
 
 // ---- the flow --------------------------------------------------------------------------------------------------------------------
 
-const channelLabel = (k) => CHANNELS[k]?.label ?? k;
+/** The channels that are UPI apps (BHIM, Paytm, UPI with the app unknown): one UPI box in the picture, and its apps when it is opened. */
+export const UPI_APPS = Object.entries(CHANNELS).filter(([, c]) => c.kind === 'upi_app').map(([k]) => k);
+/** A channel as the picture groups it: the UPI apps are one channel, UPI. */
+export const channelGroupOf = (c) => (UPI_APPS.includes(c) ? 'upi' : c);
+const CHANNEL_GROUPS = { upi: { label: 'UPI', hint: 'Payments through the UPI apps: BHIM, Paytm and others' } };
+const channelLabel = (k) => CHANNEL_GROUPS[k]?.label ?? CHANNELS[k]?.label ?? k;
 const purposeLabel = (side, k) => (side === 'in' ? IN_PURPOSES : OUT_PURPOSES).find((p) => p.id === k)?.label ?? k;
 
-/** The key a cell belongs to on one side: the fixed deposits first, then its channel or its purpose. */
-export const keyOf = (cell, grouping) => (cell.g === 'sinking' ? FD : grouping === 'channel' ? cell.c : cell.g);
+/** The key a cell belongs to on one side: its channel or its purpose. (Money to or from the fixed deposits is not on a side: see flowOf.) */
+export const keyOf = (cell, grouping) => (grouping === 'channel' ? channelGroupOf(cell.c) : cell.g);
 
 /**
- * The cashflow of the months: money in (grouped), the accounts, money out (grouped). Nodes: { id, col: 0|1|2, kind: 'in'|'out'|'fd'|'account',
+ * The cashflow of the months: money in (grouped), the accounts, money out (grouped). Nodes: { id, col: 0|1|2, kind: 'in'|'out'|'account'|'fd',
  * key, label, paise, n, noCategory }; accounts also have inPaise and outPaise (what is left is what stayed there, or came out of the balance).
- * Links: { from, to, paise, kind: 'in'|'out'|'fd' }. Accounts with no money in the months are left out.
+ * Links: { from, to, paise, kind: 'in'|'out'|'fd', transfer? }. Accounts with no money in the months are left out.
+ *
+ * The fixed deposits are an account too, in the middle column after the others, so money put into them or brought back is a transfer from one
+ * account to another, drawn as a band between the two (kind 'fd', transfer: true), not as money out or in. Their box is as tall as what they
+ * hold (`fdHeld`, the balance at the end of the period) or what moved, whichever is more.
  */
-export function flowOf({ cube, accounts, months, groupIn = 'channel', groupOut = 'channel' }) {
+export function flowOf({ cube, accounts, months, groupIn = 'channel', groupOut = 'channel', fdHeld = 0 }) {
   const set = new Set(months);
   const cells = cube.filter((c) => set.has(c.m));
-  const sides = { in: new Map(), out: new Map() }, hub = new Map(), links = new Map();
+  const sides = { in: new Map(), out: new Map() }, hub = new Map(), links = new Map(), moves = new Map();
   const grouping = { in: groupIn, out: groupOut };
+  const hubOf = (a) => hub.get(a) ?? hub.set(a, { inPaise: 0, outPaise: 0, n: 0 }).get(a);
   for (const c of cells) {
+    const h = hubOf(c.a);
+    if (c.g === 'sinking') {
+      // between this account and the fixed deposits: a transfer, in neither the money received nor the money spent
+      const m = moves.get(c.a) ?? moves.set(c.a, { to: 0, from: 0, n: 0 }).get(c.a);
+      if (c.d === 'out') { m.to += c.paise; h.outPaise += c.paise; } else { m.from += c.paise; h.inPaise += c.paise; }
+      m.n += c.n; h.n += c.n;
+      continue;
+    }
     const key = keyOf(c, grouping[c.d]);
     const side = sides[c.d];
     const e = side.get(key) ?? side.set(key, { paise: 0, n: 0, un: 0 }).get(key);
     e.paise += c.paise; e.n += c.n; if (c.u) e.un += c.n;
-    const h = hub.get(c.a) ?? hub.set(c.a, { inPaise: 0, outPaise: 0, n: 0 }).get(c.a);
     if (c.d === 'in') h.inPaise += c.paise; else h.outPaise += c.paise;
     h.n += c.n;
     const lk = c.d === 'in' ? `L:${key}|A:${c.a}` : `A:${c.a}|R:${key}`;
@@ -152,9 +169,9 @@ export function flowOf({ cube, accounts, months, groupIn = 'channel', groupOut =
   }
   const nodes = [];
   const sideNodes = (d, col, prefix) => [...sides[d]].sort((x, y) => y[1].paise - x[1].paise || (x[0] < y[0] ? -1 : 1)).map(([key, e]) => ({
-    id: `${prefix}:${key}`, col, kind: key === FD ? 'fd' : d, key,
-    label: key === FD ? (d === 'in' ? 'From fixed deposits' : 'To fixed deposits') : grouping[d] === 'channel' ? channelLabel(key) : purposeLabel(d, key),
-    sub: key !== FD && grouping[d] === 'channel' ? CHANNELS[key]?.hint ?? '' : '',
+    id: `${prefix}:${key}`, col, kind: d, key,
+    label: grouping[d] === 'channel' ? channelLabel(key) : purposeLabel(d, key),
+    sub: grouping[d] === 'channel' ? CHANNEL_GROUPS[key]?.hint ?? CHANNELS[key]?.hint ?? '' : '',
     paise: e.paise, n: e.n, noCategory: e.un,
   }));
   nodes.push(...sideNodes('in', 0, 'L'));
@@ -162,12 +179,21 @@ export function flowOf({ cube, accounts, months, groupIn = 'channel', groupOut =
     const h = hub.get(a.id);
     if (h && (h.inPaise > 0 || h.outPaise > 0)) nodes.push({ id: `A:${a.id}`, col: 1, kind: 'account', key: a.id, label: a.label, sub: '', paise: Math.max(h.inPaise, h.outPaise), n: h.n, noCategory: 0, inPaise: h.inPaise, outPaise: h.outPaise });
   }
+  const toFd = [...moves.values()].reduce((t, m) => t + m.to, 0), fromFd = [...moves.values()].reduce((t, m) => t + m.from, 0);
+  const held = Math.max(0, fdHeld);
+  if (toFd > 0 || fromFd > 0 || held > 0) {
+    nodes.push({ id: `A:${FD}`, col: 1, kind: 'fd', key: FD, label: 'Fixed deposits', sub: 'An account held outside the current accounts', paise: Math.max(held, toFd, fromFd), n: [...moves.values()].reduce((t, m) => t + m.n, 0), noCategory: 0, inPaise: toFd, outPaise: fromFd, held });
+  }
   nodes.push(...sideNodes('out', 2, 'R'));
   const out = [];
   for (const [lk, paise] of links) {
     if (paise <= 0) continue;
     const [from, to] = lk.split('|');
-    out.push({ from, to, paise, kind: from === `L:${FD}` || to === `R:${FD}` ? 'fd' : from.startsWith('L:') ? 'in' : 'out' });
+    out.push({ from, to, paise, kind: from.startsWith('L:') ? 'in' : 'out' });
+  }
+  for (const [a, m] of moves) {
+    if (m.to > 0) out.push({ from: `A:${a}`, to: `A:${FD}`, paise: m.to, kind: 'fd', transfer: true });
+    if (m.from > 0) out.push({ from: `A:${FD}`, to: `A:${a}`, paise: m.from, kind: 'fd', transfer: true });
   }
   const t = totalsOf(cube, months);
   return { nodes, links: out, ...t, hasData: nodes.length > 0 };
@@ -177,19 +203,26 @@ export function flowOf({ cube, accounts, months, groupIn = 'channel', groupOut =
 
 /**
  * The cells behind a box or band, as a filter: { dir?, account?, channel?, purpose?, fd?: 'only' | 'exclude' }. `node` is a flowOf node;
- * `link` is a flowOf link (then `nodes` has both ends). A channel or purpose box leaves the fixed deposits out, because they have a box of their own.
+ * `link` is a flowOf link (then `nodes` has both ends). A channel or purpose box leaves the fixed deposits out, because they are an account
+ * of their own; the deposits' box, and a transfer to or from them, mean the lines moved between an account and the deposits.
  * @param {{ node?: any, link?: any, nodes: any[], groupIn: string, groupOut: string }} pick
  */
 export function specOf({ node, link, nodes, groupIn, groupOut }) {
   /** @type {(n: any, dir: string) => Record<string, string>} */
   const one = (n, dir) => {
-    if (n.kind === 'account') return { account: n.key };
     const grouping = n.col === 0 ? groupIn : groupOut;
-    if (n.kind === 'fd') return { dir, fd: 'only' };
     return grouping === 'channel' ? { dir, channel: n.key, fd: 'exclude' } : { dir, purpose: n.key, fd: 'exclude' };
   };
-  if (!link) return node.kind === 'account' ? { account: node.key } : one(node, node.col === 0 ? 'in' : 'out');
+  if (!link) {
+    if (node.kind === 'account') return { account: node.key };
+    if (node.kind === 'fd') return { fd: 'only' };
+    return one(node, node.col === 0 ? 'in' : 'out');
+  }
   const [a, b] = [nodes.find((n) => n.id === link.from), nodes.find((n) => n.id === link.to)];
+  if (a.kind === 'fd' || b.kind === 'fd') {
+    const acct = a.kind === 'fd' ? b : a;
+    return { fd: 'only', dir: a.kind === 'fd' ? 'in' : 'out', account: acct.key };
+  }
   const side = a.col === 0 ? one(a, 'in') : one(b, 'out');
   const acct = a.kind === 'account' ? a : b;
   return { ...side, account: acct.key };
@@ -200,7 +233,7 @@ export function cellMatches(cell, spec, months) {
   if (!months.includes(cell.m)) return false;
   if (spec.dir && cell.d !== spec.dir) return false;
   if (spec.account && cell.a !== spec.account) return false;
-  if (spec.channel && cell.c !== spec.channel) return false;
+  if (spec.channel && !(spec.channel === 'upi' ? UPI_APPS.includes(cell.c) : cell.c === spec.channel)) return false;   // 'upi': any UPI app
   if (spec.purpose && cell.g !== spec.purpose) return false;
   if (spec.fd === 'only' && cell.g !== 'sinking') return false;
   if (spec.fd === 'exclude' && cell.g === 'sinking') return false;
@@ -208,22 +241,25 @@ export function cellMatches(cell, spec, months) {
   // Who it was paid to or by, and its category, are on the pieces (the lines), not on the cube's cells; 'none' means nobody named / no category yet.
   if (spec.party && cell.party !== (spec.party === 'none' ? '' : spec.party)) return false;
   if (spec.category && cell.cat !== (spec.category === 'none' ? '' : spec.category)) return false;
+  // The person behind a UPI payment: a delegate's id, 'own' for the accounts' own UPI (no delegate), 'none' for a delegated payment no delegate is chosen for yet.
+  if (spec.delegate && cell.delegate !== spec.delegate) return false;
   return true;
 }
 
 /**
  * How a clicked box or band is broken down, the same way for every purpose: Projects by project, Salary by employee (who it was paid to),
- * Maintenance by who paid it, every other purpose by category, and a channel by what its money was for. 'project' and 'purpose' come from the
- * cube in the browser; 'party' and 'category' need the lines, so the server groups them (GET /channels/breakdown). null: an account or the
- * fixed deposits, which go straight to their lines.
+ * Maintenance by who paid it, every other purpose by category, a channel by what its money was for, and the UPI channel by the person behind each
+ * payment, whichever app they used. 'project' and 'purpose' come from the cube in the browser; 'party', 'category' and 'delegate' need the lines, so
+ * the server groups them (GET /channels/breakdown). null: an account or the fixed deposits, which go straight to their lines.
  * @param {Record<string, string>} spec as made by specOf
- * @returns {'project' | 'party' | 'category' | 'purpose' | null}
+ * @returns {'project' | 'party' | 'category' | 'purpose' | 'delegate' | null}
  */
 export function breakdownOf(spec) {
   if (spec.fd === 'only') return null;
   if (spec.purpose === 'projects') return 'project';
   if (spec.purpose === 'salary' || spec.purpose === 'maintenance') return 'party';
   if (spec.purpose) return 'category';
+  if (spec.channel === 'upi') return 'delegate';
   if (spec.channel) return 'purpose';
   return null;
 }
@@ -243,16 +279,20 @@ export function purposesOf({ cube, months, spec }) {
 }
 
 /**
- * Pieces grouped by party or category: [{ id ('' when none), name, paise, n: lines }], biggest first. `names`: id -> name; what has none is
- * 'No one named' / 'No category yet'.
+ * Pieces grouped by party, category or delegate: [{ id ('' when none), name, paise, n: lines }], biggest first. `names`: id -> name; what has none
+ * is 'No one named' / 'No category yet'. All UPI payments go out through the account holder's UPI setup: some **Direct**, some by the **UPI circle**,
+ * the delegates paying under that same UPI ID. So for delegates the id 'own' is named Direct, a delegate's name carries "UPI circle · " (from the
+ * server), and 'none' is a circle payment that no delegate is chosen for yet.
  */
 export function groupPieces(pieces, by, names) {
-  const field = by === 'party' ? 'party' : 'cat';
-  const none = by === 'party' ? 'No one named' : 'No category yet';
+  const field = by === 'party' ? 'party' : by === 'delegate' ? 'delegate' : 'cat';
+  const none = by === 'party' ? 'No one named' : by === 'delegate' ? 'Not a UPI payment' : 'No category yet';
+  const unknown = by === 'party' ? 'Someone no longer listed' : by === 'delegate' ? 'UPI circle · a delegate no longer listed' : 'Another category';
+  const fixed = by === 'delegate' ? { own: 'Direct', none: 'UPI circle · no delegate yet' } : {};
   const groups = new Map(), seen = new Set();
   for (const p of pieces) {
     const id = p[field];
-    const e = groups.get(id) ?? groups.set(id, { id, name: id ? names.get(id) ?? (by === 'party' ? 'Someone no longer listed' : 'Another category') : none, paise: 0, n: 0 }).get(id);
+    const e = groups.get(id) ?? groups.set(id, { id, name: id ? fixed[id] ?? names.get(id) ?? unknown : none, paise: 0, n: 0 }).get(id);
     e.paise += p.paise;
     if (!seen.has(`${id}|${p.lineId}`)) { seen.add(`${id}|${p.lineId}`); e.n += 1; }
   }

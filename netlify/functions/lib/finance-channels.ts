@@ -18,7 +18,7 @@ import { financialYearOf } from '../../../scripts/lib/finance-allocation.mjs';
 import { todayIST } from '../../../scripts/lib/finance-parties.mjs';
 import { attribute, delegateLabel } from '../../../scripts/lib/finance-delegates.mjs';
 import { fdBalance } from '../../../scripts/lib/finance-metrics.mjs';
-import { cellMatches, channelCube, channelPieces, fyMonths, groupPieces, monthsSoFar } from '../../../scripts/lib/finance-channels.mjs';
+import { UPI_APPS, cellMatches, channelCube, channelPieces, fyMonths, groupPieces, monthsSoFar } from '../../../scripts/lib/finance-channels.mjs';
 import { CIRCLE_CAP_PAISE } from '../../../scripts/lib/finance-upi-circle.mjs';
 
 type Json = Record<string, any>;
@@ -32,11 +32,11 @@ async function loadLedger() {
     rowsAll('/fin_allocations?select=bank_line_id,category_id,project_id,party_id,amount_paise&posted_at=not.is.null&order=id.asc'),
     rows('/fin_categories?select=id,name,type,head,is_salary&order=id.asc&limit=500').catch(() => rows('/fin_categories?select=id,name,type&order=id.asc&limit=500')),
     rows('/fin_bank_accounts?select=id,label&order=created_at.asc&limit=50'),
-    rowsAll('/fin_upi_lines?select=bank_line_id,app&bank_line_id=not.is.null&order=id.asc'),
+    rowsAll('/fin_upi_lines?select=bank_line_id,app,paid_at,upi_ref,is_circle&bank_line_id=not.is.null&order=id.asc'),
     rowsAll('/fin_parties?select=id,name,merged_into&order=id.asc').catch(() => rowsAll('/fin_parties?select=id,name&order=id.asc')).catch(() => [] as Json[]),
   ]);
   const upiAppByLine = new Map<string, 'bhim' | 'paytm'>(upiJoined.map((u) => [u.bank_line_id as string, u.app as 'bhim' | 'paytm']));
-  return { lines, allocRows, categories, accounts, parties, upiAppByLine };
+  return { lines, allocRows, categories, accounts, parties, upiAppByLine, upiJoined };
 }
 
 /** Signs in, checks the year, and records an auditor's visit. Returns the answer to send back, or what to carry on with. */
@@ -131,26 +131,36 @@ async function piecesFor(req: Request, what: string) {
   const fd = q.get('fd');
   if (fd !== null && fd !== 'only' && fd !== 'exclude') return { fail: json({ error: 'Choose only or exclude.' }, 400) };
   const ids: Record<string, string | undefined> = {};
-  for (const key of ['project', 'party', 'category']) {
+  for (const key of ['project', 'party', 'category', 'delegate']) {
     const v = q.get(key);
-    if (v !== null && v !== 'none' && !UUID.test(v)) return { fail: json({ error: `Choose a ${key}.` }, 400) };
+    if (v !== null && v !== 'none' && !(key === 'delegate' && v === 'own') && !UUID.test(v)) return { fail: json({ error: `Choose a ${key}.` }, 400) };
     ids[key] = v ?? undefined;
   }
   const spec = { dir: dir ?? undefined, channel: q.get('channel') ?? undefined, purpose: q.get('purpose') ?? undefined, account: q.get('account') ?? undefined, fd: fd ?? undefined, ...ids };
 
-  const { lines, allocRows, categories, accounts, parties, upiAppByLine } = await loadLedger();
+  const { lines, allocRows, categories, accounts, parties, upiAppByLine, upiJoined } = await loadLedger();
+  // The person behind a UPI payment: the delegate active that day, or the one an admin picked (the rule the UPI page uses). 'own' is the accounts' own
+  // UPI (not a delegated payment); 'none' a delegated payment with no delegate chosen yet.
+  const [delegates, picks] = await Promise.all([loadDelegates().catch(() => []), loadDelegateLinks().catch(() => new Map<string, string>())]);
+  const delegateOf = new Map<string, string>();
+  for (const u of upiJoined) {
+    if (!u.is_circle) { delegateOf.set(u.bank_line_id as string, 'own'); continue; }
+    const who = attribute({ isCircle: true, paidAt: String(u.paid_at), upiRef: u.upi_ref }, delegates, picks) as { delegateId: string | null };
+    delegateOf.set(u.bank_line_id as string, who.delegateId ?? 'none');
+  }
   // A party that was merged into another is that other one.
   const mergedInto = new Map<string, string>(parties.filter((p) => p.merged_into).map((p) => [p.id as string, p.merged_into as string]));
   const canon = (id: string) => { let at = id, hops = 0; while (at && mergedInto.has(at) && hops++ < 8) at = mergedInto.get(at)!; return at; };
   const from = `${fy}-04-01`;
   const to = `${fy + 1}-03-31`;
   const pieces = channelPieces({ lines: lines.filter((l) => l.tran_date >= from && l.tran_date <= to), upiAppByLine, allocations: allocRows, categories })
-    .map((p: Json) => ({ ...p, party: canon(p.party) }))
+    .map((p: Json) => ({ ...p, party: canon(p.party), delegate: UPI_APPS.includes(p.c) ? delegateOf.get(p.lineId) ?? 'own' : '' }))
     .filter((p: Json) => cellMatches(p, spec, months));
   return {
     pieces: pieces as Json[],
     accounts: new Map(accounts.map((a) => [a.id as string, a.label as string])),
     partyNames: new Map(parties.map((p) => [p.id as string, p.name as string])),
+    delegateNames: new Map(delegates.map((d) => [d.id as string, `UPI circle · ${((l: string) => (/^\d+$/.test(l) ? `Number ${l}` : l))(delegateLabel(d))}`])),
     categoryNames: new Map(categories.map((c) => [c.id as string, c.name as string])),
   };
 }
@@ -181,10 +191,10 @@ export async function getChannelLines(req: Request): Promise<Response> {
 export async function getChannelBreakdown(req: Request): Promise<Response> {
   try {
     const by = new URL(req.url).searchParams.get('by');
-    if (by !== 'party' && by !== 'category') return json({ error: 'Choose party or category.' }, 400);
+    if (by !== 'party' && by !== 'category' && by !== 'delegate') return json({ error: 'Choose party, category or delegate.' }, 400);
     const r = await piecesFor(req, 'breakdown');
     if ('fail' in r) return r.fail!;
-    const rowsOut = groupPieces(r.pieces, by, by === 'party' ? r.partyNames : r.categoryNames);
+    const rowsOut = groupPieces(r.pieces, by, by === 'party' ? r.partyNames : by === 'delegate' ? r.delegateNames : r.categoryNames);
     return json({ by, rows: rowsOut, paise: rowsOut.reduce((t: number, x: Json) => t + x.paise, 0) });
   } catch (err) {
     console.error('[finance-channels] breakdown failed', err);

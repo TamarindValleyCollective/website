@@ -328,3 +328,35 @@ test('breakdown: names are on the answer, narrations are not, and an auditor’s
   for (const secret of ['Corner Shop', 'HARDWARE', '600000000001', 'AXODH', '0101102630472']) assert.ok(!text.includes(secret), secret);
   assert.equal(auditRows.length, 1);
 });
+
+// ---- UPI by the person behind each payment ---------------------------------------------------------------------------------------------
+
+const withUpiPeople = () => {
+  db.data.fin_bank_lines.push(
+    { id: ID(96), bank_account_id: 'acc', tran_date: '2025-09-10', direction: 'debit', amount_paise: 20000, narration: 'UPI/P2A/600000000010/Someone/Bank' },
+    { id: ID(97), bank_account_id: 'acc', tran_date: '2025-09-12', direction: 'debit', amount_paise: 30000, narration: 'UPI/P2A/600000000011/Someone Else/Bank' },
+  );
+  db.data.fin_upi_lines.push(
+    { id: ID(98), bank_line_id: ID(96), app: 'bhim', paid_at: '2025-09-10', direction: 'debit', amount_paise: 20000, is_circle: false, ignored: false, upi_ref: '600000000010' },
+    { id: ID(99), bank_line_id: ID(97), app: 'paytm', paid_at: '2025-09-12', direction: 'debit', amount_paise: 30000, is_circle: true, ignored: false, upi_ref: '600000000011' },
+  );
+};
+
+test('UPI breakdown: Direct, and each delegate of the UPI circle by name, whichever app they used', async () => {
+  grant('admin');
+  withUpiPeople();
+  const r = await (await callBreakdown('&by=delegate&dir=out&channel=upi&fd=exclude')).json();
+  assert.deepEqual(r.rows.map((x) => [x.id, x.name, x.paise]), [['none', 'UPI circle · no delegate yet', 100000], [D1, 'UPI circle · Number 5550100001', 30000], ['own', 'Direct', 20000]]);
+  const cube = (await (await call()).json()).cube;
+  assert.equal(r.paise, sum(cube.filter((c) => ['paytm', 'bhim', 'upi_unknown'].includes(c.c) && c.d === 'out' && c.g !== 'sinking')), 'the people add up to the UPI box');
+});
+
+test('UPI breakdown: each person’s lines, and a bad delegate is refused', async () => {
+  grant('admin');
+  withUpiPeople();
+  const one = await (await callLines(`&dir=out&channel=upi&fd=exclude&delegate=${D1}`)).json();
+  assert.deepEqual([one.count, one.paise, one.lines[0].channel], [1, 30000, 'paytm']);
+  const direct = await (await callLines('&dir=out&channel=upi&fd=exclude&delegate=own')).json();
+  assert.deepEqual([direct.count, direct.paise, direct.lines[0].channel], [1, 20000, 'bhim']);
+  assert.equal((await callLines('&delegate=somebody')).status, 400);
+});
