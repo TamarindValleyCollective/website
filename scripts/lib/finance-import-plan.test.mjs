@@ -181,6 +181,17 @@ test('a later overlapping download adds only the new lines and says how many wer
   assert.deepEqual(r.coverage.intervals, [{ from: '2026-01-01', to: '2026-11-30' }]);
 });
 
+test('a download starting inside a held period reports no gap back to the previous year', () => {
+  const y25 = stmt('2025-01-01', '2025-12-31', 0, [['2025-03-01', 'Z', 1000]]);
+  const y26 = stmt('2026-01-01', '2026-11-02', 1000, [['2026-02-01', 'A', -100], ['2026-10-05', 'B', -200], ['2026-11-02', 'C', -50]]);
+  const held = heldFromPlan(noHeld(), plan([file('y25', y25), file('y26', y26)]));
+  const newer = stmt('2026-10-01', '2026-11-14', 900, [['2026-10-05', 'B', -200], ['2026-11-02', 'C', -50], ['2026-11-10', 'D', -10]]);
+  const b = byId(plan([file('newer', newer)], held), 'newer');
+  assert.equal(b.status, 'ok');
+  assert.deepEqual([b.counts.new, b.counts.alreadyHeld], [1, 2]);
+  assert.deepEqual(b.boundaries.map((x) => x.type), ['overlap']);
+});
+
 test('a line posted late on the last day already held is accepted; a backdated one is not', () => {
   const held = heldFromPlan(noHeld(), plan([file('first', stmt('2026-11-01', '2026-11-02', 1000, [['2026-11-02', 'A', -100]]))]));
   const late = stmt('2026-11-01', '2026-11-03', 1000, [['2026-11-02', 'A', -100], ['2026-11-02', 'LATE', -50], ['2026-11-03', 'B', 10]]);

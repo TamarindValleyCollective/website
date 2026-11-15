@@ -141,14 +141,18 @@ export function planBankImport({ accountId, incoming, held }) {
     }
 
     // The neighbours on each side: adjacent periods must meet on the same balance; a hole is reported.
-    const before = spans.filter((h) => h.to < s.from).sort((a, b) => (a.to < b.to ? 1 : -1))[0];
+    // A held period that already covers the file's first (last) day is its neighbour on that side, so there is no
+    // hole to report there: without this, a download starting inside a held year "missed" the stretch before it.
+    const startCovered = spans.some((h) => h.from <= s.from && h.to >= s.from);
+    const endCovered = spans.some((h) => h.from <= s.to && h.to >= s.to);
+    const before = startCovered ? undefined : spans.filter((h) => h.to < s.from).sort((a, b) => (a.to < b.to ? 1 : -1))[0];
     if (before) {
       if (nextDay(before.to) === s.from) {
         if (before.closingPaise === s.openingPaise) result.boundaries.push({ type: 'chain_ok', side: 'before', with: { from: before.from, to: before.to }, balancePaise: s.openingPaise });
         else result.errors.push({ type: 'boundary_mismatch', side: 'before', with: { from: before.from, to: before.to }, expectedPaise: before.closingPaise, foundPaise: s.openingPaise });
       } else result.boundaries.push({ type: 'gap', side: 'before', between: [before.to, s.from], from: nextDay(before.to), to: prevDay(s.from) });
     }
-    const after = spans.filter((h) => h.from > s.to).sort((a, b) => (a.from < b.from ? -1 : 1))[0];
+    const after = endCovered ? undefined : spans.filter((h) => h.from > s.to).sort((a, b) => (a.from < b.from ? -1 : 1))[0];
     if (after) {
       if (nextDay(s.to) === after.from) {
         if (after.openingPaise === s.closingPaise) result.boundaries.push({ type: 'chain_ok', side: 'after', with: { from: after.from, to: after.to }, balancePaise: s.closingPaise });
