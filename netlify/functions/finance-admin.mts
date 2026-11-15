@@ -20,7 +20,7 @@ import { todayIST } from '../../scripts/lib/finance-parties.mjs';
 import { attentionOf } from '../../scripts/lib/finance-attention.mjs';
 import { lookupIfsc } from '../../scripts/lib/finance-ifsc.mjs';
 import { PARTY_ID, addEvidence, addMissingIfsc, getEvidence, listEvidence, addVendor, addPayeeAccount, createParty, listParties, mergeParty, retirePayeeAccount, revealPayeeAccount, reviewParty, unmergeParty, updateParty, verifyPayeeAccount } from './lib/finance-parties';
-import { REQUEST_ID, addVoucher, cancelOrDecide, listFiles, createRecord, getVoucher, listMine, listRequests, matchRecord, reviewRecord, unmatchRecord } from './lib/finance-requests';
+import { REQUEST_ID, addVoucher, cancelOrDecide, listFiles, createRecord, getVoucher, listMine, listRequests, matchRecord, autoMatchRecords, reviewRecord, unmatchRecord } from './lib/finance-requests';
 import { listUpiLines } from './lib/finance-upi-view';
 import { assignDelegate, saveDelegate } from './lib/finance-delegates';
 import { saveOperator } from './lib/finance-upi-operators';
@@ -255,6 +255,7 @@ const dispatch = async (req: Request): Promise<Response> => {
   }
   // Payment requests and spend logs (session 08)
   if (route === '/requests/mine' && req.method === 'GET') return listMine(req);
+  if (route === '/requests/auto-match' && req.method === 'POST') return autoMatchRecords(req);
   if (route === '/requests' && req.method === 'GET') return listRequests(req);
   if (route === '/requests' && req.method === 'POST') return createRecord(req);
   if (route === '/vendors' && req.method === 'POST') return addVendor(req);

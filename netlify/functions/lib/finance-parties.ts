@@ -200,7 +200,7 @@ export async function listParties(req: Request): Promise<Response> {
     const shown = everyone
       // The label, or a name a bank showed for one of the party's accounts ("milk" finds the label, a surname finds the bank's name).
       .filter((p: Json) => !q || p.name.toLowerCase().includes(q) || p.accounts.some((a: Json) => String(a.verification?.name ?? '').toLowerCase().includes(q)))
-      .map(({ stats: s, ...p }: Json) => ({ ...p, lastPaid: s?.lastPaid ?? null, paidPaise: s?.paidPaise ?? 0, postings: s?.postings ?? 0 }));
+      .map(({ stats: s, ...p }: Json) => ({ ...p, lastPaid: s?.lastPaid ?? null, paidPaise: s?.paidPaise ?? 0, lastReceived: s?.lastReceived ?? null, receivedPaise: s?.receivedPaise ?? 0, lines: s?.lines ?? 0, postings: s?.postings ?? 0 }));
     return jsonResponse({
       kinds: PARTY_KINDS,
       canEdit: capabilities.includes('allocate'),

@@ -91,6 +91,9 @@ test('posting stats count each party under its main party and take the dominant 
   ];
   const s = postingStats(allocations, lines, cats, new Map([['dup', 'main']])).get('main');
   assert.equal(s.paidPaise, 400000, 'receipts are not counted as paid');
+  assert.equal(s.receivedPaise, 999900, 'and what came in from them is its own total');
+  assert.equal(s.lastReceived, '2026-10-20');
+  assert.equal(s.lines, 4, 'every line counts, whichever way the money went');
   assert.equal(s.lastPaid, '2026-10-09');
   assert.equal(s.direction, 'debit');
   assert.equal(s.postings, 3);

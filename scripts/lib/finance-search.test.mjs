@@ -170,3 +170,21 @@ test('the Reversal chip shows only lines the bank reversed (an original and its 
   assert.deepEqual(lines.filter((l) => passesChips(l, [['reversal', 'paired']], '2026-11-07')).map((l) => l.id), ['a', 'b']);
   assert.equal(optionCounts(lines, '2026-11-07').reversal.paired, 2);
 });
+
+test('a group total leaves out money moved between TVC\'s own accounts, and says how many it left out', () => {
+  const lines = [
+    line('a', '2026-11-14', 'debit', 100000),
+    line('b', '2026-11-12', 'credit', 250000),
+    line('c', '2026-11-10', 'debit', 5000000, { transfer: true }),
+    line('d', '2026-11-10', 'credit', 5000000, { transfer: true }),
+  ];
+  const [group] = buildItems(lines, ['month'], new Set(), (m) => m, { isTransfer: (l) => Boolean(l.transfer) }).items;
+  assert.equal(group.netPaise, 150000, 'in 2,500 less out 1,000; the two sides of the transfer do not move it');
+  assert.equal(group.transfers, 2);
+  assert.equal(group.count, 4, 'the lines are all still there');
+  const [plain] = buildItems(lines, ['month']).items;
+  assert.equal(plain.netPaise, 150000, 'the two sides of a transfer cancel anyway');
+  const [oneSided] = buildItems(lines.slice(0, 3), ['month'], new Set(), (m) => m, { isTransfer: (l) => Boolean(l.transfer) }).items;
+  assert.equal(oneSided.netPaise, 150000, 'a transfer whose other side is not in the view still does not count');
+  assert.equal(buildItems(lines.slice(0, 3), ['month']).items[0].netPaise, 150000 - 5000000, 'without the rule it would');
+});

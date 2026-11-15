@@ -11,6 +11,7 @@
 import StaffLayout from '../../../layouts/StaffLayout.astro';
 import SignInGate from '../../../components/SignInGate.astro';
 import '../../../styles/data-table.css';
+import '../../../styles/money.css';
 ---
 
 <StaffLayout title="UPI" description="UPI payments." current="finance" currentPage="finance-upi">
@@ -23,28 +24,39 @@ import '../../../styles/data-table.css';
     <div id="status" aria-live="polite" class="hint" hidden></div>
 
     <div id="content" hidden>
-      <h2 class="list-title">Delegated spend by month</h2>
-      <ul class="list" id="months"></ul>
-      <p class="hint" id="months-note"></p>
-
-      <h2 class="list-title">Operators</h2>
-      <ul class="list" id="operators"></ul>
-      <p class="hint" id="operators-note"></p>
-      <p class="delegate-actions"><button type="button" class="button button--outline" id="operator-add" hidden>Add an operator</button></p>
-
-      <h2 class="list-title">Delegates</h2>
-      <ul class="list" id="delegates"></ul>
-      <p class="hint" id="delegates-note"></p>
-      <p class="delegate-actions"><button type="button" class="button button--outline" id="delegate-add" hidden>Add a delegate</button></p>
-      <div id="delegate-queue" class="card" hidden>
-        <p id="delegate-queue-text"></p>
-        <button type="button" class="button button--outline" id="delegate-queue-show">Show them</button>
+      <!-- Only what needs doing: each notice shows when it applies, so a quiet month has none and the table is the first thing. -->
+      <div id="attention" class="attention">
+        <div id="delegate-queue" class="notice" hidden>
+          <p id="delegate-queue-text"></p>
+          <button type="button" class="button button--outline" id="delegate-queue-show">Show them</button>
+        </div>
+        <div id="over-card" class="notice notice--crit" hidden></div>
+        <div id="bank-only" class="notice" hidden></div>
       </div>
 
-      <div id="bank-only" class="card" hidden></div>
-
-      <h2 class="list-title">Payments</h2>
       <div id="upi-table"></div>
+
+      <div class="setup">
+        <details class="setup-panel">
+          <summary><span class="setup-title">Delegated spend by month</span><span class="setup-sum" id="months-summary"></span></summary>
+          <ul class="list" id="months"></ul>
+          <p class="hint" id="months-note"></p>
+        </details>
+
+        <details class="setup-panel">
+          <summary><span class="setup-title">Operators</span><span class="setup-sum" id="operators-summary"></span></summary>
+          <ul class="list" id="operators"></ul>
+          <p class="hint" id="operators-note"></p>
+          <p class="delegate-actions"><button type="button" class="button button--outline" id="operator-add" hidden>Add an operator</button></p>
+        </details>
+
+        <details class="setup-panel">
+          <summary><span class="setup-title">Delegates</span><span class="setup-sum" id="delegates-summary"></span></summary>
+          <ul class="list" id="delegates"></ul>
+          <p class="hint" id="delegates-note"></p>
+          <p class="delegate-actions"><button type="button" class="button button--outline" id="delegate-add" hidden>Add a delegate</button></p>
+        </details>
+      </div>
     </div>
 
     <dialog id="operator-dialog" class="sheet delegate-sheet" aria-labelledby="operator-title">
@@ -107,6 +119,7 @@ import '../../../styles/data-table.css';
   import { StaffAuthError, clearStepUp, clearToken, closeOnBackdrop, decodeTokenEmail, getToken, setToken, showToast, staffFetch } from '../../../../scripts/lib/staff-client.mjs';
   import { clearState, showFailure, showLoading } from '../../../../scripts/lib/staff-states.mjs';
   import { createDataTable } from '../../../../scripts/lib/data-table-ui.mjs';
+  import { amountKind, kindClass, moneyNode } from '../../../../scripts/lib/finance-ui.mjs';
 
   declare const google: any;
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
@@ -200,6 +213,13 @@ import '../../../styles/data-table.css';
         return row(monthName(m.month), lines, m.over ? { text: 'Over the allowance', kind: 'crit' } : { text: 'Within', kind: 'ok' });
       }),
     );
+    // The heading carries the one fact worth seeing with the panel shut: the latest month, and whether it is over.
+    const latest = [...data.months].sort((x: any, y: any) => (x.month < y.month ? 1 : -1))[0];
+    $('months-summary').textContent = latest ? `${monthName(latest.month)}: ${rupees(latest.paise)} of ${rupees(latest.capPaise)}${latest.over ? ' · over the allowance' : ''}` : 'No delegated payments yet';
+    const overs = data.months.filter((m: any) => m.over);
+    const overCard = $('over-card');
+    overCard.hidden = overs.length === 0;
+    overCard.replaceChildren(...(overs.length ? [el('p', undefined, `${overs.map((m: any) => monthName(m.month)).join(', ')} ${overs.length === 1 ? 'is' : 'are'} over the delegated allowance. Open "Delegated spend by month" below for the figures.`)] : []));
     $('months-note').textContent = data.months.length
       ? 'A delegated payment is one a delegate made with the spend right given to them (UPI Circle). Paytm marks them with the “Pocket Money” tag; BHIM marks them with no bank named and CR. Every download is in the operator’s name, so the file does not say which delegate paid.'
       : 'No delegated payments yet.';
@@ -238,6 +258,7 @@ import '../../../styles/data-table.css';
     $('operators-note').textContent = !operators.length
       ? 'Operators appear here once the database has them. Until then every UPI file is imported without asking whose it is.'
       : 'Every UPI payment went out through one operator’s UPI: directly by them, or by a delegate in their UPI circle. The import asks whose each UPI file is.';
+    $('operators-summary').textContent = operators.length ? operators.map((o) => o.name).join(', ') : 'None yet';
     $('operator-add').hidden = !canConfigure || !operators.length;
   }
 
@@ -303,6 +324,8 @@ import '../../../styles/data-table.css';
     const needs = data.needsDelegate ?? 0;
     $('delegate-queue').hidden = needs === 0;
     $('delegate-queue-text').textContent = needs ? `${plural(needs, 'delegated payment')} ${needs === 1 ? 'was' : 'were'} made while more than one delegate was active, so the dates cannot say who paid. Choose the delegate on each one.` : '';
+    const activeNow = delegates.filter((d) => d.activeTo === null || d.activeTo >= now).length;
+    $('delegates-summary').textContent = delegates.length ? `${plural(delegates.length, 'delegate')}, ${activeNow} active` : 'None yet';
     $('delegate-add').hidden = !canConfigure;
   }
 
@@ -459,6 +482,7 @@ import '../../../styles/data-table.css';
     rowId: (u: Upi) => u.id,
     noun: ['payment', 'payments'],
     cap: 500,
+    rowKind: (u: Upi) => kindClass(amountKind(u.direction)),
     searchPlaceholder: 'Search who, remark, reference, account…',
     favoritesKey: `tvc-upi-favorites:${decodeTokenEmail(getToken() ?? '')}`,
     defaultGroup: 'month',
@@ -468,8 +492,8 @@ import '../../../styles/data-table.css';
     columns: [
       { id: 'date', label: 'Date', type: 'date', value: (u: Upi) => u.paidAt, sortValue: (u: Upi) => `${u.paidAt} ${u.time ?? ''}`, render: (u: Upi) => `${day(u.paidAt)}${u.time ? ` ${u.time}` : ''}` },
       { id: 'counterparty', label: 'Paid to', value: (u: Upi) => u.counterparty ?? 'Unnamed payee' },
-      { id: 'direction', label: 'Debit / credit', value: (u: Upi) => (u.direction === 'credit' ? 'Credit' : 'Debit') },
-      { id: 'amount', label: 'Amount', type: 'amount', align: 'end', value: (u: Upi) => u.amountPaise, render: (u: Upi) => rupees(u.amountPaise) },
+      // The sign and colour say debit or credit (the Debits and Credits chips still filter); a credit also gets a stripe down its row.
+      { id: 'amount', label: 'Amount', type: 'amount', align: 'end', value: (u: Upi) => u.amountPaise, render: (u: Upi) => moneyNode(u.amountPaise, amountKind(u.direction)) },
       { id: 'app', label: 'App', value: (u: Upi) => APP[u.app] },
       { id: 'paidBy', label: 'Paid by', value: (u: Upi) => paidByText(u), render: (u: Upi) => paidByCell(u) },
       { id: 'account', label: 'Account', value: (u: Upi) => u.account ?? '', render: (u: Upi) => (u.account ? u.account : el('span', 'dim', 'Not known yet')) },
@@ -510,7 +534,7 @@ import '../../../styles/data-table.css';
     card: (u: Upi) => {
       const c = el('div', 'upi-card');
       const top = el('div', 'upi-card-top');
-      top.append(el('span', 'title', u.counterparty ?? 'Unnamed payee'), el('span', undefined, `${u.direction === 'credit' ? '+' : ''}${rupees(u.amountPaise)}`));
+      top.append(el('span', 'title', u.counterparty ?? 'Unnamed payee'), moneyNode(u.amountPaise, amountKind(u.direction)));
       c.append(top, el('div', 'sub', `${day(u.paidAt)}${u.time ? ` ${u.time}` : ''} · ${APP[u.app]} · ${paidByText(u)}`), el('span', `pill pill--${STATE[u.state].kind}`, STATE[u.state].text));
       const note = u.note ?? u.purpose ?? u.remark;
       if (note) c.append(el('div', 'sub', note));
@@ -591,8 +615,82 @@ import '../../../styles/data-table.css';
     color: var(--tvc-ink-soft);
   }
 
-  .finance-upi .card {
-    margin-top: 14px;
+  .finance-upi .attention {
+    display: grid;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .finance-upi .attention:empty {
+    display: none;
+  }
+
+  /* A line, not a card: it is there to be acted on, then gone. */
+  .finance-upi .notice {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 14px;
+    padding: 10px 14px;
+    border: 1px solid var(--tvc-line);
+    border-inline-start: 4px solid var(--tvc-orange);
+    border-radius: var(--radius);
+    background: var(--tvc-white);
+  }
+
+  .finance-upi .notice[hidden] {
+    display: none;
+  }
+
+  .finance-upi .notice p {
+    flex: 1 1 280px;
+    margin: 0;
+  }
+
+  .finance-upi .notice--crit {
+    border-inline-start-color: var(--tvc-error-text);
+  }
+
+  .finance-upi .setup {
+    display: grid;
+    gap: 8px;
+    margin-top: 28px;
+  }
+
+  .finance-upi .setup-panel {
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    background: var(--tvc-white);
+  }
+
+  .finance-upi .setup-panel > summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 12px;
+    padding: 12px 14px;
+    cursor: pointer;
+  }
+
+  .finance-upi .setup-title {
+    font-weight: 600;
+  }
+
+  .finance-upi .setup-sum {
+    color: var(--tvc-ink-soft);
+    font-size: var(--text-sm);
+  }
+
+  .finance-upi .setup-panel > :not(summary) {
+    margin-inline: 14px;
+  }
+
+  .finance-upi .setup-panel > .delegate-actions {
+    margin-bottom: 14px;
+  }
+
+  .finance-upi .setup-panel > .hint {
+    margin-bottom: 10px;
   }
 
   .finance-upi .dt .peek,
@@ -681,10 +779,6 @@ import '../../../styles/data-table.css';
 
   .finance-upi .delegate-actions {
     margin: 12px 0 16px;
-  }
-
-  .finance-upi #delegate-queue {
-    margin-bottom: 16px;
   }
 
   .finance-upi .pick {

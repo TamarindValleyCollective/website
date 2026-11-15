@@ -71,7 +71,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
 
   type Account = { id: string; method: 'bank' | 'upi'; shown: string; status: 'unverified' | 'verified'; shared: boolean; validFrom: string | null; retiredOn: string | null; payableNow: boolean; review: string[]; verification: { at: string | null; by: string | null; method: string | null; methodLabel: string; note: string | null; name?: string | null } | null; evidence?: { payment: number; name_check: number; other: number } };
-  type Party = { id: string; name: string; kind: string; active: boolean; householdId: string | null; formerSince: string | null; accounts: Account[]; earlierAccounts: number; needsReview: boolean; mergedCount: number; lastPaid: string | null; paidPaise: number; postings: number };
+  type Party = { id: string; name: string; kind: string; active: boolean; householdId: string | null; formerSince: string | null; accounts: Account[]; earlierAccounts: number; needsReview: boolean; mergedCount: number; lastPaid: string | null; paidPaise: number; lastReceived: string | null; receivedPaise: number; lines: number; postings: number };
   type Suggestion = { id: string; type: 'merge' | 'rename' | 'kind'; partyId: string; targetId?: string; to?: string; what: string; why: string };
   type Data = { kinds: string[]; canEdit: boolean; canVerify: boolean; me: { id: string; ready: boolean; hasPasskey: boolean; stepUpValid: boolean } | null; parties: Party[]; suggestions: Suggestion[]; needsReviewCount: number };
 
@@ -207,6 +207,11 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
   // The bank's name "differs" when no bank name is the label apart from case and punctuation.
   const squash = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, '');
   const differs = (p: Party) => bankNames(p).length > 0 && !bankNames(p).some((n) => squash(n) === squash(p.name));
+  // The latest line with this party, either way: its date and whether it was a payment or a receipt.
+  const lastActivity = (p: Party): { date: string; what: string } | null => {
+    if (p.lastPaid && (!p.lastReceived || p.lastPaid >= p.lastReceived)) return { date: p.lastPaid, what: 'paid' };
+    return p.lastReceived ? { date: p.lastReceived, what: 'received' } : null;
+  };
   const evidenceCount = (p: Party) => p.accounts.reduce((n, a) => n + (a.evidence ? a.evidence.payment + a.evidence.name_check + a.evidence.other : 0), 0);
 
   // The kind, changed in place: most imported payees are still "Other", and setting 120 of them one sheet at a time would be a chore.
@@ -259,8 +264,10 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
       },
       { id: 'bank', label: 'Name at the bank', value: (p: Party) => bankNames(p).join(', '), render: (p: Party) => (bankNames(p).length ? h('span', { class: differs(p) ? 'differs' : '', text: bankNames(p).join(', ') }) : '–') },
       { id: 'evidence', label: 'Evidence', type: 'count', align: 'end', value: (p: Party) => evidenceCount(p), render: (p: Party) => (evidenceCount(p) ? `${evidenceCount(p)} ${evidenceCount(p) === 1 ? 'file' : 'files'}` : '–') },
-      { id: 'lastPaid', label: 'Last paid', type: 'date', value: (p: Party) => p.lastPaid ?? '', render: (p: Party) => (p.lastPaid ? niceIso(p.lastPaid) : '–') },
+      // The latest line either way, with which way it was; totals are plain amounts under their headings (a total is not one transaction).
+      { id: 'lastActivity', label: 'Last activity', type: 'date', value: (p: Party) => lastActivity(p)?.date ?? '', render: (p: Party) => { const a = lastActivity(p); return a ? h('span', {}, document.createTextNode(niceIso(a.date)), h('span', { class: 'detail', text: ` ${a.what}` })) : '–'; } },
       { id: 'paid', label: 'Paid in total', type: 'amount', align: 'end', value: (p: Party) => (p.paidPaise > 0 ? p.paidPaise : null), render: (p: Party) => (p.paidPaise > 0 ? rupees(p.paidPaise) : '–') },
+      { id: 'received', label: 'Received in total', type: 'amount', align: 'end', value: (p: Party) => (p.receivedPaise > 0 ? p.receivedPaise : null), render: (p: Party) => (p.receivedPaise > 0 ? rupees(p.receivedPaise) : '–') },
     ],
     filters: [
       { id: 'review', label: 'Needs review', test: (p: Party) => p.needsReview },
@@ -271,6 +278,8 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
       { id: 'differs', label: "Bank's name differs", test: differs },
       { id: 'duplicate', label: 'Possible duplicate', test: (p: Party) => duplicateIds.has(p.id) },
       { id: 'other', label: 'Kind is Other', test: (p: Party) => p.kind === 'other' },
+      { id: 'paidsome', group: 'flow', label: 'We have paid them', test: (p: Party) => p.paidPaise > 0 },
+      { id: 'receivedsome', group: 'flow', label: 'We have received from them', test: (p: Party) => p.receivedPaise > 0 },
       { id: 'inactive', label: 'Inactive', test: (p: Party) => !p.active },
     ],
     groups: [
@@ -281,7 +290,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
     card: (p: Party) =>
       h('div', { class: 'party-card', attrs: { role: 'button', tabindex: '0' }, on: { click: (e: Event) => { if (!(e.target as HTMLElement).closest('select,input,button')) openDetail(p.id); } } },
         h('div', { class: 'party-card-top' }, h('span', { class: 'title', text: p.name }), h('span', { class: 'status-cell' }, h('span', { class: `dot dot--${stateOf(p)}`, attrs: { 'aria-hidden': 'true' } }), document.createTextNode(STATE_TEXT[stateOf(p)]))),
-        h('div', { class: 'detail', text: [KIND_LABELS[p.kind] ?? p.kind, accountSummary(p), p.paidPaise > 0 ? rupees(p.paidPaise) : ''].filter(Boolean).join(' · ') }),
+        h('div', { class: 'detail', text: [KIND_LABELS[p.kind] ?? p.kind, accountSummary(p), p.paidPaise > 0 ? `Paid ${rupees(p.paidPaise)}` : '', p.receivedPaise > 0 ? `Received ${rupees(p.receivedPaise)}` : ''].filter(Boolean).join(' · ') }),
         bankNames(p).length ? h('div', { class: differs(p) ? 'differs' : 'detail', text: `Bank: ${bankNames(p).join(', ')}` }) : null,
         h('div', { class: 'party-flag' }, p.active ? null : pill('Inactive'), p.needsReview ? pill('Needs review', 'crit') : null, duplicateIds.has(p.id) ? pill('Possible duplicate', 'warn') : null)),
     bulk: [
@@ -358,24 +367,43 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
   }
 
   // ---- bulk actions on the ticked rows
+  // Each is the same PATCH as changing one party by hand (so the same rules and audit entry per party), run five at a time so that
+  // changing a hundred parties takes seconds, with the count shown as it goes.
+  async function patchAll(items: Party[], bodyOf: (p: Party) => unknown, onProgress: (done: number, total: number) => void): Promise<{ done: number; failed: number }> {
+    let next = 0;
+    let finished = 0;
+    let failed = 0;
+    async function worker() {
+      while (next < items.length) {
+        const p = items[next++];
+        try {
+          const { status } = await call(`/api/finance-admin/parties/${p.id}`, 'PATCH', bodyOf(p));
+          if (status !== 200) failed += 1;
+        } catch {
+          failed += 1;
+        }
+        finished += 1;
+        onProgress(finished, items.length);
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(5, items.length) }, worker));
+    return { done: items.length - failed, failed };
+  }
   function openBulkKind(rows: Party[]) {
     const dlg = $<HTMLDialogElement>('account-sheet');
     const movable = rows.filter((p) => !p.householdId);
     const sel = h('select', { attrs: { name: 'kind' } }, ...(data?.kinds ?? []).filter((k) => k !== 'member').map((k) => h('option', { text: KIND_LABELS[k] ?? k, attrs: { value: k } }))) as HTMLSelectElement;
     const msg = h('p', { class: 'error', attrs: { hidden: '' } });
+    const go = h('button', { class: 'button button--primary', text: 'Set kind', attrs: { type: 'submit' } }) as HTMLButtonElement;
     const form = h('form', { class: 'stack-form' },
       labelled(`Set the kind of ${movable.length} ${movable.length === 1 ? 'party' : 'parties'} to`, sel),
       movable.length < rows.length ? h('p', { class: 'hint', text: `${rows.length - movable.length} linked to a household stay a member.` }) : null,
       msg,
-      h('div', { class: 'sheet-actions' }, closeBtn(dlg, 'Cancel'), h('button', { class: 'button button--primary', text: 'Set kind', attrs: { type: 'submit' } })));
+      h('div', { class: 'sheet-actions' }, closeBtn(dlg, 'Cancel'), go));
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      let done = 0;
-      let failed = 0;
-      for (const p of movable) {
-        const { status } = await call(`/api/finance-admin/parties/${p.id}`, 'PATCH', { kind: sel.value });
-        if (status === 200) done += 1; else failed += 1;
-      }
+      go.disabled = true;
+      const { done, failed } = await patchAll(movable.filter((p) => p.kind !== sel.value), () => ({ kind: sel.value }), (d, t) => { go.textContent = `Changing ${d} of ${t}…`; });
       dlg.close();
       table.clearSelection();
       showToast(failed ? `Changed ${done}; ${failed} could not be changed.` : `Changed ${done}.`);
@@ -391,12 +419,9 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
       h('div', { class: 'sheet-actions' }, closeBtn(dlg, 'Cancel'), h('button', { class: 'button button--primary', text: 'Mark inactive', attrs: { type: 'submit' } })));
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      let done = 0;
-      let failed = 0;
-      for (const p of rows) {
-        const { status } = await call(`/api/finance-admin/parties/${p.id}`, 'PATCH', { active: false });
-        if (status === 200) done += 1; else failed += 1;
-      }
+      const go = form.querySelector<HTMLButtonElement>('button[type=submit]')!;
+      go.disabled = true;
+      const { done, failed } = await patchAll(rows.filter((p) => p.active), () => ({ active: false }), (d, t) => { go.textContent = `Marking ${d} of ${t}…`; });
       dlg.close();
       table.clearSelection();
       showToast(failed ? `Marked ${done}; ${failed} could not be changed.` : `Marked ${done} inactive.`);
@@ -410,13 +435,10 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
       showToast('Those are already active.');
       return;
     }
-    let done = 0;
-    for (const p of off) {
-      const { status } = await call(`/api/finance-admin/parties/${p.id}`, 'PATCH', { active: true });
-      if (status === 200) done += 1;
-    }
+    showToast(`Marking ${off.length} active…`);
+    const { done, failed } = await patchAll(off, () => ({ active: true }), () => {});
     table.clearSelection();
-    showToast(`Marked ${done} active.`);
+    showToast(failed ? `Marked ${done} active; ${failed} could not be changed.` : `Marked ${done} active.`);
     load();
   }
   // Two ticked parties are the same payee: the one without payment details is merged into the other.
@@ -718,25 +740,97 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
 
   // Two parties that are really one payee. Nothing is deleted or moved: this party is hidden and its accounts appear under
   // the one you choose, where the old and new bank accounts are reviewed together. Needs the unlock, like verifying.
+  // What the person needs to see to decide which of two parties stays: the same facts for each, side by side.
+  function mergeFacts(x: Party): string[] {
+    const live = liveAccounts(x);
+    const lines = [`${KIND_LABELS[x.kind] ?? x.kind}${x.active ? '' : ' · inactive'}${x.formerSince ? ' · former member' : ''}`];
+    lines.push(live.length ? live.map((a) => `${a.method === 'bank' ? 'Bank' : 'UPI'} ${a.shown}${a.status === 'verified' ? ' (verified)' : ' (not verified)'}`).join(', ') : 'No payment details');
+    if (bankNames(x).length) lines.push(`Name at the bank: ${bankNames(x).join(', ')}`);
+    const files = evidenceCount(x);
+    lines.push(files ? `${files} evidence ${files === 1 ? 'file' : 'files'}` : 'No evidence attached');
+    // Money both ways. `lines`, `receivedPaise` and `lastReceived` arrive with the Received column; until then only the payments-out figures exist,
+    // so each is read defensively and the sheet is right with or without them.
+    const books = x as Party & { lines?: number; receivedPaise?: number; lastReceived?: string | null };
+    const count = books.lines ?? x.postings;
+    const last = [x.lastPaid, books.lastReceived ?? null].filter((d): d is string => Boolean(d)).sort().pop();
+    lines.push(count ? [`${count} ${count === 1 ? 'line' : 'lines'} in the books`, x.paidPaise > 0 ? `${rupees(x.paidPaise)} paid` : '', (books.receivedPaise ?? 0) > 0 ? `${rupees(books.receivedPaise!)} received` : '', last ? `last ${niceIso(last)}` : ''].filter(Boolean).join(' · ') : 'Nothing in the books yet');
+    if (x.mergedCount) lines.push(`Already holds ${x.mergedCount} merged ${x.mergedCount === 1 ? 'party' : 'parties'}`);
+    return lines;
+  }
+  // The one merged away must not be a member linked to a household, nor already hold merged parties (the server enforces the same).
+  const whyNotMergedAway = (x: Party): string | null => (x.householdId ? 'Linked to a household, so it has to be the one that stays.' : x.mergedCount > 0 ? 'Other parties were merged into it, so it has to be the one that stays.' : null);
+
+  // Two parties that are really one payee. Nothing is deleted or moved: the one you do not keep is hidden and its accounts appear
+  // under the one you keep, where the old and new bank accounts are reviewed together. Needs the unlock, like verifying.
+  // Opened with both parties known (a suggestion, or two ticked rows) it shows them side by side; opened from one party it first
+  // asks for the other. Either way the person chooses which stays.
   function openMerge(p: Party, presetId = '') {
     if (!mayVerify()) return;
     $<HTMLDialogElement>('detail-sheet').close();
     const dlg = $<HTMLDialogElement>('account-sheet');
     const others = (data?.parties ?? []).filter((x) => x.id !== p.id);
-    const into = combo({ options: others.map((x) => ({ value: x.id, label: x.name })), value: others.some((x) => x.id === presetId) ? presetId : '', blank: 'Choose the main party…', matcher: matchOptions, ariaLabel: 'The main party' }) as any;
+    let other: Party | null = others.find((x) => x.id === presetId) ?? null;
+    let keepId = other?.id ?? ''; // the suggestion's choice to start with; the person can change it
     const msg = h('p', { class: 'error', attrs: { hidden: '' } });
-    const form = h(
-      'form',
-      { class: 'stack-form' },
-      labelled(`"${p.name}" is the same payee as`, into),
-      h('p', { class: 'hint', text: 'This party disappears from the list and its accounts show under the one you choose. Nothing is deleted and nothing is paid differently; if the payee then has two bank accounts, retire the old one.' }),
-      msg,
-      h('div', { class: 'sheet-actions' }, closeBtn(dlg, 'Cancel'), h('button', { class: 'button button--primary', text: 'Merge', attrs: { type: 'submit' } })),
-    );
+    const body = h('div', { class: 'merge-body' });
+    const go = h('button', { class: 'button button--primary', text: 'Merge', attrs: { type: 'submit' } }) as HTMLButtonElement;
+    const form = h('form', { class: 'stack-form' }, body, msg, h('div', { class: 'sheet-actions' }, closeBtn(dlg, 'Cancel'), go));
+
+    function paint() {
+      msg.hidden = true;
+      if (!other) {
+        const pick = combo({ options: others.map((x) => ({ value: x.id, label: x.name })), value: '', blank: 'Choose the other party…', matcher: matchOptions, ariaLabel: 'The other party' }) as any;
+        pick.addEventListener('change', () => {
+          other = others.find((x) => x.id === pick.value) ?? null;
+          keepId = other?.id ?? '';
+          paint();
+        });
+        body.replaceChildren(labelled(`"${p.name}" is the same payee as`, pick), h('p', { class: 'hint', text: 'You will see both side by side and choose which one stays.' }));
+        go.disabled = true;
+        go.textContent = 'Merge';
+        return;
+      }
+      const pair = [p, other];
+      const allowed = pair.filter((x) => !whyNotMergedAway(pair.find((y) => y !== x)!)); // x may stay when the other can be merged away
+      if (!allowed.length) {
+        body.replaceChildren(h('p', { class: 'error', text: 'These two cannot be merged: each one is linked to a household or already holds merged parties. Undo or change that first.' }));
+        go.disabled = true;
+        return;
+      }
+      if (!allowed.some((x) => x.id === keepId)) keepId = allowed[0].id;
+      const keep = pair.find((x) => x.id === keepId)!;
+      const drop = pair.find((x) => x.id !== keepId)!;
+      const card = (x: Party) => {
+        const blocked = !allowed.includes(x);
+        const radio = h('input', { attrs: { type: 'radio', name: 'keep', value: x.id, ...(blocked ? { disabled: '' } : {}) } }) as HTMLInputElement;
+        radio.checked = x.id === keepId;
+        radio.addEventListener('change', () => {
+          keepId = x.id;
+          paint();
+        });
+        return h('label', { class: `merge-card${x.id === keepId ? ' is-keep' : ''}${blocked ? ' is-blocked' : ''}` },
+          h('span', { class: 'merge-pick' }, radio, h('span', { text: x.id === keepId ? 'Keep this one' : 'Merge this one away' })),
+          h('span', { class: 'title', text: x.name }),
+          ...mergeFacts(x).map((t) => h('span', { class: 'detail', text: t })),
+          blocked ? h('span', { class: 'merge-note', text: `Cannot stay: ${whyNotMergedAway(pair.find((y) => y !== x)!)?.toLowerCase()}` }) : null);
+      };
+      body.replaceChildren(
+        ...[
+        h('div', { class: 'merge-cols' }, card(p), card(other)),
+        h('p', { class: 'merge-summary' }, h('strong', { text: `"${drop.name}"` }), document.createTextNode(' will be hidden from the list and its payment details and history will show under '), h('strong', { text: `"${keep.name}"` }), document.createTextNode('. Nothing is deleted and nothing is paid differently; if the payee then has two bank accounts, retire the old one. The name that stays is the one shown, and you can rename it afterwards.')),
+        !presetId ? h('button', { class: 'linklike', text: 'Choose a different party', attrs: { type: 'button' }, on: { click: () => { other = null; keepId = ''; paint(); } } }) : null,
+        ].filter((n): n is HTMLElement => n !== null),
+      );
+      go.disabled = false;
+      go.textContent = `Merge into "${keep.name}"`;
+    }
+
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      if (!into.value) return;
-      const { status, data: out } = await call(`/api/finance-admin/parties/${p.id}/merge`, 'POST', { into: into.value });
+      if (!other || !keepId) return;
+      const keep = [p, other].find((x) => x.id === keepId)!;
+      const drop = [p, other].find((x) => x.id !== keepId)!;
+      const { status, data: out } = await call(`/api/finance-admin/parties/${drop.id}/merge`, 'POST', { into: keep.id });
       if (status === 200) {
         dlg.close();
         showToast('Merged.');
@@ -747,7 +841,8 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
         msg.textContent = out?.error ?? 'Could not merge those.';
       }
     });
-    present(dlg, h('h2', { text: `Merge ${p.name}`, attrs: { id: 'account-title' } }), form);
+    paint();
+    present(dlg, h('h2', { text: other ? 'Merge two parties' : `Merge ${p.name}`, attrs: { id: 'account-title' } }), form);
   }
 
   // Rename: the name is a label (what is typed in the transfer sheet, and what is searched), so it can be fixed any time;
@@ -1493,6 +1588,69 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
   .parties .differs-key {
     color: var(--tvc-orange-text);
     font-weight: 600;
+  }
+
+  .parties .merge-cols {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .parties .merge-card {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 12px;
+    border: 2px solid var(--tvc-line);
+    border-radius: var(--radius);
+    background: var(--tvc-white);
+    cursor: pointer;
+  }
+
+  .parties .merge-card.is-keep {
+    border-color: var(--tvc-green);
+    background: var(--tvc-green-tint);
+  }
+
+  .parties .merge-card.is-blocked {
+    cursor: not-allowed;
+    opacity: 0.8;
+  }
+
+  .parties .merge-pick {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--tvc-ink-soft);
+  }
+
+  .parties .merge-card.is-keep .merge-pick {
+    color: var(--tvc-green-dark);
+  }
+
+  .parties .merge-card .detail {
+    display: block;
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  .parties .merge-note {
+    margin-block-start: 4px;
+    color: var(--tvc-orange-text);
+    font-size: var(--text-sm);
+    font-weight: 600;
+  }
+
+  .parties .merge-summary {
+    margin: 12px 0 0;
+  }
+
+  @media (width <= 560px) {
+    .parties .merge-cols {
+      grid-template-columns: 1fr;
+    }
   }
 
   .parties .party-card {

@@ -2,8 +2,10 @@
 // Finance (internal), session 08: every payment request and logged spend, for the people who approve and match them. Backed by
 // netlify/functions/finance-admin.mts (/requests, lib/finance-requests.ts); the rules are scripts/lib/finance-requests.mjs.
 //   * approve or reject a request (approving needs the same unlock as verifying a payee; whoever raised it cannot decide it)
-//   * match a record to the UPI row or bank line it became: an exact UPI reference is shown as matched; anything else is a
-//     suggestion that a person accepts, never linked on a guess
+//   * match a record to the UPI row or bank line it became: an exact UPI reference is shown as matched; a suggestion with no
+//     competition (one candidate payment that no other record wants) is matched automatically, and anything less certain stays a
+//     suggestion that a person accepts. Any match made without a reference can be undone with Unmatch, and a record a person has
+//     unmatched is never matched automatically again
 //   * look at the bill or payment photo; clear the flag on a payment to the requester's own party
 // What a record says it was for is shown on the UPI page and in the ledger once it is matched.
 //
@@ -12,6 +14,7 @@
 import StaffLayout from '../../../layouts/StaffLayout.astro';
 import '../../../styles/data-table.css';
 import '../../../styles/request-cells.css';
+import '../../../styles/money.css';
 import SignInGate from '../../../components/SignInGate.astro';
 import StepUpSheet from '../../../components/StepUpSheet.astro';
 ---
@@ -41,6 +44,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
   import { initStepUpLock } from '../../../../scripts/lib/staff-stepup-ui.mjs';
   import { clearState, showFailure, showLoading } from '../../../../scripts/lib/staff-states.mjs';
   import { createDataTable } from '../../../../scripts/lib/data-table-ui.mjs';
+  import { moneyNode } from '../../../../scripts/lib/finance-ui.mjs';
 
   declare const google: any;
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
@@ -56,9 +60,9 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
   type Rec = {
     id: string; kind: 'request' | 'log'; status: string; source: 'app' | 'history'; requester: string | null; requesterId: string | null; payee: string | null; amountPaise: number; mode: string | null; purpose: string;
     neededBy: string | null; reimbursement: boolean; paidOn: string | null; paidVia: string | null; upiRef: string | null; decidedBy: string | null; decisionReason: string | null; reviewFlag: string | null;
-    vouchers: number; createdAt: string; fulfilled: { method: string; label: string } | null; matched: 'reference' | 'accepted' | null; linked: { upi: boolean; bank: boolean; upiRef: string | null; bankLineId: string | null } | null; mismatch: boolean; proposals: Proposal[]; ownParty: boolean;
+    vouchers: number; createdAt: string; fulfilled: { method: string; label: string } | null; matched: 'reference' | 'accepted' | 'auto' | null; linked: { upi: boolean; bank: boolean; upiRef: string | null; bankLineId: string | null } | null; mismatch: boolean; proposals: Proposal[]; ownParty: boolean;
   };
-  let data: { me: { id: string; ready: boolean; hasPasskey: boolean; stepUpValid: boolean }; can: { approve: boolean; allocate: boolean }; records: Rec[]; agingCount: number } | null = null;
+  let data: { me: { id: string; ready: boolean; hasPasskey: boolean; stepUpValid: boolean }; can: { approve: boolean; allocate: boolean }; records: Rec[]; agingCount: number; autoPending?: number } | null = null;
   let defaulted = false; // the first view with something in it opens once; after that the person's own choice stays
 
   const rupees = (paise: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(paise / 100);
@@ -196,7 +200,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
     else if (r.matched) {
       // One pill for each place the payment is tied (the UPI payment, the bank line), each a link to it. One link is enough: the
       // other side is derived. Hover says whether it was matched by reference or by a person.
-      const how = r.matched === 'reference' ? 'Matched by the UPI reference' : 'Matched by a person';
+      const how = r.matched === 'reference' ? 'Matched by the UPI reference' : r.matched === 'auto' ? 'Matched automatically: the only candidate payment, and no other record wanted it' : 'Matched by a person';
       const pills = el('div', 'tags');
       const link = (label: string, href: string, title: string) => {
         const a = el('a', 'pill pill--ok pill--link', label);
@@ -207,7 +211,11 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
       if (r.linked?.upi && r.linked.upiRef) link('UPI', `/internal/finance/upi/?ref=${r.linked.upiRef}`, 'Open this payment on the UPI page');
       if (r.linked?.bank && r.linked.bankLineId) link('Bank', `/internal/finance/ledger/?line=${r.linked.bankLineId}`, 'Open this line in the ledger');
       if (!pills.children.length) pills.append(pill('Matched', 'ok'));
+      // The requested amount above stays plain (a request is not a transaction); this is the payment it is tied to, and a match
+      // needs the same amount, so it is the record's own amount as the debit it became.
+      pills.append(moneyNode(r.amountPaise, 'db'));
       out.append(pills);
+      if (r.matched === 'auto') out.append(el('span', 'sub', 'Matched automatically'));
     } else if (r.proposals.length && data?.can.allocate) {
       const open = openIds.has(r.id);
       const t = el('button', 'linklike', `${r.proposals.length} ${r.proposals.length === 1 ? 'suggestion' : 'suggestions'} ${open ? '▴' : '▾'}`);
@@ -247,7 +255,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
         const res = await staffFetch(`/api/finance-admin/requests/${r.id}/files`);
         for (const f of res.data.files ?? []) await openVoucher(f.id);
       });
-    if (data?.can.allocate && r.matched === 'accepted') btn('Unmatch', () => confirm('Remove the match?') && void act(`/api/finance-admin/requests/${r.id}/unmatch`, {}, 'Unmatched.', r.id));
+    if (data?.can.allocate && (r.matched === 'accepted' || r.matched === 'auto')) btn('Unmatch', () => confirm(r.matched === 'auto' ? 'Remove this automatic match? It will not be matched automatically again; you can still match it by hand.' : 'Remove the match?') && void act(`/api/finance-admin/requests/${r.id}/unmatch`, {}, 'Unmatched.', r.id));
     return box;
   }
   // The suggested payments for a record, opened from its own "suggestions" link and drawn as part of it.
@@ -314,6 +322,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
       { id: 'rejected', group: 'status', label: 'Rejected', test: (r: Rec) => r.status === 'rejected' },
       { id: 'cancelled', group: 'status', label: 'Cancelled', test: (r: Rec) => r.status === 'cancelled' },
       { id: 'matched', group: 'match', label: 'Matched', test: (r: Rec) => Boolean(r.matched) },
+      { id: 'auto', group: 'match', label: 'Matched automatically', test: (r: Rec) => r.matched === 'auto' },
       { id: 'unmatched', group: 'match', label: 'Not matched', test: (r: Rec) => !r.matched },
       { id: 'differs', group: 'amount', label: 'Amount differs', test: (r: Rec) => r.mismatch },
       { id: 'history', group: 'source', label: 'From the old sheet', test: (r: Rec) => r.source === 'history' },
@@ -348,7 +357,8 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
     lock.render();
   }
 
-  async function load() {
+  // `autoDone`: the automatic matching already ran in this chain, so a suggestion it could not make cannot send the page round again.
+  async function load(autoDone = false): Promise<void> {
     gate.hidden = true;
     forbidden.hidden = true;
     showLoading(statusEl);
@@ -361,11 +371,20 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
       intro.textContent = out.agingCount ? `${out.agingCount} approved ${out.agingCount === 1 ? 'request has' : 'requests have'} waited over two weeks for a payment to match.` : 'What each record was for shows on the UPI page and in the ledger once it is matched.';
       render();
       content.hidden = false;
+      // Records with one candidate payment that no other record wants are matched without asking; then the list is read again.
+      if (!autoDone && out.can?.allocate && (out.autoPending ?? 0) > 0) {
+        const done = await staffFetch('/api/finance-admin/requests/auto-match', { method: 'POST', body: {} }).catch(() => null);
+        const n = Number(done?.data?.matched ?? 0);
+        if (n > 0) {
+          showToast(`Matched ${n} ${n === 1 ? 'record' : 'records'} automatically. Unmatch any that is wrong.`);
+          return load(true);
+        }
+      }
     } catch (err) {
       if (fail(err)) return;
       content.hidden = true;
       intro.hidden = true;
-      showFailure(statusEl, { title: "Couldn't load the requests", text: "The server didn't answer. Nothing was changed. Check your connection and try again; if it keeps failing, tell a super admin.", onRetry: load });
+      showFailure(statusEl, { title: "Couldn't load the requests", text: "The server didn't answer. Nothing was changed. Check your connection and try again; if it keeps failing, tell a super admin.", onRetry: () => void load() });
     }
   }
 

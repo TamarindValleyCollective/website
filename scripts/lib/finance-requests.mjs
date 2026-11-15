@@ -220,6 +220,34 @@ export function proposeMatches(records, upiLines, bankLines, { claimedUpi = new 
 }
 
 /**
+ * Which suggested matches are safe to make without asking: a record whose ONE suggested payment is claimed by that record alone.
+ * Any doubt leaves it as a suggestion for a person: two candidate payments for the record (a UPI row and a separate bank line count
+ * as two, since they might be two payments), or one payment that suits two records. A UPI row and the bank line it is joined to are
+ * one payment, so a record suggested the row and another suggested the line still collide.
+ * `proposals`: from proposeMatches, for every unmatched record (including ones that may not be auto-matched, since they still compete);
+ * `upiLines` carry `bankLineId`. -> [{ recordId, type, targetId, reasons }], at most one per record.
+ */
+export function autoMatchPicks(proposals, upiLines) {
+  const upiBy = new Map(upiLines.map((u) => [u.id, u]));
+  const paymentKey = (p) => (p.type === 'bank' ? `b:${p.targetId}` : upiBy.get(p.targetId)?.bankLineId ? `b:${upiBy.get(p.targetId).bankLineId}` : `u:${p.targetId}`);
+  const byRecord = new Map();
+  const byPayment = new Map();
+  for (const p of proposals) {
+    byRecord.set(p.recordId, [...(byRecord.get(p.recordId) ?? []), p]);
+    const k = paymentKey(p);
+    byPayment.set(k, new Set([...(byPayment.get(k) ?? []), p.recordId]));
+  }
+  const picks = [];
+  for (const [recordId, list] of byRecord) {
+    if (list.length !== 1) continue;
+    const [only] = list;
+    if (byPayment.get(paymentKey(only)).size !== 1) continue;
+    picks.push({ recordId, type: only.type, targetId: only.targetId, reasons: only.reasons });
+  }
+  return picks;
+}
+
+/**
  * The purposes the UPI page and the ledger pull in. `records`: { status, purpose, upiRef, upiLineId, bankLineId }. A rejected or
  * cancelled record explains nothing. -> a lookup that takes any of a payment's identifiers ({ upiRef, upiLineId, bankLineId }).
  */
