@@ -1,70 +1,108 @@
 // Run with: node --test scripts/lib/finance-channels-view.test.mjs
 //
-// The drawing rules of the Channels view that need no browser: how big each circle is, what is written on it and how thick each
-// link is. (The graph itself is drawn with Cytoscape.js and laid out by ELK in the browser.) Every figure is invented.
+// The layout of the Channels view, which needs no browser: where each box and band goes, from the flow. (The drawing itself places this
+// layout in the page.) Every figure is invented.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { elementsOf, moneyText } from './finance-channels-view.mjs';
+import { layoutFlow, moneyText, monthName, statusOf } from './finance-channels-view.mjs';
+import { channelCube, flowOf } from './finance-channels.mjs';
 
-const graph = {
-  dir: 'out', total: 10_000_000, // ₹1,00,000
-  nodes: [
-    { id: 'acct:A1', kind: 'account', label: 'Current account', paise: 10_000_000, n: 9 },
-    { id: 'ch:bulk', kind: 'channel', label: 'Paypro', paise: 6_000_000, n: 5, attention: [] },
-    { id: 'ch:card', kind: 'channel', label: 'Debit card', paise: 40_000, n: 1, attention: [{ tone: 'warn', text: '1 line has no category' }] },
-    { id: 'del:d1', kind: 'delegate', label: 'Test Person', paise: 90_000, n: 3, monthPaise: 450_000, capPaise: 500_000 },
-    { id: 'del:d2', kind: 'delegate', label: '5550100001', paise: 30_000, n: 1, monthPaise: 10_000, capPaise: 500_000 },
-    { id: 'del:d3', kind: 'delegate', label: 'Third Person', paise: 20_000, n: 1, monthPaise: 600_000, capPaise: 500_000 },
-    { id: 'fd', kind: 'fd', label: 'Fixed deposits', paise: 4_000_000, n: 0 },
-  ],
-  edges: [{ from: 'acct:A1', to: 'ch:bulk', paise: 6_000_000 }, { from: 'acct:A1', to: 'ch:card', paise: 40_000 }, { from: 'ch:bulk', to: 'fd', paise: 3_000_000 }],
-};
-const el = elementsOf(graph);
-const nodeOf = (id) => el.nodes.find((n) => n.data.id === id).data;
+const line = (id, tran_date, direction, amount_paise, narration, bank_account_id = 'A1') => ({ id, tran_date, direction, amount_paise, narration, bank_account_id });
+const alloc = (bank_line_id, category_id, amount_paise) => ({ bank_line_id, category_id, amount_paise, project_id: null });
+const categories = [
+  { id: 'c-sal', type: 'opex', head: 'farm', is_salary: true }, { id: 'c-farm', type: 'opex', head: 'farm', is_salary: false },
+  { id: 'c-sink', type: 'sinking_fund', head: 'investment', is_salary: false }, { id: 'c-maint', type: 'member_contribution', head: null, is_salary: false },
+];
+const lines = [
+  line('l1', '2026-10-05', 'debit', 9_000_000, 'NEFT/0101102630472/10/'), line('l2', '2026-10-06', 'debit', 2_000_000, 'UPI/P2A/600000000001/Shop/Bank'),
+  line('l3', '2026-10-07', 'debit', 300_000, 'POS/SHOP'), line('l4', '2026-10-08', 'debit', 4_000_000, 'INB/NEFT/X/FD/Bank'), line('l5', '2026-10-09', 'credit', 20_000_000, 'INB/NEFT/Y/Household/Bank'),
+  line('l6', '2026-10-10', 'credit', 500_000, 'Razorpay Software Pvt Ltd Fund', 'A2'), line('l7', '2026-10-11', 'credit', 1_500_000, 'INB/NEFT/Z/Deposit/Bank'),
+];
+const allocations = [alloc('l1', 'c-sal', 9_000_000), alloc('l2', 'c-farm', 2_000_000), alloc('l3', 'c-farm', 300_000), alloc('l4', 'c-sink', 4_000_000), alloc('l5', 'c-maint', 20_000_000), alloc('l7', 'c-sink', 1_500_000)];
+const cube = channelCube({ lines, upiAppByLine: new Map([['l2', 'paytm']]), allocations, categories });
+const accounts = [{ id: 'A1', label: 'Current account' }, { id: 'A2', label: 'Second account' }];
+const layouts = [['channel', 'channel'], ['purpose', 'purpose'], ['channel', 'purpose'], ['purpose', 'channel']].map(([groupIn, groupOut]) => layoutFlow(flowOf({ cube, accounts, months: ['2026-10'], groupIn, groupOut })));
+const L = layouts[0];
 
 test('money is written in lakh once it is large enough to matter, and in rupees below that', () => {
   assert.equal(moneyText(10_000_000), '₹1.00 L');
   assert.equal(moneyText(2_305_000), '₹0.23 L');
   assert.equal(moneyText(96_700), '₹967');
-  assert.equal(moneyText(9_670_000), '₹0.97 L');
   assert.equal(moneyText(500_000), '₹5,000');
 });
 
-test('circle area is the amount: the biggest account is the biggest circle, channels are on the same scale, small ones have a floor', () => {
-  assert.equal(nodeOf('acct:A1').w, 104);
-  assert.ok(Math.abs(nodeOf('ch:bulk').w - 104 * Math.sqrt(0.6)) < 0.5);
-  assert.equal(nodeOf('ch:card').w, 32, 'a tiny amount is still big enough to click');
-  assert.ok(nodeOf('fd').w < nodeOf('acct:A1').w);
+test('a delegate is fine until 80% of their month, warned until the limit, then over', () => {
+  assert.equal(statusOf(100, 1000), 'ok');
+  assert.equal(statusOf(800, 1000), 'warn');
+  assert.equal(statusOf(1000, 1000), 'warn');
+  assert.equal(statusOf(1001, 1000), 'crit');
+  assert.equal(statusOf(5000, null), 'ok');
 });
 
-test('delegates have a scale of their own, so they are not lost beside the accounts', () => {
-  assert.equal(nodeOf('del:d1').w, 76);
-  assert.ok(nodeOf('del:d2').w < 76 && nodeOf('del:d2').w >= 32);
+test('the months are named', () => {
+  assert.equal(monthName('2026-04'), 'April');
+  assert.equal(monthName('2027-03'), 'March');
 });
 
-test('the figure is written inside the circle where it fits, and under the name where it does not', () => {
-  assert.equal(nodeOf('acct:A1').inside, true);
-  assert.equal(nodeOf('acct:A1').label, 'Current account');
-  assert.equal(nodeOf('ch:card').inside, false);
-  assert.equal(nodeOf('ch:card').label, 'Debit card\n₹400');
+test('one scale for everything: the same money is the same height, and a band is as wide as its money', () => {
+  for (const l of layouts) {
+    for (const n of l.nodes) assert.ok(Math.abs(n.h - Math.max(4, n.paise * l.scale)) < 1e-6, `${n.id} height`);
+    for (const x of l.links) assert.ok(Math.abs(x.w - Math.max(1.5, x.paise * l.scale)) < 1e-6, `${x.from} -> ${x.to} width`);
+  }
 });
 
-test('a circle that needs attention says so, and a delegate near or over their monthly limit is coloured by it', () => {
-  assert.equal(nodeOf('ch:card').attention, true);
-  assert.equal(nodeOf('ch:bulk').attention, false);
-  assert.equal(nodeOf('del:d1').status, 'warn', '90% of the limit is close');
-  assert.equal(nodeOf('del:d2').status, 'ok');
-  assert.equal(nodeOf('del:d3').status, 'crit', 'over it');
+test('boxes in a column never overlap and all sit inside the picture', () => {
+  for (const l of layouts) {
+    for (const col of [0, 1, 2]) {
+      const box = l.nodes.filter((n) => n.col === col).sort((a, b) => a.y - b.y);
+      for (let i = 1; i < box.length; i++) assert.ok(box[i].y >= box[i - 1].y + box[i - 1].h, `${box[i - 1].id} and ${box[i].id} overlap`);
+      for (const n of box) assert.ok(n.y >= 0 && n.y + n.h <= l.height, `${n.id} is outside the picture`);
+    }
+  }
 });
 
-test('links are as thick as the money through them, between a floor and a ceiling', () => {
-  const w = (from, to) => el.edges.find((e) => e.data.source === from && e.data.target === to).data.w;
-  assert.ok(Math.abs(w('acct:A1', 'ch:bulk') - 10.8) < 0.05);
-  assert.equal(w('acct:A1', 'ch:card'), 2, 'never thinner than 2');
-  assert.ok(w('ch:bulk', 'fd') < w('acct:A1', 'ch:bulk'));
-  assert.ok(el.edges.every((e) => e.data.w <= 18));
+test('the bands on a box fit inside it, none on top of another', () => {
+  for (const l of layouts) {
+    for (const n of l.nodes) {
+      const used = (side) => l.links.filter((x) => (side === 'out' ? x.from : x.to) === n.id).sort((a, b) => (side === 'out' ? a.sy : a.ty) - (side === 'out' ? b.sy : b.ty));
+      for (const side of ['out', 'in']) {
+        const ls = used(side);
+        let at = n.y;
+        for (const x of ls) { const y = side === 'out' ? x.sy : x.ty; assert.ok(y >= at - 1e-6, `${n.id} ${side} bands overlap`); at = y + x.w; }
+        assert.ok(at <= n.y + n.h + 1.5 * ls.length, `${n.id} ${side} bands run past the box`);
+      }
+    }
+  }
 });
 
-test('an empty slice has nothing to draw', () => {
-  assert.deepEqual(elementsOf({ dir: 'out', total: 0, nodes: [], edges: [] }), { nodes: [], edges: [] });
+test('the fixed deposits are last in their column, whichever grouping is chosen', () => {
+  for (const l of layouts) for (const col of [0, 2]) {
+    const box = l.nodes.filter((n) => n.col === col).sort((a, b) => a.y - b.y);
+    assert.equal(box.at(-1).kind, 'fd', `column ${col}`);
+  }
+});
+
+test('every band is a curve from the right edge of its source to the left edge of its target', () => {
+  const byId = new Map(L.nodes.map((n) => [n.id, n]));
+  for (const x of L.links) {
+    const a = byId.get(x.from), b = byId.get(x.to);
+    assert.ok(x.d.startsWith(`M${a.x + a.w},`), x.d);
+    assert.ok(x.d.endsWith(`${b.x},${x.ty + x.w / 2}`), x.d);
+  }
+});
+
+test('what an account kept is a strip beside it, on the side that has the room', () => {
+  const kept = L.kept;
+  const a1 = kept.find((k) => k.account === 'A:A1');
+  assert.equal(a1.side, 'right', 'more came in than went out on the current account');
+  assert.equal(a1.paise, 21_500_000 - 15_300_000);
+  const a2 = kept.find((k) => k.account === 'A:A2');
+  assert.equal(a2.side, 'right');
+  assert.ok(a1.h > 0 && a2.h > 0);
+});
+
+test('an empty period has nothing to lay out and does not fail', () => {
+  const empty = layoutFlow(flowOf({ cube, accounts, months: ['2026-01'], groupIn: 'channel', groupOut: 'channel' }));
+  assert.equal(empty.nodes.length, 0);
+  assert.equal(empty.links.length, 0);
 });

@@ -817,41 +817,55 @@ the page draws from `scripts/lib/finance-dashboard-view.mjs` (pure, tested) usin
 
 ## Channels (the dashboard's Channels tab, `/internal/finance/dashboard/#channels`, no migration)
 
-A map of how money moves, from the real ledger. **Only money channels are circles**: the bank **accounts**, the **channels** the money passes
-through (what the ledger already calls an origin: BHIM, Paytm, Paypro, the payment gateway, the debit card, the bank directly, UPI with the app
-unknown), the **delegates** (they pay through an operator's UPI app, so they hang off that channel) and the **fixed deposits** (an account held
-outside the current accounts: money put in goes through the channel that carried it). What the money was *for* (salary, farm and household,
-projects, company, sinking fund; on the way in: maintenance, money back from the sinking fund, everything else) is **not a channel, so it is a
-filter**, Spent on / Received for, with *All projects* and one entry per project (decided 2026-11-15, after an earlier mockup drew those as
-circles). Circle area is the amount (accounts, channels and the deposits on one scale, delegates on their own); a link is as thick as the money
-through it; the figure is inside a circle where it fits; a ring marks something that needs attention (today: lines with no category yet).
+The cashflow, and the channels it moves through, from the real ledger. One picture, read left to right: **money in → the accounts → money out**.
+Each side is grouped by **Channel** (what the ledger already calls an origin: BHIM, Paytm, Paypro, the payment gateway, the debit card, the bank
+direct, UPI with the app unknown) or by **Purpose** (what the money was for: salary, farm and household, projects, company; on the way in:
+maintenance, everything else), and the two sides are chosen separately. A band is as wide as the money in it, and a box as tall. Click any box or
+band to follow its money end to end (the rest fades) and to see the lines behind it. A dot on a box means lines there have no category yet.
 
-- **Data.** `GET /api/finance-admin/channels?fy=2026` (`lib/finance-channels.ts`; needs `finance` / `view`, an auditor's visit is logged and refused
-  if it cannot be, like the dashboard) returns the year summed once into a small aggregate (`channelCube` in `scripts/lib/finance-channels.mjs`):
-  one cell per month, account, channel, direction and purpose, with the amount and the number of lines. The channel is `originOf()` (the ledger's
-  rule, from the narration and the joined UPI row's app) and the purpose is `groupOf()` (the dashboard's rule: sinking fund, then a project, then
-  salary, then the category's head), so the totals agree with the Cashflow tab. What nobody has categorised is `other`, flagged, so each direction
-  always adds up to the bank lines. The payload also has the accounts, the projects, the delegates and what each paid through which UPI app (a
-  delegated payment belongs to the delegate active that day or the one an admin picked, `finance-delegates.mjs`), and the fixed deposits' balance at
-  each month end (`fdBalance`). It carries no narrations, UPI references or party names: account labels, delegate labels and numbers (as on the UPI
-  page), counts and amounts. The browser then draws any slice (period, direction, account, purpose) without asking again (`graphOf`).
-- **Drawing.** `scripts/lib/finance-channels-view.mjs`: the rules for each circle and link are pure (`elementsOf`, tested); the graph is
-  **Cytoscape.js** (drawing, zoom, pan, drag) with the **ELK layered layout** (columns, ordered to minimise crossing links). Both are large (about 130
-  KB and 400 KB compressed) and are loaded only when the Channels tab is first opened, never with the rest of the dashboard; ELK runs in the page
-  (no Web Worker, so the site's content security policy is unaffected). Colours come from the `--tvc-chart-*` tokens and repaint on a theme change.
-  There is a table view with the same figures as text, the details panel works from the keyboard, and the graph itself is a canvas.
-- **Filters.** Direction (money out / in), period (year to date, last 3 months, this month; a closed year has only the year), account, and the
-  purpose. Clicking a circle opens its details (amount, payments, share, what a channel was used for with each row a shortcut to that filter, what
-  needs attention, what it connects to).
-- **Not in this first version** (the mockup, `docs/finance/mockups/dashboards.html`, shows them): planned circles for things that do not exist yet
-  (a second bank, a POS terminal, Google Pay: they appear when the data does), the hub and ring arrangements and the draggable Organic mode, Main /
-  All links, search, needs attention only, hide planned, opening and closing a circle's branch, a circle for each deposit and the deposits' interest,
-  splitting delegates' spend by purpose (a purpose filter hides them), and links from the panel to the ledger. A POS terminal would count under Debit
-  card until it has a channel of its own, and a second person's Paytm cannot be told apart from the first until there is an operator record.
-- **Tests.** `finance-channels.test.mjs` (the aggregate, every filter, reconciliation, delegates, deposits, lines with no category),
-  `finance-channels-view.test.mjs` (sizes, figures, link thickness) and `finance-channels-endpoint.test.mjs` (the real function with Supabase
-  stubbed: grants, the money tying to the bank lines, drafts not counted, the deposits' balance, delegate attribution, a database without the
-  delegate tables, no narration leaving the server).
+Decided 2026-11-15, after a first version drew channels, purposes, projects and delegates as circles in a force graph and was rejected. The design
+follows the products that do this well (Monarch's Cash Flow, Mercury's money-movement breakdown): a shallow flow, a time strip, one grouping switch
+and click-through to the lines, rather than every dimension as another column. Purposes are a grouping, not boxes of their own; projects are not
+a channel, so they appear only as the single "Projects" purpose.
+
+- **Fixed deposits.** A holding outside the accounts, so money moved to or from them is **neither received nor spent**. They are two green boxes,
+  *To fixed deposits* (last in the money-out column, with *Held ₹… at <month> end*, the deposits' balance from `fdBalance`) and *From fixed
+  deposits* (last in the money-in column), whichever grouping is chosen, so they never disappear into "Bank direct". The figures above the picture
+  keep them apart: **Received**, **Spent**, **Net moved into fixed deposits**, **Left in the accounts** (received less spent less what moved), and
+  the month strip leaves them out. A second account is a second box in the middle column, each with what it kept or took from its balance.
+- **Period.** Presets (This month, Last month, Last 3 months, Year to date; a closed year says Whole year), exact **From/To** months, and a **month
+  strip** of received and spent for each month: click a month, drag across several, shift-click to extend; clicking the only chosen month goes back
+  to the year. Ranges are whole months. **Compare with the period before** adds the change under each figure against the same number of months
+  straight before; when the year does not reach back that far it says so once. Year-on-year comparison needs the previous year's data and is not
+  built.
+- **Delegates** are their own card under the picture (each person's month against their limit, "No delegate yet" for unattributed payments), not
+  part of the flow: they are recorded from the UPI records and are not bank-statement lines, so putting them in would make the totals differ
+  between groupings.
+- **Data.** `GET /api/finance-admin/channels?fy=2026` (`lib/finance-channels.ts`; needs `finance` / `view`, an auditor's visit is logged and
+  refused if it cannot be, like the dashboard) returns the year summed once into a small aggregate (`channelCube` in
+  `scripts/lib/finance-channels.mjs`): one cell per month, account, channel, direction and purpose, with the amount and the number of lines. The
+  channel is `originOf()` (the ledger's rule, from the narration and the joined UPI row's app) and the purpose is `groupOf()` (the dashboard's
+  rule: sinking fund, then a project, then salary, then the category's head), so the totals agree with the Cashflow tab. What nobody has
+  categorised is `other`, flagged, so each direction always adds up to the bank lines. The browser draws any period and grouping of it without
+  asking again (`flowOf`). It carries no narrations, UPI references or party names.
+- **The lines behind a box or band.** `GET /api/finance-admin/channels/lines?fy=&months=&dir=&channel=&purpose=&account=&fd=` sums the same
+  pieces (`channelPieces`), so the count and amount agree with the figure on the box; it returns the number of lines, the amount and the largest
+  eight (date, account, channel, purpose, amount and the line's id, which the date links to in the Ledger). No narrations. `specOf` turns a click
+  into the filter and `cellMatches` applies it, and a test checks that for every box and band, in every grouping, the lines add up to its figure.
+- **Drawing.** `scripts/lib/finance-channels-view.mjs`: the layout is pure and tested (`layoutFlow`: one scale for the whole picture, the outer
+  columns ordered by where their money goes so bands cross as little as possible, the deposits last, bands placed on each box in the order of the
+  box at the other end); the SVG, the month strip and the click handling are small DOM code on top. No library. Colours are the `--tvc-chart-*`
+  tokens, so both appearances work. On a phone the picture scrolls sideways inside its card. A table of the same figures sits under it.
+- **Not built yet.** Exact days rather than whole months (the aggregate is per month; per day is a modest change), year-on-year comparison, one
+  box for each deposit or by bank or maturity (all deposits are one pair of boxes for now), deposit interest as a third green band, delegates inside
+  the flow, planned boxes for things that do not exist yet (a second bank, a POS terminal, Google Pay: they appear when the data does), a
+  Ledger link that opens with the same filters applied (today each line opens on its own). A POS terminal would count under Debit card until it
+  has a channel of its own.
+- **Tests.** `finance-channels.test.mjs` (the aggregate, the months and presets, totals that reconcile to the bank, the flow in every grouping,
+  that each side adds up, and that every click ties to the figure on it), `finance-channels-view.test.mjs` (one scale, no overlapping boxes, bands
+  inside their boxes, deposits last) and `finance-channels-endpoint.test.mjs` (the real function with Supabase stubbed: grants, validation, the
+  money tying to the bank lines, drafts not counted, the lines behind a box, delegate attribution, a database without the delegate tables, no
+  narration leaving the server, the audit).
 
 ## The budget editor (session 07, page `/internal/finance/budget/`, migration `0099_finance_budget_editing.sql`, **applied 2026-11-10**)
 

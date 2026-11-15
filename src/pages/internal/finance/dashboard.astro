@@ -118,34 +118,42 @@ import SignInGate from '../../../components/SignInGate.astro';
       </div>
 
       <div class="dash-view" id="v-channels" hidden>
-        <p class="hint" id="ch-note"></p>
-        <div class="ch-filters" role="group" aria-label="Filters for the map">
-          <div class="segmented" id="ch-dir" role="group" aria-label="Direction">
-            <button type="button" data-d="out" aria-pressed="true">Money out</button>
-            <button type="button" data-d="in" aria-pressed="false">Money in</button>
-          </div>
-          <div class="segmented" id="ch-per" role="group" aria-label="Period">
-            <button type="button" data-p="ytd" aria-pressed="true">Year to date</button>
-            <button type="button" data-p="m3" aria-pressed="false">Last 3 months</button>
-            <button type="button" data-p="m1" aria-pressed="false">This month</button>
-          </div>
-          <label class="ch-field"><span>Account</span><select id="ch-acct"></select></label>
-          <label class="ch-field"><span id="ch-plabel">Spent on</span><select id="ch-purpose"></select></label>
-        </div>
-        <div class="ch-wrap">
-          <div class="card ch-stage">
-            <div id="ch-graph" class="ch-graph" role="img" aria-label="A map of how money moves through the accounts and channels. The table below the map has the same figures as text."></div>
-            <p id="ch-state" class="ch-state" hidden></p>
-            <div class="ch-tools" role="group" aria-label="Zoom">
-              <button type="button" id="ch-zin" aria-label="Zoom in">+</button>
-              <button type="button" id="ch-zout" aria-label="Zoom out">−</button>
-              <button type="button" id="ch-fit" aria-label="Fit everything in view">Fit</button>
-              <button type="button" id="ch-arrange" aria-label="Arrange the circles again">Tidy</button>
+        <p id="ch-state" class="hint" hidden></p>
+        <div class="card ch-period">
+          <div class="ch-row">
+            <h2>Period</h2>
+            <div class="segmented" id="ch-presets" role="group" aria-label="Period presets">
+              <button type="button" data-p="m1">This month</button>
+              <button type="button" data-p="prev">Last month</button>
+              <button type="button" data-p="m3">Last 3 months</button>
+              <button type="button" data-p="ytd">Year to date</button>
             </div>
           </div>
-          <aside class="card ch-panel" id="ch-panel" aria-live="polite"></aside>
+          <div class="ch-controls">
+            <label class="ch-field"><span>From</span><select id="ch-from"></select></label>
+            <label class="ch-field"><span>to</span><select id="ch-to"></select></label>
+            <label class="ch-check"><input type="checkbox" id="ch-cmp" /> Compare with the period before</label>
+            <span class="hint" id="ch-range"></span>
+          </div>
+          <div class="ch-scroll"><svg id="ch-strip" class="fl-strip" role="img" aria-label="Money received and spent in each month of the year. Choose a month, or drag across several, to pick the period."></svg></div>
+          <p class="hint">Click a month, or drag across several. Shift-click extends the range.</p>
         </div>
-        <details class="ch-details"><summary>Table view of the channels</summary><div class="tablewrap" id="ch-table"></div></details>
+        <div class="card ch-main">
+          <div class="ch-stats" id="ch-stats"></div>
+          <div class="ch-controls">
+            <div class="ch-seg"><span>Money in, by</span><div class="segmented" id="ch-gin" role="group" aria-label="Group money in by"><button type="button" data-g="channel">Channel</button><button type="button" data-g="purpose">Purpose</button></div></div>
+            <div class="ch-seg"><span>Money out, by</span><div class="segmented" id="ch-gout" role="group" aria-label="Group money out by"><button type="button" data-g="channel">Channel</button><button type="button" data-g="purpose">Purpose</button></div></div>
+          </div>
+          <div class="ch-scroll"><svg id="ch-flow" class="fl-flow" role="img" aria-label="The cashflow: where money came in from, through the accounts, to where it went out. The table below has the same figures as text."></svg></div>
+          <p class="hint ch-legend"><i class="ch-swatch"></i>Green is money moved to or from the fixed deposits. They are a holding outside the accounts, so it is neither received nor spent.</p>
+          <div class="ch-detail" id="ch-detail" aria-live="polite"></div>
+        </div>
+        <div class="card">
+          <h2>UPI Circle delegates</h2>
+          <p class="hint">Paid through a delegate’s own UPI number and recorded from the UPI records, so they are not bank-statement lines and are not in the cashflow above.</p>
+          <div class="ch-deleg" id="ch-deleg"></div>
+        </div>
+        <details class="ch-details"><summary>The same figures as a table</summary><div class="tablewrap" id="ch-table"></div></details>
       </div>
 
       <div class="dash-view" id="v-data-health" hidden>
@@ -166,8 +174,9 @@ import SignInGate from '../../../components/SignInGate.astro';
 <script>
   import { StaffAuthError, clearStepUp, clearToken, decodeTokenEmail, getToken, setToken, staffFetch } from '../../../../scripts/lib/staff-client.mjs';
   import { clearState, showFailure, showLoading } from '../../../../scripts/lib/staff-states.mjs';
-  import { IN_PURPOSES, OUT_PURPOSES, graphOf, monthsOfPeriod, usedFor } from '../../../../scripts/lib/finance-channels.mjs';
-  import { moneyText, statusOf } from '../../../../scripts/lib/finance-channels-view.mjs';
+  import { CHANNELS } from '../../../../scripts/lib/finance-origin.mjs';
+  import { IN_PURPOSES, OUT_PURPOSES, flowOf, fyMonths, monthBars, monthsSoFar, presetMonths, previousMonths, rangeOf, specOf, totalsOf } from '../../../../scripts/lib/finance-channels.mjs';
+  import { drawFlow, layoutFlow, moneyText, monthName, mountStrip, statusOf } from '../../../../scripts/lib/finance-channels-view.mjs';
   import {
     GROUPS, GROUP_CLASS, GROUP_LABELS, HEAD_LABELS, SPEND_HEADS, STATUS, balanceSvg, barsInOutSvg, circleBarsSvg, healthItems, lakhText, monthsText, percentText, ringSvg, rupeesText,
     signedLakh, sparkSvg, stackedSvg, tilesOf, toLakh, monthShort,
@@ -542,27 +551,38 @@ import SignInGate from '../../../components/SignInGate.astro';
     if (view === 'channels') void showChannels();
   }
 
-  // ---- Channels: how money moves through the accounts and channels (docs/finance/FINANCE.md "Channels") -------------------------------
-  // Loaded when the tab is first opened (its own endpoint, and the graph libraries, which are large), then every filter works on what
-  // arrived: the server sends the year summed by month, account, channel, direction and purpose.
-  type ChView = { render(g: any): Promise<void>; select(id: string | null): void; zoomBy(f: number): void; fit(): void; arrange(): Promise<void>; resize(): void };
-  const ch: { data: any; fy: number | null; filters: { dir: 'out' | 'in'; period: 'ytd' | 'm3' | 'm1'; account: string; purpose: string }; view: ChView | null; graph: any; selected: string | null; loading: boolean; failed: boolean } = {
-    data: null, fy: null, filters: { dir: 'out', period: 'ytd', account: 'all', purpose: 'all' }, view: null, graph: null, selected: null, loading: false, failed: false,
+  // ---- Channels: the cashflow and the channels it moves through (docs/finance/FINANCE.md "Channels") -----------------------------------
+  // Loaded when the tab is first opened (its own endpoint). The server sends the year summed by month, account, channel, direction and
+  // purpose, so the period, the grouping and the compare switch all work on what arrived. The lines behind a box or band are asked for
+  // when it is clicked (GET /channels/lines).
+  type ChSel = { nodeId: string } | { from: string; to: string } | null;
+  const ch: { data: any; fy: number | null; months: string[]; groupIn: string; groupOut: string; cmp: boolean; sel: ChSel; strip: any; layout: any; drawn: any; flow: any; loading: boolean; seq: number } = {
+    data: null, fy: null, months: [], groupIn: 'channel', groupOut: 'channel', cmp: false, sel: null, strip: null, layout: null, drawn: null, flow: null, loading: false, seq: 0,
   };
-  const rupees = (paise: number) => moneyText(paise);
+  const chMoney = (paise: number) => moneyText(paise);
+  const chSoFar = (): string[] => monthsSoFar({ fy: ch.data.fy, today: ch.data.today });
+  const chClosed = () => {
+    const t = String(ch.data.today), thisFy = Number(t.slice(5, 7)) >= 4 ? Number(t.slice(0, 4)) : Number(t.slice(0, 4)) - 1;
+    return ch.data.fy < thisFy;
+  };
+  const monthShortName = (m: string) => monthName(m).slice(0, 3);
+  const monthYear = (m: string) => `${monthShortName(m)} ${m.slice(0, 4)}`;
+  const chSvg = (id: string) => $(id) as unknown as SVGSVGElement;
 
   async function showChannels() {
     if (ch.loading) return;
-    if (ch.data && ch.fy === fy) { await renderChannels(); return; }
+    if (ch.data && ch.fy === fy) { renderChannels(); return; }
     ch.loading = true;
-    ch.failed = false;
-    $('ch-state').hidden = false;
-    $('ch-state').textContent = 'Loading the channels…';
+    const state = $('ch-state');
+    state.hidden = false;
+    state.textContent = 'Loading the cashflow…';
     try {
       const { status, data: payload } = await staffFetch(`/api/finance-admin/channels${fy ? `?fy=${fy}` : ''}`);
       if (status !== 200) throw new Error('load failed');
       ch.data = payload;
       ch.fy = payload.fy;
+      ch.months = presetMonths(chSoFar(), 'ytd');
+      ch.sel = null;
     } catch (err) {
       ch.loading = false;
       if (err instanceof StaffAuthError) {
@@ -570,182 +590,296 @@ import SignInGate from '../../../components/SignInGate.astro';
         else showForbidden();
         return;
       }
-      ch.failed = true;
-      $('ch-state').hidden = false;
-      $('ch-state').textContent = "Couldn't load the channels. Nothing was changed. Check your connection and open the tab again.";
+      state.hidden = false;
+      state.textContent = "Couldn't load the cashflow. Nothing was changed. Check your connection and open the tab again.";
       return;
     }
     ch.loading = false;
-    await renderChannels();
+    state.hidden = true;
+    renderChannels();
   }
 
-  function channelFilters() {
-    const f = ch.filters;
-    return { months: monthsOfPeriod({ fy: ch.data.fy, today: ch.data.today, period: f.period }), dir: f.dir, account: f.account, purpose: f.purpose };
-  }
+  function chPreset(p: string): string[] { return presetMonths(chSoFar(), p); }
+  const sameMonths = (a: string[], b: string[]) => a.length === b.length && a.every((m, i) => m === b[i]);
 
-  function fillChannelFilters() {
-    const d = ch.data, f = ch.filters, closedYear = d.fy < Number(String(d.today).slice(0, 4)) - (Number(String(d.today).slice(5, 7)) >= 4 ? 0 : 1);
-    $('ch-dir').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String((b as HTMLElement).dataset.d === f.dir)));
-    $('ch-per').querySelectorAll('button').forEach((node) => {
-      const b = node as HTMLButtonElement;
-      b.disabled = closedYear && b.dataset.p !== 'ytd';
-      b.setAttribute('aria-pressed', String(b.dataset.p === (closedYear ? 'ytd' : f.period)));
+  /** The parts that depend only on the chosen months, so dragging across the strip can repaint them without redrawing the diagram. */
+  function paintRange() {
+    const soFar = chSoFar();
+    const label = ch.months.length === 1 ? monthYear(ch.months[0]) : `${monthYear(ch.months[0])} to ${monthYear(ch.months[ch.months.length - 1])}`;
+    $('ch-range').textContent = label;
+    const from = $<HTMLSelectElement>('ch-from'), to = $<HTMLSelectElement>('ch-to');
+    for (const s of [from, to]) if (s.options.length !== soFar.length || s.options[0]?.value !== soFar[0]) s.replaceChildren(...soFar.map((m) => new Option(monthYear(m), m)));
+    from.value = ch.months[0];
+    to.value = ch.months[ch.months.length - 1];
+    $('ch-presets').querySelectorAll('button').forEach((b) => {
+      const p = (b as HTMLElement).dataset.p!;
+      b.setAttribute('aria-pressed', String(sameMonths(chPreset(p), ch.months)));
     });
-    const acct = $<HTMLSelectElement>('ch-acct');
-    acct.replaceChildren(new Option('All accounts', 'all'), ...d.accounts.map((a: any) => new Option(a.label, a.id)));
-    acct.value = f.account;
-    $('ch-plabel').textContent = f.dir === 'in' ? 'Received for' : 'Spent on';
-    const pur = $<HTMLSelectElement>('ch-purpose');
-    const list = f.dir === 'in' ? IN_PURPOSES : OUT_PURPOSES;
-    pur.replaceChildren(new Option(f.dir === 'in' ? 'All receipts' : 'All spending', 'all'), ...list.filter((p) => p.id !== 'projects' || f.dir === 'in').map((p) => new Option(p.label, p.id)));
-    if (f.dir === 'out') {
-      const group = document.createElement('optgroup');
-      group.label = 'Projects';
-      group.append(new Option('All projects', 'projects'), ...d.projects.map((p: any) => new Option(p.name, `project:${p.id}`)));
-      pur.insertBefore(group, [...pur.children].find((o) => (o as HTMLOptionElement).value === 'company') ?? null);
-    }
-    pur.value = [...pur.querySelectorAll('option')].some((o) => o.value === f.purpose) ? f.purpose : 'all';
-    f.purpose = pur.value;
   }
 
-  async function renderChannels() {
-    if (!ch.data) return;
-    fillChannelFilters();
+  const stat = (cls: string, value: string, label: string, delta?: string) => {
+    const box = el('div', `ch-stat ${cls}`);
+    box.append(el('b', '', value), el('span', '', label));
+    if (delta) box.append(el('span', 'ch-delta', delta));
+    return box;
+  };
+
+  function renderStats() {
+    const d = ch.data, cur = totalsOf(d.cube, ch.months);
+    const prevMonths = ch.cmp ? previousMonths(fyMonths(d.fy), ch.months) : null;
+    const prev = prevMonths ? totalsOf(d.cube, prevMonths) : null;
+    const prevLabel = prevMonths ? (prevMonths.length === 1 ? monthShortName(prevMonths[0]) : `${monthShortName(prevMonths[0])}–${monthShortName(prevMonths[prevMonths.length - 1])}`) : '';
+    const delta = (k: 'received' | 'spent' | 'moved' | 'left') => {
+      if (!prev) return undefined;
+      const diff = cur[k] - prev[k];
+      if (diff === 0) return `No change vs ${prevLabel}`;
+      const pct = prev[k] ? ` (${Math.round((Math.abs(diff) / Math.abs(prev[k])) * 100)}%)` : '';
+      return `${diff > 0 ? '▲' : '▼'} ${chMoney(Math.abs(diff))}${pct} vs ${prevLabel}`;
+    };
+    if (ch.cmp && !prev) $('ch-range').textContent += ' · nothing earlier this year to compare with';
+    const stats = $('ch-stats');
+    stats.replaceChildren(
+      stat('ch-in', lakhText(cur.received, 2), 'Received', delta('received')),
+      stat('ch-out', lakhText(cur.spent, 2), 'Spent', delta('spent')),
+      stat('ch-keep', `${cur.moved < 0 ? '−' : ''}${lakhText(Math.abs(cur.moved), 2)}`, cur.moved >= 0 ? 'Net moved into fixed deposits' : 'Net back from fixed deposits', delta('moved')),
+      stat('', `${cur.left >= 0 ? '+' : '−'}${lakhText(Math.abs(cur.left), 2)}`, cur.left >= 0 ? 'Left in the accounts' : 'Taken from the balance', delta('left')),
+    );
+  }
+
+  function renderChannels() {
     const d = ch.data;
-    const graph = graphOf({ cube: d.cube, accounts: d.accounts, delegates: d.delegates, delegatePayments: d.delegatePayments, fd: d.fd, projects: d.projects, filters: channelFilters() });
-    ch.graph = graph;
-    const moved = graph.total;
-    $('ch-note').textContent = d.hasData ? `${rupees(moved)} ${ch.filters.dir === 'in' ? 'came in' : 'went out'} through ${graph.nodes.filter((n: any) => n.kind === 'channel').length} channels. Circle area is the amount and a link is as thick as the money through it. Click a circle for its details; drag to move, scroll or pinch to zoom.` : 'No bank statement has been imported yet.';
-    $('ch-state').hidden = graph.nodes.length > 0;
-    $('ch-state').textContent = d.hasData ? 'No money moved in this slice. Change the period, account or purpose.' : 'Nothing to show yet. Import a bank statement first.';
-    if (!ch.view) {
-      try {
-        const mod = await import('../../../../scripts/lib/finance-channels-view.mjs');
-        ch.view = (await mod.createChannelsView({ container: $('ch-graph'), onSelect: (id: string | null) => { ch.selected = id; renderChannelPanel(); } })) as ChView;
-      } catch (err) {
-        console.error('[finance channels] could not start the graph', err);
-        $('ch-state').hidden = false;
-        $('ch-state').textContent = 'The map could not be drawn here. The table below has the same figures.';
-      }
+    if (!d) return;
+    const soFar = chSoFar(), all = fyMonths(d.fy);
+    ch.months = ch.months.filter((m) => soFar.includes(m));
+    if (!ch.months.length) ch.months = chPreset('ytd');
+    // the chrome that shows the choices
+    const closed = chClosed(), last = soFar[soFar.length - 1], before = soFar[soFar.length - 2];
+    const labels: Record<string, string> = { m1: closed ? monthShortName(last) : 'This month', prev: closed ? (before ? monthShortName(before) : '–') : 'Last month', m3: 'Last 3 months', ytd: closed ? 'Whole year' : 'Year to date' };
+    $('ch-presets').querySelectorAll('button').forEach((b) => {
+      const btn = b as HTMLButtonElement, p = btn.dataset.p!;
+      btn.textContent = labels[p];
+      btn.disabled = p === 'prev' && soFar.length < 2;
+    });
+    $<HTMLInputElement>('ch-cmp').checked = ch.cmp;
+    for (const [id, g] of [['ch-gin', ch.groupIn], ['ch-gout', ch.groupOut]]) $(id).querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String((b as HTMLElement).dataset.g === g)));
+    paintRange();
+    ch.strip.set({ months: all, soFar, bars: monthBars(d.cube, all), chosen: ch.months });
+    renderStats();
+
+    const flow = flowOf({ cube: d.cube, accounts: d.accounts, months: ch.months, groupIn: ch.groupIn, groupOut: ch.groupOut });
+    ch.flow = flow;
+    const state = $('ch-state'), svg = chSvg('ch-flow');
+    state.hidden = flow.hasData;
+    state.textContent = d.hasData ? 'No money moved in this period. Choose other months.' : 'Nothing to show yet. Import a bank statement first.';
+    if (flow.hasData) {
+      ch.layout = layoutFlow(flow);
+      ch.drawn = drawFlow(svg, ch.layout, {
+        heads: [`Money in · by ${ch.groupIn}`, 'Accounts', `Money out · by ${ch.groupOut}`],
+        fdNote: (n: any) => {
+          if (n.kind !== 'fd' || n.col !== 2) return '';
+          const at = ch.months[ch.months.length - 1];
+          return `Held ${chMoney(d.fd?.balances?.[at] ?? 0)} at ${monthShortName(at)} end`;
+        },
+        onSelect: (s: any) => chSelect(s.link ? { from: s.link.from, to: s.link.to } : { nodeId: s.nodeId }),
+        selected: selectionOf(),
+      });
+    } else {
+      ch.layout = null;
+      ch.drawn = null;
+      svg.replaceChildren();
+      ch.sel = null;
     }
-    if (ch.view) {
-      await ch.view.render(graph);
-      ch.view.resize();
-      if (ch.selected && graph.nodes.some((n: any) => n.id === ch.selected)) ch.view.select(ch.selected);
-      else ch.selected = null;
-    }
-    renderChannelPanel();
+    if (ch.sel && !selectionOf()) ch.sel = null;
+    renderDetail();
+    renderDelegates();
     renderChannelTable();
   }
 
-  const chRow = (label: string, value: string) => {
-    const li = el('li');
-    li.append(el('span', '', label), el('span', 'ch-v', value));
-    return li;
-  };
+  /** The chosen box or band as the drawing wants it, or null if it is not in the picture any more. */
+  function selectionOf() {
+    const s = ch.sel, l = ch.layout;
+    if (!s || !l) return null;
+    if ('nodeId' in s) return l.nodes.some((n: any) => n.id === s.nodeId) ? { nodeId: s.nodeId } : null;
+    const link = l.links.find((x: any) => x.from === s.from && x.to === s.to);
+    return link ? { link } : null;
+  }
 
-  function renderChannelPanel() {
-    const box = $('ch-panel');
+  function chSelect(next: ChSel) {
+    const same = ch.sel && next && JSON.stringify(ch.sel) === JSON.stringify(next);
+    ch.sel = same ? null : next;
+    ch.drawn?.select(selectionOf());
+    renderDetail();
+  }
+
+  const purposeName = (dir: string, id: string, uncategorised: boolean) => (uncategorised ? 'Not categorised yet' : ((dir === 'in' ? IN_PURPOSES : OUT_PURPOSES).find((p) => p.id === id)?.label ?? id));
+
+  /** What was clicked, in words, and the lines behind it (asked for from the server, so the count and amount agree with the picture). */
+  function renderDetail() {
+    const box = $('ch-detail');
     box.replaceChildren();
-    const g = ch.graph;
-    const n = g?.nodes.find((x: any) => x.id === ch.selected);
-    if (!n) {
-      box.append(el('h2', '', 'How to read this'));
-      const list = el('ul', 'ch-list');
-      ['Every circle is a money channel: an account, a channel the money passes through, a delegate’s UPI app, or the fixed deposits.',
-        'Circle area is the amount. A link is as thick as the money flowing through it.',
-        'What the money was for (salary, farm and household, projects, company, sinking fund) is a filter above, not a circle.',
-        'A ring around a circle means something there needs attention: click it to see what.'].forEach((t) => list.append(el('li', '', t)));
-      box.append(list);
+    const s = selectionOf(), flow = ch.flow, layout = ch.layout;
+    if (!s || !flow || !layout) {
+      box.append(el('p', 'hint', 'Click any box or band to follow its money from where it came to where it went, and to see the lines behind it.'));
       return;
     }
-    box.append(el('h2', '', n.label));
-    if (n.sub) box.append(el('p', 'hint', n.sub));
-    const facts = el('ul', 'ch-list');
-    if (n.kind === 'fd') {
-      facts.append(chRow('Balance', rupees(n.paise)), chRow(ch.filters.dir === 'in' ? 'Came back in the period' : 'Put in during the period', rupees(n.putPaise ?? 0)));
-      box.append(facts, el('p', 'hint', 'Held outside the current accounts. Today this is one circle; each deposit would be its own once deposits are recorded.'));
+    const nodes: any[] = flow.nodes;
+    const inTotal = nodes.filter((n) => n.col === 0).reduce((t, n) => t + n.paise, 0), outTotal = nodes.filter((n) => n.col === 2).reduce((t, n) => t + n.paise, 0);
+    let head: string, spec: any;
+    if (s.link) {
+      const a = nodes.find((n) => n.id === s.link.from), b = nodes.find((n) => n.id === s.link.to);
+      head = `${a.label} → ${b.label} — ${chMoney(s.link.paise)}`;
+      spec = specOf({ link: s.link, nodes, groupIn: ch.groupIn, groupOut: ch.groupOut });
     } else {
-      facts.append(chRow(ch.filters.dir === 'in' ? 'Money in' : 'Money out', rupees(n.paise)), chRow('Payments', String(n.n)));
-      if (n.kind === 'channel' && g.total > 0) facts.append(chRow('Share of all', `${Math.round((n.paise / g.total) * 100)}%`));
-      box.append(facts);
+      const n = nodes.find((x) => x.id === s.nodeId);
+      head = `${n.label} — ${chMoney(n.paise)}`;
+      if (n.kind === 'fd') head += ', moved between your own holdings, so neither received nor spent';
+      else if (n.kind === 'account') head += `. In ${chMoney(n.inPaise)}, out ${chMoney(n.outPaise)}`;
+      else head += `, ${Math.round((n.paise / (n.col === 0 ? inTotal : outTotal)) * 100)}% of all money ${n.col === 0 ? 'in' : 'out'}`;
+      spec = specOf({ node: n, nodes, groupIn: ch.groupIn, groupOut: ch.groupOut });
+      if (n.noCategory) head += `. ${n.noCategory} ${n.noCategory === 1 ? 'line has' : 'lines have'} no category yet`;
     }
-    if (n.kind === 'delegate' && n.capPaise) {
-      const st = statusOf(n.monthPaise ?? 0, n.capPaise);
-      const meter = el('div', `ch-meter ch-meter-${st}`);
-      const fill = el('i');
-      fill.style.width = `${Math.min(100, Math.round(((n.monthPaise ?? 0) / n.capPaise) * 100))}%`;
-      meter.append(fill);
-      box.append(el('p', 'hint', `${rupees(n.monthPaise ?? 0)} of ${rupees(n.capPaise)} in the last month of the period`), meter);
-    }
-    if (n.kind === 'channel') {
-      const used = usedFor({ cube: ch.data.cube, filters: channelFilters(), channelId: n.channel });
-      if (used.length) {
-        box.append(el('h3', '', ch.filters.dir === 'in' ? 'What it was for' : 'What it was used for'));
-        const list = el('ul', 'ch-list');
-        for (const u of used) {
-          const li = el('li');
-          const b = el('button', 'ch-link', u.label) as HTMLButtonElement;
-          b.type = 'button';
-          b.title = 'Show only this money';
-          b.addEventListener('click', () => { ch.filters.purpose = u.id; void renderChannels(); });
-          li.append(b, el('span', 'ch-v', rupees(u.paise)));
-          list.append(li);
-        }
-        box.append(list);
-      }
-    }
-    if (n.attention?.length) {
-      box.append(el('h3', '', 'Needs attention'));
-      for (const a of n.attention) box.append(el('p', 'ch-attn', a.text));
-      box.append(el('p', 'hint', 'Categorise them on the Ledger page.'));
-    }
-    const near = g.edges.filter((e: any) => e.from === n.id || e.to === n.id).map((e: any) => (e.from === n.id ? e.to : e.from));
-    if (near.length) {
-      box.append(el('h3', '', 'Connected to'));
-      const chips = el('div', 'ch-chips');
-      for (const id of [...new Set<string>(near)]) {
-        const other = g.nodes.find((x: any) => x.id === id);
-        if (!other) continue;
-        const b = el('button', 'ch-chip', other.label) as HTMLButtonElement;
-        b.type = 'button';
-        b.addEventListener('click', () => { ch.selected = id; ch.view?.select(id); renderChannelPanel(); });
-        chips.append(b);
-      }
-      box.append(chips);
-    }
-    const clear = el('button', 'ch-chip', 'Clear selection') as HTMLButtonElement;
+    const title = el('p', 'ch-head');
+    title.append(el('b', '', head));
+    const clear = el('button', 'ch-clear', 'Clear') as HTMLButtonElement;
     clear.type = 'button';
-    clear.addEventListener('click', () => { ch.selected = null; ch.view?.select(null); renderChannelPanel(); });
-    box.append(clear);
+    clear.addEventListener('click', () => { ch.sel = null; ch.drawn?.select(null); renderDetail(); });
+    box.append(title, clear);
+    const holder = el('div', 'ch-lines');
+    holder.append(el('p', 'hint', 'Loading the lines…'));
+    box.append(holder);
+    void loadLines(spec, holder, ++ch.seq);
+  }
+
+  async function loadLines(spec: Record<string, string>, holder: HTMLElement, seq: number) {
+    const q = new URLSearchParams({ fy: String(ch.data.fy), months: ch.months.join(',') });
+    for (const [k, v] of Object.entries(spec)) if (v) q.set(k, v);
+    let res: any;
+    try {
+      res = await staffFetch(`/api/finance-admin/channels/lines?${q}`);
+      if (res.status !== 200) throw new Error('load failed');
+    } catch (err) {
+      if (seq !== ch.seq) return;
+      if (err instanceof StaffAuthError) {
+        if (err.kind === 'unauthorized') showGate('Your session expired. Sign in again.');
+        else showForbidden();
+        return;
+      }
+      holder.replaceChildren(el('p', 'hint', "Couldn't load the lines. Nothing was changed. Click it again to retry."));
+      return;
+    }
+    if (seq !== ch.seq) return;   // another box was chosen while this one was loading
+    const r = res.data;
+    holder.replaceChildren();
+    if (!r.count) { holder.append(el('p', 'hint', 'No lines.')); return; }
+    const wrap = el('div', 'tablewrap');
+    const table = document.createElement('table');
+    const head = table.createTHead().insertRow();
+    ['Date', 'Account', 'Channel', 'Purpose', 'Amount'].forEach((t, i) => { const th = document.createElement('th'); th.textContent = t; if (i === 4) th.className = 'num'; head.append(th); });
+    const body = table.createTBody();
+    for (const l of r.lines) {
+      const tr = body.insertRow();
+      const date = tr.insertCell();
+      const a = document.createElement('a');
+      a.href = `/internal/finance/ledger/?line=${encodeURIComponent(l.id)}`;
+      a.textContent = day(l.date);
+      date.append(a);
+      tr.insertCell().textContent = l.account;
+      tr.insertCell().textContent = (CHANNELS as Record<string, any>)[l.channel]?.label ?? l.channel;
+      tr.insertCell().textContent = purposeName(l.dir, l.purpose, l.uncategorised);
+      const amt = tr.insertCell();
+      amt.className = 'num';
+      amt.textContent = `${l.dir === 'in' ? '+' : '−'}${chMoney(l.paise)}`;
+    }
+    wrap.append(table);
+    const more = el('p', 'hint', `${r.count} ${r.count === 1 ? 'line' : 'lines'}, ${chMoney(r.paise)}${r.lines.length < r.pieces ? `. The largest ${r.lines.length} are shown.` : '.'} Open a date to see the line in the Ledger.`);
+    holder.append(wrap, more);
+  }
+
+  function renderDelegates() {
+    const d = ch.data, box = $('ch-deleg');
+    box.replaceChildren();
+    const last = ch.months[ch.months.length - 1], months = new Set(ch.months);
+    const people = [...(d.delegates as any[]).map((x) => ({ id: x.id as string | null, label: /^\d+$/.test(x.label) ? `Number ${x.label}` : x.label, cap: x.capPaise as number | null })), { id: null, label: 'No delegate yet', cap: null }];
+    let any = false;
+    for (const p of people) {
+      const mine = (d.delegatePayments as any[]).filter((x) => x.d === p.id && months.has(x.m));
+      const total = mine.reduce((t, x) => t + x.paise, 0);
+      if (!total) continue;
+      any = true;
+      const inMonth = mine.filter((x) => x.m === last).reduce((t, x) => t + x.paise, 0);
+      const row = el('div', 'ch-dl');
+      row.append(el('b', '', p.label));
+      if (p.cap) {
+        const meter = el('div', `ch-meter ch-meter-${statusOf(inMonth, p.cap)}`);
+        meter.setAttribute('role', 'img');
+        meter.setAttribute('aria-label', `${monthName(last)}: ${chMoney(inMonth)} of ${chMoney(p.cap)}`);
+        const fill = el('i');
+        fill.style.width = `${Math.min(100, Math.round((inMonth / p.cap) * 100))}%`;
+        meter.append(fill);
+        row.append(meter, el('span', '', `${chMoney(total)} paid · ${monthShortName(last)} ${chMoney(inMonth)} of ${chMoney(p.cap)}`));
+      } else {
+        row.append(el('span', 'hint', 'no monthly limit set'), el('span', '', `${chMoney(total)} paid`));
+      }
+      box.append(row);
+    }
+    if (!any) box.append(el('p', 'hint', 'No delegate payments in this period.'));
   }
 
   function renderChannelTable() {
-    const g = ch.graph;
     const wrap = $('ch-table');
     wrap.replaceChildren();
-    if (!g || !g.nodes.length) return;
+    const flow = ch.flow;
+    if (!flow?.links.length) return;
+    const byId = new Map<string, any>(flow.nodes.map((n: any) => [n.id, n]));
     const table = document.createElement('table');
     const head = table.createTHead().insertRow();
-    ['Circle', 'Kind', ch.filters.dir === 'in' ? 'Money in' : 'Money out', 'Payments'].forEach((t, i) => { const th = document.createElement('th'); th.textContent = t; if (i > 1) th.className = 'num'; head.append(th); });
+    ['From', 'To', 'Amount'].forEach((t, i) => { const th = document.createElement('th'); th.textContent = t; if (i === 2) th.className = 'num'; head.append(th); });
     const body = table.createTBody();
-    const kind: Record<string, string> = { account: 'Account', channel: 'Channel', delegate: 'Delegate', fd: 'Fixed deposits' };
-    for (const n of g.nodes) {
+    for (const l of [...flow.links].sort((a: any, b: any) => b.paise - a.paise)) {
       const tr = body.insertRow();
-      [n.label, kind[n.kind] ?? n.kind, rupees(n.paise), n.kind === 'fd' ? '–' : String(n.n)].forEach((t, i) => { const td = tr.insertCell(); td.textContent = t; if (i > 1) td.className = 'num'; });
+      tr.insertCell().textContent = byId.get(l.from).label;
+      tr.insertCell().textContent = byId.get(l.to).label;
+      const amt = tr.insertCell();
+      amt.className = 'num';
+      amt.textContent = chMoney(l.paise);
     }
     wrap.append(table);
   }
 
-  $('ch-dir').addEventListener('click', (e) => { const b = (e.target as Element).closest('button'); if (!b) return; ch.filters.dir = (b as HTMLElement).dataset.d === 'in' ? 'in' : 'out'; ch.filters.purpose = 'all'; ch.selected = null; void renderChannels(); });
-  $('ch-per').addEventListener('click', (e) => { const b = (e.target as Element).closest('button') as HTMLButtonElement | null; if (!b || b.disabled) return; ch.filters.period = b.dataset.p as 'ytd' | 'm3' | 'm1'; void renderChannels(); });
-  $('ch-acct').addEventListener('change', (e) => { ch.filters.account = (e.target as HTMLSelectElement).value; void renderChannels(); });
-  $('ch-purpose').addEventListener('change', (e) => { ch.filters.purpose = (e.target as HTMLSelectElement).value; void renderChannels(); });
-  $('ch-zin').addEventListener('click', () => ch.view?.zoomBy(1.3));
-  $('ch-zout').addEventListener('click', () => ch.view?.zoomBy(1 / 1.3));
-  $('ch-fit').addEventListener('click', () => ch.view?.fit());
-  $('ch-arrange').addEventListener('click', () => { void ch.view?.arrange(); });
+  ch.strip = mountStrip(chSvg('ch-strip'), {
+    onChange: (months: string[], done: boolean) => {
+      if (!ch.data || !months.length) return;
+      ch.months = months;
+      if (!done) { paintRange(); return; }
+      ch.sel = null;
+      renderChannels();
+    },
+  });
+  $('ch-presets').addEventListener('click', (e) => {
+    const b = (e.target as Element).closest('button') as HTMLButtonElement | null;
+    if (!b || b.disabled || !ch.data) return;
+    ch.months = chPreset(b.dataset.p!);
+    ch.sel = null;
+    renderChannels();
+  });
+  const chRange = () => {
+    if (!ch.data) return;
+    ch.months = rangeOf(chSoFar(), $<HTMLSelectElement>('ch-from').value, $<HTMLSelectElement>('ch-to').value);
+    ch.sel = null;
+    renderChannels();
+  };
+  $('ch-from').addEventListener('change', chRange);
+  $('ch-to').addEventListener('change', chRange);
+  $('ch-cmp').addEventListener('change', (e) => { ch.cmp = (e.target as HTMLInputElement).checked; renderChannels(); });
+  for (const [id, key] of [['ch-gin', 'groupIn'], ['ch-gout', 'groupOut']] as const) {
+    $(id).addEventListener('click', (e) => {
+      const b = (e.target as Element).closest('button');
+      if (!b || !ch.data) return;
+      ch[key] = (b as HTMLElement).dataset.g === 'purpose' ? 'purpose' : 'channel';
+      ch.sel = null;
+      renderChannels();
+    });
+  }
   $('tabs').addEventListener('click', (e) => {
     const b = (e.target as Element).closest('button');
     if (b) location.hash = (b as HTMLElement).dataset.v!;
@@ -1395,132 +1529,182 @@ import SignInGate from '../../../components/SignInGate.astro';
     }
   }
 
-  /* Channels: a graph (Cytoscape.js) with its filters, a details panel and a table. Colours inside the graph come from the same tokens. */
-  .ch-filters {
+  /* Channels: the period and month strip, the cashflow diagram and the lines behind it. The diagram is SVG drawn by
+     scripts/lib/finance-channels-view.mjs; its colours are the chart tokens, so both appearances work. */
+  .ch-period,
+  .ch-main {
+    display: grid;
+    gap: 6px;
+  }
+
+  .ch-row {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 8px 14px;
+    justify-content: space-between;
+    gap: 8px 20px;
   }
 
-  .ch-field {
+  .ch-row h2 {
+    margin: 0;
+  }
+
+  .ch-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 22px;
+  }
+
+  .ch-field,
+  .ch-check,
+  .ch-seg {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     font-size: var(--text-sm);
     color: var(--tvc-ink-soft);
   }
 
-  .ch-wrap {
-    display: grid;
-    gap: 16px;
-    grid-template-columns: minmax(0, 1fr) minmax(250px, 300px);
-    align-items: start;
+  .ch-check {
+    cursor: pointer;
   }
 
-  .ch-stage {
-    position: relative;
-    padding: 0;
-    overflow: hidden;
+  .ch-scroll {
+    overflow-x: auto;
   }
 
-  .ch-graph {
-    height: 560px;
-    background-image: radial-gradient(var(--tvc-line) 1px, transparent 1px);
-    background-size: 22px 22px;
+  .fl-strip,
+  .fl-flow {
+    display: block;
+    width: 100%;
+    height: auto;
   }
 
-  .ch-state {
-    position: absolute;
-    inset: 0;
-    display: grid;
-    place-items: center;
-    margin: 0;
-    padding: 24px;
-    text-align: center;
-    color: var(--tvc-ink-soft);
-    pointer-events: none;
+  .fl-flow {
+    min-width: 760px;
   }
 
-  .ch-tools {
-    position: absolute;
-    left: 10px;
-    bottom: 10px;
+  .fl-strip {
+    min-width: 520px;
+    touch-action: pan-y;
+    user-select: none;
+  }
+
+  .ch-stats {
     display: flex;
-    gap: 6px;
+    flex-wrap: wrap;
+    gap: 10px 28px;
+    align-items: baseline;
   }
 
-  .ch-tools button {
-    min-width: 40px;
-    height: 36px;
-    padding: 0 8px;
+  .ch-stat b {
+    display: block;
+    font-size: 1.5rem;
+    letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .ch-stat span {
+    display: block;
+    font-size: var(--text-xs);
+    color: var(--tvc-ink-soft);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .ch-stat .ch-delta {
+    margin-top: 2px;
+    font-size: var(--text-sm);
+    text-transform: none;
+    letter-spacing: 0;
+  }
+
+  .ch-in b {
+    color: var(--tvc-chart-in);
+  }
+
+  .ch-out b {
+    color: var(--tvc-orange-text);
+  }
+
+  .ch-keep b {
+    color: var(--tvc-chart-balance);
+  }
+
+  .ch-legend {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+  }
+
+  .ch-swatch {
+    flex: none;
+    width: 18px;
+    height: 8px;
+    border-radius: 2px;
+    background: var(--tvc-chart-balance);
+  }
+
+  .ch-detail {
+    display: grid;
+    gap: 8px;
+  }
+
+  .ch-head {
+    margin: 0;
+    max-width: 80ch;
+  }
+
+  .ch-clear {
+    justify-self: start;
+    padding: 2px 11px;
     border: 1px solid var(--tvc-line-strong);
-    border-radius: 18px;
+    border-radius: 99px;
     background: var(--tvc-white);
     color: var(--tvc-ink);
     font: inherit;
     font-size: var(--text-sm);
-    font-weight: 600;
     cursor: pointer;
   }
 
-  .ch-tools button:hover {
+  .ch-clear:hover {
     background: var(--tvc-cream);
   }
 
-  .ch-panel {
-    display: grid;
-    gap: 10px;
-    align-content: start;
-  }
-
-  .ch-panel h3 {
-    margin: 4px 0 0;
-    font-size: var(--text-sm);
-    font-weight: 600;
-    color: var(--tvc-ink-soft);
-  }
-
-  .ch-panel .hint {
-    margin: 0;
-  }
-
-  .ch-list {
+  .ch-lines {
     display: grid;
     gap: 6px;
+  }
+
+  .ch-lines .hint,
+  .ch-controls .hint {
     margin: 0;
-    padding: 0;
-    list-style: none;
-    font-size: var(--text-sm);
   }
 
-  .ch-list li {
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
-  }
-
-  .ch-v {
-    font-variant-numeric: tabular-nums;
-    font-weight: 600;
-    white-space: nowrap;
-  }
-
-  .ch-link {
-    padding: 0;
-    border: 0;
-    background: none;
-    font: inherit;
-    color: var(--tvc-green-dark);
+  .ch-lines th,
+  .ch-lines td {
     text-align: left;
-    text-decoration: underline;
-    cursor: pointer;
   }
 
-  .ch-attn {
-    margin: 0;
+  .ch-lines th.num,
+  .ch-lines td.num {
+    text-align: right;
+  }
+
+  .ch-deleg {
+    display: grid;
+    gap: 10px;
+    margin-top: 8px;
+  }
+
+  .ch-dl {
+    display: grid;
+    grid-template-columns: minmax(120px, 200px) minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: center;
     font-size: var(--text-sm);
-    color: var(--tvc-orange-text);
   }
 
   .ch-meter {
@@ -1545,43 +1729,160 @@ import SignInGate from '../../../components/SignInGate.astro';
     background: var(--tvc-error-text);
   }
 
-  .ch-chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-
-  .ch-chip {
-    min-height: 30px;
-    padding: 3px 11px;
-    border: 1px solid var(--tvc-line-strong);
-    border-radius: 99px;
-    background: var(--tvc-white);
-    color: var(--tvc-ink);
-    font: inherit;
-    font-size: var(--text-sm);
-    cursor: pointer;
-  }
-
-  .ch-chip:hover {
-    background: var(--tvc-cream);
-  }
-
   .ch-details summary {
     cursor: pointer;
     font-size: var(--text-sm);
     color: var(--tvc-ink-soft);
   }
 
-  @media (max-width: 1000px) {
-    .ch-wrap {
-      grid-template-columns: minmax(0, 1fr);
-    }
+  /* inside the diagram */
+  .fl-head {
+    font-size: var(--text-xs);
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    fill: var(--tvc-ink-soft);
+  }
+
+  .fl-name,
+  .fl-acct {
+    font-size: var(--text-sm);
+    fill: var(--tvc-ink);
+  }
+
+  .fl-acct {
+    font-weight: 650;
+  }
+
+  .fl-amt {
+    font-size: var(--text-xs);
+    fill: var(--tvc-ink-soft);
+  }
+
+  .fl-keptnote {
+    font-size: var(--text-xs);
+    font-weight: 650;
+    fill: var(--tvc-chart-balance);
+  }
+
+  .fl-axis-label {
+    font-size: var(--text-xs);
+    fill: var(--tvc-ink);
+  }
+
+  .fl-flow .halo {
+    paint-order: stroke;
+    stroke: var(--tvc-white);
+    stroke-width: 4px;
+    stroke-linejoin: round;
+  }
+
+  .fl-link {
+    fill: none;
+    opacity: 0.32;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+
+  .fl-link:hover {
+    opacity: 0.6;
+  }
+
+  .fl-link.on {
+    opacity: 0.62;
+  }
+
+  .fl-in {
+    stroke: var(--tvc-chart-in);
+  }
+
+  .fl-out {
+    stroke: var(--tvc-chart-out);
+  }
+
+  .fl-fd {
+    stroke: var(--tvc-chart-balance);
+  }
+
+  .fl-box.fl-in {
+    fill: var(--tvc-chart-in);
+    stroke: none;
+  }
+
+  .fl-box.fl-out {
+    fill: var(--tvc-chart-out);
+    stroke: none;
+  }
+
+  .fl-box.fl-fd {
+    fill: var(--tvc-chart-balance);
+    stroke: none;
+  }
+
+  .fl-box.fl-account {
+    fill: var(--tvc-ink);
+  }
+
+  .fl-kept {
+    fill: var(--tvc-chart-balance);
+  }
+
+  .fl-attn {
+    fill: var(--tvc-orange-text);
+    stroke: var(--tvc-white);
+    stroke-width: 1.5px;
+  }
+
+  .fl-node {
+    cursor: pointer;
+  }
+
+  .fl-node:focus-visible {
+    outline: 2px solid var(--tvc-ink);
+    outline-offset: 2px;
+  }
+
+  .fl-node.sel .fl-box {
+    stroke: var(--tvc-ink);
+    stroke-width: 2px;
+  }
+
+  .fl-node.dim,
+  .fl-link.dim {
+    opacity: 0.12;
+  }
+
+  .fl-bar {
+    cursor: pointer;
+  }
+
+  .fl-bar.off rect {
+    opacity: 0.28;
+  }
+
+  .fl-in-bar {
+    fill: var(--tvc-chart-in);
+  }
+
+  .fl-out-bar {
+    fill: var(--tvc-chart-out);
+  }
+
+  .fl-hit {
+    fill: transparent;
+  }
+
+  .fl-bar.off .fl-hit {
+    opacity: 1;
+  }
+
+  .fl-axis {
+    stroke: var(--tvc-line);
   }
 
   @media (max-width: 640px) {
-    .ch-graph {
-      height: 440px;
+    .ch-dl {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 4px;
     }
   }
 </style>

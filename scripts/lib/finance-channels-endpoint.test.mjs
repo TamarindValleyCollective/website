@@ -198,3 +198,61 @@ test('an auditor’s visit is logged, and refused if it cannot be', async () => 
   assert.equal((await call()).status, 200);
   assert.equal(auditRows.length, 0, 'ordinary views are not logged');
 });
+
+// ---- GET /channels/lines: the lines behind a box or band -----------------------------------------------------------------------------
+
+const ALL = '2025-04,2025-05,2025-06,2025-07,2025-08,2025-09,2025-10,2025-11,2025-12,2026-01,2026-02,2026-03';
+const callLines = (query) => handler(new Request(`https://x.test/api/finance-admin/channels/lines?fy=2025&months=${ALL}${query}`, { headers: { authorization: `Bearer ${who}` } }));
+
+test('lines: the same grants as the picture, and only months of that year, in or out, only or exclude', async () => {
+  reset([person()], []);
+  assert.equal((await callLines('')).status, 403);
+  grant('admin');
+  assert.equal((await handler(new Request('https://x.test/api/finance-admin/channels/lines?fy=2025', { headers: { authorization: `Bearer ${who}` } }))).status, 400, 'months are needed');
+  assert.equal((await handler(new Request('https://x.test/api/finance-admin/channels/lines?fy=2025&months=2024-01', { headers: { authorization: `Bearer ${who}` } }))).status, 400, 'a month of another year');
+  assert.equal((await callLines('&dir=sideways')).status, 400);
+  assert.equal((await callLines('&fd=maybe')).status, 400);
+  assert.equal((await callLines('&dir=out')).status, 200);
+});
+
+test('lines: the count and amount behind a box agree with the aggregate, and each line says how to open it in the Ledger', async () => {
+  grant('admin');
+  const cube = (await (await call()).json()).cube;
+  const paytm = await (await callLines('&dir=out&channel=paytm&fd=exclude')).json();
+  assert.equal(paytm.paise, sum(cube.filter((c) => c.c === 'paytm' && c.d === 'out')));
+  assert.equal(paytm.count, 1, 'one bank line, split in two allocations');
+  assert.equal(paytm.pieces, 2);
+  assert.deepEqual(paytm.lines.map((l) => [l.id, l.paise]), [[L.shop, 70000], [L.shop, 30000]], 'the biggest first, each with the line id');
+  assert.equal(paytm.lines[0].account, 'Current account');
+  const fd = await (await callLines('&dir=out&fd=only')).json();
+  assert.deepEqual([fd.count, fd.paise], [1, 200000]);
+  const salary = await (await callLines('&dir=out&purpose=salary&fd=exclude')).json();
+  assert.equal(salary.paise, 70000);
+  const card = await (await callLines('&channel=card')).json();
+  assert.deepEqual(card.lines.map((l) => l.uncategorised), [true], 'a line with no category is marked');
+  const noMatch = await (await callLines('&channel=gateway')).json();
+  assert.deepEqual([noMatch.count, noMatch.paise, noMatch.lines], [0, 0, []]);
+});
+
+test('lines: only the largest few are listed, but the count and amount cover them all', async () => {
+  grant('admin');
+  for (let i = 0; i < 12; i++) {
+    const id = ID(900 + i);
+    db.data.fin_bank_lines.push({ id, bank_account_id: 'acc', tran_date: '2025-06-01', direction: 'debit', amount_paise: 1000 + i, narration: 'NEFT/0101102630472/10/' });
+    db.data.fin_allocations.push({ id: ID(950 + i), bank_line_id: id, category_id: C.groc, project_id: null, amount_paise: 1000 + i, posted_at: '2025-07-01T00:00:00Z' });
+  }
+  const r = await (await callLines('&channel=paypro&fd=exclude')).json();
+  assert.equal(r.count, 12);
+  assert.equal(r.lines.length, 8);
+  assert.equal(r.paise, 12000 + 66);
+  assert.deepEqual(r.lines.map((l) => l.paise), [1011, 1010, 1009, 1008, 1007, 1006, 1005, 1004]);
+});
+
+test('lines: no narration, UPI reference or household name leaves the server, and an auditor’s visit is logged', async () => {
+  grant('read_only');
+  const res = await callLines('&dir=out');
+  const text = await res.text();
+  for (const secret of ['Household Nine', 'Corner Shop', 'HARDWARE', '600000000001', 'AXODH']) assert.ok(!text.includes(secret), secret);
+  assert.equal(auditRows.length, 1);
+  assert.equal(auditRows[0].action, 'finance.channels_viewed');
+});
