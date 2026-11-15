@@ -294,6 +294,10 @@ import SignInGate from '../../../components/SignInGate.astro';
           for (const el of mounted.values()) el.remove();
           mounted.clear();
           applyView();
+          // Tick the restored lines that can post, so the Post bar is there straight away.
+          const ticked = { ...tstate.rowSelection };
+          for (const [id] of usable) if (isReady(byId.get(id)!)) ticked[id] = true;
+          table.setRowSelection(ticked);
           showToast(`Restored ${usable.length} ${usable.length === 1 ? 'line' : 'lines'}. Nothing is posted yet.`);
         }, 'button button--small'),
         button('Forget them', () => {
