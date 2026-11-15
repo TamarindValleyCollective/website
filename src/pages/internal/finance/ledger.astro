@@ -12,6 +12,7 @@
 // placed with textContent only, never as HTML.
 import StaffLayout from '../../../layouts/StaffLayout.astro';
 import '../../../styles/linked-picker.css';
+import '../../../styles/money.css';
 import SignInGate from '../../../components/SignInGate.astro';
 ---
 
@@ -120,7 +121,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   import { clearState, showFailure, showLoading } from '../../../../scripts/lib/staff-states.mjs';
   import { linkedPicker } from '../../../../scripts/lib/linked-picker.mjs';
   import { categoryNodes, categoryPath, partyNodes, partyPath, partyStart, readCategoryPath } from '../../../../scripts/lib/finance-picker-nodes.mjs';
-  import { button, categoryOptions, combo, h, input, labelled, niceDate, niceMonth, parseRupees, partyOptions, pill, present, rupees, unitOptions } from '../../../../scripts/lib/finance-ui.mjs';
+  import { amountKind, button, categoryOptions, combo, h, input, labelled, niceDate, niceMonth, parseRupees, partyOptions, kindClass, moneyText, pill, present, rupees, unitOptions } from '../../../../scripts/lib/finance-ui.mjs';
   import { GROUP_FIELDS, buildItems, defaultUnitFor, financialYearOf, groupLabel, matchOptions, kindLabel, kindsInOrder, optionCounts, optionKeys, optionLabel, passesChips, passesWords, readFavorites, withFavorite } from '../../../../scripts/lib/finance-search.mjs';
   import { originLabel, ORIGINS } from '../../../../scripts/lib/finance-origin.mjs';
   import { compareRows, describeCondition, matchAmount, matchDate, matchText, parseAmount, parseDate, parseText } from '../../../../scripts/lib/finance-columns.mjs';
@@ -175,7 +176,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   let query = ''; // what is being typed right now; it filters live
   let groupBy: string[] = ['month']; // months are headings in the table: status, Close month and the lock live there
   const collapsed = new Set<string>();
-  type Item = { kind: 'line'; line: Line } | { kind: 'group'; key: string; depth: number; field: string; label: string; count: number; netPaise: number; open: boolean };
+  type Item = { kind: 'line'; line: Line } | { kind: 'group'; key: string; depth: number; field: string; label: string; count: number; netPaise: number; transfers: number; open: boolean };
   let items: Item[] = []; // what the list shows: group headings and the lines of the groups that are open
   let itemIndexOfLine = new Map<string, number>();
   let matched = 0; // lines the search leaves, including those inside collapsed groups
@@ -322,6 +323,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   const partyById = (id: string) => data?.lookups.parties.find((p) => p.id === id) ?? null;
   // The category a line is being described with (typed, or the one suggested and shown), so the party list and the follow-up fields can follow it.
   const categoryShown = (l: Line) => draftOf(l.id).categoryId || ghostOf(l, 'categoryId');
+  const isTransferLine = (l: Line) => typeOfCategory(l.allocation?.categoryId || categoryShown(l)) === 'transfer';
   // What would be posted for the unit, year and project of a line: the person's choice, else the sensible default for this payer and date.
   function describedWith(l: Line) {
     const d = draftOf(l.id);
@@ -1196,7 +1198,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     const row = (l: Line) => ({ id: l.id, date: l.date, origin: originText(l), narration: l.narration, amount: l.amountPaise, category: l.effective.category, party: l.effective.party, nature: l.effective.nature, status: l.review ? 'review' : l.state });
     const sorted = shown.map((l) => ({ l, r: row(l) })).sort((a, b) => compare(a.r, b.r)).map((x) => x.l);
     matched = sorted.length;
-    const built = buildItems(sorted, groupBy, collapsed, niceMonth);
+    const built = buildItems(sorted, groupBy, collapsed, niceMonth, { isTransfer: isTransferLine });
     items = built.items as Item[];
     lines = built.visible as Line[];
     itemIndexOfLine = new Map();
@@ -1541,7 +1543,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   });
 
   // ---- rows. Built once when they scroll into view; an edit changes the cells in place (fill), never the row element.
-  type Refs = { catHint: HTMLElement; check: HTMLInputElement; narr: HTMLButtonElement; details: HTMLElement; cat: ComboEl; catTick: HTMLElement; catText: HTMLElement; party: ComboEl; partyTick: HTMLElement; partyText: HTMLElement; nature: HTMLInputElement; natureTick: HTMLElement; natureText: HTMLElement; pillSlot: HTMLElement; catPeek: HTMLButtonElement; partyPeek: HTMLButtonElement; natureCell: HTMLElement; meta: HTMLElement; originSlot: HTMLElement };
+  type Refs = { amountText: HTMLElement; catHint: HTMLElement; check: HTMLInputElement; narr: HTMLButtonElement; details: HTMLElement; cat: ComboEl; catTick: HTMLElement; catText: HTMLElement; party: ComboEl; partyTick: HTMLElement; partyText: HTMLElement; nature: HTMLInputElement; natureTick: HTMLElement; natureText: HTMLElement; pillSlot: HTMLElement; catPeek: HTMLButtonElement; partyPeek: HTMLButtonElement; natureCell: HTMLElement; meta: HTMLElement; originSlot: HTMLElement };
   const refs = new WeakMap<HTMLElement, Refs>();
   const tick = (label: string, onClick: () => void) => h('button', { class: 'tick', text: '✓', attrs: { type: 'button', 'aria-label': label, title: label }, on: { click: onClick } });
   const cell = (cls: string, label: string, ...kids: (Node | null)[]) => h('span', { class: `gcell gcell--${cls}`, attrs: { role: 'cell', 'data-label': label } }, ...kids);
@@ -1618,13 +1620,16 @@ import SignInGate from '../../../components/SignInGate.astro';
     const partyPeek = peek();
     const meta = h('span', { class: 'gcell gcell--meta', attrs: { role: 'cell' } });
 
+    // The amount, in the one style every admin table uses (finance-ui.mjs, moneyNode): the sign always, green for money in, blue with ⇄ for a
+    // transfer between TVC's own accounts, plain for money out. fill() sets it, since a transfer is known by the category.
+    const amountText = h('span', { class: 'amt' });
     const rowEl = h(
       'div',
       { class: 'lrow', attrs: { role: 'row', 'data-id': l.id } },
       cell('select', '', check),
       cell('date', '', dateBtn),
       cell('origin', 'Origin', originSlot),
-      cell(`amount amount--${l.direction}`, '', document.createTextNode(`${l.direction === 'debit' ? '−' : '+'}${rupees(l.amountPaise)}`)),
+      cell('amount', '', amountText),
       cell('category', 'Category', catPeek, cat, catTick, catText, catHint),
       cell('party', l.direction === 'debit' ? 'Paid to' : 'Received from', partyPeek, party, partyTick, partyText),
       cell('status', '', pillSlot),
@@ -1684,7 +1689,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       if (now.missingParty && now.state === 'allocated' && (e.target as HTMLElement).closest('.gcell--party')) editPartyInline(now, partyText);
       else void openLine(l.id);
     });
-    refs.set(rowEl, { catHint, check, narr, details, cat, catTick, catText, party, partyTick, partyText, nature, natureTick, natureText, pillSlot, catPeek, partyPeek, natureCell, meta, originSlot });
+    refs.set(rowEl, { amountText, catHint, check, narr, details, cat, catTick, catText, party, partyTick, partyText, nature, natureTick, natureText, pillSlot, catPeek, partyPeek, natureCell, meta, originSlot });
     fill(rowEl, l);
     return rowEl;
   }
@@ -1719,6 +1724,11 @@ import SignInGate from '../../../components/SignInGate.astro';
     const d = draftOf(l.id);
     el.classList.toggle('is-locked', !can);
     el.classList.toggle('is-selected', Boolean(tstate.rowSelection[l.id]));
+    const kind = amountKind(l.direction, isTransferLine(l));
+    el.classList.toggle('is-credit', kind === 'cr');
+    el.classList.toggle('is-transfer', kind[0] === 't');
+    r.amountText.className = `amt${kindClass(kind) ? ` amt--${kindClass(kind)}` : ''}`;
+    r.amountText.textContent = moneyText(l.amountPaise, kind);
     r.check.disabled = !can;
     r.check.checked = Boolean(tstate.rowSelection[l.id]);
     // With more than one bank account the account matters as much as the channel, so it sits under it.
@@ -2085,7 +2095,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       h('span', { class: 'ggroup-label', text: g.label }),
       state,
       h('span', { class: 'ggroup-count', text: `${g.count} ${g.count === 1 ? 'line' : 'lines'}` }),
-      h('span', { class: 'ggroup-net', text: `Net ${net}`, attrs: { title: 'Money in minus money out for these lines' } }),
+      h('span', { class: 'ggroup-net', text: `Net ${net}${g.transfers ? ` · ${g.transfers} ${g.transfers === 1 ? 'transfer' : 'transfers'} not counted` : ''}`, attrs: { title: g.transfers ? 'Money in minus money out. Transfers between TVC\'s own accounts net to nothing, so they are left out.' : 'Money in minus money out for these lines' } }),
     );
     b.addEventListener('click', () => {
       if (collapsed.has(g.key)) collapsed.delete(g.key);
@@ -3322,8 +3332,13 @@ import SignInGate from '../../../components/SignInGate.astro';
     white-space: nowrap;
   }
 
-  .ledger .amount--credit {
-    color: var(--tvc-green-dark);
+  /* A credit or a transfer is marked by a stripe down the row (a fill would clash with a ticked row, which is green). */
+  .ledger .lrow.is-credit {
+    box-shadow: inset 4px 0 0 var(--tvc-green-dark);
+  }
+
+  .ledger .lrow.is-transfer {
+    box-shadow: inset 4px 0 0 var(--tvc-sky-blue-text);
   }
 
   .ledger .gcell--category,

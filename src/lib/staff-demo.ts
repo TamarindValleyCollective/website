@@ -327,7 +327,8 @@ function demoFinanceParties() {
     party('p5', 'Test Electricals', [], { kind: 'other' }),
     party('p6', 'TEST ELECTRCIALS', [verified('a6', 'bank', 'ending 4821', 1, 'TEST ELECTRICALS')], { lastPaid: '2026-11-14', paidPaise: 3670000, postings: 3 }),
     party('p7', 'Sri Lakshmi Hardware', [verified('a7', 'upi', 'ending 0192', 1, 'SRI LAKSHMI HARDWARE AND PAINTS')], { kind: 'other', lastPaid: '2026-10-28', paidPaise: 4120000, postings: 4 }),
-    party('p8', 'Asha Nursery', [], { kind: 'other', lastPaid: '2026-11-09', paidPaise: 1825000, postings: 3 }),
+    party('p8', 'Asha Nursery', [], { kind: 'other', lastPaid: '2026-11-09', paidPaise: 1825000, postings: 3, lastReceived: '2026-11-11', receivedPaise: 182500, lines: 4 }),
+    party('p9', 'Workshop Guest', [], { kind: 'customer', lastReceived: '2026-11-12', receivedPaise: 1800000, lines: 1 }),
   ];
   // What the posted payments were booked under, for the kind suggestions (the real list reads it from the books).
   const stat = (postings: number, categoryName: string, categoryType: string) => ({ postings, direction: 'debit', categoryName, categoryType, categoryShare: 1 });
@@ -337,6 +338,38 @@ function demoFinanceParties() {
     { kindLabels: { vendor: 'Vendor', employee: 'Employee', customer: 'Customer', government: 'Government' } },
   );
   return { kinds: ['member', 'vendor', 'employee', 'customer', 'bank', 'government', 'director', 'other'], canEdit: true, canVerify: true, me: { id: 'demo-1', ready: true, hasPasskey: true, stepUpValid: false }, needsReviewCount: 0, parties: financeParties, suggestions };
+}
+// Invented ledger lines for /internal/finance/ledger/: debits, credits, and both sides of a transfer between TVC's own accounts.
+function demoLedger() {
+  const categories = [
+    { id: 'c1', name: 'Structures and infrastructure', type: 'capex', active: true },
+    { id: 'c2', name: 'Workshop income', type: 'revenue', active: true },
+    { id: 'c3', name: 'Transfer between accounts', type: 'transfer', active: true },
+    { id: 'c4', name: 'Bank interest', type: 'interest', active: true },
+    { id: 'c5', name: 'Utility bills', type: 'opex', active: true },
+    { id: 'c6', name: 'Bank charges', type: 'opex', active: true },
+  ];
+  const parties = [{ id: 'p1', name: 'Test Electricals', kind: 'vendor' }, { id: 'p2', name: 'Workshop Guest', kind: 'customer' }, { id: 'p3', name: 'Own savings account', kind: 'bank' }, { id: 'p4', name: 'Axis Bank', kind: 'bank' }, { id: 'p5', name: 'BESCOM', kind: 'government' }];
+  const line = (n: number, date: string, narration: string, direction: 'debit' | 'credit', rupees: number, categoryId: string, partyId: string) => {
+    const category = categories.find((c) => c.id === categoryId)!;
+    const party = parties.find((x) => x.id === partyId)!;
+    return {
+      id: `l${n}`, date, narration, direction, amountPaise: rupees * 100, account: 'Demo current account', remark: null, counterparty: null, origin: 'bank', sources: ['bank'],
+      allocatedPaise: rupees * 100, state: 'allocated' as const, review: false, missingParty: false, suggestion: null,
+      allocation: { categoryId, partyId, nature: category.name, count: 1, householdLabel: null, maintenanceYear: null },
+      effective: { category: category.name, party: party.name, nature: category.name },
+    };
+  };
+  const lines = [
+    line(1, '2026-11-14', 'UPI/Test Electricals/Wiring', 'debit', 36700, 'c1', 'p1'),
+    line(2, '2026-11-12', 'NEFT/Workshop Guest/Workshop fee', 'credit', 18000, 'c2', 'p2'),
+    line(3, '2026-11-10', 'TRF to savings account', 'debit', 50000, 'c3', 'p3'),
+    line(4, '2026-11-10', 'TRF from current account', 'credit', 50000, 'c3', 'p3'),
+    line(5, '2026-11-08', 'INT.PD to 07-11-2026', 'credit', 1245, 'c4', 'p4'),
+    line(6, '2026-11-05', 'UPI/BESCOM/Electricity', 'debit', 12450, 'c5', 'p5'),
+    line(7, '2026-11-03', 'SMS ALERT CHRGS', 'debit', 118, 'c6', 'p4'),
+  ];
+  return { canAllocate: true, lines, lookups: { categories, parties, projects: [], requesterPartyId: null, closedMonths: [], households: [] }, badges: {} };
 }
 // Invented rules and categories for /internal/finance/rules/.
 function demoRules() {
@@ -542,6 +575,8 @@ export function installStaffDemo(tokenKey: string, kind: string): void {
     }
     if (path === '/api/units-admin/overview') return reply(demoUnits());
     if (path === '/api/finance-admin/upi-lines' && (init?.method ?? 'GET') === 'GET') return reply(demoUpiLines());
+    if (path === '/api/finance-admin/ledger/all' && (init?.method ?? 'GET') === 'GET') return reply(demoLedger());
+    if (path === '/api/finance-admin/periods' && (init?.method ?? 'GET') === 'GET') return reply({ canClose: false, months: [] });
     if (path === '/api/finance-admin/rules' && (init?.method ?? 'GET') === 'GET') return reply(demoRules());
     if (path === '/api/finance-admin/requests' && (init?.method ?? 'GET') === 'GET') return reply(demoRequests());
     if (path === '/api/finance-admin/requests/auto-match' && init?.method === 'POST') { demoAutoMatched = true; return reply({ ok: true, matched: 1, skipped: 0 }); }

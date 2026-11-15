@@ -15,6 +15,21 @@ export function h(tag, props = {}, ...kids) {
   return el;
 }
 
+// One amount style for every admin table that shows a transaction (docs/design-language.md, "Amounts"): the sign always, colour as a
+// second cue, and a stripe on the row for credits and transfers. A debit is the ordinary case and stays plain. Kinds:
+//   'db' money out   'cr' money in   'tdb' / 'tcr' the same between TVC's own accounts (a transfer), marked with ⇄.
+// A request is not a transaction, so its amount is not shown this way (it shows the linked debit, once matched).
+export const amountKind = (direction, isTransfer = false) => `${isTransfer ? 't' : ''}${direction === 'credit' ? 'cr' : 'db'}`;
+export const isTransferKind = (kind) => kind[0] === 't';
+/** '−₹1,000.00' | '+₹1,000.00' | '⇄ −₹1,000.00' | '⇄ +₹1,000.00' (paise in). */
+export const moneyText = (paise, kind) => `${isTransferKind(kind) ? '⇄ ' : ''}${kind.endsWith('cr') ? '+' : '−'}${rupees(Math.abs(paise))}`;
+/** The class that colours an amount and stripes its row: 'cr' (green), 'tr' (blue, a transfer) or '' (a debit: plain). */
+export const kindClass = (kind) => (isTransferKind(kind) ? 'tr' : kind === 'cr' ? 'cr' : '');
+export function moneyNode(paise, kind) {
+  const k = kindClass(kind);
+  return h('span', { class: `amt${k ? ` amt--${k}` : ''}`, text: moneyText(paise, kind) });
+}
+
 export const pill = (text, kind) => h('span', { class: `pill${kind ? ` pill--${kind}` : ''}`, text });
 export const button = (text, onClick, cls = 'button button--outline') => h('button', { class: cls, text, attrs: { type: 'button' }, on: { click: onClick } });
 export const labelled = (label, input) => h('label', {}, h('span', { text: label }), input);

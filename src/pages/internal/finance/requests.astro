@@ -14,6 +14,7 @@
 import StaffLayout from '../../../layouts/StaffLayout.astro';
 import '../../../styles/data-table.css';
 import '../../../styles/request-cells.css';
+import '../../../styles/money.css';
 import SignInGate from '../../../components/SignInGate.astro';
 import StepUpSheet from '../../../components/StepUpSheet.astro';
 ---
@@ -43,6 +44,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
   import { initStepUpLock } from '../../../../scripts/lib/staff-stepup-ui.mjs';
   import { clearState, showFailure, showLoading } from '../../../../scripts/lib/staff-states.mjs';
   import { createDataTable } from '../../../../scripts/lib/data-table-ui.mjs';
+  import { moneyNode } from '../../../../scripts/lib/finance-ui.mjs';
 
   declare const google: any;
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
@@ -209,6 +211,9 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
       if (r.linked?.upi && r.linked.upiRef) link('UPI', `/internal/finance/upi/?ref=${r.linked.upiRef}`, 'Open this payment on the UPI page');
       if (r.linked?.bank && r.linked.bankLineId) link('Bank', `/internal/finance/ledger/?line=${r.linked.bankLineId}`, 'Open this line in the ledger');
       if (!pills.children.length) pills.append(pill('Matched', 'ok'));
+      // The requested amount above stays plain (a request is not a transaction); this is the payment it is tied to, and a match
+      // needs the same amount, so it is the record's own amount as the debit it became.
+      pills.append(moneyNode(r.amountPaise, 'db'));
       out.append(pills);
       if (r.matched === 'auto') out.append(el('span', 'sub', 'Matched automatically'));
     } else if (r.proposals.length && data?.can.allocate) {

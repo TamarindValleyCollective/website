@@ -142,7 +142,8 @@ export function suggestChanges(parties, { kindLabels = {} } = {}) {
 /**
  * What the books say about each party, from posted allocations (not reversals): how many lines, the money paid out, the date of the
  * latest payment, and the category most of them were booked under (in the direction that has more lines). Parties merged into another
- * are counted under the main one. Returns Map(partyId -> { postings, paidPaise, lastPaid, direction, categoryName, categoryType,
+ * are counted under the main one. Returns Map(partyId -> { postings (in the dominant direction, for the kind suggestion), lines (all of them),
+ * paidPaise, lastPaid, receivedPaise, lastReceived, direction, categoryName, categoryType,
  * categoryShare }). `allocations`: { bank_line_id, party_id, category_id, amount_paise }; `lines`: { id, tran_date, direction };
  * `categories`: { id, name, type }.
  */
@@ -154,12 +155,15 @@ export function postingStats(allocations, lines, categories, canonicalOf = new M
     const line = lineOf.get(a.bank_line_id);
     if (!line || !a.party_id) continue;
     const id = canonicalOf.get(a.party_id) ?? a.party_id;
-    const p = per.get(id) ?? { paidPaise: 0, lastPaid: null, debit: new Map(), credit: new Map() };
+    const p = per.get(id) ?? { paidPaise: 0, lastPaid: null, receivedPaise: 0, lastReceived: null, debit: new Map(), credit: new Map() };
     const side = line.direction === 'credit' ? p.credit : p.debit;
     side.set(a.category_id, (side.get(a.category_id) ?? 0) + 1);
     if (line.direction === 'debit') {
       p.paidPaise += Number(a.amount_paise);
       if (!p.lastPaid || line.tran_date > p.lastPaid) p.lastPaid = line.tran_date;
+    } else {
+      p.receivedPaise += Number(a.amount_paise);
+      if (!p.lastReceived || line.tran_date > p.lastReceived) p.lastReceived = line.tran_date;
     }
     per.set(id, p);
   }
@@ -171,7 +175,7 @@ export function postingStats(allocations, lines, categories, canonicalOf = new M
     const total = sum(side);
     const [topId, topN] = [...side.entries()].sort((a, b) => b[1] - a[1])[0] ?? [null, 0];
     const cat = catOf.get(topId);
-    out.set(id, { postings: total, paidPaise: p.paidPaise, lastPaid: p.lastPaid, direction, categoryName: cat?.name ?? null, categoryType: cat?.type ?? null, categoryShare: total ? topN / total : 0 });
+    out.set(id, { postings: total, lines: sum(p.debit) + sum(p.credit), paidPaise: p.paidPaise, lastPaid: p.lastPaid, receivedPaise: p.receivedPaise, lastReceived: p.lastReceived, direction, categoryName: cat?.name ?? null, categoryType: cat?.type ?? null, categoryShare: total ? topN / total : 0 });
   }
   return out;
 }

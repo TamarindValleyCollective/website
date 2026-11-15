@@ -173,8 +173,8 @@ for esbuild, and Node 22.18+ or newer, which imports the registry `.ts` directly
   Unverified, Verified, No payment details, No evidence attached, Bank's name differs, Possible duplicate, Kind is Other, Inactive), Group by
   (Kind by default, Status, First letter) and Favorites (kept in the browser, per account); a filter box under every column header in the Ledger's
   syntax (`^word`, `=word`, `!word`, `>1000`, `2026-10`); sortable columns Name, Kind (changed in place), Accounts, Status, Name at the bank
-  (orange when it differs from ours), Evidence (files attached), Last paid, Paid in total; cards on phones. Everything is searched and sorted in the
-  browser. Last paid and Paid in total come from posted, non-reversal allocations (a failure there only blanks those columns). Ticking rows
+  (orange when it differs from ours), Evidence (files attached), Last activity (the latest line either way, with which way it was), Paid in total, Received in total; cards on phones. Everything is searched and sorted in the
+  browser. Last activity, Paid in total and Received in total come from posted, non-reversal allocations (payments out and money in counted separately; a failure there only blanks those columns). Two chips, *We have paid them* and *We have received from them*, find a party by which way money has gone. Ticking rows
   opens a bulk bar: Set kind, Merge (exactly two ticked: the one without payment details merges into the other, through the usual merge
   sheet and its step-up), Mark inactive, Mark active; each is the existing `PATCH /parties/:id` per party (so each keeps its own rules and audit entry), run five at a time with the count shown as it goes, so changing a hundred parties takes seconds. The usual job, "turn all the Others into Vendors": filter to *Kind is Other*, tick the box in the header (every party shown), choose *Set kind*; Vendor is preselected, and parties linked to a household stay members. The bar of ticked rows sticks to the bottom of the table's own column (it must not span the whole window: it once slid under the left rail and hid *Set kind*). A dot shows each payee's state so
   "Needs review" is the one loud signal. Add party defaults to Vendor.
@@ -388,7 +388,7 @@ types the importer knows; each batch stores its `source`: `axis_statement`, `pay
   it, and the audit entry (`finance.payment_note_set`) is written first and holds the length, never the text. **Links both ways:** in the
   ledger the Origin of a BHIM or Paytm payment links to that payment in the UPI table (`/internal/finance/upi/?ref=<reference>`, and the
   line sheet has the same link); in the UPI table a payment joined to a bank line has *Open in the ledger*
-  (`/internal/finance/ledger/?line=<line id>`, which opens the line sheet). The UPI table also has its own **Debit / credit** column.
+  (`/internal/finance/ledger/?line=<line id>`, which opens the line sheet). The UPI table has no separate Debit / credit column: the amount carries the sign and colour (docs/design-language.md, "Amounts"), and a credit's row has a green stripe.
   The UPI payments table is the shared admin table (docs/design-language.md, "Data tables"): the old App / Paid by / Bank statement buttons are
   chips in the search box's Filters list (chips of one group are alternatives, so BHIM and Paytm shows both; groups combine), every column has a filter
   box, Group by defaults to Month (also App, Paid by, Account, Bank statement), Favorites are kept per account in the browser, and it shows cards on

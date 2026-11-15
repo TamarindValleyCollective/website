@@ -12,6 +12,7 @@
 // groups:  [{ id, label, key(row), order? }]   one level, as in the Ledger's Group by
 // bulk:    [{ id, label, run(rows) }]   shown when rows are ticked
 // detail:  (row) -> Node | null   a full-width row under that row (the Requests suggestions); built fresh for the table and for the card
+// rowKind: (row) -> 'cr' | 'tr' | ''   a credit or a transfer gets a coloured stripe down its row (and card); '' is the ordinary row
 // onUserFilter: () => void   called when the person changes a chip, the search, a column filter or the grouping (not by setRows or setChips)
 // column extras: sortable: false (no sort button), wrap: true (the cell may wrap, for long text), sticky: true (the last column stays
 //   in view while the table scrolls sideways, for a column of buttons)
@@ -30,7 +31,7 @@ export function createDataTable(opts) {
   const {
     root, columns, rowId, searchText = () => '', filters = [], groups = [], bulk = [], selectable = bulk.length > 0, onOpen = null, card = null,
     rowClass = () => '', noun = ['row', 'rows'], favoritesKey = null, searchPlaceholder = 'Search every column', toolbarEnd = null, empty = {},
-    defaultGroup = '', defaultSort = null, onChange = () => {}, onUserFilter = () => {}, detail = null, cap = Infinity,
+    defaultGroup = '', defaultSort = null, onChange = () => {}, onUserFilter = () => {}, detail = null, rowKind = () => '', cap = Infinity,
   } = opts;
   const allowed = { chipIds: filters.map((f) => f.id), groupIds: groups.map((g) => g.id) };
   const state = { rows: [], chips: [], words: [], text: '', group: defaultGroup, sort: defaultSort ?? [null, 1], cols: {}, collapsed: new Set(), sel: new Set(), favs: [], popOpen: false };
@@ -185,7 +186,8 @@ export function createDataTable(opts) {
       const r = item.row;
       const id = rowId(r);
       const sel = state.sel.has(id);
-      const tr = h('tr', { class: `dt-row ${rowClass(r)}${sel ? ' dt-selected' : ''}${onOpen ? ' dt-clickable' : ''}` });
+      const kind = rowKind(r);
+      const tr = h('tr', { class: `dt-row ${rowClass(r)}${sel ? ' dt-selected' : ''}${onOpen ? ' dt-clickable' : ''}${kind ? ` dt-${kind}` : ''}` });
       if (selectable) tr.append(h('td', { class: 'dt-tick' }, tick(sel, 'Select row', (on) => { on ? state.sel.add(id) : state.sel.delete(id); renderBody(); renderHead(); renderBulk(); })));
       for (const c of columns) {
         const out = c.render ? c.render(r) : c.value(r);
@@ -206,6 +208,7 @@ export function createDataTable(opts) {
         const moreCard = detail?.(r) ?? null;
         if (moreCard) c.append(moreCard);
         c.classList.add('dt-card');
+        if (kind) c.classList.add(`dt-${kind}`);
         if (sel) c.classList.add('dt-selected');
         if (selectable) c.prepend(tick(sel, 'Select row', (on) => { on ? state.sel.add(id) : state.sel.delete(id); renderBody(); renderHead(); renderBulk(); }));
         cardNodes.push(c);

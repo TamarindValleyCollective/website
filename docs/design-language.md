@@ -59,6 +59,12 @@ disagree `global.css` wins. In any `.astro` or `.css` file:
   dark appearance (same file, tokens only) that follows the device or the account menu's Appearance choice; keep it
   working by using `--tvc-*` tokens for every colour in admin files (a raw colour will not turn dark; mix tokens with
   `color-mix` when you need an in-between shade) and check a new page in Dark as well as Light.
+- **Amounts.** Every admin table that shows a transaction (Ledger, UPI) writes the amount one way, from `moneyNode` / `moneyText` in
+  `scripts/lib/finance-ui.mjs` and the colours in `src/styles/money.css`: the sign always (`−₹13,800.00`, `+₹5,000.00`), **credits green**, a transfer between TVC's
+  own accounts **blue with ⇄** (`⇄ −₹50,000.00`), and a **debit plain**, because most rows are debits and orange or red already mean "problem". Colour is
+  the second cue, never the only one. A credit or a transfer also gets a 4px **stripe** down its row (the shared table's `rowKind`; the ledger's own rows);
+  never a row fill, which would clash with a ticked row. A request is not a transaction, so its amount stays plain, and a matched request shows the debit
+  it is linked to. A total (Paid in total, Received in total) is a sum, not a transaction: plain, under its heading. There is no separate Debit / credit column.
 - Choosing from a long list, or a value that lives under other values (Maintenance › year › unit, Vendors › a vendor), uses the **linked picker**
   (`scripts/lib/linked-picker.mjs`, styles `src/styles/linked-picker.css`; read `docs/linked-picker.md`), never a native `<select>` with dozens of options. A short fixed
   list (a handful of choices) stays a `.segmented` or a plain select. `combo()` in `scripts/lib/finance-ui.mjs` is the flat-list wrapper over it. Its list opens outside any scrolling table, so
