@@ -26,7 +26,7 @@ export function createDataTable(opts) {
   const {
     root, columns, rowId, searchText = () => '', filters = [], groups = [], bulk = [], selectable = bulk.length > 0, onOpen = null, card = null,
     rowClass = () => '', noun = ['row', 'rows'], favoritesKey = null, searchPlaceholder = 'Search every column', toolbarEnd = null, empty = {},
-    defaultGroup = '', defaultSort = null, onChange = () => {},
+    defaultGroup = '', defaultSort = null, onChange = () => {}, cap = Infinity,
   } = opts;
   const allowed = { chipIds: filters.map((f) => f.id), groupIds: groups.map((g) => g.id) };
   const state = { rows: [], chips: [], words: [], text: '', group: defaultGroup, sort: defaultSort ?? [null, 1], cols: {}, collapsed: new Set(), sel: new Set(), favs: [], popOpen: false };
@@ -95,7 +95,15 @@ export function createDataTable(opts) {
     const counts = {};
     for (const f of filters) counts[f.id] = chipCounts(state.rows, [f], others(f.id))[f.id];
     const cols = [];
-    if (filters.length) cols.push(h('section', {}, h('h3', { text: 'Filters' }), ...filters.map((f) => option(f.label, state.chips.includes(f.id), () => { state.chips = state.chips.includes(f.id) ? state.chips.filter((x) => x !== f.id) : [...state.chips, f.id]; render(); }, String(counts[f.id])))));
+    if (filters.length) {
+      // A gap where the group changes: chips in one group are alternatives (BHIM or Paytm), groups combine.
+      const opts = filters.map((f, i) => {
+        const o = option(f.label, state.chips.includes(f.id), () => { state.chips = state.chips.includes(f.id) ? state.chips.filter((x) => x !== f.id) : [...state.chips, f.id]; render(); }, String(counts[f.id]));
+        if (i > 0 && (f.group ?? f.id) !== (filters[i - 1].group ?? filters[i - 1].id)) o.classList.add('dt-opt--gap');
+        return o;
+      });
+      cols.push(h('section', {}, h('h3', { text: 'Filters' }), ...opts));
+    }
     if (groups.length) cols.push(h('section', {}, h('h3', { text: 'Group by' }), option('None', !state.group, () => { state.group = ''; render(); }), ...groups.map((g) => option(g.label, state.group === g.id, () => { state.group = g.id; render(); }))));
     if (favoritesKey) {
       const save = h('button', { class: 'dt-opt', attrs: { type: 'button' }, on: { click: () => {
@@ -151,7 +159,8 @@ export function createDataTable(opts) {
 
   // ---- rows
   function renderBody() {
-    const { items } = buildItems(shown, groupDef(), state.collapsed);
+    // `cap`: a very long list is cut after that many rows (the foot says so); filters narrow it.
+    const { items } = buildItems(shown.slice(0, cap), groupDef(), state.collapsed);
     const width = columns.length + (selectable ? 1 : 0);
     const trs = [];
     const cardNodes = [];
@@ -202,7 +211,9 @@ export function createDataTable(opts) {
         ...(filtered ? [h('button', { class: 'button button--outline', attrs: { type: 'button' }, text: 'Clear filters', on: { click: clearAll } })] : []),
       );
     }
-    foot.textContent = state.rows.length ? `${shown.length} of ${state.rows.length} ${state.rows.length === 1 ? noun[0] : noun[1]}${state.sel.size ? ` · ${state.sel.size} selected` : ''}` : '';
+    foot.textContent = state.rows.length
+      ? `${shown.length > cap ? `Showing the first ${cap} of ${shown.length}. Narrow the filters to see the rest.` : `${shown.length} of ${state.rows.length} ${state.rows.length === 1 ? noun[0] : noun[1]}`}${state.sel.size ? ` · ${state.sel.size} selected` : ''}`
+      : '';
   }
 
   function renderBulk() {
@@ -264,6 +275,7 @@ export function createDataTable(opts) {
     selected,
     clearSelection() { state.sel.clear(); renderBody(); renderHead(); renderBulk(); },
     setChips(ids) { state.chips = ids.filter((i) => allowed.chipIds.includes(i)); render(); },
+    setText(text) { input.value = text; state.text = text.trim(); render(); },
     setGroup(id) { state.group = allowed.groupIds.includes(id) ? id : ''; render(); },
     shown: () => shown,
     state,

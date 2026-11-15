@@ -45,7 +45,13 @@ export const passesWords = (hay, words) => {
  * Returns { rows, errors } where errors maps a column id to the message for a condition that cannot be understood.
  */
 export function filterRows(rows, { columns = [], chips = [], filters = [], words = [], searchText = () => '', cols = {} } = {}) {
-  const tests = chips.map((id) => filters.find((f) => f.id === id)?.test).filter(Boolean);
+  // Chips of one `group` (BHIM and Paytm, say) are alternatives: a row passes if it passes any of them. Different groups all have to pass.
+  const byGroup = new Map();
+  for (const id of chips) {
+    const f = filters.find((x) => x.id === id);
+    if (f) byGroup.set(f.group ?? f.id, [...(byGroup.get(f.group ?? f.id) ?? []), f.test]);
+  }
+  const tests = [...byGroup.values()].map((list) => (r) => list.some((t) => t(r)));
   const conds = [];
   const errors = {};
   for (const c of columns) {
@@ -94,8 +100,9 @@ export function sortRows(rows, column, dir = 1) {
 
 /**
  * Splits rows (already in the order the page wants inside a group) into the flat list the table draws:
- * { kind: 'group', key, label, count, open } then its rows, or nothing for a collapsed group. `group` is { id, key(row), order? };
- * `order` lists labels in the order to show them, others follow alphabetically, then "No ..." groups last.
+ * { kind: 'group', key, label, count, open } then its rows, or nothing for a collapsed group. `group` is { id, key(row), order?, descending?,
+ * format?(key) }; `order` lists keys in the order to show them, others follow alphabetically (backwards when `descending`), then "No ..." groups
+ * last; `format` turns a key into the heading (2026-10 into October 2026).
  */
 export function buildItems(rows, group, collapsed = new Set()) {
   if (!group) return { items: rows.map((row) => ({ kind: 'row', row })), visible: rows };
@@ -106,10 +113,11 @@ export function buildItems(rows, group, collapsed = new Set()) {
     groups.get(k).push(r);
   }
   const rank = (k) => (group.order?.includes(k) ? group.order.indexOf(k) : group.order ? group.order.length : 0);
+  const sign = group.descending ? -1 : 1;
   const keys = [...groups.keys()].sort((a, b) => {
     const none = (k) => /^No /.test(k);
     if (none(a) !== none(b)) return none(a) ? 1 : -1;
-    return rank(a) - rank(b) || a.localeCompare(b);
+    return rank(a) - rank(b) || a.localeCompare(b) * sign;
   });
   const items = [];
   const visible = [];
@@ -117,7 +125,7 @@ export function buildItems(rows, group, collapsed = new Set()) {
     const members = groups.get(k);
     const key = `${group.id}:${k}`;
     const open = !collapsed.has(key);
-    items.push({ kind: 'group', key, label: k, count: members.length, open });
+    items.push({ kind: 'group', key, label: group.format ? group.format(k) : k, count: members.length, open });
     if (open) for (const row of members) { items.push({ kind: 'row', row }); visible.push(row); }
   }
   return { items, visible };

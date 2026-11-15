@@ -53,6 +53,16 @@ test('chips all have to pass, and counts say how many each gives', () => {
   assert.deepEqual(chipCounts(rows, filters), { other: 1, nofiles: 1, vendor: 2 });
 });
 
+test('chips of one group are alternatives, chips of different groups all have to pass', () => {
+  const filters = [
+    { id: 'vendor', group: 'kind', test: (r) => r.kind === 'Vendor' },
+    { id: 'other', group: 'kind', test: (r) => r.kind === 'Other' },
+    { id: 'nofiles', test: (r) => !r.files },
+  ];
+  assert.deepEqual(ids(filterRows(rows, { filters, chips: ['vendor', 'other'] })), [1, 2, 4]);
+  assert.deepEqual(ids(filterRows(rows, { filters, chips: ['vendor', 'other', 'nofiles'] })), [2]);
+});
+
 test('sorting puts empty cells last either way, and equal rows keep their order', () => {
   const by = (id, dir) => sortRows(rows, columns.find((c) => c.id === id), dir).map((r) => r.id);
   assert.deepEqual(by('last', 1), [4, 3, 1, 2]);
@@ -74,6 +84,8 @@ test('grouping follows the given order, puts "No ..." last and drops the rows of
   const none = buildItems(rows, { id: 'x', key: (r) => (r.files ? 'Has files' : 'No files') });
   assert.equal(none.items.at(-2).label, 'No files');
   assert.equal(buildItems(rows, null).items.length, 4);
+  const months = buildItems(rows, { id: 'm', key: (r) => (r.last || 'No date').slice(0, 7), descending: true, format: (k) => `M ${k}` });
+  assert.deepEqual(months.items.filter((i) => i.kind === 'group').map((g) => g.label), ['M 2026-11', 'M 2026-10', 'M No date'], 'newest first, "No ..." last, headings formatted');
 });
 
 test('favorites keep only what is known, replace by name, and survive unreadable storage', () => {

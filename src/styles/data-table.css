@@ -153,6 +153,10 @@
   cursor: pointer;
 }
 
+.dt .dt-opt--gap {
+  margin-block-start: 6px;
+}
+
 .dt .dt-opt:hover {
   background: var(--tvc-cream);
 }

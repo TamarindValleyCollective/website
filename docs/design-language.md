@@ -67,8 +67,8 @@ disagree `global.css` wins. In any `.astro` or `.css` file:
 - **Data tables.** Every admin table has the Ledger's format: a search box that holds chips (its ▾ opens Filters, Group by and Favorites), sortable
   headers over a row of column filters (`^word`, `=word`, `!word`, `>1000`, `2026-10`), group bands, ticked rows with a bulk bar, and cards on a phone. It is
   one shared component: logic in `scripts/lib/data-table.mjs` (tested), DOM in `scripts/lib/data-table-ui.mjs`, styles in `src/styles/data-table.css`. A page
-  describes its columns, chip filters and groupings and hands over rows; it does not restyle the table. Parties uses it; the Ledger keeps its own
-  virtualised build and the UPI, Requests and Rules tables move over one at a time. The Dashboard and Budget are not tables and stay out of it.
+  describes its columns, chip filters and groupings and hands over rows; it does not restyle the table. Parties and UPI use it; the Ledger keeps its own
+  virtualised build and the Requests and Rules tables move over one at a time. A filter can name a `group`: chips of one group are alternatives (BHIM or Paytm), groups combine. The Dashboard and Budget are not tables and stay out of it.
 
 `npm run lint:css` checks this (Stylelint); the `Design language` GitHub Action runs it on every
 PR. Raw hex colors are errors (CI fails); radius literals are warnings for now. Admin font sizes outside the scale are errors. A color that genuinely isn't a TVC color (a third-party brand, a data

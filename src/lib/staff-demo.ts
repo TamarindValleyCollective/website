@@ -338,6 +338,32 @@ function demoFinanceParties() {
   );
   return { kinds: ['member', 'vendor', 'employee', 'customer', 'bank', 'government', 'director', 'other'], canEdit: true, canVerify: true, me: { id: 'demo-1', ready: true, hasPasskey: true, stepUpValid: false }, needsReviewCount: 0, parties: financeParties, suggestions };
 }
+// Invented UPI payments for /internal/finance/upi/: BHIM and Paytm rows over two months, direct and delegated, in every bank-statement state.
+function demoUpiLines() {
+  const line = (n: number, paidAt: string, time: string, app: string, counterparty: string | null, remark: string | null, rupees: number, extra: Record<string, unknown> = {}) => ({
+    id: `u${n}`, operatorId: 'o1', paidAt, time, app, counterparty, remark, amountPaise: rupees * 100, direction: 'debit', isCircle: false, upiRef: `5${String(n).padStart(11, '0')}`, note: null, purpose: null,
+    bankLineId: n % 3 === 0 ? null : `bl${n}`, account: n % 5 === 0 ? null : 'Demo bank ending 0001', delegateId: null, delegate: null, delegateHow: null, state: n % 3 === 0 ? 'waiting' : 'matched', ...extra,
+  });
+  const lines = [
+    line(1, '2026-11-14', '10:12', 'bhim', 'Test Electricals', 'Wiring', 36700),
+    line(2, '2026-11-12', '18:40', 'paytm', 'Green Valley Nursery', 'Saplings', 18250),
+    line(3, '2026-11-09', '09:05', 'bhim', 'Sample Stores', null, 1260),
+    line(4, '2026-11-07', '16:20', 'paytm', 'Ravi Shankar T', 'Farm wages', 7800, { isCircle: true, delegate: 'Demo Delegate', delegateId: 'd1', delegateHow: 'auto' }),
+    line(5, '2026-11-05', '11:00', 'bhim', null, null, 450, { state: 'unmatched', bankLineId: null }),
+    line(6, '2026-11-03', '13:30', 'paytm', 'Example Hardware', 'Pipes', 4120, { isCircle: true, delegateHow: 'ambiguous' }),
+    line(7, '2026-10-28', '08:15', 'bhim', 'Sri Lakshmi Hardware', 'Paint', 4120),
+    line(8, '2026-10-22', '19:45', 'bhim', 'Asha Nursery', null, 1825, { direction: 'credit', note: 'Refund for the extra saplings' }),
+    line(9, '2026-10-17', '12:10', 'paytm', 'Test Traders', 'Feed', 2290),
+    line(10, '2026-10-02', '10:00', 'bhim', 'BESCOM', 'Electricity', 12450),
+  ];
+  return {
+    lines, lastBankDate: '2026-11-14', canEdit: true, canConfigure: true, capPaise: 1000000,
+    operators: [{ id: 'o1', name: 'Demo Operator' }],
+    delegates: [{ id: 'd1', identifier: '+91 90000 00001', displayName: 'Demo Delegate', activeFrom: '2026-09-01', activeTo: null, capPaise: 500000, operatorId: 'o1' }],
+    months: [{ month: '2026-11', paise: 1190000, capPaise: 1000000, count: 2, over: true, byDelegate: [] }],
+    bankWithoutRow: { count: 0, totalPaise: 0 }, reversedCount: 0, notIdentified: 0, needsDelegate: 1,
+  };
+}
 // Invented branch directory: one code that exists, every other is "no such branch".
 const demoIfsc = (code: string) => (code === 'ABCD0123456' ? { found: true, bank: 'Test Bank', branch: 'Main Road', city: 'Sample City', state: 'Sample State' } : { found: false });
 function demoFinanceRename(id: string, body: any) {
@@ -467,6 +493,7 @@ export function installStaffDemo(tokenKey: string, kind: string): void {
       });
     }
     if (path === '/api/units-admin/overview') return reply(demoUnits());
+    if (path === '/api/finance-admin/upi-lines' && (init?.method ?? 'GET') === 'GET') return reply(demoUpiLines());
     if (path === '/api/finance-admin/parties' && (init?.method ?? 'GET') === 'GET') return reply(demoFinanceParties());
     if (path === '/api/finance-admin/parties' && init?.method === 'POST') {
       const body = (() => { try { return JSON.parse(String(init.body ?? '{}')); } catch { return {}; } })();

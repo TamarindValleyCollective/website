@@ -388,6 +388,11 @@ types the importer knows; each batch stores its `source`: `axis_statement`, `pay
   ledger the Origin of a BHIM or Paytm payment links to that payment in the UPI table (`/internal/finance/upi/?ref=<reference>`, and the
   line sheet has the same link); in the UPI table a payment joined to a bank line has *Open in the ledger*
   (`/internal/finance/ledger/?line=<line id>`, which opens the line sheet). The UPI table also has its own **Debit / credit** column.
+  The UPI payments table is the shared admin table (docs/design-language.md, "Data tables"): the old App / Paid by / Bank statement buttons are
+  chips in the search box's Filters list (chips of one group are alternatives, so BHIM and Paytm shows both; groups combine), every column has a filter
+  box, Group by defaults to Month (also App, Paid by, Account, Bank statement), Favorites are kept per account in the browser, and it shows cards on
+  a phone. A `?ref=` link fills the search box. The list is cut at 500 rows with a note; filters narrow it. "Show them" on the delegate queue turns on
+  the *Needs a delegate* chip. Choosing the delegate and writing a note still happen in the row, as before.
   Other channels (Paypro, gateway, card) have no page of their own to link to yet.
 - **Source badges** (migration `0090`, **applied 2026-11-07**). The Origin column shows small badges for the records that vouch for a line:
   its bank (always), then the BHIM or Paytm app when a UPI row is joined, Paypro or Razorpay when the narration says so
