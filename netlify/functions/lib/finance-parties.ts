@@ -31,6 +31,8 @@ import {
   todayIST,
 } from '../../../scripts/lib/finance-parties.mjs';
 import { fingerprintText } from '../../../scripts/lib/finance-party-import.mjs';
+import { postingStats, suggestChanges } from '../../../scripts/lib/finance-party-suggestions.mjs';
+import { rowsAll } from './finance-ledger';
 import { VOUCHER_MAX_BYTES, sniffVoucher } from '../../../scripts/lib/finance-requests.mjs';
 
 type Json = Record<string, any>;
@@ -145,6 +147,18 @@ function serverError(err: unknown, what: string): Response {
   return jsonResponse({ error: 'Server error' }, 500);
 }
 
+const KIND_WORDS: Record<string, string> = { member: 'Member', vendor: 'Vendor', employee: 'Employee', customer: 'Customer', bank: 'Bank', government: 'Government', director: 'Director', other: 'Other' };
+
+// Posted allocations per party (see postingStats). Read in pages: PostgREST returns at most 1000 rows at a time.
+async function partyStats(canonicalOf: Map<string, string>) {
+  const [allocations, lines, categories] = await Promise.all([
+    rowsAll('/fin_allocations?select=bank_line_id,party_id,category_id,amount_paise&posted_at=not.is.null&reverses_allocation_id=is.null&party_id=not.is.null&order=id.asc'),
+    rowsAll('/fin_bank_lines?select=id,tran_date,direction&order=id.asc'),
+    rows('/fin_categories?select=id,name,type&limit=1000'),
+  ]);
+  return postingStats(allocations, lines, categories, canonicalOf) as Map<string, Json>;
+}
+
 // ---------------------------------------------------------------- list
 export async function listParties(req: Request): Promise<Response> {
   const auth = await requireStaff(req, 'finance', 'view');
@@ -172,16 +186,28 @@ export async function listParties(req: Request): Promise<Response> {
       const mfa = await mfaSummary(staff.id);
       me = { id: staff.id, ready: mfa.ready, hasPasskey: mfa.passkey, stepUpValid: stepUpIsValid(req, staff.id) };
     }
-    const shown = visible
+    // What the books say about each party (last paid, total paid, the usual category). A failure here only blanks those columns.
+    const stats = (await partyStats(canonicalOf).catch((err) => {
+      console.error('[finance-admin] party stats failed', err);
+      return new Map<string, Json>();
+    })) as Map<string, Json>;
+    const everyone = visible.map((p: Json) => ({ ...partyForResponse(p, accountsOf(p.id), flags, todayIST(), mergedCount(p.id), names, evidence), stats: stats.get(p.id) ?? null }));
+    // Suggested changes are worked out over the whole directory, whatever the search text is.
+    const suggestions = suggestChanges(
+      everyone.map((p: Json) => ({ id: p.id, name: p.name, kind: p.kind, active: p.active, householdId: p.householdId, accounts: p.accounts.map((a: Json) => ({ verifiedName: a.verification?.name ?? null })), stats: p.stats })),
+      { kindLabels: KIND_WORDS },
+    );
+    const shown = everyone
       // The label, or a name a bank showed for one of the party's accounts ("milk" finds the label, a surname finds the bank's name).
-      .filter((p: Json) => !q || p.name.toLowerCase().includes(q) || accountsOf(p.id).some((a: Json) => String(a.verified_name ?? '').toLowerCase().includes(q)))
-      .map((p: Json) => partyForResponse(p, accountsOf(p.id), flags, todayIST(), mergedCount(p.id), names, evidence));
+      .filter((p: Json) => !q || p.name.toLowerCase().includes(q) || p.accounts.some((a: Json) => String(a.verification?.name ?? '').toLowerCase().includes(q)))
+      .map(({ stats: s, ...p }: Json) => ({ ...p, lastPaid: s?.lastPaid ?? null, paidPaise: s?.paidPaise ?? 0, postings: s?.postings ?? 0 }));
     return jsonResponse({
       kinds: PARTY_KINDS,
       canEdit: capabilities.includes('allocate'),
       canVerify,
       me,
       parties: shown,
+      suggestions,
       needsReviewCount: shown.filter((p: Json) => p.needsReview).length,
     });
   } catch (err) {

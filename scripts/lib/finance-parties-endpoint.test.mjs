@@ -193,6 +193,22 @@ test('a read-only viewer sees the directory (names, last four) but cannot add', 
   assert.equal((await api(viewer, '/parties', { method: 'POST', body: newVendor({ name: 'Another Shop' }) })).status, 403);
 });
 
+test('the list suggests a merge and a rename from the bank name on a verified account, and leaves the rows searchable by it', async () => {
+  reset();
+  const op = sign('u1', 'user');
+  db.fin_parties.push({ id: 'pa', name: 'Test Electricals', kind: 'other', active: true, household_id: null, merged_into: null });
+  db.fin_parties.push({ id: 'pb', name: 'TEST ELECTRCIALS', kind: 'vendor', active: true, household_id: null, merged_into: null });
+  db.fin_parties.push({ id: 'pc', name: 'Sri Lakshmi Hardware', kind: 'vendor', active: true, household_id: null, merged_into: null });
+  db.fin_party_accounts.push({ id: 'aa', party_id: 'pb', method: 'bank', last4: '4821', status: 'verified', verified_name: 'TEST ELECTRICALS', created_at: '2026-11-01T00:00:00Z' });
+  db.fin_party_accounts.push({ id: 'ab', party_id: 'pc', method: 'upi', last4: '0192', status: 'verified', verified_name: 'SRI LAKSHMI HARDWARE AND PAINTS', created_at: '2026-11-01T00:00:00Z' });
+  const body = await (await api(op, '/parties')).json();
+  const by = (t) => body.suggestions.filter((x) => x.type === t);
+  assert.deepEqual(by('merge').map((x) => [x.partyId, x.targetId]), [['pa', 'pb']], 'the entry without payment details merges into the one holding it');
+  assert.deepEqual(by('rename').map((x) => [x.partyId, x.to]), [['pc', 'Sri Lakshmi Hardware and Paints']]);
+  assert.ok(body.parties.every((p) => 'lastPaid' in p && 'paidPaise' in p), 'the stats columns are always present, empty when nothing is posted');
+  assert.equal(JSON.stringify(body).includes('details_enc'), false);
+});
+
 test('the IFSC lookup names the bank for finance users, says when no branch exists, and sends nothing but the IFSC', async () => {
   reset();
   const viewer = sign('u2', 'read_only');

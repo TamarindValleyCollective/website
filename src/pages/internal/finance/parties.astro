@@ -8,6 +8,7 @@
 // placed with textContent only, never as HTML.
 import StaffLayout from '../../../layouts/StaffLayout.astro';
 import '../../../styles/linked-picker.css';
+import '../../../styles/data-table.css';
 import SignInGate from '../../../components/SignInGate.astro';
 import StepUpSheet from '../../../components/StepUpSheet.astro';
 ---
@@ -24,24 +25,27 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
     <div id="status" aria-live="polite" class="hint" hidden></div>
 
     <div id="content" hidden>
-      <div class="bar">
-        <label class="field">
-          <span class="visually-hidden">Search parties</span>
-          <input id="q" type="search" placeholder="Search by name" autocomplete="off" />
-        </label>
-        <button type="button" id="add" class="button button--primary add-button" hidden>
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"></path></svg>
-          <span class="add-label">Add party</span>
+      <section id="suggest" class="suggest" aria-label="Suggested changes" hidden>
+        <button type="button" id="suggest-head" class="suggest-head" aria-expanded="true">
+          <span class="pill pill--warn" id="suggest-count">0</span>
+          <strong>Suggested changes</strong>
+          <span class="hint">From the name the bank showed on verified accounts and what each payee's payments were booked under. Nothing changes until you accept.</span>
+          <span class="suggest-caret" aria-hidden="true">▾</span>
         </button>
-      </div>
-      <div class="segmented chips" id="chips" role="group" aria-label="Show"></div>
-      <ul class="list" id="list"></ul>
+        <ul id="suggest-list" class="suggest-list"></ul>
+        <button type="button" id="suggest-more" class="suggest-more" hidden></button>
+      </section>
+      <div id="table"></div>
+      <button type="button" id="add" class="button button--primary add-button" hidden>
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"></path></svg>
+        <span class="add-label">Add party</span>
+      </button>
       <p id="legend" class="legend" hidden>
         <span class="dot dot--verified" aria-hidden="true"></span> verified
         <span class="dot dot--unverified" aria-hidden="true"></span> not verified yet
         <span class="dot dot--review" aria-hidden="true"></span> needs review
+        <span class="differs-key">Orange</span> name at the bank differs from ours
       </p>
-      <div id="empty" aria-live="polite" hidden></div>
     </div>
 
     <dialog id="party-sheet" class="sheet" aria-labelledby="party-title"></dialog>
@@ -55,18 +59,21 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
 <script>
   import { combo } from '../../../../scripts/lib/finance-ui.mjs';
   import { matchOptions } from '../../../../scripts/lib/finance-search.mjs';
+  import { createDataTable } from '../../../../scripts/lib/data-table-ui.mjs';
+  import { rupees, niceDate as niceIso } from '../../../../scripts/lib/finance-ui.mjs';
   import { StaffAuthError, clearStepUp, clearToken, closeOnBackdrop, decodeTokenEmail, getStepUp, getToken, setToken, showToast, staffFetch } from '../../../../scripts/lib/staff-client.mjs';
   import { initStepUpLock } from '../../../../scripts/lib/staff-stepup-ui.mjs';
   import { markDiff, groupFromRight } from '../../../../scripts/lib/finance-diff.mjs';
   import { VERIFY_METHODS, namesResemble } from '../../../../scripts/lib/finance-parties.mjs';
-  import { clearState, showEmpty, showFailure, showLoading } from '../../../../scripts/lib/staff-states.mjs';
+  import { clearState, showFailure, showLoading } from '../../../../scripts/lib/staff-states.mjs';
 
   declare const google: any;
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
 
   type Account = { id: string; method: 'bank' | 'upi'; shown: string; status: 'unverified' | 'verified'; shared: boolean; validFrom: string | null; retiredOn: string | null; payableNow: boolean; review: string[]; verification: { at: string | null; by: string | null; method: string | null; methodLabel: string; note: string | null; name?: string | null } | null; evidence?: { payment: number; name_check: number; other: number } };
-  type Party = { id: string; name: string; kind: string; active: boolean; householdId: string | null; formerSince: string | null; accounts: Account[]; earlierAccounts: number; needsReview: boolean; mergedCount: number };
-  type Data = { kinds: string[]; canEdit: boolean; canVerify: boolean; me: { id: string; ready: boolean; hasPasskey: boolean; stepUpValid: boolean } | null; parties: Party[]; needsReviewCount: number };
+  type Party = { id: string; name: string; kind: string; active: boolean; householdId: string | null; formerSince: string | null; accounts: Account[]; earlierAccounts: number; needsReview: boolean; mergedCount: number; lastPaid: string | null; paidPaise: number; postings: number };
+  type Suggestion = { id: string; type: 'merge' | 'rename' | 'kind'; partyId: string; targetId?: string; to?: string; what: string; why: string };
+  type Data = { kinds: string[]; canEdit: boolean; canVerify: boolean; me: { id: string; ready: boolean; hasPasskey: boolean; stepUpValid: boolean } | null; parties: Party[]; suggestions: Suggestion[]; needsReviewCount: number };
 
   const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
   const KIND_LABELS: Record<string, string> = { member: 'Member', vendor: 'Vendor', employee: 'Employee', customer: 'Customer', bank: 'Bank', government: 'Government', director: 'Director', other: 'Other' };
@@ -77,10 +84,8 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
   const content = $('content');
   const intro = $('intro');
   let data: Data | null = null;
-  let query = '';
-  type Filter = 'all' | 'review' | 'unverified' | 'verified';
+  // ?filter=review|unverified|verified (links from the dashboard) opens with that filter on.
   const asked = new URLSearchParams(location.search).get('filter');
-  let filter: Filter = asked === 'review' || asked === 'unverified' || asked === 'verified' ? asked : 'all';
 
   function h(tag: string, props: { class?: string; text?: string; attrs?: Record<string, string>; on?: Record<string, (e: Event) => void> } = {}, ...kids: (Node | null)[]): HTMLElement {
     const el = document.createElement(tag);
@@ -155,7 +160,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
     forbidden.hidden = true;
     if (!data) showLoading(statusEl);
     try {
-      const { status, data: out } = await call(`/api/finance-admin/parties${query ? `?q=${encodeURIComponent(query)}` : ''}`);
+      const { status, data: out } = await call('/api/finance-admin/parties');
       if (status !== 200) throw new Error('load failed');
       data = out as Data;
       clearState(statusEl);
@@ -163,7 +168,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
       intro.textContent = 'Everyone TVC pays or receives from. Bank and UPI details show only their last four characters here.';
       $('add').hidden = !data.canEdit;
       lock.render();
-      render();
+      renderAll();
       content.hidden = false;
     } catch (err) {
       if (err instanceof StaffAuthError) return;
@@ -184,13 +189,11 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
     no_replacement: 'This account is being retired and no other account is set up to replace it.',
   };
   // ---- the list: what needs doing first. A payee is in one of four states, shown as a quiet dot, so the one loud signal is
-  // "Needs review"; the chips above give the counts and filter the list.
+  // "Needs review".
   type PState = 'review' | 'unverified' | 'verified' | 'none';
   const hasLiveUnverified = (p: Party) => p.accounts.some((a) => a.status === 'unverified' && !isRetired(a));
   const stateOf = (p: Party): PState => (p.needsReview ? 'review' : hasLiveUnverified(p) ? 'unverified' : p.accounts.length ? 'verified' : 'none');
   const STATE_TEXT: Record<PState, string> = { review: 'Needs review', unverified: 'Not verified yet', verified: 'Verified', none: 'No payment details' };
-  const FILTERS: [Filter, string][] = [['all', 'All'], ['review', 'Needs review'], ['unverified', 'Unverified'], ['verified', 'Verified']];
-  const inFilter = (p: Party, f: Filter) => f === 'all' || (f === 'review' && p.needsReview) || (f === 'unverified' && hasLiveUnverified(p)) || (f === 'verified' && !hasLiveUnverified(p) && p.accounts.length > 0);
 
   function accountSummary(p: Party): string {
     const live = p.accounts.filter((a) => !isRetired(a));
@@ -199,11 +202,18 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
     const parts = [banks ? `${banks} bank account${banks === 1 ? '' : 's'}` : '', upis ? (upis === 1 ? 'UPI' : `${upis} UPI ids`) : ''].filter(Boolean);
     return parts.length ? parts.join(' and ') : 'No payment details';
   }
+  const liveAccounts = (p: Party) => p.accounts.filter((a) => !isRetired(a));
+  const bankNames = (p: Party) => [...new Set(p.accounts.map((a) => a.verification?.name).filter((n): n is string => Boolean(n)))];
+  // The bank's name "differs" when no bank name is the label apart from case and punctuation.
+  const squash = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, '');
+  const differs = (p: Party) => bankNames(p).length > 0 && !bankNames(p).some((n) => squash(n) === squash(p.name));
+  const evidenceCount = (p: Party) => p.accounts.reduce((n, a) => n + (a.evidence ? a.evidence.payment + a.evidence.name_check + a.evidence.other : 0), 0);
 
   // The kind, changed in place: most imported payees are still "Other", and setting 120 of them one sheet at a time would be a chore.
   function kindSelect(p: Party): HTMLSelectElement {
     const sel = h('select', { class: 'kind-select', attrs: { 'aria-label': `Kind of ${p.name}` } }, ...(data?.kinds ?? []).map((k) => h('option', { text: KIND_LABELS[k] ?? k, attrs: { value: k } }))) as HTMLSelectElement;
     sel.value = p.kind;
+    if (p.householdId) sel.disabled = true; // a member linked to a household stays a member
     sel.addEventListener('click', (e) => e.stopPropagation());
     sel.addEventListener('change', async () => {
       const before = p.kind;
@@ -211,6 +221,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
       if (status === 200) {
         p.kind = sel.value;
         showToast('Saved.');
+        table.render();
       } else {
         sel.value = before;
         showToast(out?.error ?? 'Could not change that.');
@@ -219,45 +230,206 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
     return sel;
   }
 
-  function render() {
-    const all = data?.parties ?? [];
-    $('chips').replaceChildren(
-      ...FILTERS.map(([id, label]) => {
-        const n = all.filter((p) => inFilter(p, id)).length;
-        return h('button', { attrs: { type: 'button', 'aria-pressed': String(filter === id) }, on: { click: () => { filter = id; render(); } } }, h('span', { text: label }), h('span', { class: `chip-count${id === 'review' && n > 0 ? ' chip-count--crit' : ''}`, text: String(n) }));
-      }),
-    );
-    const parties = all.filter((p) => inFilter(p, filter));
-    $('list').replaceChildren(
-      ...parties.map((p) => {
-        const state = stateOf(p);
-        return h(
-          'li',
-          {},
-          h(
-            'div',
-            { class: 'row party-row' },
-            h('span', { class: `dot dot--${state}`, attrs: { 'aria-hidden': 'true' } }),
-            h('button', { class: 'party-main', attrs: { type: 'button' }, on: { click: () => openDetail(p.id) } }, h('span', { class: 'title', text: p.name }), h('span', { class: 'detail', text: accountSummary(p) }), h('span', { class: 'visually-hidden', text: STATE_TEXT[state] })),
-            data?.canEdit ? kindSelect(p) : h('span', { class: 'detail kind-text', text: KIND_LABELS[p.kind] ?? p.kind }),
-            h('span', { class: 'party-flag' }, p.active ? null : pill('Inactive'), p.formerSince ? pill('Former member') : null, p.needsReview ? pill('Needs review', 'crit') : null),
-          ),
-        );
-      }),
-    );
-    $('legend').hidden = parties.length === 0;
-    const empty = $('empty');
-    if (parties.length) clearState(empty);
-    else if (query) showEmpty(empty, { title: 'No party matches that search', text: 'Try a shorter name, or clear the search.' });
-    else if (all.length === 0) showEmpty(empty, { title: 'No parties yet', text: 'Add the first one by hand, or load an existing list with the import script (the steps are in docs/finance/FINANCE.md).', action: data?.canEdit ? { label: 'Add party', onClick: openAddParty } : undefined });
-    else showEmpty(empty, { title: 'Nothing in this view', text: 'No payees are in this group right now.', action: { label: 'Show everyone', onClick: () => { filter = 'all'; render(); } } });
-  }
-  let searchTimer: number | undefined;
-  $<HTMLInputElement>('q').addEventListener('input', (e) => {
-    query = (e.target as HTMLInputElement).value.trim();
-    clearTimeout(searchTimer);
-    searchTimer = window.setTimeout(load, 250);
+  // Parties some merge suggestion names (either side): the "Possible duplicate" filter and the pill on the row.
+  let duplicateIds = new Set<string>();
+
+  const KIND_ORDER = ['Member', 'Vendor', 'Employee', 'Customer', 'Bank', 'Government', 'Director', 'Other'];
+  const table = createDataTable({
+    root: $('table'),
+    rowId: (p: Party) => p.id,
+    noun: ['party', 'parties'],
+    searchPlaceholder: 'Search names, bank names, notes…',
+    favoritesKey: `tvc-party-favorites:${decodeTokenEmail(getToken() ?? '')}`,
+    defaultGroup: 'kind',
+    defaultSort: ['name', 1],
+    toolbarEnd: $('add'),
+    searchText: (p: Party) => [p.name, KIND_LABELS[p.kind], ...bankNames(p), ...p.accounts.map((a) => a.shown), STATE_TEXT[stateOf(p)]].join(' '),
+    onOpen: (p: Party) => openDetail(p.id),
+    empty: { title: 'No parties yet', text: 'Add the first one by hand, or load an existing list with the import script (the steps are in docs/finance/FINANCE.md).' },
+    columns: [
+      {
+        id: 'name', label: 'Name', value: (p: Party) => p.name,
+        render: (p: Party) => h('span', { class: 'name-cell' }, h('button', { class: 'party-main', attrs: { type: 'button' }, on: { click: () => openDetail(p.id) } }, h('span', { class: 'title', text: p.name })), h('span', { class: 'party-flag' }, p.active ? null : pill('Inactive'), p.formerSince ? pill('Former member') : null, p.needsReview ? pill('Needs review', 'crit') : null, duplicateIds.has(p.id) ? pill('Possible duplicate', 'warn') : null)),
+      },
+      { id: 'kind', label: 'Kind', value: (p: Party) => KIND_LABELS[p.kind] ?? p.kind, render: (p: Party) => (data?.canEdit ? kindSelect(p) : h('span', { class: 'detail kind-text', text: KIND_LABELS[p.kind] ?? p.kind })) },
+      { id: 'accounts', label: 'Accounts', value: (p: Party) => accountSummary(p), sortValue: (p: Party) => liveAccounts(p).length },
+      {
+        id: 'status', label: 'Status', value: (p: Party) => STATE_TEXT[stateOf(p)],
+        render: (p: Party) => h('span', { class: 'status-cell' }, h('span', { class: `dot dot--${stateOf(p)}`, attrs: { 'aria-hidden': 'true' } }), document.createTextNode(STATE_TEXT[stateOf(p)])),
+      },
+      { id: 'bank', label: 'Name at the bank', value: (p: Party) => bankNames(p).join(', '), render: (p: Party) => (bankNames(p).length ? h('span', { class: differs(p) ? 'differs' : '', text: bankNames(p).join(', ') }) : '–') },
+      { id: 'evidence', label: 'Evidence', type: 'count', align: 'end', value: (p: Party) => evidenceCount(p), render: (p: Party) => (evidenceCount(p) ? `${evidenceCount(p)} ${evidenceCount(p) === 1 ? 'file' : 'files'}` : '–') },
+      { id: 'lastPaid', label: 'Last paid', type: 'date', value: (p: Party) => p.lastPaid ?? '', render: (p: Party) => (p.lastPaid ? niceIso(p.lastPaid) : '–') },
+      { id: 'paid', label: 'Paid in total', type: 'amount', align: 'end', value: (p: Party) => (p.paidPaise > 0 ? p.paidPaise : null), render: (p: Party) => (p.paidPaise > 0 ? rupees(p.paidPaise) : '–') },
+    ],
+    filters: [
+      { id: 'review', label: 'Needs review', test: (p: Party) => p.needsReview },
+      { id: 'unverified', label: 'Unverified', test: (p: Party) => hasLiveUnverified(p) },
+      { id: 'verified', label: 'Verified', test: (p: Party) => !hasLiveUnverified(p) && p.accounts.length > 0 },
+      { id: 'noaccount', label: 'No payment details', test: (p: Party) => liveAccounts(p).length === 0 },
+      { id: 'noevidence', label: 'No evidence attached', test: (p: Party) => evidenceCount(p) === 0 },
+      { id: 'differs', label: "Bank's name differs", test: differs },
+      { id: 'duplicate', label: 'Possible duplicate', test: (p: Party) => duplicateIds.has(p.id) },
+      { id: 'other', label: 'Kind is Other', test: (p: Party) => p.kind === 'other' },
+      { id: 'inactive', label: 'Inactive', test: (p: Party) => !p.active },
+    ],
+    groups: [
+      { id: 'kind', label: 'Kind', key: (p: Party) => KIND_LABELS[p.kind] ?? p.kind, order: KIND_ORDER },
+      { id: 'status', label: 'Status', key: (p: Party) => STATE_TEXT[stateOf(p)], order: ['Needs review', 'Not verified yet', 'Verified', 'No payment details'] },
+      { id: 'letter', label: 'First letter', key: (p: Party) => (p.name.trim()[0] ?? '#').toUpperCase() },
+    ],
+    card: (p: Party) =>
+      h('div', { class: 'party-card', attrs: { role: 'button', tabindex: '0' }, on: { click: (e: Event) => { if (!(e.target as HTMLElement).closest('select,input,button')) openDetail(p.id); } } },
+        h('div', { class: 'party-card-top' }, h('span', { class: 'title', text: p.name }), h('span', { class: 'status-cell' }, h('span', { class: `dot dot--${stateOf(p)}`, attrs: { 'aria-hidden': 'true' } }), document.createTextNode(STATE_TEXT[stateOf(p)]))),
+        h('div', { class: 'detail', text: [KIND_LABELS[p.kind] ?? p.kind, accountSummary(p), p.paidPaise > 0 ? rupees(p.paidPaise) : ''].filter(Boolean).join(' · ') }),
+        bankNames(p).length ? h('div', { class: differs(p) ? 'differs' : 'detail', text: `Bank: ${bankNames(p).join(', ')}` }) : null,
+        h('div', { class: 'party-flag' }, p.active ? null : pill('Inactive'), p.needsReview ? pill('Needs review', 'crit') : null, duplicateIds.has(p.id) ? pill('Possible duplicate', 'warn') : null)),
+    bulk: [
+      { id: 'kind', label: 'Set kind…', run: (rows: Party[]) => openBulkKind(rows) },
+      { id: 'merge', label: 'Merge…', run: (rows: Party[]) => bulkMerge(rows) },
+      { id: 'inactive', label: 'Mark inactive', run: (rows: Party[]) => openBulkInactive(rows) },
+      { id: 'active', label: 'Mark active', run: (rows: Party[]) => bulkActive(rows) },
+    ],
   });
+
+  let askedApplied = false;
+  function renderAll() {
+    const all = data?.parties ?? [];
+    duplicateIds = new Set((data?.suggestions ?? []).filter((x) => x.type === 'merge').flatMap((x) => [x.partyId, x.targetId ?? '']));
+    table.setRows(all);
+    if (!askedApplied) {
+      askedApplied = true;
+      if (asked === 'review' || asked === 'unverified' || asked === 'verified') table.setChips([asked]);
+    }
+    $('legend').hidden = all.length === 0;
+    renderSuggestions();
+  }
+
+  // ---- suggested changes: each is accepted through the same routes as a manual change (rename, kind, merge), with their own rules
+  const dismissedKey = () => `tvc-party-suggestions-dismissed:${decodeTokenEmail(getToken() ?? '')}`;
+  const readDismissed = (): Set<string> => {
+    try { return new Set(JSON.parse(localStorage.getItem(dismissedKey()) ?? '[]')); } catch { return new Set(); }
+  };
+  const dismiss = (id: string) => {
+    try { localStorage.setItem(dismissedKey(), JSON.stringify([...readDismissed(), id])); } catch { /* blocked storage: it comes back next time */ }
+    renderSuggestions();
+  };
+  const SUGGESTIONS_SHOWN = 3;
+  let showAllSuggestions = false;
+  function renderSuggestions() {
+    const gone = readDismissed();
+    const list = (data?.suggestions ?? []).filter((x) => !gone.has(x.id));
+    $('suggest').hidden = list.length === 0;
+    $('suggest-count').textContent = String(list.length);
+    // Three at a time: a long list must not push the table off the screen.
+    const shown = showAllSuggestions ? list : list.slice(0, SUGGESTIONS_SHOWN);
+    $('suggest-more').hidden = list.length <= SUGGESTIONS_SHOWN;
+    $('suggest-more').textContent = showAllSuggestions ? 'Show fewer' : `Show ${list.length - SUGGESTIONS_SHOWN} more`;
+    $('suggest-list').replaceChildren(
+      ...shown.map((x) =>
+        h('li', {}, h('div', { class: 'suggest-what', text: x.what }), h('div', { class: 'hint', text: x.why }),
+          h('div', { class: 'suggest-actions' },
+            data?.canEdit ? button(x.type === 'merge' ? 'Review merge' : 'Accept', () => acceptSuggestion(x), 'button button--primary') : null,
+            button('Dismiss', () => dismiss(x.id)))),
+      ),
+    );
+  }
+  $('suggest-more').addEventListener('click', () => {
+    showAllSuggestions = !showAllSuggestions;
+    renderSuggestions();
+  });
+  $('suggest-head').addEventListener('click', () => {
+    const open = $('suggest-list').hidden;
+    $('suggest-list').hidden = !open;
+    if (!open) $('suggest-more').hidden = true;
+    else renderSuggestions();
+    $('suggest-head').setAttribute('aria-expanded', String(open));
+  });
+  async function acceptSuggestion(x: Suggestion) {
+    const p = data?.parties.find((q) => q.id === x.partyId);
+    if (!p) return;
+    if (x.type === 'merge') return openMerge(p, x.targetId ?? '');
+    const body = x.type === 'rename' ? { name: x.to } : { kind: x.to };
+    const { status, data: out } = await call(`/api/finance-admin/parties/${p.id}`, 'PATCH', body);
+    if (status === 200) {
+      showToast('Saved.');
+      load();
+    } else showToast(out?.error ?? 'Could not change that.');
+  }
+
+  // ---- bulk actions on the ticked rows
+  function openBulkKind(rows: Party[]) {
+    const dlg = $<HTMLDialogElement>('account-sheet');
+    const movable = rows.filter((p) => !p.householdId);
+    const sel = h('select', { attrs: { name: 'kind' } }, ...(data?.kinds ?? []).filter((k) => k !== 'member').map((k) => h('option', { text: KIND_LABELS[k] ?? k, attrs: { value: k } }))) as HTMLSelectElement;
+    const msg = h('p', { class: 'error', attrs: { hidden: '' } });
+    const form = h('form', { class: 'stack-form' },
+      labelled(`Set the kind of ${movable.length} ${movable.length === 1 ? 'party' : 'parties'} to`, sel),
+      movable.length < rows.length ? h('p', { class: 'hint', text: `${rows.length - movable.length} linked to a household stay a member.` }) : null,
+      msg,
+      h('div', { class: 'sheet-actions' }, closeBtn(dlg, 'Cancel'), h('button', { class: 'button button--primary', text: 'Set kind', attrs: { type: 'submit' } })));
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      let done = 0;
+      let failed = 0;
+      for (const p of movable) {
+        const { status } = await call(`/api/finance-admin/parties/${p.id}`, 'PATCH', { kind: sel.value });
+        if (status === 200) done += 1; else failed += 1;
+      }
+      dlg.close();
+      table.clearSelection();
+      showToast(failed ? `Changed ${done}; ${failed} could not be changed.` : `Changed ${done}.`);
+      load();
+    });
+    present(dlg, h('h2', { text: 'Set kind', attrs: { id: 'account-title' } }), form);
+  }
+  function openBulkInactive(rows: Party[]) {
+    const dlg = $<HTMLDialogElement>('account-sheet');
+    const form = h('form', { class: 'stack-form' },
+      h('p', { text: `Mark ${rows.length} ${rows.length === 1 ? 'party' : 'parties'} inactive?` }),
+      h('p', { class: 'hint', text: 'They stay in the books and on the ledger lines they are already on. They are no longer offered when choosing who was paid, and nothing is deleted. To bring them back, show the Inactive filter, tick them and choose Mark active.' }),
+      h('div', { class: 'sheet-actions' }, closeBtn(dlg, 'Cancel'), h('button', { class: 'button button--primary', text: 'Mark inactive', attrs: { type: 'submit' } })));
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      let done = 0;
+      let failed = 0;
+      for (const p of rows) {
+        const { status } = await call(`/api/finance-admin/parties/${p.id}`, 'PATCH', { active: false });
+        if (status === 200) done += 1; else failed += 1;
+      }
+      dlg.close();
+      table.clearSelection();
+      showToast(failed ? `Marked ${done}; ${failed} could not be changed.` : `Marked ${done} inactive.`);
+      load();
+    });
+    present(dlg, h('h2', { text: 'Mark inactive', attrs: { id: 'account-title' } }), form);
+  }
+  async function bulkActive(rows: Party[]) {
+    const off = rows.filter((p) => !p.active);
+    if (!off.length) {
+      showToast('Those are already active.');
+      return;
+    }
+    let done = 0;
+    for (const p of off) {
+      const { status } = await call(`/api/finance-admin/parties/${p.id}`, 'PATCH', { active: true });
+      if (status === 200) done += 1;
+    }
+    table.clearSelection();
+    showToast(`Marked ${done} active.`);
+    load();
+  }
+  // Two ticked parties are the same payee: the one without payment details is merged into the other.
+  function bulkMerge(rows: Party[]) {
+    if (rows.length !== 2) {
+      showToast('Tick the two parties that are one payee.');
+      return;
+    }
+    const [a, b] = rows;
+    const [from, into] = a.accounts.length === 0 || b.accounts.length > 0 ? [a, b] : [b, a];
+    table.clearSelection();
+    openMerge(from, into.id);
+  }
 
   // ---- sheets
   function present(dlg: HTMLDialogElement, ...kids: (Node | null)[]) {
@@ -1293,6 +1465,142 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
       margin: auto 0 0;
       border-radius: 22px 22px 0 0;
       max-height: 88dvh;
+    }
+  }
+
+  /* The shared table (styles/data-table.css) holds the rest; these are this page's cells and the suggestions panel. */
+  .parties .name-cell {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+  }
+
+  .parties .name-cell .party-main {
+    flex: 0 1 auto;
+    min-height: 0;
+    font-weight: 600;
+  }
+
+  .parties .status-cell {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+
+  .parties .differs,
+  .parties .differs-key {
+    color: var(--tvc-orange-text);
+    font-weight: 600;
+  }
+
+  .parties .party-card {
+    display: grid;
+    gap: 4px;
+    padding-inline-end: 28px;
+    cursor: pointer;
+  }
+
+  .parties .party-card-top {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    font-weight: 600;
+  }
+
+  .parties .suggest {
+    margin-block-end: 14px;
+    border: 1px solid var(--tvc-line);
+    border-inline-start: 4px solid var(--tvc-orange);
+    border-radius: var(--radius);
+    background: var(--tvc-white);
+  }
+
+  .parties .suggest-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    width: 100%;
+    padding: 10px 14px;
+    border: 0;
+    background: none;
+    color: var(--tvc-ink);
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+  }
+
+  .parties .suggest-head .hint {
+    flex: 1 1 260px;
+    margin: 0;
+  }
+
+  .parties .suggest-list {
+    margin: 0;
+    padding: 0 14px 6px;
+    list-style: none;
+  }
+
+  .parties .suggest-list[hidden] {
+    display: none;
+  }
+
+  .parties .suggest-list li {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 2px 16px;
+    align-items: center;
+    padding: 10px 0;
+    border-top: 1px solid var(--tvc-line);
+  }
+
+  .parties .suggest-list li .hint {
+    margin: 0;
+  }
+
+  .parties .suggest-what {
+    font-weight: 600;
+  }
+
+  .parties .suggest-more {
+    margin: 0 14px 10px;
+    padding: 4px 0;
+    border: 0;
+    background: none;
+    color: var(--tvc-ink);
+    font: inherit;
+    font-weight: 600;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
+  .parties .suggest-more[hidden] {
+    display: none;
+  }
+
+  .parties .suggest-actions {
+    display: flex;
+    flex-wrap: wrap;
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    gap: 8px;
+  }
+
+  @media (width <= 760px) {
+    .parties .suggest-head .hint {
+      display: none;
+    }
+
+    .parties .suggest-list li {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .parties .suggest-actions {
+      grid-column: 1;
+      grid-row: auto;
+      margin-block-start: 6px;
     }
   }
 </style>

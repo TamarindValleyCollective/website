@@ -1,0 +1,391 @@
+/* TVC's admin data table, the format the Ledger set (scripts/lib/data-table-ui.mjs builds the markup). Import this in any page that
+   uses it. Colors are --tvc-* tokens only. Sticky header cells are layered on --tvc-white: --tvc-green-tint is translucent in the
+   admin shell and would let rows show through. */
+
+.dt .dt-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 10px;
+  margin-block-end: 10px;
+}
+
+.dt .dt-search {
+  position: relative;
+  flex: 1 1 360px;
+  min-width: 0;
+}
+
+.dt .dt-sbox {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 40px;
+  padding: 3px 4px 3px 10px;
+  border: 1px solid var(--tvc-line-strong);
+  border-radius: var(--radius-field);
+  background: var(--tvc-white);
+}
+
+.dt .dt-sbox:focus-within {
+  border-color: var(--tvc-orange);
+  box-shadow: 0 0 0 3px var(--tvc-orange-tint);
+}
+
+.dt .dt-chips {
+  display: contents;
+}
+
+.dt .dt-sbox input {
+  flex: 1 1 80px;
+  min-width: 60px;
+  min-height: 32px;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--tvc-ink);
+  font: inherit;
+  padding: 0;
+}
+
+.dt .dt-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 100%;
+  padding: 2px 2px 2px 9px;
+  border-radius: 7px;
+  background: var(--tvc-cream);
+  color: var(--tvc-ink);
+  font-size: var(--text-sm);
+}
+
+.dt .dt-chip b {
+  margin-inline-end: 4px;
+  color: var(--tvc-ink-soft);
+  font-weight: 600;
+}
+
+.dt .dt-chip button,
+.dt .dt-x {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--tvc-ink-soft);
+  font: inherit;
+  cursor: pointer;
+}
+
+.dt .dt-chip button:hover,
+.dt .dt-x:hover,
+.dt .dt-caret:hover {
+  background: var(--tvc-cream);
+}
+
+.dt .dt-caret {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--tvc-ink-soft);
+  font: inherit;
+  cursor: pointer;
+}
+
+.dt .dt-pop {
+  position: absolute;
+  z-index: 20;
+  inset-inline: 0;
+  top: calc(100% + 6px);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 16px;
+  padding: 14px;
+  border: 1px solid var(--tvc-line-strong);
+  border-radius: var(--radius);
+  background: var(--tvc-white);
+  box-shadow: 0 10px 30px rgb(0 0 0 / 14%);
+}
+
+.dt .dt-pop[hidden] {
+  display: none;
+}
+
+.dt .dt-pop h3 {
+  margin: 0 0 6px;
+  color: var(--tvc-ink-soft);
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.dt .dt-pop section > input {
+  width: 100%;
+  min-height: 34px;
+  margin-block: 6px;
+  padding: 0 8px;
+  border: 1px solid var(--tvc-line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--tvc-white);
+  color: var(--tvc-ink);
+  font: inherit;
+}
+
+.dt .dt-opt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--tvc-ink);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.dt .dt-opt:hover {
+  background: var(--tvc-cream);
+}
+
+.dt .dt-opt[aria-pressed='true'] {
+  background: var(--tvc-green-tint);
+  font-weight: 600;
+}
+
+.dt .dt-opt em {
+  color: var(--tvc-ink-soft);
+  font-size: var(--text-sm);
+  font-style: normal;
+}
+
+.dt .dt-fav {
+  display: flex;
+  align-items: center;
+}
+
+.dt .dt-errors {
+  margin: 0 0 8px;
+  color: var(--tvc-error-text);
+  font-size: var(--text-sm);
+}
+
+.dt .dt-errors[hidden],
+.dt .dt-empty[hidden],
+.dt .dt-bulk[hidden],
+.dt .dt-scroll[hidden] {
+  display: none;
+}
+
+/* the table */
+.dt .dt-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--tvc-line);
+  border-radius: var(--radius);
+  background: var(--tvc-white);
+}
+
+.dt .dt-table {
+  width: 100%;
+  min-width: 940px;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.dt .dt-table th,
+.dt .dt-table td {
+  padding: 9px 10px;
+  text-align: start;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.dt .dt-table thead th {
+  border-bottom: 1px solid var(--tvc-line);
+  background: var(--tvc-white);
+  color: var(--tvc-ink-soft);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.dt .dt-end {
+  text-align: end;
+}
+
+.dt .dt-sort {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.dt .dt-sorted .dt-sort {
+  color: var(--tvc-ink);
+}
+
+.dt .dt-arrow {
+  margin-inline-start: 4px;
+  font-size: 0.75rem;
+  opacity: 0.5;
+}
+
+.dt .dt-sorted .dt-arrow {
+  opacity: 1;
+}
+
+.dt .dt-filters td {
+  padding: 5px 6px;
+  border-bottom: 1px solid var(--tvc-line);
+  background: var(--tvc-white);
+}
+
+.dt .dt-colfilter {
+  width: 100%;
+  min-width: 70px;
+  min-height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--tvc-line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--tvc-white);
+  color: var(--tvc-ink);
+  font: inherit;
+  font-size: var(--text-sm);
+}
+
+.dt .dt-tick {
+  width: 40px;
+  padding-inline-end: 0;
+}
+
+.dt input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--tvc-green);
+}
+
+.dt .dt-group td {
+  padding: 0;
+  border-top: 1px solid var(--tvc-line);
+  background: var(--tvc-cream);
+}
+
+.dt .dt-group-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  background: none;
+  color: var(--tvc-ink);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.dt .dt-count {
+  color: var(--tvc-ink-soft);
+  font-size: var(--text-sm);
+}
+
+.dt .dt-row td {
+  border-top: 1px solid var(--tvc-line);
+}
+
+.dt .dt-clickable {
+  cursor: pointer;
+}
+
+.dt .dt-row:hover td {
+  background: var(--tvc-cream);
+}
+
+.dt .dt-row.dt-selected td {
+  background: var(--tvc-green-tint);
+}
+
+.dt .dt-empty {
+  padding: 28px 16px;
+  text-align: center;
+}
+
+.dt .dt-empty-title {
+  margin: 0 0 4px;
+  font-weight: 600;
+}
+
+.dt .dt-foot {
+  margin: 10px 0 0;
+  color: var(--tvc-ink-soft);
+  font-size: var(--text-sm);
+}
+
+.dt .dt-bulk {
+  position: fixed;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--tvc-line-strong);
+  background: var(--tvc-surface);
+}
+
+.dt .dt-cards {
+  display: none;
+}
+
+/* phones: the table becomes cards, as in the Ledger */
+@media (width <= 760px) {
+  .dt .dt-scroll {
+    display: none;
+  }
+
+  .dt .dt-cards {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .dt .dt-card {
+    position: relative;
+    padding: 12px;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    background: var(--tvc-white);
+  }
+
+  .dt .dt-card.dt-selected {
+    background: var(--tvc-green-tint);
+  }
+
+  .dt .dt-card > input[type='checkbox'] {
+    position: absolute;
+    inset-block-start: 12px;
+    inset-inline-end: 12px;
+  }
+
+  .dt .dt-group--card {
+    border-radius: var(--radius-sm);
+    background: var(--tvc-cream);
+  }
+
+  .dt .dt-bulk {
+    bottom: calc(var(--tabbar-h, 64px) + env(safe-area-inset-bottom));
+  }
+}

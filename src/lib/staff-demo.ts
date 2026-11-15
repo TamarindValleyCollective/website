@@ -11,6 +11,7 @@
 
 import { ACCOMMODATION_UNITS, ACCOMMODATION_TYPES } from '../../scripts/lib/accommodation.mjs';
 import { VERIFY_METHODS, findSimilarParties } from '../../scripts/lib/finance-parties.mjs';
+import { suggestChanges } from '../../scripts/lib/finance-party-suggestions.mjs';
 import { shapeAlignment, validateAlignment } from '../../scripts/lib/site-map-align.mjs';
 import planLines from '../../docs/site-map/plan-plot-lines.json';
 import plotOutlines from '../../docs/site-map/plot-outlines.json';
@@ -316,14 +317,26 @@ const DEMO_PAYEE_DETAILS: Record<string, { method: string; account?: string; ifs
 let financeParties: any[] | null = null;
 function demoFinanceParties() {
   const account = (id: string, method: string, shown: string, status: string) => ({ id, method, shown, status, shared: false, validFrom: null, retiredOn: null, payableNow: status === 'verified', review: [], createdAt: '2026-11-01T00:00:00Z', verifiedAt: null, verification: null, evidence: { payment: 0, name_check: 0, other: 0 } });
-  const party = (id: string, name: string, accounts: any[]) => ({ id, name, kind: 'vendor', active: true, householdId: null, formerSince: null, accounts, earlierAccounts: 0, needsReview: false, mergedCount: 0 });
+  const party = (id: string, name: string, accounts: any[], extra: Record<string, unknown> = {}) => ({ id, name, kind: 'vendor', active: true, householdId: null, formerSince: null, accounts, earlierAccounts: 0, needsReview: false, mergedCount: 0, lastPaid: null, paidPaise: 0, postings: 0, ...extra });
+  const verified = (id: string, method: string, shown: string, files: number, name: string) => ({ ...account(id, method, shown, 'verified'), evidence: { payment: 0, name_check: files, other: 0 }, verification: { at: '2026-11-03T00:00:00Z', by: 'Demo Admin', method: 'bank_name_check', methodLabel: "Bank's payee-name check (screenshot)", note: null, name } });
   financeParties ??= [
     party('p1', 'Test Traders', [account('a1', 'bank', 'ending 0001', 'unverified')]),
     party('p2', 'Sample Stores', [account('a2', 'upi', 'ending ores', 'unverified')]),
     party('p3', 'Example Hardware', [{ ...account('a3', 'bank', 'ending 0003', 'verified'), evidence: { payment: 0, name_check: 1, other: 0 }, verification: { at: '2026-11-03T00:00:00Z', by: 'Demo Admin', method: 'bank_name_check', methodLabel: "Bank's payee-name check (screenshot)", note: null, name: 'EXAMPLE HARDWARE PRIVATE LIMITED' } }]),
     party('p4', 'Imported Stores (Milk)', [{ ...account('a4', 'bank', 'ending 0004', 'unverified'), review: ['missing_ifsc'] }]),
+    party('p5', 'Test Electricals', [], { kind: 'other' }),
+    party('p6', 'TEST ELECTRCIALS', [verified('a6', 'bank', 'ending 4821', 1, 'TEST ELECTRICALS')], { lastPaid: '2026-11-14', paidPaise: 3670000, postings: 3 }),
+    party('p7', 'Sri Lakshmi Hardware', [verified('a7', 'upi', 'ending 0192', 1, 'SRI LAKSHMI HARDWARE AND PAINTS')], { kind: 'other', lastPaid: '2026-10-28', paidPaise: 4120000, postings: 4 }),
+    party('p8', 'Asha Nursery', [], { kind: 'other', lastPaid: '2026-11-09', paidPaise: 1825000, postings: 3 }),
   ];
-  return { kinds: ['vendor', 'employee', 'customer', 'other'], canEdit: true, canVerify: true, me: { id: 'demo-1', ready: true, hasPasskey: true, stepUpValid: false }, needsReviewCount: 0, parties: financeParties };
+  // What the posted payments were booked under, for the kind suggestions (the real list reads it from the books).
+  const stat = (postings: number, categoryName: string, categoryType: string) => ({ postings, direction: 'debit', categoryName, categoryType, categoryShare: 1 });
+  const demoStats: Record<string, any> = { p6: stat(3, 'Structures and infrastructure', 'capex'), p7: stat(4, 'Structures and infrastructure', 'capex'), p8: stat(3, 'Operational and miscellaneous', 'opex') };
+  const suggestions = suggestChanges(
+    financeParties.map((x: any) => ({ id: x.id, name: x.name, kind: x.kind, active: x.active, householdId: x.householdId, accounts: x.accounts.map((a: any) => ({ verifiedName: a.verification?.name ?? null })), stats: demoStats[x.id] ?? null })),
+    { kindLabels: { vendor: 'Vendor', employee: 'Employee', customer: 'Customer', government: 'Government' } },
+  );
+  return { kinds: ['member', 'vendor', 'employee', 'customer', 'bank', 'government', 'director', 'other'], canEdit: true, canVerify: true, me: { id: 'demo-1', ready: true, hasPasskey: true, stepUpValid: false }, needsReviewCount: 0, parties: financeParties, suggestions };
 }
 // Invented branch directory: one code that exists, every other is "no such branch".
 const demoIfsc = (code: string) => (code === 'ABCD0123456' ? { found: true, bank: 'Test Bank', branch: 'Main Road', city: 'Sample City', state: 'Sample State' } : { found: false });

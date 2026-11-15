@@ -15,7 +15,7 @@
 //
 // Everything lands UNVERIFIED with no creator, so a director must verify each payee in the app before it can be paid.
 // The dry run and the apply summary print counts and line numbers only: never a name, account number or UPI id. Re-running
-// is safe: parties are matched on name + kind and accounts on their keyed fingerprint, so nothing is added twice.
+// is safe: parties are matched on name (any kind) and accounts on their keyed fingerprint, so nothing is added twice.
 //
 // --apply needs SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY and FINANCE_PAYEE_KEY (the payee encryption key; STAFF_MFA_KEY is used if it is not set), and migration
 // 0079 applied. Needs Node 22.18+ (it imports the TypeScript crypto helper directly).

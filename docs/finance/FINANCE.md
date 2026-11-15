@@ -168,9 +168,25 @@ for esbuild, and Node 22.18+ or newer, which imports the registry `.ts` directly
   payees needing review, statement gaps, Paytm payments with no bank line and Paytm payments waiting, the last import date and
   counts of parties and bank accounts. Counts and labels only: no names, numbers or fingerprints. Each row links into the
   filtered Parties list (`?filter=unverified|review|verified`) or Import.
-- **The Parties list.** Status chips with counts (All / Needs review / Unverified / Verified) filter the list; a quiet dot shows each
-  payee's state so "Needs review" is the one loud signal; the kind is changed in place (the list also has it on phones, in the
-  sheet). Add party defaults to Vendor.
+- **The Parties list.** Now the shared admin table, in the Ledger's format (`scripts/lib/data-table.mjs` logic, `data-table-ui.mjs` DOM,
+  `src/styles/data-table.css`; see docs/design-language.md, "Data tables"): a search box that holds chips, with Filters (Needs review,
+  Unverified, Verified, No payment details, No evidence attached, Bank's name differs, Possible duplicate, Kind is Other, Inactive), Group by
+  (Kind by default, Status, First letter) and Favorites (kept in the browser, per account); a filter box under every column header in the Ledger's
+  syntax (`^word`, `=word`, `!word`, `>1000`, `2026-10`); sortable columns Name, Kind (changed in place), Accounts, Status, Name at the bank
+  (orange when it differs from ours), Evidence (files attached), Last paid, Paid in total; cards on phones. Everything is searched and sorted in the
+  browser. Last paid and Paid in total come from posted, non-reversal allocations (a failure there only blanks those columns). Ticking rows
+  opens a bulk bar: Set kind, Merge (exactly two ticked: the one without payment details merges into the other, through the usual merge
+  sheet and its step-up), Mark inactive, Mark active; each is a loop over the existing `PATCH /parties/:id`. A dot shows each payee's state so
+  "Needs review" is the one loud signal. Add party defaults to Vendor.
+- **Suggested changes** (`GET /parties` returns `suggestions`; rules in `scripts/lib/finance-party-suggestions.mjs`, pure and tested). Only
+  typed or booked evidence is used, never a screenshot: the name the bank showed when an account was verified (`verified_name`), the other
+  parties' names, and what a party's posted payments were booked under. *Merge* (names match allowing one slip per eight letters, or one bank
+  name fits both; never two members, never a member linked to a household away), *Rename* (our label is a spelling or a shortening of the
+  verified bank name; never a member, never to a name another party has), *Kind* (only "Other", and only when at least two payments and 80% of
+  them agree: Salaries to Employee, opex/capex to Vendor, revenue receipts to Customer, tax to Government). Accepting a rename or a kind calls
+  `PATCH /parties/:id`; accepting a merge opens the normal merge sheet. Dismissals are remembered in the browser. Reading screenshots with a
+  vision model was considered and left out (it would send payee images to an external model); it is the natural next step if typed names are
+  too few.
 - **Merging (migration `0081_finance_party_merge.sql`, applied to TVC ERP on 2026-11-02).** Two parties that are really one payee (often a bank merger: an old
   and a new account) are merged by a director with the step-up: `POST /parties/:id/merge {into}`. Nothing is moved or deleted,
   because account rows are immutable: the duplicate gets `merged_into = main party`, is hidden from the list, and the main party
