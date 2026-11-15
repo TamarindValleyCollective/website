@@ -73,20 +73,26 @@ decisions below are the mockup's defaults and are listed on its Decisions tab.
 10. Financial year selector in the header; a closed year shows final figures; Data health always describes today.
 11. Data health items that block a month close: unverified payees in use, bank lines with no category, advances
     with no recovery agreed, a broken balance chain.
-12. **Channels** (admin only, added 2026-11-15; mockup tab only, nothing built): a map of the money paths drawn as circles whose
-    area is the amount. Bank accounts on the left, the channels money passes through in the middle (payment gateway, POS terminal,
-    bulk payments, card, each UPI app, plain bank transfers), and UPI Circle delegates on the right under the operator's app they
-    pay through. Banks and channels share one scale and delegates have their own; very small amounts are drawn at a minimum size.
-    Circles are joined by links whose thickness is the money flowing through them; the figure sits inside a circle where it fits and
-    under the name where it does not. It starts closed except the live bank: clicking a circle opens what is behind
-    it (a bank shows its channels, a UPI app its delegates) and shows its details in a panel (figures, what needs attention, what
-    it connects to); Expand all and Collapse all open and close everything. A ! badge marks what needs attention, a + or − that a
-    circle can be opened or closed, and dashed means planned. A Money out / Money in switch changes the direction. The channels add
-    up to the bank statement and a table view says so. On a phone the three groups wrap, without links, and the panel opens below. The first
-    version had boxes with every figure inside, and a Sankey was rejected (it mixes money in and out and tangles as channels are
-    added). Boxes for things not built (the ICICI account, the POS terminal, Google Pay) are dashed and marked Planned so the
-    structure does not change when they arrive. Today a POS terminal counts under Debit card and a second person's Paytm cannot be
-    told apart from the first: that needs an operator record.
+12. **Channels** (admin only, added 2026-11-15; mockup tab only, nothing built): a map of the money paths drawn as a graph you can zoom
+    and move around in, like a knowledge graph. Circles are sized by amount (area) and joined by links as thick as the money flowing
+    through them. Bank accounts on the left, the channels money passes through in the middle (payment gateway, POS terminal, bulk
+    payments, card, each UPI app, plain bank transfers; staggered in two lanes so the graph is compact), and UPI Circle delegates on
+    the right under the operator's app they pay through. Banks and channels share one scale and delegates have their own; very small
+    amounts are drawn at a minimum size. The figure sits inside a circle where it fits and under the name where it does not.
+    Scroll or pinch to zoom, drag the background to move, drag a circle to rearrange, and Fit resets the layout; what is written under
+    a circle depends on the zoom relative to the fitted view (zoomed out: names only for the banks, normal: name and figure, zoomed
+    in: counts and shares). It starts closed except the live bank: clicking a circle opens what is behind it (a bank shows its
+    channels, a UPI app its delegates), brings it into view and shows its details in a panel (figures, what needs attention, what it
+    connects to); Zoom to this focuses on a circle and its connections; Expand all and Collapse all open and close everything.
+    **Filters:** period (year to date, last three months, this month; a closed year has only the year), one bank account, needs
+    attention only (the flagged circles and the live path back to their bank), hide planned, hide delegates, and a search that
+    highlights matches and zooms to them; a count says how many circles are shown and Reset clears them. A ! badge marks what needs
+    attention, a + or - that a circle can be opened or closed, and dashed means planned. A Money out / Money in switch changes the
+    direction. The channels add up to the bank statement and a table view says so. On a phone it is the same canvas (pinch to zoom)
+    with the panel below. Earlier versions had boxes with every figure inside, then circles with no links; a Sankey was rejected (it
+    mixes money in and out and tangles as channels are added). Boxes for things not built (the ICICI account, the POS terminal,
+    Google Pay) are dashed and marked Planned so the structure does not change when they arrive. Today a POS terminal counts under
+    Debit card and a second person's Paytm cannot be told apart from the first: that needs an operator record.
 
 **For session 07 and the sessions after it:** figures are in lakh in tiles and charts, full rupees for the
 circle and advances; budget bars scale to 130% of each line's budget with a tick at the budget; status pills
