@@ -534,14 +534,16 @@ Modelled on how ServiceNow lists work, because the sheet's convenience was selec
 - **Drafts.** What you type is a draft that lives in the page only; a warning appears if you try to leave with unposted drafts. Posting
   is the second step: **"Post N ready"** (the bar) asks first, then posts the ready lines, each in full. Two steps by decision: filling
   cells is reversible, posting is not. Drafts are also kept in the browser and offered back on the next visit; **Fill them in again**
-  restores them, ticks the ready ones and turns on the **Filled in, not posted** status filter. That filter and **Needs a reason**
+  restores them, selects the ready ones and turns on the **Filled in, not posted** status filter. That filter and **Needs a reason**
   (a category or party but no wording yet) are in Filters, so you can see which lines carry something not yet posted. Server-side
   drafts without wording are not possible yet: the database requires wording on every allocation row. A cell that holds your draft (category, party or wording, typed, applied, accepted or restored) has a white box with a green outline and a thicker left edge, and the tooltip "Yours, not posted yet"; suggestions stay grey italic. Wide table only; the card layout does not mark cells yet.
 - **Selecting.** A checkbox on every editable line; the header checkbox selects the page; shift-click selects the run between two
   lines. Lines that cannot be edited here (already posted, partly allocated, waiting for review) cannot be ticked.
-- **The bar** appears under the table when lines are selected and sticks to the bottom of the screen: *Set category*, *Set party*, *Set
-  wording* (to all selected), *Accept suggestions*, *Fill from first* (copy the first selected line's three cells to the others, the
-  sheet's fill-down), *Post N ready*, *Clear*.
+- **The bar** appears under the table when lines are selected and sticks to the bottom of the screen, as three labelled steps: **1 · Set
+  for all** (category, party and what it was for, then *Apply to N lines*, strong only once a box is filled), **2 · Or use suggestions**
+  (*Accept suggestions*: fills empty cells only, never replaces what you set) and **3 · Post** (*Post N ready*, with why it is off beside
+  it). The top line counts selected, ready and those needing what it was for, with *Show those* (turns on the *Needs a reason* filter),
+  and *Clear*. The page keeps space under the table so the bar never covers the last rows.
 - **Apply to the others.** Change a cell on a line that is one of several selected and the bar asks "Apply this to the other N
   selected lines too?" (Apply to all / Only this line).
 - **Keyboard.** Enter in a wording cell moves to the next line's wording cell.

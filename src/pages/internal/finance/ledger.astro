@@ -91,7 +91,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       <p id="progress" class="progress"></p>
       <span id="announce" class="visually-hidden" role="status"></span>
       <span id="selcount" class="visually-hidden" role="status"></span>
-      <p class="hint twostep">A tick only fills a field in. Nothing is saved until you tick the lines and press <strong>Post</strong>. Cells with a green outline are yours and not posted yet; grey italics are suggestions.</p>
+      <p class="hint twostep">Accepting a suggestion (the ✓) or choosing a value only fills a field in. Nothing is saved until you select the lines and press <strong>Post</strong>. Cells with a green outline are yours and not posted yet; grey italics are suggestions.</p>
       <div id="restorenote" class="postnote applyprompt" hidden></div>
       <div id="draftnote" class="postnote applyprompt" role="status" hidden></div>
       <div id="monthstrip" class="postnote applyprompt" role="status" hidden></div>
@@ -714,7 +714,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     const reason = input('closedReason', { placeholder: 'Why is a closed month being changed?' }) as HTMLInputElement;
     const reasonBox = labelled('Reason for changing a closed month', reason);
     const msg = h('p', { class: 'error', attrs: { hidden: '' } });
-    const all = h('input', { attrs: { type: 'checkbox', checked: '', 'aria-label': 'Tick or untick every line' } }) as HTMLInputElement;
+    const all = h('input', { attrs: { type: 'checkbox', checked: '', 'aria-label': 'Select or unselect every line' } }) as HTMLInputElement;
     const apply = button('Apply', () => void submit(), 'button button--primary');
     const picked = () => proposals.filter((_, i) => boxes[i].checked);
     function refresh() {
@@ -1753,7 +1753,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       const fields = [ghostOf(l, 'categoryId') ? 'category' : '', ghostOf(l, 'partyId') || strangerOf(l) ? (l.direction === 'debit' ? 'who was paid' : 'who paid') : '', ghostOf(l, 'nature') ? 'wording' : ''].filter(Boolean);
       const sure = CONFIDENCE_WORDS[l.suggestion?.confidence ?? ''] ?? 'a guess';
       const p = pill(isStrong(l) ? 'Suggested' : 'A guess', 'warn');
-      p.title = `Suggested ${fields.join(', ')} (${sure}), shown in italics. Tick a value to accept it; nothing is saved until you tick the line and press Post.`;
+      p.title = `Suggested ${fields.join(', ')} (${sure}), shown in italics. Press the ✓ to accept it; nothing is saved until you select the line and press Post.`;
       return p;
     }
     return pill(d.categoryId ? 'Needs a reason' : 'Needs category');
@@ -1779,6 +1779,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     yours('party', can && Boolean(d.partyId));
     yours('wording', can && Boolean(d.nature.trim()));
     yours('nature', can && Boolean(d.nature.trim()));
+    yours('meta', can && Boolean(d.categoryId || d.partyId));
     const kind = amountKind(l.direction, isTransferLine(l));
     el.classList.toggle('is-credit', kind === 'cr');
     el.classList.toggle('is-transfer', kind[0] === 't');
@@ -1912,7 +1913,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     // On a phone a line at rest is two lines: the narration and amount, then date, category and party in one grey line.
     const catWords = can ? (d.categoryId ? nameOf(lk.categories, d.categoryId) : ghostOf(l, 'categoryId') ? nameOf(lk.categories, ghostOf(l, 'categoryId')) : '') : l.allocation ? nameOf(lk.categories, l.allocation.categoryId) : '';
     const partyWords = can ? (d.partyId ? nameOf(lk.parties, d.partyId) : '') : l.allocation?.partyId ? nameOf(lk.parties, l.allocation.partyId) : '';
-    r.meta.textContent = [catWords, partyWords].filter(Boolean).join(' · ') || 'Nothing chosen yet';
+    r.meta.textContent = (can && (d.categoryId || d.partyId) ? 'Yours: ' : '') + ([catWords, partyWords].filter(Boolean).join(' · ') || 'Nothing chosen yet');
   }
   const syncRow = (l: Line) => {
     const el = mounted.get(l.id);
@@ -1948,7 +1949,7 @@ import SignInGate from '../../../components/SignInGate.astro';
             for (const l of ready) next[l.id] = true;
             table.setRowSelection(next);
           }, 'button button--small')
-        : h('span', { class: 'hint', text: 'They are ticked: press Post in the bar at the bottom.' }),
+        : h('span', { class: 'hint', text: 'They are selected: press Post in the bar at the bottom.' }),
     );
     box.hidden = false;
   }
@@ -3829,6 +3830,11 @@ import SignInGate from '../../../components/SignInGate.astro';
 
   /* A phone: each line is a card (date and amount, the narration, then the three cells with their labels, then its status). */
   @media (max-width: 1240px) {
+    .ledger .lrow .gcell--meta.is-mine {
+      margin: 0;
+      padding: 2px 8px;
+    }
+
     .ledger .gcell--wording,
     .ledger.show-word .gcell--wording {
       display: none;
