@@ -176,7 +176,7 @@ for esbuild, and Node 22.18+ or newer, which imports the registry `.ts` directly
   (orange when it differs from ours), Evidence (files attached), Last paid, Paid in total; cards on phones. Everything is searched and sorted in the
   browser. Last paid and Paid in total come from posted, non-reversal allocations (a failure there only blanks those columns). Ticking rows
   opens a bulk bar: Set kind, Merge (exactly two ticked: the one without payment details merges into the other, through the usual merge
-  sheet and its step-up), Mark inactive, Mark active; each is a loop over the existing `PATCH /parties/:id`. A dot shows each payee's state so
+  sheet and its step-up), Mark inactive, Mark active; each is the existing `PATCH /parties/:id` per party (so each keeps its own rules and audit entry), run five at a time with the count shown as it goes, so changing a hundred parties takes seconds. The usual job, "turn all the Others into Vendors": filter to *Kind is Other*, tick the box in the header (every party shown), choose *Set kind*; Vendor is preselected, and parties linked to a household stay members. The bar of ticked rows sticks to the bottom of the table's own column (it must not span the whole window: it once slid under the left rail and hid *Set kind*). A dot shows each payee's state so
   "Needs review" is the one loud signal. Add party defaults to Vendor.
 - **Suggested changes** (`GET /parties` returns `suggestions`; rules in `scripts/lib/finance-party-suggestions.mjs`, pure and tested). Only
   typed or booked evidence is used, never a screenshot: the name the bank showed when an account was verified (`verified_name`), the other

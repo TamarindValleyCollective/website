@@ -358,24 +358,43 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
   }
 
   // ---- bulk actions on the ticked rows
+  // Each is the same PATCH as changing one party by hand (so the same rules and audit entry per party), run five at a time so that
+  // changing a hundred parties takes seconds, with the count shown as it goes.
+  async function patchAll(items: Party[], bodyOf: (p: Party) => unknown, onProgress: (done: number, total: number) => void): Promise<{ done: number; failed: number }> {
+    let next = 0;
+    let finished = 0;
+    let failed = 0;
+    async function worker() {
+      while (next < items.length) {
+        const p = items[next++];
+        try {
+          const { status } = await call(`/api/finance-admin/parties/${p.id}`, 'PATCH', bodyOf(p));
+          if (status !== 200) failed += 1;
+        } catch {
+          failed += 1;
+        }
+        finished += 1;
+        onProgress(finished, items.length);
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(5, items.length) }, worker));
+    return { done: items.length - failed, failed };
+  }
   function openBulkKind(rows: Party[]) {
     const dlg = $<HTMLDialogElement>('account-sheet');
     const movable = rows.filter((p) => !p.householdId);
     const sel = h('select', { attrs: { name: 'kind' } }, ...(data?.kinds ?? []).filter((k) => k !== 'member').map((k) => h('option', { text: KIND_LABELS[k] ?? k, attrs: { value: k } }))) as HTMLSelectElement;
     const msg = h('p', { class: 'error', attrs: { hidden: '' } });
+    const go = h('button', { class: 'button button--primary', text: 'Set kind', attrs: { type: 'submit' } }) as HTMLButtonElement;
     const form = h('form', { class: 'stack-form' },
       labelled(`Set the kind of ${movable.length} ${movable.length === 1 ? 'party' : 'parties'} to`, sel),
       movable.length < rows.length ? h('p', { class: 'hint', text: `${rows.length - movable.length} linked to a household stay a member.` }) : null,
       msg,
-      h('div', { class: 'sheet-actions' }, closeBtn(dlg, 'Cancel'), h('button', { class: 'button button--primary', text: 'Set kind', attrs: { type: 'submit' } })));
+      h('div', { class: 'sheet-actions' }, closeBtn(dlg, 'Cancel'), go));
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      let done = 0;
-      let failed = 0;
-      for (const p of movable) {
-        const { status } = await call(`/api/finance-admin/parties/${p.id}`, 'PATCH', { kind: sel.value });
-        if (status === 200) done += 1; else failed += 1;
-      }
+      go.disabled = true;
+      const { done, failed } = await patchAll(movable.filter((p) => p.kind !== sel.value), () => ({ kind: sel.value }), (d, t) => { go.textContent = `Changing ${d} of ${t}…`; });
       dlg.close();
       table.clearSelection();
       showToast(failed ? `Changed ${done}; ${failed} could not be changed.` : `Changed ${done}.`);
@@ -391,12 +410,9 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
       h('div', { class: 'sheet-actions' }, closeBtn(dlg, 'Cancel'), h('button', { class: 'button button--primary', text: 'Mark inactive', attrs: { type: 'submit' } })));
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      let done = 0;
-      let failed = 0;
-      for (const p of rows) {
-        const { status } = await call(`/api/finance-admin/parties/${p.id}`, 'PATCH', { active: false });
-        if (status === 200) done += 1; else failed += 1;
-      }
+      const go = form.querySelector<HTMLButtonElement>('button[type=submit]')!;
+      go.disabled = true;
+      const { done, failed } = await patchAll(rows.filter((p) => p.active), () => ({ active: false }), (d, t) => { go.textContent = `Marking ${d} of ${t}…`; });
       dlg.close();
       table.clearSelection();
       showToast(failed ? `Marked ${done}; ${failed} could not be changed.` : `Marked ${done} inactive.`);
@@ -410,13 +426,10 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
       showToast('Those are already active.');
       return;
     }
-    let done = 0;
-    for (const p of off) {
-      const { status } = await call(`/api/finance-admin/parties/${p.id}`, 'PATCH', { active: true });
-      if (status === 200) done += 1;
-    }
+    showToast(`Marking ${off.length} active…`);
+    const { done, failed } = await patchAll(off, () => ({ active: true }), () => {});
     table.clearSelection();
-    showToast(`Marked ${done} active.`);
+    showToast(failed ? `Marked ${done} active; ${failed} could not be changed.` : `Marked ${done} active.`);
     load();
   }
   // Two ticked parties are the same payee: the one without payment details is merged into the other.
