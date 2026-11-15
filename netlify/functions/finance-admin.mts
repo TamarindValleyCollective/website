@@ -22,6 +22,7 @@ import { lookupIfsc } from '../../scripts/lib/finance-ifsc.mjs';
 import { PARTY_ID, addEvidence, addMissingIfsc, getEvidence, listEvidence, addVendor, addPayeeAccount, createParty, listParties, mergeParty, retirePayeeAccount, revealPayeeAccount, reviewParty, unmergeParty, updateParty, verifyPayeeAccount } from './lib/finance-parties';
 import { REQUEST_ID, addVoucher, cancelOrDecide, listFiles, createRecord, getVoucher, listMine, listRequests, matchRecord, reviewRecord, unmatchRecord } from './lib/finance-requests';
 import { listUpiLines } from './lib/finance-upi-view';
+import { assignDelegate, saveDelegate } from './lib/finance-delegates';
 import { getDashboard } from './lib/finance-dashboard';
 import { BUDGET_ID, approveDraft, discardDraft, getBudget, saveLines, startDraft } from './lib/finance-budget';
 import { setPaymentNote } from './lib/finance-notes';
@@ -260,6 +261,10 @@ const dispatch = async (req: Request): Promise<Response> => {
   }
   // Ledger and review (session 05)
   if (route === '/upi-lines' && req.method === 'GET') return listUpiLines(req);
+  if (route === '/delegates' && req.method === 'POST') return saveDelegate(req, null);
+  if (route === '/delegates/assign' && req.method === 'POST') return assignDelegate(req);
+  const delegate = /^\/delegates\/([^/]+)$/.exec(route);
+  if (delegate && LEDGER_ID.test(delegate[1]) && req.method === 'PATCH') return saveDelegate(req, delegate[1]);
   if (route === '/payment-note' && req.method === 'POST') return setPaymentNote(req);
   if (route === '/ledger' && req.method === 'GET') return listLedger(req);
   if (route === '/ledger/all' && req.method === 'GET') return ledgerAll(req);
@@ -309,6 +314,8 @@ export const config = {
     '/api/finance-admin/accounts/*',
     '/api/finance-admin/evidence/*',
     '/api/finance-admin/upi-lines',
+    '/api/finance-admin/delegates',
+    '/api/finance-admin/delegates/*',
     '/api/finance-admin/requests',
     '/api/finance-admin/requests/*',
     '/api/finance-admin/vendors',

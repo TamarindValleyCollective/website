@@ -3,7 +3,8 @@
 // of the account or by a delegate (UPI Circle), whether it is joined to a bank line in the ledger, and the delegated spend per
 // calendar month against the allowance. Backed by
 // netlify/functions/finance-admin.mts (/upi-lines, lib/finance-upi-view.ts); the rules are scripts/lib/finance-upi-circle.mjs.
-// Read-only: files are added on the Import page.
+// Files are added on the Import page; here an admin adds the delegates (who they are, from when, an optional limit) and
+// picks the delegate for the payments the dates cannot decide (scripts/lib/finance-delegates.mjs, lib/finance-delegates.ts).
 //
 // Same shell as the other internal tools: Google Sign-In gated, unlinked, noindex. Everything the server returns is
 // placed with textContent only, never as HTML.
@@ -25,6 +26,15 @@ import SignInGate from '../../../components/SignInGate.astro';
       <ul class="list" id="months"></ul>
       <p class="hint" id="months-note"></p>
 
+      <h2 class="list-title">Delegates</h2>
+      <ul class="list" id="delegates"></ul>
+      <p class="hint" id="delegates-note"></p>
+      <p class="delegate-actions"><button type="button" class="button button--outline" id="delegate-add" hidden>Add a delegate</button></p>
+      <div id="delegate-queue" class="card" hidden>
+        <p id="delegate-queue-text"></p>
+        <button type="button" class="button button--outline" id="delegate-queue-show">Show them</button>
+      </div>
+
       <div id="bank-only" class="card" hidden></div>
 
       <h2 class="list-title">Payments</h2>
@@ -42,6 +52,7 @@ import SignInGate from '../../../components/SignInGate.astro';
           <button type="button" role="radio" data-value="all" aria-checked="true">Anyone</button>
           <button type="button" role="radio" data-value="direct" aria-checked="false">Direct</button>
           <button type="button" role="radio" data-value="delegate" aria-checked="false">Delegate</button>
+          <button type="button" role="radio" data-value="needs" aria-checked="false" id="f-needs" hidden>Needs a delegate</button>
         </div>
         <div class="segmented" id="f-state" role="radiogroup" aria-label="Against the bank statement">
           <button type="button" role="radio" data-value="all" aria-checked="true">Any</button>
@@ -71,11 +82,45 @@ import SignInGate from '../../../components/SignInGate.astro';
       </div>
       <p class="hint" id="rows-note" aria-live="polite"></p>
     </div>
+
+    <dialog id="delegate-dialog" class="sheet delegate-sheet" aria-labelledby="delegate-title">
+      <form id="delegate-form" class="delegate-form" novalidate>
+        <h2 id="delegate-title">Add a delegate</h2>
+        <p class="sheet-text" id="delegate-lead">A delegate pays with a spend right the account's operator gave them (UPI Circle). They are known by the number the UPI app shows after "Paid for".</p>
+        <label id="delegate-number-field">
+          <span>Number</span>
+          <input id="delegate-number" inputmode="numeric" autocomplete="off" maxlength="15" />
+        </label>
+        <label>
+          <span>Name <small>(optional: shown instead of the number)</small></span>
+          <input id="delegate-name" autocomplete="off" maxlength="60" />
+        </label>
+        <div class="delegate-dates">
+          <label>
+            <span>Started</span>
+            <input id="delegate-from" type="date" />
+          </label>
+          <label>
+            <span>Ended <small>(empty while active)</small></span>
+            <input id="delegate-to" type="date" />
+          </label>
+        </div>
+        <label>
+          <span>Monthly limit in rupees <small>(optional)</small></span>
+          <input id="delegate-cap" inputmode="numeric" autocomplete="off" />
+        </label>
+        <p class="error" id="delegate-error" role="alert" hidden></p>
+        <div class="sheet-actions">
+          <button type="button" class="button button--outline" id="delegate-cancel">Cancel</button>
+          <button type="submit" class="button" id="delegate-save">Save</button>
+        </div>
+      </form>
+    </dialog>
   </section>
 </StaffLayout>
 
 <script>
-  import { StaffAuthError, clearStepUp, clearToken, decodeTokenEmail, getToken, setToken, showToast, staffFetch } from '../../../../scripts/lib/staff-client.mjs';
+  import { StaffAuthError, clearStepUp, clearToken, closeOnBackdrop, decodeTokenEmail, getToken, setToken, showToast, staffFetch } from '../../../../scripts/lib/staff-client.mjs';
   import { clearState, showFailure, showLoading } from '../../../../scripts/lib/staff-states.mjs';
 
   declare const google: any;
@@ -98,9 +143,13 @@ import SignInGate from '../../../components/SignInGate.astro';
   const APP = { bhim: 'BHIM', paytm: 'Paytm' } as const;
   const STATE = { matched: { text: 'In the ledger', kind: 'ok' }, waiting: { text: 'Waiting for statement', kind: 'warn' }, unmatched: { text: 'Not in the statement', kind: 'crit' } } as const;
 
-  type Upi = { id: string; paidAt: string; time: string | null; app: 'bhim' | 'paytm'; counterparty: string | null; remark: string | null; amountPaise: number; direction: 'debit' | 'credit'; isCircle: boolean; upiRef: string; note: string | null; purpose: string | null; bankLineId: string | null; account: string | null; state: 'matched' | 'waiting' | 'unmatched' };
+  type Upi = { id: string; paidAt: string; time: string | null; app: 'bhim' | 'paytm'; counterparty: string | null; remark: string | null; amountPaise: number; direction: 'debit' | 'credit'; isCircle: boolean; upiRef: string; note: string | null; purpose: string | null; bankLineId: string | null; account: string | null; delegateId: string | null; delegate: string | null; delegateHow: 'assigned' | 'auto' | 'ambiguous' | 'none' | null; state: 'matched' | 'waiting' | 'unmatched' };
+  type Delegate = { id: string; identifier: string; displayName: string | null; activeFrom: string; activeTo: string | null; capPaise: number | null };
   let all: Upi[] = [];
   let canEdit = false;
+  let canConfigure = false;
+  let delegates: Delegate[] = [];
+  let defaultCapPaise = 0;
   // A link from the ledger arrives as ?ref=<UPI reference>: the table opens filtered to that one payment.
   const filter = { q: new URLSearchParams(location.search).get('ref')?.replace(/\D/g, '').slice(0, 12) ?? '', app: 'all', kind: 'all', state: 'all' };
 
@@ -155,9 +204,14 @@ import SignInGate from '../../../components/SignInGate.astro';
   function renderMonths(data: any) {
     const list = $('months');
     list.replaceChildren(
-      ...data.months.map((m: any) =>
-        row(monthName(m.month), [`${rupees(m.paise)} of ${rupees(m.capPaise)} · ${plural(m.count, 'payment')}`], m.over ? { text: 'Over the allowance', kind: 'crit' } : { text: 'Within', kind: 'ok' }),
-      ),
+      ...data.months.map((m: any) => {
+        // Each delegate is counted against their own limit; payments with no delegate yet are their own line.
+        const buckets: any[] = m.byDelegate ?? [];
+        const lines = buckets.length
+          ? buckets.map((b) => `${buckets.length > 1 || b.label ? `${b.label ?? 'No delegate yet'}: ` : ''}${rupees(b.paise)} of ${rupees(b.capPaise)} · ${plural(b.count, 'payment')}`)
+          : [`${rupees(m.paise)} of ${rupees(m.capPaise)} · ${plural(m.count, 'payment')}`];
+        return row(monthName(m.month), lines, m.over ? { text: 'Over the allowance', kind: 'crit' } : { text: 'Within', kind: 'ok' });
+      }),
     );
     $('months-note').textContent = data.months.length
       ? 'A delegated payment is one a delegate made with the spend right given to them (UPI Circle). Paytm marks them with the “Pocket Money” tag; BHIM marks them with no bank named and CR. Every download is in the operator’s name, so the file does not say which delegate paid.'
@@ -172,11 +226,141 @@ import SignInGate from '../../../components/SignInGate.astro';
     );
   }
 
+  const today = () => new Date().toLocaleDateString('en-CA');
+  const labelOf = (d: Delegate) => d.displayName || d.identifier;
+
+  function renderDelegates(data: any) {
+    const list = $('delegates');
+    const now = today();
+    list.replaceChildren(
+      ...delegates.map((d) => {
+        const details = [`${d.displayName ? `Number ${d.identifier} · ` : ''}From ${day(d.activeFrom)}${d.activeTo ? ` to ${day(d.activeTo)}` : ', still active'}`, `Monthly limit ${rupees(d.capPaise ?? defaultCapPaise)}${d.capPaise ? '' : ' (the default)'} · ${plural(all.filter((u) => u.delegateId === d.id).length, 'payment')}`];
+        const ended = d.activeTo !== null && d.activeTo < now;
+        const li = row(labelOf(d), details, ended ? { text: 'Ended', kind: 'warn' } : { text: 'Active', kind: 'ok' });
+        if (canConfigure) {
+          const inner = li.querySelector<HTMLElement>('.row')!;
+          const btn = el('button', 'row');
+          btn.type = 'button';
+          btn.title = 'Edit this delegate';
+          btn.append(...Array.from(inner.childNodes));
+          btn.addEventListener('click', () => openDelegate(d));
+          li.replaceChildren(btn);
+        }
+        return li;
+      }),
+    );
+    const none = data.notIdentified ?? 0;
+    $('delegates-note').textContent = !delegates.length
+      ? `${none ? `${plural(none, 'delegated payment')} ${none === 1 ? 'has' : 'have'} no delegate yet. ` : ''}${canConfigure ? 'Add the person who pays with the UPI Circle, from the date they started: their payments are then attributed to them automatically.' : 'An admin can add the people who pay with the UPI Circle.'}`
+      : none
+        ? `${plural(none, 'delegated payment')} ${none === 1 ? 'was' : 'were'} made on a day when no delegate was active (before the first start date or after an end date).`
+        : 'A payment belongs to the one delegate who was active that day. When two were active at once, you choose on the payment.';
+    const needs = data.needsDelegate ?? 0;
+    $('delegate-queue').hidden = needs === 0;
+    $('delegate-queue-text').textContent = needs ? `${plural(needs, 'delegated payment')} ${needs === 1 ? 'was' : 'were'} made while more than one delegate was active, so the dates cannot say who paid. Choose the delegate on each one.` : '';
+    $('f-needs').hidden = needs + none === 0;
+    $('delegate-add').hidden = !canConfigure;
+  }
+
+  const dlg = $<HTMLDialogElement>('delegate-dialog');
+  let editing: Delegate | null = null;
+  closeOnBackdrop(dlg);
+  $('delegate-cancel').addEventListener('click', () => dlg.close());
+  $('delegate-add').addEventListener('click', () => openDelegate(null));
+  $('delegate-queue-show').addEventListener('click', () => {
+    setKind('needs');
+    $('upi-head').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+
+  function openDelegate(d: Delegate | null) {
+    editing = d;
+    $('delegate-title').textContent = d ? 'Edit delegate' : 'Add a delegate';
+    $('delegate-number-field').hidden = d !== null;
+    $<HTMLInputElement>('delegate-number').value = '';
+    $<HTMLInputElement>('delegate-name').value = d?.displayName ?? '';
+    $<HTMLInputElement>('delegate-from').value = d?.activeFrom ?? '';
+    $<HTMLInputElement>('delegate-to').value = d?.activeTo ?? '';
+    $<HTMLInputElement>('delegate-cap').value = d?.capPaise ? String(d.capPaise / 100) : '';
+    $<HTMLInputElement>('delegate-cap').placeholder = `${rupees(defaultCapPaise)} if empty`;
+    $('delegate-error').hidden = true;
+    dlg.showModal();
+    (d ? $('delegate-name') : $('delegate-number')).focus();
+  }
+
+  $('delegate-form').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const err = $('delegate-error');
+    const capText = $<HTMLInputElement>('delegate-cap').value.trim().replace(/[,\s₹]/g, '');
+    const body: Record<string, unknown> = {
+      displayName: $<HTMLInputElement>('delegate-name').value,
+      activeFrom: $<HTMLInputElement>('delegate-from').value,
+      activeTo: $<HTMLInputElement>('delegate-to').value,
+      capPaise: capText === '' ? null : Math.round(Number(capText) * 100),
+    };
+    if (!editing) body.identifier = $<HTMLInputElement>('delegate-number').value;
+    if (capText !== '' && !Number.isFinite(Number(capText))) {
+      err.textContent = 'The monthly limit must be an amount in rupees.';
+      err.hidden = false;
+      return;
+    }
+    const save = $<HTMLButtonElement>('delegate-save');
+    save.disabled = true;
+    try {
+      const { status, data } = await staffFetch(editing ? `/api/finance-admin/delegates/${editing.id}` : '/api/finance-admin/delegates', { method: editing ? 'PATCH' : 'POST', body });
+      if (status !== 200 && status !== 201) throw new Error(data?.error ?? 'failed');
+      dlg.close();
+      showToast(editing ? 'Delegate saved.' : 'Delegate added.');
+      await load();
+    } catch (e) {
+      if (fail(e)) return;
+      err.textContent = e instanceof Error && e.message !== 'failed' ? e.message : 'Could not save the delegate. Nothing was changed.';
+      err.hidden = false;
+    } finally {
+      save.disabled = false;
+    }
+  });
+
+  // Who paid, for one payment. A settled payment (the one delegate active that day) is just its label; one the dates cannot
+  // decide, or one an admin picked, is a select so it can be chosen or taken back.
+  function paidByCell(u: Upi): HTMLTableCellElement {
+    const td = document.createElement('td');
+    if (!u.isCircle) {
+      td.textContent = 'Direct';
+      return td;
+    }
+    const settled = u.delegateHow === 'auto' || !canEdit || !delegates.length;
+    if (settled) {
+      td.textContent = `Delegate · ${u.delegate ?? 'no delegate yet'}`;
+      if (!u.delegate) td.className = 'dim';
+      return td;
+    }
+    const pick = el('select', 'pick');
+    pick.setAttribute('aria-label', `Who made the payment to ${u.counterparty ?? 'an unnamed payee'}`);
+    pick.append(Object.assign(el('option', undefined, u.delegateHow === 'assigned' ? 'Let the dates decide' : 'Which delegate?'), { value: '' }));
+    for (const d of delegates) pick.append(Object.assign(el('option', undefined, labelOf(d)), { value: d.id }));
+    pick.value = u.delegateHow === 'assigned' ? (u.delegateId ?? '') : '';
+    if (u.delegateHow !== 'assigned') pick.classList.add('open');
+    pick.addEventListener('change', async () => {
+      pick.disabled = true;
+      try {
+        const { status, data } = await staffFetch('/api/finance-admin/delegates/assign', { method: 'POST', body: { delegateId: pick.value || null, upiRefs: [u.upiRef] } });
+        if (status !== 200) throw new Error(data?.error ?? 'failed');
+        showToast(pick.value ? 'Delegate chosen.' : 'The dates decide again.');
+        await load();
+      } catch (e) {
+        pick.disabled = false;
+        if (!fail(e)) showToast(e instanceof Error && e.message !== 'failed' ? e.message : 'Could not save the choice.');
+      }
+    });
+    td.append(pick);
+    return td;
+  }
+
   const sort = { key: 'paidAt', dir: 'desc' as 'asc' | 'desc' };
   const sortValue = (u: Upi, key: string): string | number => {
     if (key === 'direction') return u.direction;
     if (key === 'note') return (u.note ?? u.purpose ?? u.remark ?? '').toLowerCase();
-    if (key === 'kind') return u.isCircle ? 'Delegate' : 'Direct';
+    if (key === 'kind') return u.isCircle ? `Delegate ${u.delegate ?? ''}`.trim() : 'Direct';
     if (key === 'app') return APP[u.app];
     if (key === 'account') return (u.account ?? '').toLowerCase();
     if (key === 'counterparty') return (u.counterparty ?? '').toLowerCase();
@@ -253,9 +437,9 @@ import SignInGate from '../../../components/SignInGate.astro';
       .filter(
         (u) =>
           (filter.app === 'all' || u.app === filter.app) &&
-          (filter.kind === 'all' || (filter.kind === 'delegate' ? u.isCircle : !u.isCircle)) &&
+          (filter.kind === 'all' || (filter.kind === 'needs' ? u.delegateHow === 'ambiguous' || u.delegateHow === 'none' : filter.kind === 'delegate' ? u.isCircle : !u.isCircle)) &&
           (filter.state === 'all' || u.state === filter.state) &&
-          (!q || [u.counterparty, u.remark, u.purpose ?? '', u.note, u.upiRef, u.account ?? ''].join(' ').toLowerCase().includes(q)),
+          (!q || [u.counterparty, u.remark, u.purpose ?? '', u.note, u.upiRef, u.account ?? '', u.delegate ?? ''].join(' ').toLowerCase().includes(q)),
       )
       .sort((a, b) => {
         const [x, y] = [sortValue(a, sort.key), sortValue(b, sort.key)];
@@ -283,7 +467,7 @@ import SignInGate from '../../../components/SignInGate.astro';
           cellOf(u.direction === 'credit' ? 'Credit' : 'Debit'),
           cellOf(rupees(u.amountPaise), 'num'),
           cellOf(APP[u.app]),
-          cellOf(u.isCircle ? 'Delegate' : 'Direct'),
+          paidByCell(u),
           cellOf(u.account ?? 'Not known yet', u.account ? undefined : 'dim'),
           noteCell(u),
           state,
@@ -306,6 +490,12 @@ import SignInGate from '../../../components/SignInGate.astro';
     sort.key = key;
     renderRows();
   });
+
+  function setKind(value: string) {
+    filter.kind = value;
+    for (const b of Array.from($('f-kind').querySelectorAll('button'))) b.setAttribute('aria-checked', String(b.dataset.value === value));
+    renderRows();
+  }
 
   function segmented(id: string, key: 'app' | 'kind' | 'state') {
     const group = $(id);
@@ -339,7 +529,11 @@ import SignInGate from '../../../components/SignInGate.astro';
         : 'No UPI payments yet. Add the BHIM history or the Paytm export on the Import page.';
       all = data.lines;
       canEdit = Boolean(data.canEdit);
+      canConfigure = Boolean(data.canConfigure);
+      delegates = data.delegates ?? [];
+      defaultCapPaise = data.capPaise;
       renderMonths(data);
+      renderDelegates(data);
       $<HTMLInputElement>('q').value = filter.q;
       renderRows();
       content.hidden = false;
@@ -518,5 +712,68 @@ import SignInGate from '../../../components/SignInGate.astro';
   .finance-upi .upi-table .sub {
     display: block;
     font-size: var(--text-xs);
+  }
+
+  .finance-upi #months-note,
+  .finance-upi #delegates-note {
+    margin-top: 10px;
+  }
+
+  .finance-upi .delegate-actions {
+    margin: 12px 0 16px;
+  }
+
+  .finance-upi #delegate-queue {
+    margin-bottom: 16px;
+  }
+
+  .finance-upi .pick {
+    max-width: 14rem;
+    font: inherit;
+    font-size: var(--text-sm);
+  }
+
+  /* A payment waiting for a delegate to be chosen: the select itself says so, in the warning colour. */
+  .finance-upi .pick.open {
+    border-color: var(--tvc-orange-text);
+  }
+
+  .finance-upi .delegate-sheet {
+    width: min(480px, calc(100vw - 32px));
+  }
+
+  .finance-upi .delegate-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .finance-upi .delegate-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-weight: 600;
+  }
+
+  .finance-upi .delegate-form label small {
+    font-weight: 400;
+    color: var(--tvc-ink-soft);
+  }
+
+  .finance-upi .delegate-form input {
+    font: inherit;
+    font-weight: 400;
+  }
+
+  .finance-upi .delegate-dates {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  @media (max-width: 560px) {
+    .finance-upi .delegate-dates {
+      grid-template-columns: 1fr;
+    }
   }
 </style>

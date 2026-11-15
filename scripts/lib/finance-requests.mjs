@@ -72,15 +72,20 @@ export function validateRecord(body, { kind, today }) {
     value.paidOn = null;
     value.paidVia = null;
     value.upiRef = null;
+    value.delegateId = null;
   } else {
     if (!realDate(body.paidOn)) return { error: 'Enter the date it was paid.' };
     if (body.paidOn > today) return { error: 'The payment date cannot be in the future.' };
     if (!PAID_VIA.includes(body.paidVia)) return { error: 'Say whether it was paid directly or by a delegate.' };
     const ref = cleanUpiRef(body.upiRef);
     if (ref === undefined) return { error: 'A UPI reference is 12 digits.' };
+    // Which delegate, when it was paid by one. Optional: the server fills it in when only one was active that day.
+    const delegateId = body.paidVia === 'delegate' && typeof body.delegateId === 'string' && body.delegateId ? body.delegateId : null;
+    if (delegateId && !UUID.test(delegateId)) return { error: 'Choose the delegate from the list.' };
     value.paidOn = body.paidOn;
     value.paidVia = body.paidVia;
     value.upiRef = ref;
+    value.delegateId = delegateId;
     value.neededBy = null;
     value.reimbursement = false;
   }
