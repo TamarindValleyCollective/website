@@ -1,5 +1,5 @@
 -- Finance module: UPI operators (docs/finance/FINANCE.md, "UPI operators" and "Channels").
--- NOT YET APPLIED to TVC ERP. Tested on the real data on 2026-11-15 inside a transaction that was rolled back: all 128 UPI rows and the one
+-- Applied to TVC ERP on 2026-11-15 (recorded as finance_upi_operators). Tested first on the real data inside a transaction that was rolled back: all 128 UPI rows and the one
 -- delegate got the operator, the link-only trigger was enabled again, the table was RLS-on with no anon/authenticated read, and a batch with
 -- no operator was refused. Apply, then check: both tables RLS-on with no anon/authenticated grants; every fin_upi_lines and
 -- fin_delegates row has an operator; fin_store_upi_batch refuses a batch with no operator.

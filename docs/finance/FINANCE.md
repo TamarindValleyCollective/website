@@ -348,8 +348,7 @@ types the importer knows; each batch stores its `source`: `axis_statement`, `pay
   never the number or name. Not built: reading delegate numbers off receipt screenshots (decided against: nobody will upload each
   receipt), per-delegate rows in the dashboard's circle gauge (it still shows the monthly total), and showing the delegate in the
   ledger.
-- **UPI operators** (migration `0101`, **not yet applied**: tested on the real data inside a transaction that was rolled back on 2026-11-15, which
-  gave all 128 UPI rows and the one delegate the first operator, left the link-only trigger on, locked the table to the service role and refused a
+- **UPI operators** (migration `0101`, **applied 2026-11-15**, after a test on the real data inside a rolled-back transaction; checked afterwards: all 128 UPI rows and the one delegate the first operator, left the link-only trigger on, locked the table to the service role and refused a
   batch with no operator; `lib/finance-upi-operators.ts`, pure rules in `finance-upi-operators.mjs`). All UPI payments go out through the UPI setup of
   one of the account's **operators** (the people who can add the account to their UPI apps); each is either made by the operator **directly** or by a
   **delegate** in that operator's UPI circle, and either operator may have delegates. Nothing recorded *whose* UPI a payment went through, because the
@@ -362,8 +361,7 @@ types the importer knows; each batch stores its `source`: `axis_statement`, `pay
   Summary names, the sender id that pays most of a BHIM history; never the labels themselves), remembered for the operator it was confirmed as, so the
   next file that looks the same is suggested to them, and with one operator that operator is suggested; with two operators and a layout nobody has
   had, nothing is suggested. When the operators upload their own files, the same question tells whose file it is. A circle payment can only belong to a
-  delegate of its own operator's circle (`attribute`). Until the migration is applied there are no operators: UPI files import without asking, the
-  UPI page shows no operators, and everything else works as before. Not built: reading the operator off the file itself (neither export names them).
+  delegate of its own operator's circle (`attribute`). Before the migration was applied there were no operators and everything worked without them (the code still tolerates that). Not built: reading the operator off the file itself (neither export names them).
 - **Notes and links between the ledger and the UPI page** (migration `0089`, **applied 2026-11-07**). The bank's or the app's wording is never
   changed. A **note** sits beside it: one per payment, in `fin_payment_notes`, keyed `upi:<12-digit reference>` for a UPI payment (so a UPI
   row and its bank line share one note, before and after they are joined) or `bank:<line id>` otherwise. It is shown and edited in the
@@ -857,8 +855,7 @@ not a channel, so they appear only as the single "Projects" purpose.
   kind in `finance-origin.mjs`), so the picture has one UPI box (*UPI (All)*). All UPI payments go out through an operator's UPI setup, so it opens
   **by operator** (*Whose UPI*), then, inside an operator, **by person**: *Direct* and each delegate of that operator's UPI circle (*UPI circle ·
   <name or number>*, and *UPI circle · no delegate yet* for a circle payment no delegate is chosen for), **whichever app each used** (the app is on
-  the lines), then the lines. Each row's money rolls up into the one above, so the rows always add up to their parent. Without operators recorded
-  (migration `0101` not applied) it opens by person at once. The drill is as deep as the tree (`drillDims`, `layoutDrill`): one more column and
+  the lines), then the lines. Each row's money rolls up into the one above, so the rows always add up to their parent. Without operators recorded it opens by person at once. The drill is as deep as the tree (`drillDims`, `layoutDrill`): one more column and
   one more slide per level.
 - **Fixed deposits are an account.** They are not money out: putting money into one is a **transfer** from one account to another, and money
   brought back is a transfer the other way. So they are a box in the accounts column, after the bank accounts, as tall as what they hold (the
