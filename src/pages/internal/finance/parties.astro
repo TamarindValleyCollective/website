@@ -718,25 +718,92 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
 
   // Two parties that are really one payee. Nothing is deleted or moved: this party is hidden and its accounts appear under
   // the one you choose, where the old and new bank accounts are reviewed together. Needs the unlock, like verifying.
+  // What the person needs to see to decide which of two parties stays: the same facts for each, side by side.
+  function mergeFacts(x: Party): string[] {
+    const live = liveAccounts(x);
+    const lines = [`${KIND_LABELS[x.kind] ?? x.kind}${x.active ? '' : ' · inactive'}${x.formerSince ? ' · former member' : ''}`];
+    lines.push(live.length ? live.map((a) => `${a.method === 'bank' ? 'Bank' : 'UPI'} ${a.shown}${a.status === 'verified' ? ' (verified)' : ' (not verified)'}`).join(', ') : 'No payment details');
+    if (bankNames(x).length) lines.push(`Name at the bank: ${bankNames(x).join(', ')}`);
+    const files = evidenceCount(x);
+    lines.push(files ? `${files} evidence ${files === 1 ? 'file' : 'files'}` : 'No evidence attached');
+    lines.push(x.postings ? `${x.postings} ${x.postings === 1 ? 'line' : 'lines'} in the books${x.paidPaise > 0 ? ` · ${rupees(x.paidPaise)} paid` : ''}${x.lastPaid ? ` · last paid ${niceIso(x.lastPaid)}` : ''}` : 'Nothing in the books yet');
+    if (x.mergedCount) lines.push(`Already holds ${x.mergedCount} merged ${x.mergedCount === 1 ? 'party' : 'parties'}`);
+    return lines;
+  }
+  // The one merged away must not be a member linked to a household, nor already hold merged parties (the server enforces the same).
+  const whyNotMergedAway = (x: Party): string | null => (x.householdId ? 'Linked to a household, so it has to be the one that stays.' : x.mergedCount > 0 ? 'Other parties were merged into it, so it has to be the one that stays.' : null);
+
+  // Two parties that are really one payee. Nothing is deleted or moved: the one you do not keep is hidden and its accounts appear
+  // under the one you keep, where the old and new bank accounts are reviewed together. Needs the unlock, like verifying.
+  // Opened with both parties known (a suggestion, or two ticked rows) it shows them side by side; opened from one party it first
+  // asks for the other. Either way the person chooses which stays.
   function openMerge(p: Party, presetId = '') {
     if (!mayVerify()) return;
     $<HTMLDialogElement>('detail-sheet').close();
     const dlg = $<HTMLDialogElement>('account-sheet');
     const others = (data?.parties ?? []).filter((x) => x.id !== p.id);
-    const into = combo({ options: others.map((x) => ({ value: x.id, label: x.name })), value: others.some((x) => x.id === presetId) ? presetId : '', blank: 'Choose the main party…', matcher: matchOptions, ariaLabel: 'The main party' }) as any;
+    let other: Party | null = others.find((x) => x.id === presetId) ?? null;
+    let keepId = other?.id ?? ''; // the suggestion's choice to start with; the person can change it
     const msg = h('p', { class: 'error', attrs: { hidden: '' } });
-    const form = h(
-      'form',
-      { class: 'stack-form' },
-      labelled(`"${p.name}" is the same payee as`, into),
-      h('p', { class: 'hint', text: 'This party disappears from the list and its accounts show under the one you choose. Nothing is deleted and nothing is paid differently; if the payee then has two bank accounts, retire the old one.' }),
-      msg,
-      h('div', { class: 'sheet-actions' }, closeBtn(dlg, 'Cancel'), h('button', { class: 'button button--primary', text: 'Merge', attrs: { type: 'submit' } })),
-    );
+    const body = h('div', { class: 'merge-body' });
+    const go = h('button', { class: 'button button--primary', text: 'Merge', attrs: { type: 'submit' } }) as HTMLButtonElement;
+    const form = h('form', { class: 'stack-form' }, body, msg, h('div', { class: 'sheet-actions' }, closeBtn(dlg, 'Cancel'), go));
+
+    function paint() {
+      msg.hidden = true;
+      if (!other) {
+        const pick = combo({ options: others.map((x) => ({ value: x.id, label: x.name })), value: '', blank: 'Choose the other party…', matcher: matchOptions, ariaLabel: 'The other party' }) as any;
+        pick.addEventListener('change', () => {
+          other = others.find((x) => x.id === pick.value) ?? null;
+          keepId = other?.id ?? '';
+          paint();
+        });
+        body.replaceChildren(labelled(`"${p.name}" is the same payee as`, pick), h('p', { class: 'hint', text: 'You will see both side by side and choose which one stays.' }));
+        go.disabled = true;
+        go.textContent = 'Merge';
+        return;
+      }
+      const pair = [p, other];
+      const allowed = pair.filter((x) => !whyNotMergedAway(pair.find((y) => y !== x)!)); // x may stay when the other can be merged away
+      if (!allowed.length) {
+        body.replaceChildren(h('p', { class: 'error', text: 'These two cannot be merged: each one is linked to a household or already holds merged parties. Undo or change that first.' }));
+        go.disabled = true;
+        return;
+      }
+      if (!allowed.some((x) => x.id === keepId)) keepId = allowed[0].id;
+      const keep = pair.find((x) => x.id === keepId)!;
+      const drop = pair.find((x) => x.id !== keepId)!;
+      const card = (x: Party) => {
+        const blocked = !allowed.includes(x);
+        const radio = h('input', { attrs: { type: 'radio', name: 'keep', value: x.id, ...(blocked ? { disabled: '' } : {}) } }) as HTMLInputElement;
+        radio.checked = x.id === keepId;
+        radio.addEventListener('change', () => {
+          keepId = x.id;
+          paint();
+        });
+        return h('label', { class: `merge-card${x.id === keepId ? ' is-keep' : ''}${blocked ? ' is-blocked' : ''}` },
+          h('span', { class: 'merge-pick' }, radio, h('span', { text: x.id === keepId ? 'Keep this one' : 'Merge this one away' })),
+          h('span', { class: 'title', text: x.name }),
+          ...mergeFacts(x).map((t) => h('span', { class: 'detail', text: t })),
+          blocked ? h('span', { class: 'merge-note', text: `Cannot stay: ${whyNotMergedAway(pair.find((y) => y !== x)!)?.toLowerCase()}` }) : null);
+      };
+      body.replaceChildren(
+        ...[
+        h('div', { class: 'merge-cols' }, card(p), card(other)),
+        h('p', { class: 'merge-summary' }, h('strong', { text: `"${drop.name}"` }), document.createTextNode(' will be hidden from the list and its payment details and history will show under '), h('strong', { text: `"${keep.name}"` }), document.createTextNode('. Nothing is deleted and nothing is paid differently; if the payee then has two bank accounts, retire the old one. The name that stays is the one shown, and you can rename it afterwards.')),
+        !presetId ? h('button', { class: 'linklike', text: 'Choose a different party', attrs: { type: 'button' }, on: { click: () => { other = null; keepId = ''; paint(); } } }) : null,
+        ].filter((n): n is HTMLElement => n !== null),
+      );
+      go.disabled = false;
+      go.textContent = `Merge into "${keep.name}"`;
+    }
+
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      if (!into.value) return;
-      const { status, data: out } = await call(`/api/finance-admin/parties/${p.id}/merge`, 'POST', { into: into.value });
+      if (!other || !keepId) return;
+      const keep = [p, other].find((x) => x.id === keepId)!;
+      const drop = [p, other].find((x) => x.id !== keepId)!;
+      const { status, data: out } = await call(`/api/finance-admin/parties/${drop.id}/merge`, 'POST', { into: keep.id });
       if (status === 200) {
         dlg.close();
         showToast('Merged.');
@@ -747,7 +814,8 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
         msg.textContent = out?.error ?? 'Could not merge those.';
       }
     });
-    present(dlg, h('h2', { text: `Merge ${p.name}`, attrs: { id: 'account-title' } }), form);
+    paint();
+    present(dlg, h('h2', { text: other ? 'Merge two parties' : `Merge ${p.name}`, attrs: { id: 'account-title' } }), form);
   }
 
   // Rename: the name is a label (what is typed in the transfer sheet, and what is searched), so it can be fixed any time;
@@ -1493,6 +1561,69 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
   .parties .differs-key {
     color: var(--tvc-orange-text);
     font-weight: 600;
+  }
+
+  .parties .merge-cols {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .parties .merge-card {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 12px;
+    border: 2px solid var(--tvc-line);
+    border-radius: var(--radius);
+    background: var(--tvc-white);
+    cursor: pointer;
+  }
+
+  .parties .merge-card.is-keep {
+    border-color: var(--tvc-green);
+    background: var(--tvc-green-tint);
+  }
+
+  .parties .merge-card.is-blocked {
+    cursor: not-allowed;
+    opacity: 0.8;
+  }
+
+  .parties .merge-pick {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--tvc-ink-soft);
+  }
+
+  .parties .merge-card.is-keep .merge-pick {
+    color: var(--tvc-green-dark);
+  }
+
+  .parties .merge-card .detail {
+    display: block;
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  .parties .merge-note {
+    margin-block-start: 4px;
+    color: var(--tvc-orange-text);
+    font-size: var(--text-sm);
+    font-weight: 600;
+  }
+
+  .parties .merge-summary {
+    margin: 12px 0 0;
+  }
+
+  @media (width <= 560px) {
+    .parties .merge-cols {
+      grid-template-columns: 1fr;
+    }
   }
 
   .parties .party-card {
