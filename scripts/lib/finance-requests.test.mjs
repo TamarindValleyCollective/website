@@ -2,7 +2,7 @@
 // Invented data only.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { agingUnmatched, fulfilledVia, deriveLinks, descriptionWords, matchWords, cleanUpiRef, decide, exactMatches, padUpiRef, planMatch, proposeMatches, purposeIndex, reviewFlag, sniffVoucher, validateRecord } from './finance-requests.mjs';
+import { agingUnmatched, fulfilledVia, deriveLinks, descriptionWords, matchWords, cleanUpiRef, decide, exactMatches, padUpiRef, planMatch, proposeMatches, autoMatchPicks, purposeIndex, reviewFlag, sniffVoucher, validateRecord } from './finance-requests.mjs';
 
 const P1 = '11111111-1111-4111-8111-111111111111';
 const today = '2026-11-07';
@@ -283,4 +283,18 @@ test('a UPI row and the bank line it is joined to are one payment: offered once,
   const bank = [{ id: 'b1', direction: 'debit', amountPaise: 50_000, tranDate: '2026-11-05', narration: 'UPI/P2A/1/SEED STORE', upiRrn: '1' }, { id: 'b2', direction: 'debit', amountPaise: 50_000, tranDate: '2026-11-06', narration: 'NEFT/OTHER', upiRrn: null }];
   const out = proposeMatches([r], upi, bank);
   assert.deepEqual(out.map((p) => [p.type, p.targetId]).sort(), [['bank', 'b2'], ['upi', 'u1']], 'the joined bank line is not offered separately; an unrelated one still is');
+});
+
+test('auto-match picks only a record\'s single suggestion that no other record wants', () => {
+  const upi = [{ id: 'u1', bankLineId: 'b1' }, { id: 'u2', bankLineId: null }, { id: 'u3', bankLineId: null }];
+  const prop = (recordId, type, targetId) => ({ recordId, type, targetId, score: 1, reasons: ['same amount'] });
+  // r1 wants only u1; r2 has two candidates (u2 and u3); r3 also wants u2.
+  const picks = autoMatchPicks([prop('r1', 'upi', 'u1'), prop('r2', 'upi', 'u2'), prop('r2', 'upi', 'u3'), prop('r3', 'upi', 'u2')], upi);
+  assert.deepEqual(picks.map((x) => x.recordId), ['r1'], 'r2 has two candidates; r3 shares u2 with r2');
+  assert.deepEqual(autoMatchPicks([prop('r3', 'upi', 'u2'), prop('r4', 'upi', 'u2')], upi), [], 'one payment, two records: neither');
+  assert.deepEqual(autoMatchPicks([prop('r1', 'upi', 'u1'), prop('r5', 'bank', 'b1')], upi), [], 'a UPI row and its own bank line are one payment, so these collide');
+  assert.deepEqual(autoMatchPicks([prop('r6', 'upi', 'u3')], upi).map((x) => [x.recordId, x.type, x.targetId]), [['r6', 'upi', 'u3']]);
+  assert.deepEqual(autoMatchPicks([], upi), []);
+  // a UPI row and a separate bank line for the same record are two candidates: it might be two payments, so a person decides
+  assert.deepEqual(autoMatchPicks([prop('r7', 'upi', 'u3'), prop('r7', 'bank', 'b9')], upi), []);
 });
