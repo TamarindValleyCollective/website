@@ -264,6 +264,11 @@ Page `/internal/finance/import/`; routes in `finance-admin.mts` (`GET /imports`,
 - **Per-year checks.** Each file's balance chain must hold from its opening balance, and the bank's own footer totals must agree.
   Across years, one year's closing balance must equal the next year's opening balance (a mismatch blocks the file). A gap between
   years is shown with its dates and closes when the missing year arrives; nothing is guessed.
+  A gap is not reported on a side where a held period already covers the file's first or last day (a download starting inside
+  the held year overlaps it; it does not leave a hole before it).
+- **Preview of the delta.** Before confirming, each file row has an expandable table of the lines it would add (date, narration,
+  debit, credit and, for bank statements, the running balance), with the in/out totals and the balance after. Preview mode only,
+  capped at 500 lines (the summary says so); the commit response carries counts only, never narrations.
 - **Overlap.** A later download of a period already held adds only lines not held (`dedupe_key`: account, date, narration,
   direction, amount, running balance, order among exact repeats). It must agree with what is held, or it is blocked.
 - **Paytm.** Only rows whose account label equals a bank account's `upi_label` are kept; the rest are ignored but counted with

@@ -90,7 +90,28 @@ export type FileResult = {
   wouldLink?: number;
   unsuccessful?: { count: number; totalPaise: number };
   stored?: boolean;
+  preview?: NewLinesPreview;
 };
+
+// What a file would add to the ledger, shown before the director confirms. Preview mode only; capped so a large
+// first import does not send thousands of rows to the page.
+export type NewLinesPreview = {
+  lines: { date: string; text: string; direction: 'debit' | 'credit'; amountPaise: number; balancePaise?: number }[];
+  creditPaise: number;
+  debitPaise: number;
+  closingPaise?: number;
+  truncated: boolean;
+};
+const PREVIEW_LINE_CAP = 500;
+function newLinesPreview(rows: { date: string; text: string; direction: 'debit' | 'credit'; amountPaise: number; balancePaise?: number }[], closingPaise?: number): NewLinesPreview {
+  let creditPaise = 0;
+  let debitPaise = 0;
+  for (const r of rows) {
+    if (r.direction === 'credit') creditPaise += r.amountPaise;
+    else debitPaise += r.amountPaise;
+  }
+  return { lines: rows.slice(0, PREVIEW_LINE_CAP), creditPaise, debitPaise, closingPaise, truncated: rows.length > PREVIEW_LINE_CAP };
+}
 
 export async function runImport(args: { store: ImportStore; files: UploadedFile[]; commit: boolean; actorId: string }) {
   const { store, files, commit, actorId } = args;
@@ -151,6 +172,12 @@ export async function runImport(args: { store: ImportStore; files: UploadedFile[
         firstDate: b.firstDate,
         lastDate: b.lastDate,
       });
+      if (b.status === 'ok' && !commit && b.newLines.length) {
+        results[g.index].preview = newLinesPreview(
+          b.newLines.map((l: any) => ({ date: l.tranDate, text: l.narration, direction: l.direction, amountPaise: l.amountPaise, balancePaise: l.balancePaise })),
+          b.newLines[b.newLines.length - 1].balancePaise,
+        );
+      }
       if (b.status === 'ok') storedBank.push({ index: g.index, plan: b, account, batchId: randomUUID() });
     }
   }
@@ -215,6 +242,9 @@ export async function runImport(args: { store: ImportStore; files: UploadedFile[
   for (const u of storedUpi) {
     const kept = u.plan.newLines.filter((l: { ignored: boolean }) => !l.ignored);
     const bank = await store.bankLinesByRrn(kept.map((l: { upiRef: string }) => l.upiRef));
+    if (!commit && kept.length) {
+      results[u.index].preview = newLinesPreview(kept.map((l: any) => ({ date: l.paidAt, text: l.counterparty ?? l.details ?? '', direction: l.direction, amountPaise: l.amountPaise })));
+    }
     results[u.index].wouldLink = linkUpiToBank({ upiLines: kept.map((l: any) => ({ id: l.upiRef, upiRef: l.upiRef, amountPaise: l.amountPaise, direction: l.direction })), bankLines: bank }).links.length;
   }
 

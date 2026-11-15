@@ -228,7 +228,37 @@ import SignInGate from '../../../components/SignInGate.astro';
       const text = describeBoundary(b);
       if (text) details.push(text);
     }
-    return row(f.name, details, pill);
+    const li = row(f.name, details, pill);
+    if (f.preview?.lines?.length && !f.stored) li.querySelector('.grow')!.append(previewTable(f.preview, f.kind === 'axis_statement'));
+    return li;
+  }
+
+  // The lines this file would add, so the director can see the delta before confirming. Text goes in with textContent.
+  function previewTable(p: any, withBalance: boolean): HTMLElement {
+    const box = el('details', 'delta');
+    const totals = [`In ${rupees(p.creditPaise)}`, `out ${rupees(p.debitPaise)}`];
+    if (withBalance && typeof p.closingPaise === 'number') totals.push(`balance after ${rupees(p.closingPaise)}`);
+    box.append(el('summary', undefined, `Show the ${plural(p.lines.length, 'line')} to add · ${totals.join(' · ')}`));
+    const table = el('table', 'delta-table');
+    const head = el('tr');
+    for (const h of ['Date', 'Narration', 'Debit', 'Credit', ...(withBalance ? ['Balance'] : [])]) head.append(el('th', h === 'Debit' || h === 'Credit' || h === 'Balance' ? 'num' : undefined, h));
+    const thead = el('thead');
+    thead.append(head);
+    table.append(thead);
+    const body = el('tbody');
+    for (const l of p.lines) {
+      const tr = el('tr');
+      tr.append(el('td', undefined, day(l.date)), el('td', 'narration', l.text));
+      tr.append(el('td', 'num', l.direction === 'debit' ? rupees(l.amountPaise) : ''), el('td', 'num', l.direction === 'credit' ? rupees(l.amountPaise) : ''));
+      if (withBalance) tr.append(el('td', 'num', typeof l.balancePaise === 'number' ? rupees(l.balancePaise) : ''));
+      body.append(tr);
+    }
+    table.append(body);
+    const scroll = el('div', 'delta-scroll');
+    scroll.append(table);
+    box.append(scroll);
+    if (p.truncated) box.append(el('p', 'hint', `Only the first ${p.lines.length} lines are shown; all of them will be imported.`));
+    return box;
   }
 
   function renderCoverage(target: HTMLElement, coverage: any[]) {
@@ -548,5 +578,53 @@ import SignInGate from '../../../components/SignInGate.astro';
 
   .finance-import .row .detail {
     display: block;
+  }
+
+  .finance-import .delta {
+    margin-top: 8px;
+  }
+
+  .finance-import .delta summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--tvc-green-dark);
+  }
+
+  .finance-import .delta-scroll {
+    max-height: 420px;
+    overflow: auto;
+    margin-top: 8px;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+  }
+
+  .finance-import .delta-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-sm);
+  }
+
+  .finance-import .delta-table th,
+  .finance-import .delta-table td {
+    padding: 6px 10px;
+    text-align: left;
+    border-bottom: 1px solid var(--tvc-line);
+    vertical-align: top;
+  }
+
+  .finance-import .delta-table th {
+    position: sticky;
+    top: 0;
+    background: var(--tvc-green-tint);
+  }
+
+  .finance-import .delta-table .num {
+    text-align: right;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .finance-import .delta-table .narration {
+    overflow-wrap: anywhere;
   }
 </style>
