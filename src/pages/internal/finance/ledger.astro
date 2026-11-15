@@ -42,9 +42,9 @@ import SignInGate from '../../../components/SignInGate.astro';
             <option value="date:asc">Oldest first</option>
             <option value="amount:desc">Largest first</option>
             <option value="amount:asc">Smallest first</option>
-            <option value="narration:asc">Narration A to Z</option>
+            <option value="narration:asc">Bank narration A to Z</option>
             <option value="category:asc">Category</option>
-            <option value="party:asc">Party</option>
+            <option value="party:asc">Paid to / from</option>
           </select>
         </label>
         <button type="button" id="more-tools" class="button button--outline button--small more-tools" aria-expanded="false">More</button>
@@ -1189,7 +1189,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   // The chip, the narration search and the column conditions, then the sort, over every line already here (same rules as the server's:
   // scripts/lib/finance-columns.mjs). Nothing is fetched.
   const dateLabel = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
-  const COLUMN_LABELS: Record<string, string> = { date: 'Date', origin: 'Origin', narration: 'Narration', amount: 'Amount', category: 'Category', party: 'Party', nature: 'What it was for', status: 'Status' };
+  const COLUMN_LABELS: Record<string, string> = { date: 'Date', origin: 'Origin', narration: 'Bank narration', amount: 'Amount', category: 'Category', party: 'Paid to / from', nature: 'What it was for', status: 'Status' };
   const PARSERS: Record<string, (raw: string) => any> = { date: parseDate, origin: parseText, narration: parseText, amount: parseAmount, category: parseText, party: parseText, nature: parseText };
   // What a screen reader hears once a search settles (the progress line itself is not a live region: it changes on every keystroke).
   let announceTimer: ReturnType<typeof setTimeout> | undefined;
@@ -1825,6 +1825,12 @@ import SignInGate from '../../../components/SignInGate.astro';
       c.classList.toggle('is-mine', on);
       if (on) c.title = 'Yours, not posted yet';
       else c.removeAttribute('title');
+      // The tooltip is hover-only, so a screen reader (and a phone) gets the same words as hidden text in the cell.
+      if (cls === 'category' || cls === 'party' || cls === 'wording') {
+        const note = c.querySelector('.mine-note');
+        if (on && !note) c.append(h('span', { class: 'visually-hidden mine-note', text: ' Yours, not posted yet.' }));
+        else if (!on) note?.remove();
+      }
     };
     yours('category', can && Boolean(d.categoryId));
     yours('party', can && Boolean(d.partyId));
@@ -2452,6 +2458,8 @@ import SignInGate from '../../../components/SignInGate.astro';
     post.disabled = ready === 0;
     const plural = (n: number) => (n === 1 ? 'line' : 'lines');
     const needReason = sel.filter((l) => draftOf(l.id).categoryId && !draftOf(l.id).nature.trim()).length;
+    // Accepting takes every suggestion, weak ones too; say how many of the selected lines rest on a guess, so they get a second look.
+    const weakGuesses = sel.filter((l) => hasGhost(l) && !isStrong(l)).length;
     const anyField = () => Boolean(barFields.categoryId || barFields.partyId || barFields.nature.trim() || (maint && (barExtra.year || barExtra.unit)));
     const apply = button(`Apply to ${sel.length} ${plural(sel.length)}`, async () => {
         const patch = Object.fromEntries(Object.entries(barFields).filter(([, v]) => String(v).trim())) as Partial<Draft>;
@@ -2495,7 +2503,7 @@ import SignInGate from '../../../components/SignInGate.astro';
         button('Clear', () => table.resetRowSelection(), 'button button--outline button--small'),
       ),
       step('1 · Set for all', cat, party, words, apply, applyNote),
-      step('2 · Or use suggestions', button('Accept suggestions', () => withUndo('Suggestions accepted.', sel.map((l) => l.id), () => { for (const l of sel) acceptRow(l, true); }), 'button button--outline button--small'), h('span', { class: 'abar-note', text: 'Fills empty cells only. It never replaces what you set.' })),
+      step('2 · Or use suggestions', button('Accept suggestions', () => withUndo('Suggestions accepted.', sel.map((l) => l.id), () => { for (const l of sel) acceptRow(l, true); }), 'button button--outline button--small'), h('span', { class: `abar-note${weakGuesses ? ' abar-note--warn' : ''}`, text: `Fills empty cells only. It never replaces what you set.${weakGuesses ? ` ${weakGuesses} of these ${weakGuesses === 1 ? 'is a guess' : 'are guesses'}: check ${weakGuesses === 1 ? 'it' : 'them'} before posting.` : ''}` })),
       step('3 · Post', h('span', { class: 'abar-note', text: ready === 0 ? 'Needs a category and what it was for on at least one line.' : ready < sel.length ? `${sel.length - ready} ${plural(sel.length - ready)} not ready, and will stay as drafts. Posting asks you to confirm.` : 'Posting asks you to confirm first.' }), post),
     );
     bar.hidden = false;
@@ -3632,14 +3640,14 @@ import SignInGate from '../../../components/SignInGate.astro';
     font-size: var(--text-sm);
   }
 
-  /* A cell that holds your draft: a white box, a green outline and a thicker left edge. It reads on a plain row and on a ticked one
+  /* A cell that holds your draft: a white box with a green outline. It reads on a plain row and on a selected one
      (ticked rows are tinted green, so a green fill would vanish there). The negative margin keeps the text where it was. */
   .ledger .lrow .gcell.is-mine {
-    margin: -2px -4px -2px -9px;
-    padding: 2px 4px 2px 9px;
+    margin: -2px -4px;
+    padding: 2px 4px;
     border-radius: var(--radius-sm);
     background: var(--tvc-white);
-    box-shadow: inset 0 0 0 1px var(--tvc-green), inset 4px 0 0 var(--tvc-green);
+    box-shadow: inset 0 0 0 2px var(--tvc-green);
   }
 
   .ledger .wordtext.ghost {
@@ -3923,6 +3931,11 @@ import SignInGate from '../../../components/SignInGate.astro';
     color: var(--tvc-ink-soft);
   }
 
+  .abar .abar-note--warn {
+    color: var(--tvc-orange-text);
+    font-weight: 600;
+  }
+
   .abar .abar-step:last-child .abar-body {
     justify-content: space-between;
   }
@@ -4003,7 +4016,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       max-width: none;
     }
 
-    .abar .abar-step:not(:last-child) .abar-note {
+    .abar .abar-step:not(:last-child) .abar-note:not(.abar-note--warn) {
       display: none;
     }
 

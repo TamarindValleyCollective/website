@@ -176,7 +176,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       { id: 'when', label: 'When', wrap: true, value: (r: Rule) => describe(r), render: (r: Rule) => describe(r) },
       { id: 'category', label: 'Suggest category', value: (r: Rule) => nameOf(lookups().categories, r.categoryId) },
       { id: 'party', label: 'For party', value: (r: Rule) => nameOf(lookups().parties, r.partyId) },
-      { id: 'wording', label: 'Wording', wrap: true, value: (r: Rule) => r.natureTemplate, render: (r: Rule) => r.natureTemplate || h('span', { class: 'detail', text: 'From the UPI remark' }) },
+      { id: 'wording', label: 'What it was for', wrap: true, value: (r: Rule) => r.natureTemplate, render: (r: Rule) => r.natureTemplate || h('span', { class: 'detail', text: 'From the UPI remark' }) },
       { id: 'used', label: 'Used', type: 'count', value: (r: Rule) => r.hitCount, render: usedText },
       {
         id: 'state', label: 'State', value: (r: Rule) => `${r.active ? 'On' : 'Off'}${r.needsReview ? ' Always reviewed' : ''}`,
@@ -325,7 +325,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       labelled('Largest amount (₹)', max),
       labelled('Then suggest the category', category),
       labelled('and the party', party),
-      labelled('and the wording (you can use {counterparty} and {remark})', nature),
+      labelled('and what it was for (you can use {counterparty} and {remark})', nature),
       h('details', { attrs: existing && existing.priority !== 100 ? { open: '' } : {} }, h('summary', { text: 'Advanced' }), labelled('Priority (1 goes first; leave it at 100 if unsure)', priority)),
       h('label', {}, review, h('span', { text: 'Always send lines this rule explains to review' })),
       msg,

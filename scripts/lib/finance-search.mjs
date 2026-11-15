@@ -94,7 +94,7 @@ export const passesWords = (hay, words) => words.every((w) => hay.includes(Strin
 const STATUS_WORDS = { review: 'To review', unallocated: 'To allocate', partly_allocated: 'Partly allocated', allocated: 'Allocated' };
 export const GROUP_FIELDS = {
   category: ['Category', (l) => l.effective?.category || 'No category'],
-  party: ['Party', (l) => l.effective?.party || 'No party'],
+  party: ['Paid to / from', (l) => l.effective?.party || 'No party'],
   unit: ['Unit', (l) => l.allocation?.householdLabel || 'No unit'],
   month: ['Month', (l) => l.date.slice(0, 7)],
   account: ['Account', (l) => l.account || 'No account'],
