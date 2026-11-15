@@ -190,6 +190,14 @@ import SignInGate from '../../../components/SignInGate.astro';
   } catch {
     // storage blocked: the column is off for this visit
   }
+  // Wording (what it was for) is a column only when asked for: at rest a line is one quiet row, and the wording opens with the line.
+  const wordingKey = 'tvc-ledger-wording-column';
+  let showWording = false;
+  try {
+    showWording = localStorage.getItem(wordingKey) === '1';
+  } catch {
+    // storage blocked: the column is off for this visit
+  }
   const colFilters: Record<string, string> = {};
   let loadSeq = 0;
   let postedThisSitting = 0;
@@ -390,6 +398,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       { id: 'amount', header: 'Amount', accessorFn: (l: Line) => l.amountPaise },
       { id: 'category', header: 'Category', accessorFn: (l: Line) => l.allocation?.categoryId ?? '' },
       { id: 'party', header: 'Paid to / from', accessorFn: (l: Line) => l.allocation?.partyId ?? '' },
+      { id: 'nature', header: 'Wording', accessorFn: (l: Line) => l.effective?.nature ?? '' },
       { id: 'status', header: 'Status', accessorFn: (l: Line) => (l.review ? 'review' : l.state) },
       { id: 'narration', header: 'Bank narration', accessorFn: (l: Line) => l.narration },
     ],
@@ -1399,7 +1408,9 @@ import SignInGate from '../../../components/SignInGate.astro';
     const errs = Object.entries(filterErrors).map(([col, why]) => `Can't read the ${COLUMN_LABELS[col]} search: ${why}`);
     $('progress').textContent = [`Showing ${matched} of ${all.length}`, `${c.unallocated} left to allocate`, `${c.review} to review`, c.noparty ? `${c.noparty} posted without a party` : '', postedThisSitting ? `${postedThisSitting} posted this sitting` : '', crumbs.length ? `Searching: ${crumbs.join(', ')}` : '', ...errs].filter(Boolean).join(' · ');
   }
-  const SORTABLE = new Set(['date', 'origin', 'narration', 'amount', 'category', 'party', 'status']);
+  const SORTABLE = new Set(['date', 'origin', 'narration', 'amount', 'category', 'party', 'nature', 'status']);
+  const columnShown = (id: string) => (id === 'narration' ? showNarration : id === 'nature' ? showWording : true);
+  const columnClass = (id: string) => (id === 'nature' ? 'wording' : id); // gcell--nature is the field under an open line
   function renderHead() {
     keepFocus($('ghead'), () => renderHeadCells());
   }
@@ -1434,11 +1445,11 @@ import SignInGate from '../../../components/SignInGate.astro';
   function renderHeadCells() {
     const head = $('ghead');
     head.replaceChildren(
-      ...table.getHeaderGroups()[0].headers.filter((header) => header.column.id !== 'narration' || showNarration).map((header) => {
+      ...table.getHeaderGroups()[0].headers.filter((header) => columnShown(header.column.id)).map((header) => {
         const id = header.column.id;
         const sorted = header.column.getIsSorted();
         const label = String(header.column.columnDef.header ?? '');
-        const cellEl = h('span', { class: `gcell gcell--${id}`, attrs: { role: 'columnheader', ...(SORTABLE.has(id) ? { 'aria-sort': sorted === 'asc' ? 'ascending' : sorted === 'desc' ? 'descending' : 'none' } : {}) } });
+        const cellEl = h('span', { class: `gcell gcell--${columnClass(id)}`, attrs: { role: 'columnheader', ...(SORTABLE.has(id) ? { 'aria-sort': sorted === 'asc' ? 'ascending' : sorted === 'desc' ? 'descending' : 'none' } : {}) } });
         if (SORTABLE.has(id)) {
           const b = h('button', { class: 'sorthead', text: `${label}${sorted === 'asc' ? ' ▲' : sorted === 'desc' ? ' ▼' : ' ↕'}`, attrs: { type: 'button', 'data-key': id } });
           b.addEventListener('click', () => header.column.toggleSorting());
@@ -1452,9 +1463,9 @@ import SignInGate from '../../../components/SignInGate.astro';
   function renderFilterRow() {
     const row = $('gfilter');
     row.replaceChildren(
-      ...table.getHeaderGroups()[0].headers.filter((header) => header.column.id !== 'narration' || showNarration).map((header) => {
+      ...table.getHeaderGroups()[0].headers.filter((header) => columnShown(header.column.id)).map((header) => {
         const id = header.column.id;
-        const cellEl = h('span', { class: `gcell gcell--${id}`, attrs: { role: 'cell' } });
+        const cellEl = h('span', { class: `gcell gcell--${columnClass(id)}`, attrs: { role: 'cell' } });
         if (SORTABLE.has(id) && PARSERS[id]) {
           const box = h('input', { class: 'colfilter', attrs: { 'data-col': id, type: 'search', title: id === 'amount' ? 'In rupees: 2500, >1000, <=500, 1000..3000, !=295' : id === 'date' ? 'Try: 2026-10, oct, >2026-10-15, 2026-10-01..2026-10-31' : 'Words match anywhere. = exact, != not, ^ starts with, ! does not contain. See Search tips.', placeholder: id === 'amount' ? 'e.g. >1000' : id === 'date' ? 'e.g. 2026-10' : 'Search', 'aria-label': `Search the ${String(header.column.columnDef.header)} column`, autocomplete: 'off' } }) as HTMLInputElement;
           let timer: ReturnType<typeof setTimeout>;
@@ -1500,10 +1511,22 @@ import SignInGate from '../../../components/SignInGate.astro';
       applyNarration();
       renderColMenu();
     });
-    $('colmenu').replaceChildren(b);
+    const w = h('button', { class: 'sopt', attrs: { type: 'button', 'aria-pressed': String(showWording) } }, h('span', { class: 'sopt-tick', text: showWording ? '✓' : '' }), h('span', { text: 'Wording' }));
+    w.addEventListener('click', () => {
+      showWording = !showWording;
+      try {
+        localStorage.setItem(wordingKey, showWording ? '1' : '0');
+      } catch {
+        // not kept: it lasts for this visit
+      }
+      applyNarration();
+      renderColMenu();
+    });
+    $('colmenu').replaceChildren(w, b);
   }
   function applyNarration() {
     document.querySelector('.ledger')!.classList.toggle('show-narr', showNarration);
+    document.querySelector('.ledger')!.classList.toggle('show-word', showWording);
     renderHeadCells();
     renderFilterRow();
     virtualizer.measure();
@@ -1522,6 +1545,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     }
   });
   document.querySelector('.ledger')!.classList.toggle('show-narr', showNarration);
+  document.querySelector('.ledger')!.classList.toggle('show-word', showWording);
   $('colsearch-toggle').addEventListener('click', () => {
     const open = !document.querySelector('.ledger')!.classList.contains('show-colsearch');
     document.querySelector('.ledger')!.classList.toggle('show-colsearch', open);
@@ -1560,7 +1584,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   });
 
   // ---- rows. Built once when they scroll into view; an edit changes the cells in place (fill), never the row element.
-  type Refs = { amountText: HTMLElement; catHint: HTMLElement; check: HTMLInputElement; narr: HTMLButtonElement; details: HTMLElement; cat: ComboEl; catTick: HTMLElement; catText: HTMLElement; party: ComboEl; partyTick: HTMLElement; partyText: HTMLElement; nature: HTMLInputElement; natureTick: HTMLElement; natureText: HTMLElement; pillSlot: HTMLElement; catPeek: HTMLButtonElement; partyPeek: HTMLButtonElement; natureCell: HTMLElement; meta: HTMLElement; originSlot: HTMLElement };
+  type Refs = { wordText: HTMLElement; amountText: HTMLElement; catHint: HTMLElement; check: HTMLInputElement; narr: HTMLButtonElement; details: HTMLElement; cat: ComboEl; catTick: HTMLElement; catText: HTMLElement; party: ComboEl; partyTick: HTMLElement; partyText: HTMLElement; nature: HTMLInputElement; natureTick: HTMLElement; natureText: HTMLElement; pillSlot: HTMLElement; catPeek: HTMLButtonElement; partyPeek: HTMLButtonElement; natureCell: HTMLElement; meta: HTMLElement; originSlot: HTMLElement };
   const refs = new WeakMap<HTMLElement, Refs>();
   const tick = (label: string, onClick: () => void) => h('button', { class: 'tick', text: '✓', attrs: { type: 'button', 'aria-label': label, title: label }, on: { click: onClick } });
   const cell = (cls: string, label: string, ...kids: (Node | null)[]) => h('span', { class: `gcell gcell--${cls}`, attrs: { role: 'cell', 'data-label': label } }, ...kids);
@@ -1628,6 +1652,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     nature.addEventListener('change', () => offerToOthers(l, 'nature', nature.value));
     const natureTick = tick(`Accept the suggested wording for ${who}`, () => edit(l, 'nature', ghostOf(l, 'nature')));
     const natureText = h('span', { class: 'lcell-text' });
+    const wordText = h('span', { class: 'wordtext' });
     const pillSlot = h('span', { class: 'pillslot' });
     const originSlot = h('span', { class: 'origin-text' });
     // A line at rest is one quiet row of text. The fields appear when the line is ticked, has something typed in it, or is opened
@@ -1649,6 +1674,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       cell('amount', '', amountText),
       cell('category', 'Category', catPeek, cat, catTick, catText, catHint),
       cell('party', l.direction === 'debit' ? 'Paid to' : 'Received from', partyPeek, party, partyTick, partyText),
+      cell('wording', '', wordText),
       cell('status', '', pillSlot),
       cell('narration', '', narr, details),
       meta,
@@ -1706,7 +1732,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       if (now.missingParty && now.state === 'allocated' && (e.target as HTMLElement).closest('.gcell--party')) editPartyInline(now, partyText);
       else void openLine(l.id);
     });
-    refs.set(rowEl, { amountText, catHint, check, narr, details, cat, catTick, catText, party, partyTick, partyText, nature, natureTick, natureText, pillSlot, catPeek, partyPeek, natureCell, meta, originSlot });
+    refs.set(rowEl, { wordText, amountText, catHint, check, narr, details, cat, catTick, catText, party, partyTick, partyText, nature, natureTick, natureText, pillSlot, catPeek, partyPeek, natureCell, meta, originSlot });
     fill(rowEl, l);
     return rowEl;
   }
@@ -1856,6 +1882,12 @@ import SignInGate from '../../../components/SignInGate.astro';
       r.partyText.replaceChildren(a?.partyId ? document.createTextNode(nameOf(lk.parties, a.partyId)) : l.missingParty ? h('span', { class: 'noparty', text: 'No party', attrs: { title: 'Double-click to choose a party' } }) : document.createTextNode(''));
       r.natureText.textContent = a?.nature ?? '';
     }
+    // The Wording column: what was typed or restored, or what was posted; failing both, the suggestion in grey.
+    const wordsNow = can ? d.nature : l.allocation?.nature ?? '';
+    const wordsGhost = can && !wordsNow ? ghostOf(l, 'nature') : '';
+    r.wordText.textContent = wordsNow || wordsGhost;
+    r.wordText.classList.toggle('ghost', !wordsNow && Boolean(wordsGhost));
+    r.wordText.title = wordsNow || wordsGhost;
     // A line that cannot be edited in its row (partly allocated, flagged, or posted without a party) is finished or fixed in its sheet:
     // its pill opens it, so the way in is visible and not only the narration.
     const pillNode = pillFor(l);
@@ -3413,6 +3445,38 @@ import SignInGate from '../../../components/SignInGate.astro';
     color: var(--tvc-ink-soft);
   }
 
+  /* Wording is a column only when asked for (Columns), and only in the wide table: cards show it when a line is open. */
+  .ledger:not(.show-word) .gcell--wording {
+    display: none;
+  }
+
+  .ledger .gcell--wording {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--text-sm);
+  }
+
+  .ledger .wordtext.ghost {
+    color: var(--tvc-ink-soft);
+    font-style: italic;
+  }
+
+  @media (min-width: 1241px) {
+    .ledger.show-word .ghead,
+    .ledger.show-word .gfilter,
+    .ledger.show-word .lrow {
+      grid-template-columns: 34px 76px 136px 112px minmax(150px, 1fr) minmax(150px, 1fr) minmax(160px, 1.2fr) 124px;
+    }
+
+    .ledger.show-word.show-narr .ghead,
+    .ledger.show-word.show-narr .gfilter,
+    .ledger.show-word.show-narr .lrow {
+      grid-template-columns: 34px 76px 136px 112px minmax(140px, 1fr) minmax(140px, 1fr) minmax(150px, 1.1fr) 124px minmax(190px, 1.3fr);
+    }
+  }
+
   .ltip {
     position: fixed;
     z-index: 15;
@@ -3661,6 +3725,11 @@ import SignInGate from '../../../components/SignInGate.astro';
 
   /* A phone: each line is a card (date and amount, the narration, then the three cells with their labels, then its status). */
   @media (max-width: 1240px) {
+    .ledger .gcell--wording,
+    .ledger.show-word .gcell--wording {
+      display: none;
+    }
+
     .ledger .gcell--origin {
       display: none;
     }
