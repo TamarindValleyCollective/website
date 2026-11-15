@@ -77,11 +77,12 @@ decisions below are the mockup's defaults and are listed on its Decisions tab.
     area is the amount. Bank accounts on the left, the channels money passes through in the middle (payment gateway, POS terminal,
     bulk payments, card, each UPI app, plain bank transfers), and UPI Circle delegates on the right under the operator's app they
     pay through. Banks and channels share one scale and delegates have their own; very small amounts are drawn at a minimum size.
-    Only a name and a figure sit beside each circle. It starts closed except the live bank: clicking a circle opens what is behind
+    Circles are joined by links whose thickness is the money flowing through them; the figure sits inside a circle where it fits and
+    under the name where it does not. It starts closed except the live bank: clicking a circle opens what is behind
     it (a bank shows its channels, a UPI app its delegates) and shows its details in a panel (figures, what needs attention, what
     it connects to); Expand all and Collapse all open and close everything. A ! badge marks what needs attention, a + or − that a
     circle can be opened or closed, and dashed means planned. A Money out / Money in switch changes the direction. The channels add
-    up to the bank statement and a table view says so. On a phone the three groups stack and the panel opens below. The first
+    up to the bank statement and a table view says so. On a phone the three groups wrap, without links, and the panel opens below. The first
     version had boxes with every figure inside, and a Sankey was rejected (it mixes money in and out and tangles as channels are
     added). Boxes for things not built (the ICICI account, the POS terminal, Google Pay) are dashed and marked Planned so the
     structure does not change when they arrive. Today a POS terminal counts under Debit card and a second person's Paytm cannot be
