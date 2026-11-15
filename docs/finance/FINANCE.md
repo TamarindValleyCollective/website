@@ -536,7 +536,7 @@ Modelled on how ServiceNow lists work, because the sheet's convenience was selec
   cells is reversible, posting is not. Drafts are also kept in the browser and offered back on the next visit; **Fill them in again**
   restores them, ticks the ready ones and turns on the **Filled in, not posted** status filter. That filter and **Needs a reason**
   (a category or party but no wording yet) are in Filters, so you can see which lines carry something not yet posted. Server-side
-  drafts without wording are not possible yet: the database requires wording on every allocation row.
+  drafts without wording are not possible yet: the database requires wording on every allocation row. A cell that holds your draft (category, party or wording, typed, applied, accepted or restored) has a white box with a green outline and a thicker left edge, and the tooltip "Yours, not posted yet"; suggestions stay grey italic. Wide table only; the card layout does not mark cells yet.
 - **Selecting.** A checkbox on every editable line; the header checkbox selects the page; shift-click selects the run between two
   lines. Lines that cannot be edited here (already posted, partly allocated, waiting for review) cannot be ticked.
 - **The bar** appears under the table when lines are selected and sticks to the bottom of the screen: *Set category*, *Set party*, *Set

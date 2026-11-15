@@ -91,7 +91,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       <p id="progress" class="progress"></p>
       <span id="announce" class="visually-hidden" role="status"></span>
       <span id="selcount" class="visually-hidden" role="status"></span>
-      <p class="hint twostep">A tick only fills a field in. Nothing is saved until you tick the lines and press <strong>Post</strong>.</p>
+      <p class="hint twostep">A tick only fills a field in. Nothing is saved until you tick the lines and press <strong>Post</strong>. Cells with a green outline are yours and not posted yet; grey italics are suggestions.</p>
       <div id="restorenote" class="postnote applyprompt" hidden></div>
       <div id="draftnote" class="postnote applyprompt" role="status" hidden></div>
       <div id="monthstrip" class="postnote applyprompt" role="status" hidden></div>
@@ -1767,6 +1767,18 @@ import SignInGate from '../../../components/SignInGate.astro';
     const d = draftOf(l.id);
     el.classList.toggle('is-locked', !can);
     el.classList.toggle('is-selected', Boolean(tstate.rowSelection[l.id]));
+    // Your cells: what is in this line's draft (typed, applied, accepted or restored) and not posted. A suggestion stays grey italic.
+    const yours = (cls: string, on: boolean) => {
+      const c = el.querySelector<HTMLElement>(`.gcell--${cls}`);
+      if (!c) return;
+      c.classList.toggle('is-mine', on);
+      if (on) c.title = 'Yours, not posted yet';
+      else c.removeAttribute('title');
+    };
+    yours('category', can && Boolean(d.categoryId));
+    yours('party', can && Boolean(d.partyId));
+    yours('wording', can && Boolean(d.nature.trim()));
+    yours('nature', can && Boolean(d.nature.trim()));
     const kind = amountKind(l.direction, isTransferLine(l));
     el.classList.toggle('is-credit', kind === 'cr');
     el.classList.toggle('is-transfer', kind[0] === 't');
@@ -1869,10 +1881,10 @@ import SignInGate from '../../../components/SignInGate.astro';
       if (!active) {
         r.catPeek.textContent = d.categoryId ? `${nameOf(lk.categories, d.categoryId)}${dw.maintenance && dw.unit ? ` · ${unitLabels().get(dw.unit) ?? ''} · ${dw.year}` : dw.capital && dw.project ? ` · ${lk.projects.find((p) => p.id === dw.project)?.name ?? ''}` : ''}` : gc ? nameOf(lk.categories, gc) : 'Choose…';
         r.catPeek.classList.toggle('ghost', !d.categoryId);
-        r.catPeek.setAttribute('aria-label', `Category for ${l.narration.slice(0, 40)}: ${r.catPeek.textContent}. Press to edit.`);
+        r.catPeek.setAttribute('aria-label', `Category for ${l.narration.slice(0, 40)}: ${r.catPeek.textContent}.${d.categoryId ? ' Yours, not posted yet.' : ''} Press to edit.`);
         r.partyPeek.textContent = d.partyId ? nameOf(lk.parties, d.partyId) : gp ? nameOf(lk.parties, gp) : stranger ? `New: ${stranger}` : 'No one in particular';
         r.partyPeek.classList.toggle('ghost', !d.partyId);
-        r.partyPeek.setAttribute('aria-label', `Party for ${l.narration.slice(0, 40)}: ${r.partyPeek.textContent}. Press to edit.`);
+        r.partyPeek.setAttribute('aria-label', `Party for ${l.narration.slice(0, 40)}: ${r.partyPeek.textContent}.${d.partyId ? ' Yours, not posted yet.' : ''} Press to edit.`);
       }
     } else {
       for (const t of [r.catTick, r.partyTick, r.natureTick]) t.hidden = true;
@@ -3456,6 +3468,16 @@ import SignInGate from '../../../components/SignInGate.astro';
     text-overflow: ellipsis;
     white-space: nowrap;
     font-size: var(--text-sm);
+  }
+
+  /* A cell that holds your draft: a white box, a green outline and a thicker left edge. It reads on a plain row and on a ticked one
+     (ticked rows are tinted green, so a green fill would vanish there). The negative margin keeps the text where it was. */
+  .ledger .lrow .gcell.is-mine {
+    margin: -2px -4px -2px -9px;
+    padding: 2px 4px 2px 9px;
+    border-radius: var(--radius-sm);
+    background: var(--tvc-white);
+    box-shadow: inset 0 0 0 1px var(--tvc-green), inset 4px 0 0 var(--tvc-green);
   }
 
   .ledger .wordtext.ghost {
