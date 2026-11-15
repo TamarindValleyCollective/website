@@ -73,31 +73,33 @@ decisions below are the mockup's defaults and are listed on its Decisions tab.
 10. Financial year selector in the header; a closed year shows final figures; Data health always describes today.
 11. Data health items that block a month close: unverified payees in use, bank lines with no category, advances
     with no recovery agreed, a broken balance chain.
-12. **Channels** (admin only, added 2026-11-15; mockup tab only, nothing built): the money paths drawn as a network you can zoom and
-    move around in, like a knowledge graph. Circles are sized by amount (area) and joined by straight links, running centre to centre
-    so they meet each circle wherever they cross it, as thick as the money flowing through them. Banks, the channels money passes
-    through (payment gateway, POS terminal, bulk payments, card, each UPI app, plain bank transfers), where the money went (salary,
-    farm and household, projects, company, sinking fund) or, in Money in mode, where it came from (maintenance, stays and other),
-    delegates under the UPI apps they pay through, and the fixed deposits. Each channel connects to several of these, so it is a
-    network and not a tree; links to a head take its colour. **Fixed deposits** are their own green circle outside the current
-    accounts: the sinking fund puts money in and the interest comes back as money in; today they are one circle, and each deposit
-    would be its own once deposits are recorded (bank, amount, rate, maturity). The circles settle into an organic layout (a small
-    force simulation) and pull each other along when one is dragged; a circle and its name never overlap another. Banks and channels
-    share one scale and the figure sits inside a circle where it fits. Scroll or pinch to zoom, drag the background to move, and Fit
-    resets the layout; what is written under a circle depends on the zoom relative to the fitted view (zoomed out: names only for the
-    banks, normal: name and figure, zoomed in: counts and shares). Click a circle for its details (figures, where it went or came
-    from, what needs attention, what it connects to); the + or - on a circle opens or closes what hangs off it; Zoom to this focuses on
-    a circle and its connections; Expand all and Collapse all do the same for everything. **Filters:** period (year to date, last
-    three months, this month; a closed year has only the year), one bank account, needs attention only (the flagged circles and the
-    live path back to their bank), hide planned, hide delegates, hide where it went, and a search that highlights matches and zooms
+12. **Channels** (admin only, added 2026-11-15; mockup tab only, nothing built): **only money channels** drawn as a network you can zoom and
+    move around in, like a knowledge graph. Every circle is a channel: the accounts (the current accounts and the fixed deposits held
+    outside them), the channels money passes through (payment gateway, POS terminal, bulk payments, card, each UPI app, plain bank
+    transfers) and the delegates, who pay through an operator's UPI app. What the money was *for* (salary, farm and household,
+    projects, company, sinking fund; maintenance or stays on the way in) is **not a channel, so it is a filter** (Spent on / Received
+    for, with all projects or one project): choose it and the same circles show only that money, through the channels it used (decided
+    2026-11-15; an earlier version drew those as circles, which mixed things that are not channels into the map). Each channel's panel
+    lists what it was used for, and clicking a row applies the filter. Circles are sized by amount (area), joined by straight links as
+    thick as the money flowing through them, with the figure inside where it fits. It starts as simply as it can: **Tidy**
+    arrangement (columns, ordered so links cross as little as possible; Organic is the freeform alternative with draggable circles that
+    pull the others along), **Main links** (each circle's strongest link and the big flows; selecting or hovering a circle shows all of
+    its links; All links shows everything) and idle channels hidden (Show idle channels brings them back). Scroll or pinch to zoom, drag
+    the background to move, Fit arranges everything again; what is written under a circle depends on the zoom relative to the fitted
+    view. Click a circle for its details; the + or - on a circle opens or closes what hangs off it; Zoom to this focuses on a circle and
+    its connections. Other filters: period (year to date, last three months, this month; a closed year has only the year), one account
+    (including the fixed deposits), needs attention only, hide planned, hide delegates, and a search that highlights matches and zooms
     to them; a count says how many circles are shown and Reset clears them. A ! badge marks what needs attention and dashed means
-    planned. A Money out / Money in switch changes the direction. The channels add up to the bank statement and a table view says so
-    and shows each channel by where its money went (made-up affinities fitted so every row and column adds up; the real figures would
-    come from the ledger's allocations). On a phone it is the same canvas (pinch to zoom) with the panel below. Earlier versions had
-    boxes with every figure inside, circles in strict columns with links from side to side, and a Sankey was rejected (it mixes money in
-    and out and tangles as channels are added). Boxes for things not built (the ICICI account, the POS terminal, Google Pay) are
-    dashed and marked Planned so the structure does not change when they arrive. Today a POS terminal counts under Debit card and a
-    second person's Paytm cannot be told apart from the first: that needs an operator record.
+    planned. A Money out / Money in switch changes the direction. **Fixed deposits** are their own green circle outside the current
+    accounts: money goes in and the interest comes back by bank transfer; today they are one circle, and each deposit would be its own
+    once deposits are recorded (bank, amount, rate, maturity). The channels add up to the bank statement and a table view says so and
+    shows what each channel was used for (made-up affinities fitted so every row and column adds up; the real figures would come from
+    the ledger's allocations; delegates' spend is not split by purpose, so a purpose filter hides them). On a phone it is the same
+    canvas (pinch to zoom) with the panel below. Earlier versions had boxes with every figure inside, circles in strict columns, and an
+    organic network with circles for where the money went; a Sankey was rejected (it mixes money in and out and tangles as channels
+    are added). Boxes for things not built (the ICICI account, the POS terminal, Google Pay) are dashed and marked Planned so the
+    structure does not change when they arrive. Today a POS terminal counts under Debit card and a second person's Paytm cannot be
+    told apart from the first: that needs an operator record.
 
 **For session 07 and the sessions after it:** figures are in lakh in tiles and charts, full rupees for the
 circle and advances; budget bars scale to 130% of each line's budget with a tick at the budget; status pills
