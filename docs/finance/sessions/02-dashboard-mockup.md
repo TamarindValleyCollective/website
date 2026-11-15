@@ -64,7 +64,7 @@ decisions below are the mockup's defaults and are listed on its Decisions tab.
 6. Advances view: given, agreed monthly recovery, recovered, left, when it clears; an advance with no recovery
    agreed or a missed recovery goes to Data health and the Overview. Until payroll (session 09) exists an approver
    records recoveries against the advance.
-7. Dashboards show house and employee numbers only; names stay in the directory and payroll.
+7. Dashboards show house and employee numbers only; names stay in the directory and payroll. **Exception, decided 2026-11-15:** a UPI Circle delegate shows as on the UPI page, their name if one has been set, otherwise their number.
 8. Member view: Overview (own household's maintenance instead of the attention list), Cashflow, Budget vs actual,
    Maintenance totals with a card for the member's own household. Hidden: Advances, other households' dues, Data
    health, UPI circle, the draft next-year plan. **Decided 2026-11-10: the member view is a preview feature for chosen homes, not open to everyone yet.**
@@ -73,6 +73,15 @@ decisions below are the mockup's defaults and are listed on its Decisions tab.
 10. Financial year selector in the header; a closed year shows final figures; Data health always describes today.
 11. Data health items that block a month close: unverified payees in use, bank lines with no category, advances
     with no recovery agreed, a broken balance chain.
+12. **Channels** (admin only, added 2026-11-15; mockup tab only, nothing built): a map in the shape of the money paths. Bank
+    accounts on the left, the channels money passes through in the middle (payment gateway, POS terminal, bulk payments, card,
+    each UPI app, plain bank transfers), and UPI Circle delegates on the right under the operator's app they pay through. Each box
+    shows its figure for the year, a small bar and a pill for what needs attention (a delegate has a meter against their own
+    limit). A Money out / Money in switch changes the direction; clicking a box shows only its connections; the channels add up to
+    the bank statement and a table view says so; on a phone it is a nested list. Lines are connections, not amounts (a Sankey was
+    rejected: it mixes money in and out and tangles as channels are added). Boxes for things not built (the ICICI account, the POS
+    terminal, Google Pay) are dashed and marked Planned so the structure does not change when they arrive. Today a POS terminal
+    counts under Debit card and a second person's Paytm cannot be told apart from the first: that needs an operator record.
 
 **For session 07 and the sessions after it:** figures are in lakh in tiles and charts, full rupees for the
 circle and advances; budget bars scale to 130% of each line's budget with a tick at the budget; status pills
