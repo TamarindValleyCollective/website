@@ -266,9 +266,11 @@ Page `/internal/finance/import/`; routes in `finance-admin.mts` (`GET /imports`,
   years is shown with its dates and closes when the missing year arrives; nothing is guessed.
   A gap is not reported on a side where a held period already covers the file's first or last day (a download starting inside
   the held year overlaps it; it does not leave a hole before it).
-- **Preview of the delta.** Before confirming, each file row has an expandable table of the lines it would add (date, narration,
-  debit, credit and, for bank statements, the running balance), with the in/out totals and the balance after. Preview mode only,
-  capped at 500 lines (the summary says so); the commit response carries counts only, never narrations.
+- **Preview of the delta.** Before confirming, each file row shows the in/out totals and the balance after, and a **Review N lines**
+  button that opens a wide pop-out (the shared `.sheet` dialog) with every line it would add: date, narration, debit, credit and,
+  for bank statements, the running balance. The pop-out's Import button is the page's Import button (it imports every file that is
+  ready, and says so in its label); Escape or a click outside closes it. On a phone it is full-screen and each line is a small card.
+  Preview mode only, capped at 500 lines (the pop-out says so); the commit response carries counts only, never narrations.
 - **Overlap.** A later download of a period already held adds only lines not held (`dedupe_key`: account, date, narration,
   direction, amount, running balance, order among exact repeats). It must agree with what is held, or it is blocked.
 - **Paytm.** Only rows whose account label equals a bank account's `upi_label` are kept; the rest are ignored but counted with
