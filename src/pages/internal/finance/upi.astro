@@ -26,6 +26,11 @@ import SignInGate from '../../../components/SignInGate.astro';
       <ul class="list" id="months"></ul>
       <p class="hint" id="months-note"></p>
 
+      <h2 class="list-title">Operators</h2>
+      <ul class="list" id="operators"></ul>
+      <p class="hint" id="operators-note"></p>
+      <p class="delegate-actions"><button type="button" class="button button--outline" id="operator-add" hidden>Add an operator</button></p>
+
       <h2 class="list-title">Delegates</h2>
       <ul class="list" id="delegates"></ul>
       <p class="hint" id="delegates-note"></p>
@@ -83,10 +88,30 @@ import SignInGate from '../../../components/SignInGate.astro';
       <p class="hint" id="rows-note" aria-live="polite"></p>
     </div>
 
+    <dialog id="operator-dialog" class="sheet delegate-sheet" aria-labelledby="operator-title">
+      <form id="operator-form" class="delegate-form" novalidate>
+        <h2 id="operator-title">Add an operator</h2>
+        <p class="sheet-text">An operator is a person whose UPI setup the account's UPI payments go out through. Each UPI file you import is one operator's, and each delegate belongs to one operator's circle.</p>
+        <label>
+          <span>Name</span>
+          <input id="operator-name" autocomplete="off" maxlength="60" />
+        </label>
+        <p class="error" id="operator-error" role="alert" hidden></p>
+        <div class="sheet-actions">
+          <button type="button" class="button button--outline" id="operator-cancel">Cancel</button>
+          <button type="submit" class="button" id="operator-save">Save</button>
+        </div>
+      </form>
+    </dialog>
+
     <dialog id="delegate-dialog" class="sheet delegate-sheet" aria-labelledby="delegate-title">
       <form id="delegate-form" class="delegate-form" novalidate>
         <h2 id="delegate-title">Add a delegate</h2>
         <p class="sheet-text" id="delegate-lead">A delegate pays with a spend right the account's operator gave them (UPI Circle). They are known by the number the UPI app shows after "Paid for".</p>
+        <label id="delegate-operator-field" hidden>
+          <span>Whose UPI circle</span>
+          <select id="delegate-operator"></select>
+        </label>
         <label id="delegate-number-field">
           <span>Number</span>
           <input id="delegate-number" inputmode="numeric" autocomplete="off" maxlength="15" />
@@ -143,12 +168,15 @@ import SignInGate from '../../../components/SignInGate.astro';
   const APP = { bhim: 'BHIM', paytm: 'Paytm' } as const;
   const STATE = { matched: { text: 'In the ledger', kind: 'ok' }, waiting: { text: 'Waiting for statement', kind: 'warn' }, unmatched: { text: 'Not in the statement', kind: 'crit' } } as const;
 
-  type Upi = { id: string; paidAt: string; time: string | null; app: 'bhim' | 'paytm'; counterparty: string | null; remark: string | null; amountPaise: number; direction: 'debit' | 'credit'; isCircle: boolean; upiRef: string; note: string | null; purpose: string | null; bankLineId: string | null; account: string | null; delegateId: string | null; delegate: string | null; delegateHow: 'assigned' | 'auto' | 'ambiguous' | 'none' | null; state: 'matched' | 'waiting' | 'unmatched' };
-  type Delegate = { id: string; identifier: string; displayName: string | null; activeFrom: string; activeTo: string | null; capPaise: number | null };
+  type Upi = { operatorId?: string | null; id: string; paidAt: string; time: string | null; app: 'bhim' | 'paytm'; counterparty: string | null; remark: string | null; amountPaise: number; direction: 'debit' | 'credit'; isCircle: boolean; upiRef: string; note: string | null; purpose: string | null; bankLineId: string | null; account: string | null; delegateId: string | null; delegate: string | null; delegateHow: 'assigned' | 'auto' | 'ambiguous' | 'none' | null; state: 'matched' | 'waiting' | 'unmatched' };
+  type Delegate = { id: string; identifier: string; displayName: string | null; activeFrom: string; activeTo: string | null; capPaise: number | null; operatorId?: string | null };
+  type Operator = { id: string; name: string };
   let all: Upi[] = [];
   let canEdit = false;
   let canConfigure = false;
   let delegates: Delegate[] = [];
+  let operators: Operator[] = []; // whose UPI a payment went through (migration 0101); empty until it is applied
+  const operatorName = (id?: string | null) => operators.find((o) => o.id === id)?.name ?? null;
   let defaultCapPaise = 0;
   // A link from the ledger arrives as ?ref=<UPI reference>: the table opens filtered to that one payment.
   const filter = { q: new URLSearchParams(location.search).get('ref')?.replace(/\D/g, '').slice(0, 12) ?? '', app: 'all', kind: 'all', state: 'all' };
@@ -229,6 +257,63 @@ import SignInGate from '../../../components/SignInGate.astro';
   const today = () => new Date().toLocaleDateString('en-CA');
   const labelOf = (d: Delegate) => d.displayName || d.identifier;
 
+  // Operators: the people whose UPI the payments go out through. An admin names them; the import asks which one each UPI file is.
+  function renderOperators() {
+    const list = $('operators');
+    list.replaceChildren(
+      ...operators.map((o) => {
+        const mine = delegates.filter((d) => d.operatorId === o.id).length;
+        const li = row(o.name, [mine ? `${plural(mine, 'delegate')} in their UPI circle` : 'No delegates in their UPI circle']);
+        if (canConfigure) {
+          const inner = li.querySelector<HTMLElement>('.row')!;
+          const btn = el('button', 'row');
+          btn.type = 'button';
+          btn.title = 'Rename this operator';
+          btn.append(...Array.from(inner.childNodes));
+          btn.addEventListener('click', () => openOperator(o));
+          li.replaceChildren(btn);
+        }
+        return li;
+      }),
+    );
+    $('operators-note').textContent = !operators.length
+      ? 'Operators appear here once the database has them. Until then every UPI file is imported without asking whose it is.'
+      : 'Every UPI payment went out through one operator’s UPI: directly by them, or by a delegate in their UPI circle. The import asks whose each UPI file is.';
+    $('operator-add').hidden = !canConfigure || !operators.length;
+  }
+
+  const odlg = $<HTMLDialogElement>('operator-dialog');
+  let editingOperator: Operator | null = null;
+  $('operator-cancel').addEventListener('click', () => odlg.close());
+  $('operator-add').addEventListener('click', () => openOperator(null));
+  function openOperator(o: Operator | null) {
+    editingOperator = o;
+    $('operator-title').textContent = o ? 'Rename operator' : 'Add an operator';
+    $<HTMLInputElement>('operator-name').value = o?.name ?? '';
+    $('operator-error').hidden = true;
+    odlg.showModal();
+    $('operator-name').focus();
+  }
+  $('operator-form').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const err = $('operator-error');
+    const save = $<HTMLButtonElement>('operator-save');
+    save.disabled = true;
+    try {
+      const { status, data } = await staffFetch(editingOperator ? `/api/finance-admin/upi-operators/${editingOperator.id}` : '/api/finance-admin/upi-operators', { method: editingOperator ? 'PATCH' : 'POST', body: { name: $<HTMLInputElement>('operator-name').value } });
+      if (status !== 200 && status !== 201) throw new Error(data?.error ?? 'failed');
+      odlg.close();
+      showToast(editingOperator ? 'Operator renamed.' : 'Operator added.');
+      await load();
+    } catch (e) {
+      if (fail(e)) return;
+      err.textContent = e instanceof Error && e.message !== 'failed' ? e.message : 'Could not save the operator. Nothing was changed.';
+      err.hidden = false;
+    } finally {
+      save.disabled = false;
+    }
+  });
+
   function renderDelegates(data: any) {
     const list = $('delegates');
     const now = today();
@@ -236,6 +321,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       ...delegates.map((d) => {
         const details = [`${d.displayName ? `Number ${d.identifier} · ` : ''}From ${day(d.activeFrom)}${d.activeTo ? ` to ${day(d.activeTo)}` : ', still active'}`, `Monthly limit ${rupees(d.capPaise ?? defaultCapPaise)}${d.capPaise ? '' : ' (the default)'} · ${plural(all.filter((u) => u.delegateId === d.id).length, 'payment')}`];
         const ended = d.activeTo !== null && d.activeTo < now;
+        if (operators.length > 1 && operatorName(d.operatorId)) details.push(`UPI circle of ${operatorName(d.operatorId)}`);
         const li = row(labelOf(d), details, ended ? { text: 'Ended', kind: 'warn' } : { text: 'Active', kind: 'ok' });
         if (canConfigure) {
           const inner = li.querySelector<HTMLElement>('.row')!;
@@ -282,6 +368,11 @@ import SignInGate from '../../../components/SignInGate.astro';
     $<HTMLInputElement>('delegate-to').value = d?.activeTo ?? '';
     $<HTMLInputElement>('delegate-cap').value = d?.capPaise ? String(d.capPaise / 100) : '';
     $<HTMLInputElement>('delegate-cap').placeholder = `${rupees(defaultCapPaise)} if empty`;
+    // Whose UPI circle: asked when there is more than one operator (with one, the delegate is theirs).
+    const opSelect = $<HTMLSelectElement>('delegate-operator');
+    opSelect.replaceChildren(...(d ? [] : [new Option('Choose…', '')]), ...operators.map((o) => new Option(o.name, o.id)));
+    opSelect.value = d?.operatorId ?? '';
+    $('delegate-operator-field').hidden = operators.length < 2 || d !== null;
     $('delegate-error').hidden = true;
     dlg.showModal();
     (d ? $('delegate-name') : $('delegate-number')).focus();
@@ -298,6 +389,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       capPaise: capText === '' ? null : Math.round(Number(capText) * 100),
     };
     if (!editing) body.identifier = $<HTMLInputElement>('delegate-number').value;
+    if (!editing && operators.length > 1) body.operatorId = $<HTMLSelectElement>('delegate-operator').value;
     if (capText !== '' && !Number.isFinite(Number(capText))) {
       err.textContent = 'The monthly limit must be an amount in rupees.';
       err.hidden = false;
@@ -325,7 +417,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   function paidByCell(u: Upi): HTMLTableCellElement {
     const td = document.createElement('td');
     if (!u.isCircle) {
-      td.textContent = 'Direct';
+      td.textContent = operators.length > 1 && operatorName(u.operatorId) ? `Direct · ${operatorName(u.operatorId)}` : 'Direct';
       return td;
     }
     const settled = u.delegateHow === 'auto' || !canEdit || !delegates.length;
@@ -531,8 +623,10 @@ import SignInGate from '../../../components/SignInGate.astro';
       canEdit = Boolean(data.canEdit);
       canConfigure = Boolean(data.canConfigure);
       delegates = data.delegates ?? [];
+      operators = data.operators ?? [];
       defaultCapPaise = data.capPaise;
       renderMonths(data);
+      renderOperators();
       renderDelegates(data);
       $<HTMLInputElement>('q').value = filter.q;
       renderRows();

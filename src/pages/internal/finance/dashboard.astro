@@ -31,6 +31,7 @@ import SignInGate from '../../../components/SignInGate.astro';
         <button type="button" data-v="overview">Overview</button>
         <button type="button" data-v="cashflow">Cashflow</button>
         <button type="button" data-v="budget">Budget vs actual</button>
+        <button type="button" data-v="channels">Channels</button>
         <button type="button" data-v="upi-circle">UPI circle</button>
         <button type="button" data-v="data-health">Data health</button>
       </div></div>
@@ -116,6 +117,50 @@ import SignInGate from '../../../components/SignInGate.astro';
         <p class="hint">The circle is counted per calendar month from the Paytm tag. The UPI page has every row.</p>
       </div>
 
+      <div class="dash-view" id="v-channels" hidden>
+        <p id="ch-state" class="hint" hidden></p>
+        <div class="card ch-period">
+          <div class="ch-row">
+            <h2>Period</h2>
+            <div class="segmented" id="ch-presets" role="group" aria-label="Period presets">
+              <button type="button" data-p="m1">This month</button>
+              <button type="button" data-p="prev">Last month</button>
+              <button type="button" data-p="m3">Last 3 months</button>
+              <button type="button" data-p="ytd">Year to date</button>
+            </div>
+          </div>
+          <div class="ch-controls">
+            <label class="ch-field"><span>From</span><select id="ch-from"></select></label>
+            <label class="ch-field"><span>to</span><select id="ch-to"></select></label>
+            <label class="ch-check"><input type="checkbox" id="ch-cmp" /> Compare with the period before</label>
+            <span class="hint" id="ch-range"></span>
+          </div>
+          <div class="ch-scroll"><svg id="ch-strip" class="fl-strip" role="img" aria-label="Money received and spent in each month of the year. Choose a month, or drag across several, to pick the period."></svg></div>
+          <p class="hint">Click a month, or drag across several. Shift-click extends the range.</p>
+        </div>
+        <div class="card ch-main">
+          <div class="ch-stats" id="ch-stats"></div>
+          <div class="ch-controls">
+            <div class="ch-seg"><span>Money in, by</span><div class="segmented" id="ch-gin" role="group" aria-label="Group money in by"><button type="button" data-g="channel">Channel</button><button type="button" data-g="purpose">Purpose</button></div></div>
+            <div class="ch-seg"><span>Money out, by</span><div class="segmented" id="ch-gout" role="group" aria-label="Group money out by"><button type="button" data-g="channel">Channel</button><button type="button" data-g="purpose">Purpose</button></div></div>
+          </div>
+          <div class="ch-nav">
+            <button type="button" class="ch-clear" id="ch-back" hidden>← Back</button>
+            <div class="ch-crumbs" id="ch-crumbs" aria-label="Where you are"></div>
+            <button type="button" class="ch-clear" id="ch-all" hidden>See every line</button>
+          </div>
+          <div class="ch-scroll"><svg id="ch-flow" class="fl-flow" role="img" aria-label="The cashflow: where money came in from, through the accounts, to where it went out. Click a box to slide to its breakdown. The table below has the same figures as text."></svg></div>
+          <p class="hint ch-legend"><i class="ch-swatch"></i>Green is the fixed deposits, an account of their own. Money put into them, or brought back, is a transfer between accounts, so it is neither received nor spent.</p>
+          <p class="hint" id="ch-hint" aria-live="polite"></p>
+        </div>
+        <div class="card">
+          <h2>UPI Circle delegates</h2>
+          <p class="hint">Paid through a delegate’s own UPI number and recorded from the UPI records, so they are not bank-statement lines and are not in the cashflow above.</p>
+          <div class="ch-deleg" id="ch-deleg"></div>
+        </div>
+        <details class="ch-details"><summary>The same figures as a table</summary><div class="tablewrap" id="ch-table"></div></details>
+      </div>
+
       <div class="dash-view" id="v-data-health" hidden>
         <p id="health-note" class="note" hidden>These checks describe today's books. They do not change with the financial year.</p>
         <div class="card">
@@ -134,6 +179,9 @@ import SignInGate from '../../../components/SignInGate.astro';
 <script>
   import { StaffAuthError, clearStepUp, clearToken, decodeTokenEmail, getToken, setToken, staffFetch } from '../../../../scripts/lib/staff-client.mjs';
   import { clearState, showFailure, showLoading } from '../../../../scripts/lib/staff-states.mjs';
+  import { CHANNELS } from '../../../../scripts/lib/finance-origin.mjs';
+  import { IN_PURPOSES, OUT_PURPOSES, drillDims, flowOf, fyMonths, monthBars, monthsSoFar, presetMonths, previousMonths, projectsOf, purposesOf, rangeOf, specOf, totalsOf } from '../../../../scripts/lib/finance-channels.mjs';
+  import { drawFlow, layoutFlow, moneyText, monthName, mountStrip, statusOf } from '../../../../scripts/lib/finance-channels-view.mjs';
   import {
     GROUPS, GROUP_CLASS, GROUP_LABELS, HEAD_LABELS, SPEND_HEADS, STATUS, balanceSvg, barsInOutSvg, circleBarsSvg, healthItems, lakhText, monthsText, percentText, ringSvg, rupeesText,
     signedLakh, sparkSvg, stackedSvg, tilesOf, toLakh, monthShort,
@@ -142,7 +190,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   declare const google: any;
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
   const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
-  const VIEWS = ['overview', 'cashflow', 'budget', 'upi-circle', 'data-health'];
+  const VIEWS = ['overview', 'cashflow', 'budget', 'channels', 'upi-circle', 'data-health'];
   const GROUP_CLASSES: Record<string, string> = GROUP_CLASS;
   const GROUP_NAMES: Record<string, string> = GROUP_LABELS;
   const HEAD_NAMES: Record<string, string> = HEAD_LABELS;
@@ -505,6 +553,433 @@ import SignInGate from '../../../components/SignInGate.astro';
     VIEWS.forEach((n) => { $(`v-${n}`).hidden = n !== view; });
     $('tabs').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String((b as HTMLElement).dataset.v === view)));
     drawCharts();
+    if (view === 'channels') void showChannels();
+  }
+
+  // ---- Channels: the cashflow and the channels it moves through (docs/finance/FINANCE.md "Channels") -----------------------------------
+  // Loaded when the tab is first opened (its own endpoint). The server sends the year summed by month, account, channel, direction and
+  // purpose, so the period, the grouping and the compare switch all work on what arrived. The lines behind a box or band are asked for
+  // when it is clicked (GET /channels/lines).
+  // What is open: a box on the money-out or money-in side, its breakdown (loaded or not; undefined for a box with none), the row chosen in it,
+  // and the lines of that.
+  type ChLevel = { dim: string; rows: any[] | null | 'error'; pickId: string | null };
+  type ChDrill = { nodeId: string; spec: Record<string, string>; dims: string[]; levels: ChLevel[]; lines: any };
+  const ch: { data: any; fy: number | null; months: string[]; groupIn: string; groupOut: string; cmp: boolean; drill: ChDrill | null; strip: any; layout: any; flow: any; loading: boolean } = {
+    data: null, fy: null, months: [], groupIn: 'channel', groupOut: 'channel', cmp: false, drill: null, strip: null, layout: null, flow: null, loading: false,
+  };
+  const chMoney = (paise: number) => moneyText(paise);
+  const chSoFar = (): string[] => monthsSoFar({ fy: ch.data.fy, today: ch.data.today });
+  const chClosed = () => {
+    const t = String(ch.data.today), thisFy = Number(t.slice(5, 7)) >= 4 ? Number(t.slice(0, 4)) : Number(t.slice(0, 4)) - 1;
+    return ch.data.fy < thisFy;
+  };
+  const monthShortName = (m: string) => monthName(m).slice(0, 3);
+  const monthYear = (m: string) => `${monthShortName(m)} ${m.slice(0, 4)}`;
+  const chSvg = (id: string) => $(id) as unknown as SVGSVGElement;
+
+  async function showChannels() {
+    if (ch.loading) return;
+    if (ch.data && ch.fy === fy) { renderChannels(); return; }
+    ch.loading = true;
+    const state = $('ch-state');
+    state.hidden = false;
+    state.textContent = 'Loading the cashflow…';
+    try {
+      const { status, data: payload } = await staffFetch(`/api/finance-admin/channels${fy ? `?fy=${fy}` : ''}`);
+      if (status !== 200) throw new Error('load failed');
+      ch.data = payload;
+      ch.fy = payload.fy;
+      ch.months = presetMonths(chSoFar(), 'ytd');
+      ch.drill = null;
+    } catch (err) {
+      ch.loading = false;
+      if (err instanceof StaffAuthError) {
+        if (err.kind === 'unauthorized') showGate('Your session expired. Sign in again.');
+        else showForbidden();
+        return;
+      }
+      state.hidden = false;
+      state.textContent = "Couldn't load the cashflow. Nothing was changed. Check your connection and open the tab again.";
+      return;
+    }
+    ch.loading = false;
+    state.hidden = true;
+    renderChannels();
+  }
+
+  function chPreset(p: string): string[] { return presetMonths(chSoFar(), p); }
+  const sameMonths = (a: string[], b: string[]) => a.length === b.length && a.every((m, i) => m === b[i]);
+
+  /** The parts that depend only on the chosen months, so dragging across the strip can repaint them without redrawing the diagram. */
+  function paintRange() {
+    const soFar = chSoFar();
+    const label = ch.months.length === 1 ? monthYear(ch.months[0]) : `${monthYear(ch.months[0])} to ${monthYear(ch.months[ch.months.length - 1])}`;
+    $('ch-range').textContent = label;
+    const from = $<HTMLSelectElement>('ch-from'), to = $<HTMLSelectElement>('ch-to');
+    for (const s of [from, to]) if (s.options.length !== soFar.length || s.options[0]?.value !== soFar[0]) s.replaceChildren(...soFar.map((m) => new Option(monthYear(m), m)));
+    from.value = ch.months[0];
+    to.value = ch.months[ch.months.length - 1];
+    $('ch-presets').querySelectorAll('button').forEach((b) => {
+      const p = (b as HTMLElement).dataset.p!;
+      b.setAttribute('aria-pressed', String(sameMonths(chPreset(p), ch.months)));
+    });
+  }
+
+  const stat = (cls: string, value: string, label: string, delta?: string) => {
+    const box = el('div', `ch-stat ${cls}`);
+    box.append(el('b', '', value), el('span', '', label));
+    if (delta) box.append(el('span', 'ch-delta', delta));
+    return box;
+  };
+
+  function renderStats() {
+    const d = ch.data, cur = totalsOf(d.cube, ch.months);
+    const prevMonths = ch.cmp ? previousMonths(fyMonths(d.fy), ch.months) : null;
+    const prev = prevMonths ? totalsOf(d.cube, prevMonths) : null;
+    const prevLabel = prevMonths ? (prevMonths.length === 1 ? monthShortName(prevMonths[0]) : `${monthShortName(prevMonths[0])}–${monthShortName(prevMonths[prevMonths.length - 1])}`) : '';
+    const delta = (k: 'received' | 'spent' | 'moved' | 'left') => {
+      if (!prev) return undefined;
+      const diff = cur[k] - prev[k];
+      if (diff === 0) return `No change vs ${prevLabel}`;
+      const pct = prev[k] ? ` (${Math.round((Math.abs(diff) / Math.abs(prev[k])) * 100)}%)` : '';
+      return `${diff > 0 ? '▲' : '▼'} ${chMoney(Math.abs(diff))}${pct} vs ${prevLabel}`;
+    };
+    if (ch.cmp && !prev) $('ch-range').textContent += ' · nothing earlier this year to compare with';
+    const stats = $('ch-stats');
+    stats.replaceChildren(
+      stat('ch-in', lakhText(cur.received, 2), 'Received', delta('received')),
+      stat('ch-out', lakhText(cur.spent, 2), 'Spent', delta('spent')),
+      stat('ch-keep', `${cur.moved < 0 ? '−' : ''}${lakhText(Math.abs(cur.moved), 2)}`, cur.moved >= 0 ? 'Net moved into fixed deposits' : 'Net back from fixed deposits', delta('moved')),
+      stat('', `${cur.left >= 0 ? '+' : '−'}${lakhText(Math.abs(cur.left), 2)}`, cur.left >= 0 ? 'Left in the accounts' : 'Taken from the balance', delta('left')),
+    );
+  }
+
+  function renderChannels() {
+    const d = ch.data;
+    if (!d) return;
+    const soFar = chSoFar(), all = fyMonths(d.fy);
+    ch.months = ch.months.filter((m) => soFar.includes(m));
+    if (!ch.months.length) ch.months = chPreset('ytd');
+    // the chrome that shows the choices
+    const closed = chClosed(), last = soFar[soFar.length - 1], before = soFar[soFar.length - 2];
+    const labels: Record<string, string> = { m1: closed ? monthShortName(last) : 'This month', prev: closed ? (before ? monthShortName(before) : '–') : 'Last month', m3: 'Last 3 months', ytd: closed ? 'Whole year' : 'Year to date' };
+    $('ch-presets').querySelectorAll('button').forEach((b) => {
+      const btn = b as HTMLButtonElement, p = btn.dataset.p!;
+      btn.textContent = labels[p];
+      btn.disabled = p === 'prev' && soFar.length < 2;
+    });
+    $<HTMLInputElement>('ch-cmp').checked = ch.cmp;
+    for (const [id, g] of [['ch-gin', ch.groupIn], ['ch-gout', ch.groupOut]]) $(id).querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String((b as HTMLElement).dataset.g === g)));
+    paintRange();
+    ch.strip.set({ months: all, soFar, bars: monthBars(d.cube, all), chosen: ch.months });
+    renderStats();
+
+    const flow = flowOf({ cube: d.cube, accounts: d.accounts, months: ch.months, groupIn: ch.groupIn, groupOut: ch.groupOut, fdHeld: d.fd?.balances?.[ch.months[ch.months.length - 1]] ?? 0 });
+    ch.flow = flow;
+    const state = $('ch-state');
+    state.hidden = flow.hasData;
+    state.textContent = d.hasData ? 'No money moved in this period. Choose other months.' : 'Nothing to show yet. Import a bank statement first.';
+    ch.layout = flow.hasData ? layoutFlow(flow) : null;
+    // a change of period or grouping may have removed the box that was open
+    if (ch.drill && !ch.layout?.nodes.some((n: any) => n.id === ch.drill!.nodeId)) ch.drill = null;
+    drawStage();
+    renderDelegates();
+    renderChannelTable();
+  }
+
+  // ---- opening a box: its breakdowns beside it, level by level, then its lines (the picture slides along) ---------------------------------
+  // Click a box on the money-out side and the picture slides left, so its breakdown opens to the right; a box on the money-in side slides it right,
+  // opening to the left. Click a row and it slides one level further: to the next breakdown if there is one (UPI opens by operator, then by person),
+  // else to that row's lines. The account, the crumbs, Back and Esc go back. Every box is broken down the same way (breakdownOf, drillDims): Projects
+  // by project, Salary by employee, Maintenance by who paid, the other purposes by category, a channel by what it was for, UPI by operator and then by
+  // person; the deposits go straight to their lines.
+  const purposeName = (dir: string, id: string, uncategorised: boolean) => (uncategorised ? 'Not categorised yet' : ((dir === 'in' ? IN_PURPOSES : OUT_PURPOSES).find((p) => p.id === id)?.label ?? id));
+  const projectNames = () => new Map<string, string>((ch.data.projects as any[]).map((p) => [p.id, p.name]));
+
+  /** A level's heading. */
+  function levelTitle(dr: ChDrill, level: ChLevel) {
+    if (level.dim === 'project') return 'Project';
+    if (level.dim === 'purpose') return 'Purpose';
+    if (level.dim === 'category') return 'Category';
+    if (level.dim === 'operator') return 'Whose UPI';
+    if (level.dim === 'delegate') return 'Paid by';
+    return dr.spec.purpose === 'salary' ? 'Employee' : dr.spec.dir === 'in' ? 'Paid by' : 'Paid to';
+  }
+
+  /** The filter for the rows of level k: the box's, narrowed by the rows chosen at the levels before it (or, for the lines, at every level). */
+  function specAt(dr: ChDrill, k: number): Record<string, string> {
+    const spec = { ...dr.spec };
+    for (let j = 0; j < k; j++) {
+      const p = dr.levels[j].pickId;
+      if (p && p !== '*') spec[dr.levels[j].dim] = p;
+    }
+    return spec;
+  }
+
+  const deepest = (dr: ChDrill) => dr.levels[dr.levels.length - 1];
+  const rowName = (level: ChLevel | undefined) => (level && Array.isArray(level.rows) && level.pickId && level.pickId !== '*' ? level.rows.find((r: any) => (r.id || 'none') === level.pickId)?.name ?? null : null);
+
+  function drawStage() {
+    const d = ch.data, svg = chSvg('ch-flow'), dr = ch.drill;
+    if (!ch.layout) { svg.replaceChildren(); paintNav(); return; }
+    drawFlow(svg, ch.layout, {
+      heads: [`Money in · by ${ch.groupIn}`, 'Accounts', `Money out · by ${ch.groupOut}`],
+      fdNote: (n: any) => {
+        if (n.kind !== 'fd') return '';
+        const at = ch.months[ch.months.length - 1];
+        return `Held ${chMoney(d.fd?.balances?.[at] ?? 0)} at ${monthShortName(at)} end`;
+      },
+      drill: dr ? { nodeId: dr.nodeId, columns: dr.levels.map((l) => ({ rows: l.rows, pickId: l.pickId, title: levelTitle(dr, l) })), lines: dr.lines } : null,
+      onNode: chNode,
+      onBand: (l: any) => chNode(l.transfer ? (l.from.startsWith('A:__fd') ? l.from : l.to) : l.from.startsWith('L:') ? l.from : l.to),   // a transfer opens the deposits
+      onRow: chRow,
+    });
+    paintNav();
+  }
+
+  /** The rows of level k: from the picture's own figures for projects and purposes, from the server for people, categories, delegates and operators. */
+  function loadLevel(dr: ChDrill, k: number) {
+    const level = dr.levels[k], spec = specAt(dr, k);
+    if (level.dim === 'project') { level.rows = projectsOf({ cube: ch.data.cube, months: ch.months, spec, projects: ch.data.projects }); return; }
+    if (level.dim === 'purpose') { level.rows = purposesOf({ cube: ch.data.cube, months: ch.months, spec }); return; }
+    level.rows = null;
+    void loadBreakdown(spec, level.dim).then((rows) => {
+      if (ch.drill !== dr || dr.levels[k] !== level) return;   // something else was chosen while this loaded
+      level.rows = rows ?? 'error';
+      drawStage();
+    });
+  }
+
+  function openBox(n: any) {
+    const spec = specOf({ node: n, nodes: ch.flow.nodes, groupIn: ch.groupIn, groupOut: ch.groupOut }) as Record<string, string>;
+    const dims = drillDims(spec, { operators: ch.data.operators?.length ?? 0 });
+    const dr: ChDrill = { nodeId: n.id, spec, dims, levels: dims.length ? [{ dim: dims[0], rows: null, pickId: null }] : [], lines: null };
+    ch.drill = dr;
+    if (dims.length) loadLevel(dr, 0); else loadLinesFor(dr);
+    drawStage();
+  }
+
+  function chNode(id: string) {
+    const n = ch.layout?.nodes.find((x: any) => x.id === id);
+    if (!n) return;
+    if (n.kind === 'account' || ch.drill?.nodeId === id) { ch.drill = null; drawStage(); return; }   // the account, or the same box again: back to the picture
+    openBox(n);
+  }
+
+  function chRow(k: number, id: string) {
+    const dr = ch.drill, level = dr?.levels[k];
+    if (!dr || !level || !Array.isArray(level.rows)) return;
+    const same = level.pickId === id;
+    dr.levels.length = k + 1;   // whatever was open beyond this level goes
+    dr.lines = null;
+    if (same) level.pickId = null;
+    else {
+      level.pickId = id;
+      if (id !== '*' && k + 1 < dr.dims.length) {
+        dr.levels.push({ dim: dr.dims[k + 1], rows: null, pickId: null });
+        loadLevel(dr, k + 1);
+      } else loadLinesFor(dr);
+    }
+    drawStage();
+  }
+
+  /** Back out to `picks` chosen rows (0: the box's first breakdown; a crumb goes to its own depth). */
+  function chTo(picks: number) {
+    const dr = ch.drill;
+    if (!dr) return;
+    let changed = false;
+    for (let j = picks; j < dr.levels.length; j++) if (dr.levels[j].pickId !== null) { dr.levels[j].pickId = null; changed = true; }
+    if (dr.levels.length > Math.max(1, picks + 1)) { dr.levels.length = Math.max(1, picks + 1); changed = true; }
+    if (changed) dr.lines = null;
+    if (changed && dr.levels.length === 0) loadLinesFor(dr);
+    drawStage();
+  }
+
+  /** One step back: from lines to the breakdown they came from, from a breakdown to the one before, from the first to the picture. */
+  function chBack(all = false) {
+    const dr = ch.drill;
+    if (!dr) return;
+    const last = dr.levels.map((l) => l.pickId !== null).lastIndexOf(true);
+    if (all || last < 0) { ch.drill = null; drawStage(); return; }
+    chTo(last);
+  }
+
+  /** The lines behind what is open (or the row chosen in it), asked for from the server so the count and amount agree with the picture. */
+  function loadLinesFor(dr: ChDrill) {
+    const node = ch.layout.nodes.find((n: any) => n.id === dr.nodeId);
+    const title = rowName(deepest(dr)) ?? node.label;
+    const placeholder = { state: 'loading', title, summary: '', rows: [] as any[] };
+    dr.lines = placeholder;
+    const spec = specAt(dr, dr.levels.length);
+    const q = new URLSearchParams({ fy: String(ch.data.fy), months: ch.months.join(',') });
+    for (const [k, v] of Object.entries(spec)) if (v) q.set(k, v);
+    const dim = deepest(dr)?.dim ?? null;
+    void (async () => {
+      let res: any;
+      try {
+        res = await staffFetch(`/api/finance-admin/channels/lines?${q}`);
+        if (res.status !== 200) throw new Error('load failed');
+      } catch (err) {
+        if (ch.drill !== dr || dr.lines !== placeholder) return;
+        if (err instanceof StaffAuthError) {
+          if (err.kind === 'unauthorized') showGate('Your session expired. Sign in again.');
+          else showForbidden();
+          return;
+        }
+        dr.lines = { state: 'error', title, summary: '', rows: [] };
+        drawStage();
+        return;
+      }
+      if (ch.drill !== dr || dr.lines !== placeholder) return;   // another box was chosen while this one was loading
+      const r = res.data, names = projectNames();
+      dr.lines = {
+        state: 'ok', title,
+        summary: r.count ? `${r.count} ${r.count === 1 ? 'line' : 'lines'} · ${chMoney(r.paise)}${r.lines.length < r.pieces ? ` · largest ${r.lines.length}` : ''}` : 'No lines',
+        rows: r.lines.map((l: any) => ({
+          date: day(l.date),
+          href: `/internal/finance/ledger/?line=${encodeURIComponent(l.id)}`,
+          sub: [(CHANNELS as Record<string, any>)[l.channel]?.label ?? l.channel, l.uncategorised ? 'Not categorised yet' : dim === 'project' ? (l.project ? names.get(l.project) ?? 'Another project' : 'No project named') : dim === 'party' ? l.party : dim === 'category' ? l.category : purposeName(l.dir, l.purpose, false)].filter(Boolean).join(' · '),
+          amount: `${l.dir === 'in' ? '+' : '−'}${chMoney(l.paise)}`,
+        })),
+      };
+      drawStage();
+    })();
+  }
+
+  /** Who a box's money was paid to or by, its categories, its UPI operators or its delegates (the lines are needed for these, so the server groups them). */
+  async function loadBreakdown(spec: Record<string, string>, by: string): Promise<any[] | null> {
+    const q = new URLSearchParams({ fy: String(ch.data.fy), months: ch.months.join(','), by });
+    for (const [k, v] of Object.entries(spec)) if (v) q.set(k, v);
+    try {
+      const res: any = await staffFetch(`/api/finance-admin/channels/breakdown?${q}`);
+      if (res.status !== 200) throw new Error('load failed');
+      return res.data.rows;
+    } catch (err) {
+      if (err instanceof StaffAuthError) {
+        if (err.kind === 'unauthorized') showGate('Your session expired. Sign in again.');
+        else showForbidden();
+      }
+      return null;
+    }
+  }
+
+  /** The crumbs, Back and "See every line" above the picture, and the line of help under it. */
+  function paintNav() {
+    const dr = ch.drill, bar = $('ch-crumbs');
+    bar.replaceChildren();
+    const crumb = (label: string, go: (() => void) | null, current: boolean) => {
+      if (bar.childElementCount) bar.append(el('i', '', '›'));
+      const b = el('button', '', label) as HTMLButtonElement;
+      b.type = 'button';
+      if (current) b.setAttribute('aria-current', 'true'); else if (go) b.addEventListener('click', go);
+      bar.append(b);
+    };
+    crumb('Cashflow', () => chBack(true), !dr);
+    if (dr && ch.layout) {
+      const node = ch.layout.nodes.find((n: any) => n.id === dr.nodeId);
+      const picks = dr.levels.filter((l) => l.pickId !== null);
+      crumb(node.col === 2 ? 'Money out' : node.col === 1 ? 'Accounts' : 'Money in', () => chBack(true), false);
+      crumb(node.label, () => chTo(0), picks.length === 0);
+      picks.forEach((l, j) => crumb(l.pickId === '*' ? 'Every line' : rowName(l) ?? '…', () => chTo(j + 1), j === picks.length - 1));
+    }
+    $('ch-back').hidden = !dr;
+    const last = dr ? deepest(dr) : undefined;
+    $('ch-all').hidden = !(last && Array.isArray(last.rows) && last.pickId === null);
+    $('ch-hint').textContent = !dr
+      ? 'Click a box on the money-out side to slide left into its breakdown, or one on the money-in side to slide right. The faded account takes you back.'
+      : dr.lines ? 'These are the largest lines. Each date opens that line in the Ledger.' : 'Click a row to slide one level further.';
+  }
+
+  function renderDelegates() {
+    const d = ch.data, box = $('ch-deleg');
+    box.replaceChildren();
+    const last = ch.months[ch.months.length - 1], months = new Set(ch.months);
+    const people = [...(d.delegates as any[]).map((x) => ({ id: x.id as string | null, label: /^\d+$/.test(x.label) ? `Number ${x.label}` : x.label, cap: x.capPaise as number | null })), { id: null, label: 'No delegate yet', cap: null }];
+    let any = false;
+    for (const p of people) {
+      const mine = (d.delegatePayments as any[]).filter((x) => x.d === p.id && months.has(x.m));
+      const total = mine.reduce((t, x) => t + x.paise, 0);
+      if (!total) continue;
+      any = true;
+      const inMonth = mine.filter((x) => x.m === last).reduce((t, x) => t + x.paise, 0);
+      const row = el('div', 'ch-dl');
+      row.append(el('b', '', p.label));
+      if (p.cap) {
+        const meter = el('div', `ch-meter ch-meter-${statusOf(inMonth, p.cap)}`);
+        meter.setAttribute('role', 'img');
+        meter.setAttribute('aria-label', `${monthName(last)}: ${chMoney(inMonth)} of ${chMoney(p.cap)}`);
+        const fill = el('i');
+        fill.style.width = `${Math.min(100, Math.round((inMonth / p.cap) * 100))}%`;
+        meter.append(fill);
+        row.append(meter, el('span', '', `${chMoney(total)} paid · ${monthShortName(last)} ${chMoney(inMonth)} of ${chMoney(p.cap)}`));
+      } else {
+        row.append(el('span', 'hint', 'no monthly limit set'), el('span', '', `${chMoney(total)} paid`));
+      }
+      box.append(row);
+    }
+    if (!any) box.append(el('p', 'hint', 'No delegate payments in this period.'));
+  }
+
+  function renderChannelTable() {
+    const wrap = $('ch-table');
+    wrap.replaceChildren();
+    const flow = ch.flow;
+    if (!flow?.links.length) return;
+    const byId = new Map<string, any>(flow.nodes.map((n: any) => [n.id, n]));
+    const table = document.createElement('table');
+    const head = table.createTHead().insertRow();
+    ['From', 'To', 'Amount'].forEach((t, i) => { const th = document.createElement('th'); th.textContent = t; if (i === 2) th.className = 'num'; head.append(th); });
+    const body = table.createTBody();
+    for (const l of [...flow.links].sort((a: any, b: any) => b.paise - a.paise)) {
+      const tr = body.insertRow();
+      tr.insertCell().textContent = byId.get(l.from).label;
+      tr.insertCell().textContent = byId.get(l.to).label;
+      const amt = tr.insertCell();
+      amt.className = 'num';
+      amt.textContent = chMoney(l.paise);
+    }
+    wrap.append(table);
+  }
+
+  ch.strip = mountStrip(chSvg('ch-strip'), {
+    onChange: (months: string[], done: boolean) => {
+      if (!ch.data || !months.length) return;
+      ch.months = months;
+      if (!done) { paintRange(); return; }
+      ch.drill = null;
+      renderChannels();
+    },
+  });
+  $('ch-presets').addEventListener('click', (e) => {
+    const b = (e.target as Element).closest('button') as HTMLButtonElement | null;
+    if (!b || b.disabled || !ch.data) return;
+    ch.months = chPreset(b.dataset.p!);
+    ch.drill = null;
+    renderChannels();
+  });
+  const chRange = () => {
+    if (!ch.data) return;
+    ch.months = rangeOf(chSoFar(), $<HTMLSelectElement>('ch-from').value, $<HTMLSelectElement>('ch-to').value);
+    ch.drill = null;
+    renderChannels();
+  };
+  $('ch-from').addEventListener('change', chRange);
+  $('ch-to').addEventListener('change', chRange);
+  $('ch-cmp').addEventListener('change', (e) => { ch.cmp = (e.target as HTMLInputElement).checked; renderChannels(); });
+  $('ch-back').addEventListener('click', () => chBack());
+  $('ch-all').addEventListener('click', () => {
+    const dr = ch.drill;
+    if (dr && dr.levels.length) chRow(dr.levels.length - 1, '*');
+  });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && view === 'channels' && ch.drill) chBack(); });
+  for (const [id, key] of [['ch-gin', 'groupIn'], ['ch-gout', 'groupOut']] as const) {
+    $(id).addEventListener('click', (e) => {
+      const b = (e.target as Element).closest('button');
+      if (!b || !ch.data) return;
+      ch[key] = (b as HTMLElement).dataset.g === 'purpose' ? 'purpose' : 'channel';
+      ch.drill = null;
+      renderChannels();
+    });
   }
   $('tabs').addEventListener('click', (e) => {
     const b = (e.target as Element).closest('button');
@@ -549,6 +1024,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       content.hidden = false;
       // The figures arrived. If drawing them fails, say so, and log why: it is not the server's fault.
       try {
+        ch.data = null;
         renderFy();
         renderAll();
         show(location.hash.slice(1));
@@ -1152,5 +1628,420 @@ import SignInGate from '../../../components/SignInGate.astro';
     .dash-tile-big {
       font-size: 1.6rem;
     }
+  }
+
+  /* Channels: the period and month strip, the cashflow diagram and the lines behind it. The diagram is SVG drawn by
+     scripts/lib/finance-channels-view.mjs; its colours are the chart tokens, so both appearances work. */
+  .ch-period,
+  .ch-main {
+    display: grid;
+    gap: 6px;
+  }
+
+  .ch-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 20px;
+  }
+
+  .ch-row h2 {
+    margin: 0;
+  }
+
+  .ch-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 22px;
+  }
+
+  .ch-field,
+  .ch-check,
+  .ch-seg {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  .ch-check {
+    cursor: pointer;
+  }
+
+  .ch-scroll {
+    overflow-x: auto;
+  }
+
+  .fl-strip,
+  .fl-flow {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
+  .fl-flow {
+    min-width: 760px;
+  }
+
+  .fl-strip {
+    min-width: 520px;
+    touch-action: pan-y;
+    user-select: none;
+  }
+
+  .ch-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 28px;
+    align-items: baseline;
+  }
+
+  .ch-stat b {
+    display: block;
+    font-size: 1.5rem;
+    letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .ch-stat span {
+    display: block;
+    font-size: var(--text-xs);
+    color: var(--tvc-ink-soft);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .ch-stat .ch-delta {
+    margin-top: 2px;
+    font-size: var(--text-sm);
+    text-transform: none;
+    letter-spacing: 0;
+  }
+
+  .ch-in b {
+    color: var(--tvc-chart-in);
+  }
+
+  .ch-out b {
+    color: var(--tvc-orange-text);
+  }
+
+  .ch-keep b {
+    color: var(--tvc-chart-balance);
+  }
+
+  .ch-legend {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+  }
+
+  .ch-swatch {
+    flex: none;
+    width: 18px;
+    height: 8px;
+    border-radius: 2px;
+    background: var(--tvc-chart-balance);
+  }
+
+  .ch-deleg {
+    display: grid;
+    gap: 10px;
+    margin-top: 8px;
+  }
+
+  .ch-dl {
+    display: grid;
+    grid-template-columns: minmax(120px, 200px) minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: center;
+    font-size: var(--text-sm);
+  }
+
+  .ch-meter {
+    height: 10px;
+    border-radius: 5px;
+    background: var(--tvc-line);
+    overflow: hidden;
+  }
+
+  .ch-meter i {
+    display: block;
+    height: 100%;
+    border-radius: 5px;
+    background: var(--tvc-chart-balance);
+  }
+
+  .ch-meter-warn i {
+    background: var(--tvc-orange-text);
+  }
+
+  .ch-meter-crit i {
+    background: var(--tvc-error-text);
+  }
+
+  .ch-details summary {
+    cursor: pointer;
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  /* inside the diagram */
+  .fl-head {
+    font-size: var(--text-xs);
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    fill: var(--tvc-ink-soft);
+  }
+
+  .fl-name,
+  .fl-acct {
+    font-size: var(--text-sm);
+    fill: var(--tvc-ink);
+  }
+
+  .fl-acct {
+    font-weight: 650;
+  }
+
+  .fl-amt {
+    font-size: var(--text-xs);
+    fill: var(--tvc-ink-soft);
+  }
+
+  .fl-keptnote {
+    font-size: var(--text-xs);
+    font-weight: 650;
+    fill: var(--tvc-chart-balance);
+  }
+
+  .fl-axis-label {
+    font-size: var(--text-xs);
+    fill: var(--tvc-ink);
+  }
+
+  .fl-flow .halo {
+    paint-order: stroke;
+    stroke: var(--tvc-white);
+    stroke-width: 4px;
+    stroke-linejoin: round;
+  }
+
+  .fl-link {
+    fill: none;
+    opacity: 0.32;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+
+  .fl-link:hover {
+    opacity: 0.6;
+  }
+
+  .fl-link.on {
+    opacity: 0.62;
+  }
+
+  .fl-in {
+    stroke: var(--tvc-chart-in);
+  }
+
+  .fl-out {
+    stroke: var(--tvc-chart-out);
+  }
+
+  .fl-fd {
+    stroke: var(--tvc-chart-balance);
+  }
+
+  .fl-box.fl-in {
+    fill: var(--tvc-chart-in);
+    stroke: none;
+  }
+
+  .fl-box.fl-out {
+    fill: var(--tvc-chart-out);
+    stroke: none;
+  }
+
+  .fl-box.fl-fd {
+    fill: var(--tvc-chart-balance);
+    stroke: none;
+  }
+
+  .fl-box.fl-account {
+    fill: var(--tvc-ink);
+  }
+
+  .fl-kept {
+    fill: var(--tvc-chart-balance);
+  }
+
+  .fl-attn {
+    fill: var(--tvc-orange-text);
+    stroke: var(--tvc-white);
+    stroke-width: 1.5px;
+  }
+
+  .fl-node {
+    cursor: pointer;
+  }
+
+  .fl-node:focus-visible {
+    outline: 2px solid var(--tvc-ink);
+    outline-offset: 2px;
+  }
+
+  .fl-node.sel .fl-box {
+    stroke: var(--tvc-ink);
+    stroke-width: 2px;
+  }
+
+  .fl-node.dim,
+  .fl-link.dim {
+    opacity: 0.12;
+  }
+
+  .fl-bar {
+    cursor: pointer;
+  }
+
+  .fl-bar.off rect {
+    opacity: 0.28;
+  }
+
+  .fl-in-bar {
+    fill: var(--tvc-chart-in);
+  }
+
+  .fl-out-bar {
+    fill: var(--tvc-chart-out);
+  }
+
+  .fl-hit {
+    fill: transparent;
+  }
+
+  .fl-bar.off .fl-hit {
+    opacity: 1;
+  }
+
+  .fl-axis {
+    stroke: var(--tvc-line);
+  }
+
+  @media (max-width: 640px) {
+    .ch-dl {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 4px;
+    }
+  }
+
+  .dash .ch-controls .hint {
+    margin: 0;
+  }
+
+  /* the way back above the picture */
+  .ch-nav {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    min-height: 34px;
+  }
+
+  .ch-crumbs {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 6px;
+  }
+
+  .ch-crumbs i {
+    color: var(--tvc-ink-soft);
+    font-style: normal;
+  }
+
+  .ch-crumbs button,
+  .ch-clear {
+    padding: 3px 12px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: 99px;
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+    font: inherit;
+    font-size: var(--text-sm);
+    cursor: pointer;
+  }
+
+  .ch-crumbs button:hover,
+  .ch-clear:hover {
+    background: var(--tvc-cream);
+  }
+
+  .ch-crumbs button[aria-current='true'] {
+    background: var(--tvc-ink);
+    color: var(--tvc-white);
+    border-color: var(--tvc-ink);
+    cursor: default;
+  }
+
+  .ch-clear[hidden] {
+    display: none;
+  }
+
+  /* the picture slides along as a box is opened */
+  .fl-cam {
+    transition: transform 0.55s cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+
+  .fl-fade {
+    animation: fl-fade-in 0.5s ease both;
+  }
+
+  @keyframes fl-fade-in {
+    from {
+      opacity: 0;
+    }
+
+    to {
+      opacity: 1;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .fl-cam {
+      transition: none;
+    }
+
+    .fl-fade {
+      animation: none;
+    }
+  }
+
+  .fl-card {
+    fill: var(--tvc-white);
+    stroke: var(--tvc-line);
+  }
+
+  .fl-card-title {
+    font-size: var(--text-sm);
+    font-weight: 650;
+    fill: var(--tvc-ink);
+  }
+
+  .fl-rule {
+    stroke: var(--tvc-line);
+  }
+
+  .fl-date {
+    font-size: var(--text-xs);
+    fill: var(--tvc-green-dark);
+    text-decoration: underline;
+    cursor: pointer;
   }
 </style>

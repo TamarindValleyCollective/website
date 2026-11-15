@@ -113,6 +113,9 @@ import SignInGate from '../../../components/SignInGate.astro';
   type Result = any;
   let chosen: File[] = [];
   let lastPreview: { files: Result[] } | null = null;
+  // Whose UPI each UPI file is (migration 0101): the operators to choose from, and the choice for each file by its place in the upload.
+  let operatorList: { id: string; name: string }[] = [];
+  let operatorPick: Record<number, string> = {};
   let canImport = false;
 
   function showGate(message?: string) {
@@ -195,7 +198,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     return null;
   }
 
-  function fileRow(f: Result): HTMLElement {
+  function fileRow(f: Result, index: number): HTMLElement {
     const details: string[] = [];
     let pill: { text: string; kind: 'ok' | 'warn' | 'crit' };
     if (f.status === 'unreadable') {
@@ -240,8 +243,34 @@ import SignInGate from '../../../components/SignInGate.astro';
       if (text) details.push(text);
     }
     const li = row(f.name, details, pill);
+    if (f.operator?.needed && f.status === 'ok' && !f.stored) li.querySelector('.grow')!.append(operatorChooser(f, index));
     if (f.preview?.lines?.length && !f.stored) li.querySelector('.grow')!.append(previewTable(f, f.kind === 'axis_statement'));
     return li;
+  }
+
+  // The UPI exports are in the operator's name and never say which operator, so every UPI file asks. A suggestion (from what the file looks like)
+  // is already chosen; the choice is always the person's, and the file cannot be imported without one.
+  function operatorChooser(f: Result, index: number): HTMLElement {
+    const wrap = el('label', 'operator-choice');
+    wrap.append(el('span', 'detail', 'Whose UPI is this?'));
+    const select = document.createElement('select');
+    select.append(new Option('Choose…', ''), ...operatorList.map((o) => new Option(o.name, o.id)));
+    select.value = operatorPick[index] ?? '';
+    select.addEventListener('change', () => { operatorPick[index] = select.value; updateConfirm(); });
+    wrap.append(select);
+    if (f.operator.suggestedId && f.operator.suggestedId === select.value) wrap.append(el('span', 'detail', f.operator.reason === 'same_file_layout' ? 'Suggested: it looks like an earlier file from this operator. Change it if that is wrong.' : 'Suggested: the only operator. Change it if that is wrong.'));
+    return wrap;
+  }
+
+  // Import stays off until every UPI file that would be stored has an operator.
+  function updateConfirm() {
+    if (!lastPreview) return;
+    const ready = lastPreview.files.map((f, i) => ({ f, i })).filter(({ f }) => f.status === 'ok');
+    const missing = ready.filter(({ f, i }) => f.operator?.needed && !operatorPick[i]).length;
+    const confirm = $<HTMLButtonElement>('confirm');
+    confirm.disabled = missing > 0;
+    const note = $('confirm-text');
+    note.textContent = note.textContent!.replace(/ Choose whose UPI .*$/, '') + (missing ? ` Choose whose UPI ${missing === 1 ? 'the UPI file is' : 'each UPI file is'} first.` : '');
   }
 
   // The lines this file would add, so the director can see the delta before confirming. The row carries the totals and a
@@ -398,6 +427,8 @@ import SignInGate from '../../../components/SignInGate.astro';
   async function send(mode: 'preview' | 'commit', files: File[]) {
     const form = new FormData();
     for (const f of files) form.append('files', f);
+    const picks = Object.fromEntries(Object.entries(operatorPick).filter(([, v]) => v));
+    if (Object.keys(picks).length) form.append('operators', JSON.stringify(picks));
     const res = await fetch(`/api/finance-admin/imports/${mode}`, { method: 'POST', headers: { authorization: `Bearer ${getToken() ?? ''}` }, body: form });
     const data = await res.json().catch(() => ({}));
     if (res.status === 401) {
@@ -410,10 +441,13 @@ import SignInGate from '../../../components/SignInGate.astro';
 
   function showPreview(data: any) {
     lastPreview = data;
+    operatorList = data.operators ?? [];
+    operatorPick = {};
+    data.files.forEach((f: Result, i: number) => { if (f.operator?.needed) operatorPick[i] = f.operator.chosenId ?? f.operator.suggestedId ?? ''; });
     $('after').hidden = true;
     $('results').hidden = false;
     $('results-title').textContent = 'What would happen';
-    $('file-list').replaceChildren(...data.files.map(fileRow));
+    $('file-list').replaceChildren(...data.files.map((f: Result, i: number) => fileRow(f, i)));
     renderCoverage($('coverage-after'), data.coverage);
     const ready = data.files.filter((f: Result) => f.status === 'ok');
     const blocked = data.files.filter((f: Result) => f.status === 'blocked' || f.status === 'unreadable').length;
@@ -425,6 +459,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     $('confirm-text').textContent = ready.length
       ? `${plural(ready.length, 'file')} will be stored${blocked ? `; ${plural(blocked, 'file')} cannot be imported and will be skipped` : ''}. Imported lines cannot be edited or deleted.`
       : 'Nothing can be imported from these files.';
+    updateConfirm();
   }
 
   // ---- choosing files: the real input stays (it is what the browser and keyboard use); a drop fills it
@@ -486,7 +521,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       const { status, data } = await send('commit', chosen);
       if (status !== 200) throw new Error(data.error ?? 'failed');
       $('results-title').textContent = 'Imported';
-      $('file-list').replaceChildren(...data.files.map(fileRow));
+      $('file-list').replaceChildren(...data.files.map((f: Result, i: number) => fileRow(f, i)));
       renderCoverage($('coverage-after'), data.coverage);
       $('confirm-card').hidden = true;
       const after = $('after');
@@ -629,6 +664,14 @@ import SignInGate from '../../../components/SignInGate.astro';
 
   .finance-import .row .detail {
     display: block;
+  }
+
+  .finance-import .operator-choice {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 10px;
+    margin-top: 4px;
   }
 
   .finance-import .delta {

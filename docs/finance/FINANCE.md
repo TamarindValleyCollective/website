@@ -348,6 +348,20 @@ types the importer knows; each batch stores its `source`: `axis_statement`, `pay
   never the number or name. Not built: reading delegate numbers off receipt screenshots (decided against: nobody will upload each
   receipt), per-delegate rows in the dashboard's circle gauge (it still shows the monthly total), and showing the delegate in the
   ledger.
+- **UPI operators** (migration `0101`, **applied 2026-11-15**, after a test on the real data inside a rolled-back transaction; checked afterwards: all 128 UPI rows and the one delegate the first operator, left the link-only trigger on, locked the table to the service role and refused a
+  batch with no operator; `lib/finance-upi-operators.ts`, pure rules in `finance-upi-operators.mjs`). All UPI payments go out through the UPI setup of
+  one of the account's **operators** (the people who can add the account to their UPI apps); each is either made by the operator **directly** or by a
+  **delegate** in that operator's UPI circle, and either operator may have delegates. Nothing recorded *whose* UPI a payment went through, because the
+  Paytm and BHIM exports are in the operator's name and never say which. So now: an operator is a name an admin types on the UPI page (*Operators*:
+  add, rename; the migration creates one placeholder, "First operator", that every existing UPI row and delegate belongs to, to be renamed); each UPI
+  row carries its operator (`fin_upi_lines.operator_id`, set when its file is imported) and each delegate belongs to one operator's circle
+  (`fin_delegates.operator_id`: filled in when there is one operator, chosen in the dialog when there are several). **The import asks, every time**:
+  once operators exist, each UPI file in the preview has a *Whose UPI is this?* choice and cannot be imported without one (the other files go in).
+  The choice is preselected from a **suggestion** only: a file has a signature (a short hash of what it looks like: the accounts a Paytm export's
+  Summary names, the sender id that pays most of a BHIM history; never the labels themselves), remembered for the operator it was confirmed as, so the
+  next file that looks the same is suggested to them, and with one operator that operator is suggested; with two operators and a layout nobody has
+  had, nothing is suggested. When the operators upload their own files, the same question tells whose file it is. A circle payment can only belong to a
+  delegate of its own operator's circle (`attribute`). Before the migration was applied there were no operators and everything worked without them (the code still tolerates that). Not built: reading the operator off the file itself (neither export names them).
 - **Notes and links between the ledger and the UPI page** (migration `0089`, **applied 2026-11-07**). The bank's or the app's wording is never
   changed. A **note** sits beside it: one per payment, in `fin_payment_notes`, keyed `upi:<12-digit reference>` for a UPI payment (so a UPI
   row and its bank line share one note, before and after they are joined) or `bank:<line id>` otherwise. It is shown and edited in the
@@ -814,6 +828,83 @@ the page draws from `scripts/lib/finance-dashboard-view.mjs` (pure, tested) usin
 - **Not built yet:** the import of the existing plan (a dry-run script, run by the operator from the private sheet); the Maintenance and Advances
   views (sessions 10 and 09: the mockup shows their shape); the member-portal preview of some of these figures (to be a preview feature for chosen
   homes, not open to everyone); CSV export of a table. **Not verified:** the page in a browser with a real sign-in, on a phone, and against the real ledger.
+
+## Channels (the dashboard's Channels tab, `/internal/finance/dashboard/#channels`, no migration)
+
+The cashflow, and the channels it moves through, from the real ledger. One picture, read left to right: **money in → the accounts → money out**.
+Each side is grouped by **Channel** (what the ledger already calls an origin: Bank direct, Paypro, the payment gateway, the debit card, and **UPI**)
+or by **Purpose** (what the money was for: salary, farm and household, projects, company; on the way in: maintenance, everything else), and the
+two sides are chosen separately. A band is as wide as the money in it, and a box as tall. A dot on a box means lines there have no category yet.
+
+Decided 2026-11-15, after a first version drew channels, purposes, projects and delegates as circles in a force graph and was rejected. The design
+follows the products that do this well (Monarch's Cash Flow, Mercury's money-movement breakdown): a shallow flow, a time strip, one grouping
+switch, and a drill-down to the lines, rather than every dimension as another column. Purposes are a grouping, not boxes of their own; projects are
+not a channel, so they appear only as the single "Projects" purpose.
+
+- **Drilling in slides the picture along.** Click a box on the money-out side and the picture **slides left**, so its breakdown opens to the right;
+  a box on the money-in side slides it **right**, opening to the left. Click a row and it slides one level further, to that row's lines (a card of
+  the largest eight, each date opening that line in the Ledger). The crumbs, *Back*, Esc, the faded account, or the same box again go back;
+  *See every line* shows the box's lines rather than one row's. (The details were first placed under the diagram and were missed, then pinned to
+  the screen; sliding the picture itself replaced both.) A band opens the box at its outer end.
+- **Every box opens by its natural breakdown, not by date** (`breakdownOf`): Projects by project, Salary by employee (who it was paid to),
+  Maintenance by who paid it, every other purpose by category, a channel by what its money was for, **UPI by the person behind each payment**. Each row shows its lines and
+  amount and adds up to the box. Project and purpose breakdowns come from the cube in the browser; person, category and UPI person need the lines, so
+  `GET /channels/breakdown?by=party|category|delegate|operator` groups them on the server (a person merged into another counts as the one they were merged into).
+  That is the one place a name leaves the server, to people who may view finance and, for an auditor, with the visit logged.
+- **UPI is one channel, opened as a tree.** BHIM, Paytm and UPI-with-the-app-unknown are apps of one UPI channel (`UPI_APPS`, from the channel
+  kind in `finance-origin.mjs`), so the picture has one UPI box (*UPI (All)*). All UPI payments go out through an operator's UPI setup, so it opens
+  **by operator** (*Whose UPI*), then, inside an operator, **by person**: *Direct* and each delegate of that operator's UPI circle (*UPI circle ·
+  <name or number>*, and *UPI circle · no delegate yet* for a circle payment no delegate is chosen for), **whichever app each used** (the app is on
+  the lines), then the lines. Each row's money rolls up into the one above, so the rows always add up to their parent. Without operators recorded it opens by person at once. The drill is as deep as the tree (`drillDims`, `layoutDrill`): one more column and
+  one more slide per level.
+- **Fixed deposits are an account.** They are not money out: putting money into one is a **transfer** from one account to another, and money
+  brought back is a transfer the other way. So they are a box in the accounts column, after the bank accounts, as tall as what they hold (the
+  balance at the end of the period, from `fdBalance`, or what moved if that is more), with *Held ₹… at <month> end* under it. A transfer is a
+  green loop between the two boxes (out to the right going in, to the left coming back); a bank account's box counts it in what came into or
+  left it, so *Kept* still adds up. The figures above the picture keep it apart: **Received**, **Spent**, **Net moved into fixed deposits**,
+  **Left in the accounts** (received less spent less what moved), and the month strip leaves it out. Click the deposits or a transfer for the
+  lines moved. All deposits are one box for now.
+- **Another bank account** is another box in the accounts column, in the order the accounts were added, each with its own bands in and out and its
+  own *Kept*; the channels and purposes are shared, so a band shows which account it passes through. **Not built:** a payment from one of your
+  accounts to another is, in the ledger today, money out of one and money in to the other. Telling them apart needs the ledger to mark such lines
+  as transfers (a transfer category on both legs, or an automatic match of equal and opposite amounts a day or two apart, confirmed by an admin);
+  the transfer band and the totals already work for any pair of accounts once the lines are marked.
+- **Period.** Presets (This month, Last month, Last 3 months, Year to date; a closed year says Whole year), exact **From/To** months, and a **month
+  strip** of received and spent for each month: click a month, drag across several, shift-click to extend; clicking the only chosen month goes back
+  to the year. Ranges are whole months. **Compare with the period before** adds the change under each figure against the same number of months
+  straight before; when the year does not reach back that far it says so once. Year-on-year comparison needs the previous year's data and is not
+  built.
+- **Delegates** are their own card under the picture (each person's month against their limit, "No delegate yet" for unattributed payments), not
+  part of the flow: they are recorded from the UPI records and are not bank-statement lines, so putting them in would make the totals differ
+  between groupings.
+- **Data.** `GET /api/finance-admin/channels?fy=2026` (`lib/finance-channels.ts`; needs `finance` / `view`, an auditor's visit is logged and
+  refused if it cannot be, like the dashboard) returns the year summed once into a small aggregate (`channelCube` in
+  `scripts/lib/finance-channels.mjs`): one cell per month, account, channel, direction and purpose, with the amount and the number of lines. The
+  channel is `originOf()` (the ledger's rule, from the narration and the joined UPI row's app) and the purpose is `groupOf()` (the dashboard's
+  rule: sinking fund, then a project, then salary, then the category's head), so the totals agree with the Cashflow tab. What nobody has
+  categorised is `other`, flagged, so each direction always adds up to the bank lines. The browser draws any period and grouping of it without
+  asking again (`flowOf`). It carries no narrations, UPI references or party names.
+- **The lines behind a box, band or row.** `GET /api/finance-admin/channels/lines?fy=&months=&dir=&channel=&purpose=&account=&fd=&project=&party=&category=&delegate=&operator=`
+  sums the same pieces (`channelPieces`), so the count and amount agree with the figure on the box (`none` means nothing named; `channel=upi`
+  means any UPI app; `delegate=own` is Direct). It returns the number of lines, the amount and the largest eight (date, account, channel, purpose, project, person,
+  category, amount and the line's id, which the date links to in the Ledger). No narrations. `specOf` turns a click into the filter and
+  `cellMatches` applies it, and a test checks that for every box and band, in every grouping, the lines add up to its figure.
+- **Drawing.** `scripts/lib/finance-channels-view.mjs`: the layout is pure and tested (`layoutFlow`: one scale for the whole picture, the outer
+  columns ordered by where their money goes so bands cross as little as possible, transfers last on a box; `layoutDrill`: the breakdown column and
+  the lines card on the same scale, and how far to slide); the SVG, the camera (a CSS transition on one group, off under reduced motion), the month
+  strip and the clicks are small DOM code on top. No library. Colours are the `--tvc-chart-*` tokens, so both appearances work. On a phone the
+  picture scrolls sideways inside its card. A table of the same figures sits under it.
+- **Not built yet.** Marking transfers between bank accounts (above), exact days rather than whole months (the aggregate is per month; per day is a
+  modest change), year-on-year comparison, one box for each deposit or by bank or maturity, deposit interest as a third green band, delegates
+  under their UPI app inside the flow, planned boxes for things that do not exist yet (a second bank, a POS terminal, Google Pay: they appear when
+  the data does), a Ledger link that opens with the same filters applied (today each line opens on its own). A POS terminal would count under Debit
+  card until it has a channel of its own.
+- **Tests.** `finance-channels.test.mjs` (the aggregate, the months and presets, totals that reconcile to the bank, the flow in every grouping,
+  the deposits as an account with transfers, UPI and its apps, that each side adds up, that every click ties to the figure on it, the breakdowns),
+  `finance-channels-view.test.mjs` (one scale, no overlapping boxes, bands inside their boxes, transfers as loops, the drill-down columns and how
+  far the picture slides) and `finance-channels-endpoint.test.mjs` (the real function with Supabase stubbed: grants, validation, the money tying
+  to the bank lines, drafts not counted, the lines and breakdowns behind a box, merged people, delegate attribution, a database without the
+  delegate tables, no narration leaving the server, the audit).
 
 ## The budget editor (session 07, page `/internal/finance/budget/`, migration `0099_finance_budget_editing.sql`, **applied 2026-11-10**)
 
