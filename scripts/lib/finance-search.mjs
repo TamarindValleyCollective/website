@@ -7,7 +7,7 @@
 import { ORIGINS, originLabel } from './finance-origin.mjs';
 
 // A line here is the page's `Line`: { id, date (ISO), direction ('debit'|'credit'), amountPaise, state, review, missingParty,
-// effective: { category, party }, allocation: { householdLabel, maintenanceYear } | null }.
+// filled, needsWording (set from the page's unposted drafts), effective: { category, party }, allocation: { householdLabel, maintenanceYear } | null }.
 
 export const FILTER_KINDS = {
   status: {
@@ -16,6 +16,9 @@ export const FILTER_KINDS = {
       unallocated: ['To allocate', (l) => l.state !== 'allocated'],
       review: ['To review', (l) => Boolean(l.review)],
       noparty: ['No party', (l) => Boolean(l.missingParty)],
+      // What has been filled in on the page but not posted yet (the page sets these two flags from its drafts).
+      filled: ['Filled in, not posted', (l) => Boolean(l.filled)],
+      needswording: ['Needs wording', (l) => Boolean(l.needsWording)],
       allocated: ['Allocated', (l) => l.state === 'allocated'],
     },
   },

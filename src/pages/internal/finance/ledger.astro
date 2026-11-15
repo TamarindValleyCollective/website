@@ -132,7 +132,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   type Suggestion = { categoryId: string | null; partyId: string | null; nature: string; confidence: string; newPartyName: string | null };
   type Line = {
     id: string; date: string; narration: string; direction: 'debit' | 'credit'; amountPaise: number; account: string; remark: string | null; counterparty: string | null; origin?: string; sources?: string[]; reversal?: { role: 'original' | 'reversal'; otherId: string; otherDate: string | null } | null; noteKey?: string; note?: string | null; purpose?: string | null; upiRef?: string | null;
-    allocatedPaise: number; state: 'unallocated' | 'partly_allocated' | 'allocated'; review: boolean; missingParty: boolean; suggestion: Suggestion | null;
+    allocatedPaise: number; state: 'unallocated' | 'partly_allocated' | 'allocated'; review: boolean; missingParty: boolean; filled?: boolean; needsWording?: boolean; suggestion: Suggestion | null;
     allocation: { categoryId: string; partyId: string | null; nature: string; count: number; householdLabel: string | null; maintenanceYear: string | null } | null;
     hay?: string; // lower-case text the search box looks in, worked out once
     effective: { category: string; party: string; nature: string }; // what it was posted to, or is suggested: what the column searches read
@@ -267,6 +267,15 @@ import SignInGate from '../../../components/SignInGate.astro';
   });
   window.addEventListener('pagehide', saveDraftsNow);
   let restoreChecked = false;
+  // Which lines carry something filled in but not posted: a category, party or wording in this sitting or restored from before.
+  function markFilled() {
+    for (const l of all) {
+      const d = drafts.get(l.id);
+      const any = l.state !== 'allocated' && Boolean(d && (d.categoryId || d.partyId || d.nature));
+      l.filled = any;
+      l.needsWording = any && !d!.nature.trim();
+    }
+  }
   function offerRestore() {
     if (restoreChecked) return;
     restoreChecked = true;
@@ -298,8 +307,10 @@ import SignInGate from '../../../components/SignInGate.astro';
           // Tick the restored lines that can post, so the Post bar is there straight away.
           const ticked = { ...tstate.rowSelection };
           for (const [id] of usable) if (isReady(byId.get(id)!)) ticked[id] = true;
+          if (!chips.some((c) => c[0] === 'status' && c[1] === 'filled')) chips.push(['status', 'filled']);
+          searchChange();
           table.setRowSelection(ticked);
-          showToast(`Restored ${usable.length} ${usable.length === 1 ? 'line' : 'lines'}. Nothing is posted yet.`);
+          showToast(`Restored ${usable.length} ${usable.length === 1 ? 'line' : 'lines'}, shown under the "Filled in, not posted" filter. Nothing is posted yet.`);
         }, 'button button--small'),
         button('Forget them', () => {
           try {
@@ -1196,6 +1207,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       if (l.review) counts.review++;
       if (l.missingParty) counts.noparty++;
     }
+    markFilled();
     const shown = base.filter((l) => passesChips(l, chips, now));
     const sort = sortOf();
     const compare = compareRows(sort.key, sort.dir as 'asc' | 'desc');
@@ -1303,6 +1315,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     loadFavorites();
     const now = today();
     const pop = $('spop');
+    markFilled();
     const counted = optionCounts(all, now) as Record<string, Record<string, number>>;
     const option = (label: string, on: boolean, onClick: () => void, extra = '', key = '') => {
       const b = h('button', { class: 'sopt', attrs: { type: 'button', 'aria-pressed': String(on), ...(key ? { 'data-key': key } : {}) } }, h('span', { class: 'sopt-tick', text: on ? '✓' : '' }), h('span', { text: label }), extra ? h('span', { class: 'sopt-extra', text: extra }) : null);

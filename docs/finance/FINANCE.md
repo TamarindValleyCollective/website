@@ -533,7 +533,10 @@ Modelled on how ServiceNow lists work, because the sheet's convenience was selec
   *Allocated*.
 - **Drafts.** What you type is a draft that lives in the page only; a warning appears if you try to leave with unposted drafts. Posting
   is the second step: **"Post N ready"** (the bar) asks first, then posts the ready lines, each in full. Two steps by decision: filling
-  cells is reversible, posting is not.
+  cells is reversible, posting is not. Drafts are also kept in the browser and offered back on the next visit; **Fill them in again**
+  restores them, ticks the ready ones and turns on the **Filled in, not posted** status filter. That filter and **Needs wording**
+  (a category or party but no wording yet) are in Filters, so you can see which lines carry something not yet posted. Server-side
+  drafts without wording are not possible yet: the database requires wording on every allocation row.
 - **Selecting.** A checkbox on every editable line; the header checkbox selects the page; shift-click selects the run between two
   lines. Lines that cannot be edited here (already posted, partly allocated, waiting for review) cannot be ticked.
 - **The bar** appears under the table when lines are selected and sticks to the bottom of the screen: *Set category*, *Set party*, *Set
