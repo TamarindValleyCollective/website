@@ -659,7 +659,7 @@ var DECISIONS = [
   ['How does the Advances view work?', 'Every advance shows what was given, the agreed monthly recovery, what has been recovered, what is left, and when it clears. An advance with no recovery agreed, or a missed recovery, goes on Data health and the Overview. Recoveries come from payroll once it exists; until then an approver records them against the advance.', 'Alternative: advances only inside the payroll session, with nothing on the dashboard.'],
   ['What would members see on the portal?', 'Overview (with their own household’s maintenance instead of the attention list), Cashflow, Budget vs actual, and Maintenance totals with a card for their own household. Not shown: Advances, which other household owes what, data health, the UPI circle, the draft next-year plan. Use “Member view” in the header to preview.', 'Alternative: members see only Budget vs actual and Maintenance. Or also the Cashflow table view only for the year just closed.'],
   ['Who sees names?', 'The dashboard shows house numbers and employee numbers only. Names stay in the member directory and payroll, so a screenshot of the dashboard is safe to share. The one exception is a UPI Circle delegate, who shows as on the UPI page: their name if one has been set, otherwise their number (decided 2026-11-15).', 'Alternative: show names to approvers.'],
-  ['What does the Channels view show?', 'Only money channels, drawn as a network you can zoom and move around in, like a knowledge graph. Every circle is a channel: the accounts (the current accounts, and the fixed deposits held outside them), the channels money passes through (payment gateway, POS terminal, bulk payments, card, each UPI app, plain bank transfers) and the delegates, who pay through an operator’s UPI app. What the money was for (salary, farm and household, projects, company, sinking fund; maintenance or stays on the way in) is not a channel, so it is a filter, Spent on or Received for: choose one and the same circles show only that money, through the channels it used, and each channel’s panel lists what it was used for. Circles are sized by amount (area), joined by straight links as thick as the money flowing through them, and the figure sits inside a circle where it fits. It starts as simply as it can: Tidy arrangement (columns, ordered by an algorithm so links cross as little as possible; Organic is the freeform alternative) and Main links (each circle’s strongest link and the big flows; selecting or hovering a circle shows all of its links, and All links shows everything). Scroll or pinch to zoom, drag the background to move, and Fit arranges everything again; what is written under a circle depends on the zoom. Click a circle for its details; the + or − on a circle opens or closes what hangs off it; Zoom to this focuses on a circle and its connections. A ! badge marks what needs attention. A Money out / Money in switch changes the direction. Other filters: the period (year to date, last three months, this month), one account (including the fixed deposits), needs attention only, hide planned, hide delegates, and a search that highlights matches and zooms to them. The channels add up to the bank statement, and the table view says so and shows what each channel was used for (made-up affinities fitted so every row and column adds up; the real figures would come from the ledger allocations). Fixed deposits are their own green circle: money goes in and the interest comes back by bank transfer; today they are one circle, and each deposit would be its own once deposits are recorded (bank, amount, rate, maturity).', 'Alternative: circles for what the money was for as well (the previous version of this mockup), which mixes things that are not channels into the map; or strict columns with links from side to side, or a Sankey with ribbons only, which mixes money in and out and tangles as channels are added.'],
+  ['What does the Channels view show?', 'Only money channels, drawn as a network you can zoom and move around in, like a knowledge graph. Every circle is a channel: the accounts (the current accounts, and the fixed deposits held outside them), the channels money passes through (payment gateway, POS terminal, bulk payments, card, each UPI app, plain bank transfers) and the delegates, who pay through an operator’s UPI app. What the money was for (salary, farm and household, projects, company, sinking fund; maintenance or stays on the way in) is not a channel, so it is a filter, Spent on or Received for: choose one and the same circles show only that money, through the channels it used, and each channel’s panel lists what it was used for. Circles are sized by amount (area), joined by straight links as thick as the money flowing through them, and the figure sits inside a circle where it fits. It starts as simply as it can: Tidy arrangement (columns, with the order found by trying every possibility so as few links as possible cross, none in the default Main links view; drag a circle and the others re-order around it as you carry it, then it settles into the nearest slot that keeps the links uncrossed, staying in its own column; Organic is the freeform alternative, where dragging pulls the others along) and Main links (each circle’s strongest link and the big flows; selecting or hovering a circle shows all of its links, and All links shows everything). Scroll or pinch to zoom, drag the background to move, and Fit arranges everything again; what is written under a circle depends on the zoom. Click a circle for its details; the + or − on a circle opens or closes what hangs off it; Zoom to this focuses on a circle and its connections. A ! badge marks what needs attention. A Money out / Money in switch changes the direction. Other filters: the period (year to date, last three months, this month), one account (including the fixed deposits), needs attention only, hide planned, hide delegates, and a search that highlights matches and zooms to them. The channels add up to the bank statement, and the table view says so and shows what each channel was used for (made-up affinities fitted so every row and column adds up; the real figures would come from the ledger allocations). Fixed deposits are their own green circle: money goes in and the interest comes back by bank transfer; today they are one circle, and each deposit would be its own once deposits are recorded (bank, amount, rate, maturity).', 'Alternative: circles for what the money was for as well (the previous version of this mockup), which mixes things that are not channels into the map; or strict columns with links from side to side, or a Sankey with ribbons only, which mixes money in and out and tangles as channels are added.'],
   ['What about channels that are not built yet?', 'They appear as dashed boxes marked Planned (the ICICI account, the POS terminal, Google Pay), so the structure does not change when they arrive. Today a POS terminal would count under Debit card, and a second person’s Paytm cannot be told apart from the first: that needs an operator record.', 'Alternative: show only what exists today and add boxes later.'],
   ['Where does the sinking fund go?', 'It is the Investment head, its own grey segment in the spending chart, and is left out of runway because it is saved, not spent.', 'Alternative: show it as a separate line below spending.'],
   ['What does “committed” mean?', 'Requests that are approved but not yet matched to a bank line.', 'Alternative: also count signed purchase orders, if those exist.'],
@@ -1292,29 +1292,115 @@ function chLayoutIfNeeded() {
   if (chArr === 'tidy') chTidyLayout(); else chSimLayout(chForce);
   chForce = false;
 }
-function chTidyLayout() {
-  var vis = chNodes.filter(function (n) { return chVis[n.id]; }), layerOf = { bank: 0, asset: 0, chan: 1, del: 2 }, XS = [-300, 0, 300];
-  var cols = [[], [], []], pos = {};
-  vis.forEach(function (n) { cols[layerOf[n.group]].push(n); });
-  var rank = function () { cols.forEach(function (c) { c.forEach(function (n, i) { pos[n.id] = (i + 0.5) / c.length; }); }); };
-  rank();
-  var near = function (id) { var o = []; chEdges.forEach(function (e) { if (!chVis[e.a] || !chVis[e.b]) return; if (e.a === id) o.push(e.b); else if (e.b === id) o.push(e.a); }); return o; };
-  for (var it = 0; it < 12; it++) {
-    [1, 2, 0, 1].forEach(function (li) {
-      var key = {};
-      cols[li].forEach(function (n) {
-        var ns = near(n.id).filter(function (id) { return layerOf[chNode(id).group] !== li; });
-        key[n.id] = ns.length ? ns.reduce(function (a, id) { return a + pos[id]; }, 0) / ns.length : pos[n.id];
-      });
-      cols[li].sort(function (a, b) { return key[a.id] - key[b.id] || (a.id < b.id ? -1 : 1); });
-      cols[li].forEach(function (n, i) { pos[n.id] = (i + 0.5) / cols[li].length; });
-    });
+var CHLAYER = { bank: 0, asset: 0, chan: 1, del: 2 };
+var chTarget = {}, chTweenRaf = 0, chDragging = null;
+/* Every ordering of a list, by Heap's algorithm; fn gets the (reused) array each time. */
+function chPermute(arr, fn) {
+  var a = arr.slice(), n = a.length, c = [], i = 0, k, t;
+  for (i = 0; i < n; i++) c.push(0);
+  fn(a); i = 0;
+  while (i < n) {
+    if (c[i] < i) { k = i % 2 ? c[i] : 0; t = a[k]; a[k] = a[i]; a[i] = t; fn(a); c[i]++; i = 0; } else { c[i] = 0; i++; }
   }
-  chPos = {}; chVel = {};
-  cols.forEach(function (c, li) {
-    var gap = 6, total = c.reduce(function (t, n) { return t + chItemH(n); }, 0) + gap * Math.max(0, c.length - 1), y = -total / 2;
-    c.forEach(function (n) { chPos[n.id] = { x: XS[li], y: y + n.r }; chVel[n.id] = { x: 0, y: 0 }; y += chItemH(n) + gap; });
+}
+/* The ordering of the three columns with the fewest crossing links, found by trying every one (there are only a few thousand). A link
+   crosses another when its ends are in the opposite order in the two columns it joins. What is counted is what is drawn: with Main
+   links the main links weigh most, with All links every link does. Ties go to shorter links and then to the order already on screen,
+   so the picture does not reshuffle for no reason. `pin` ({ id, at }) is a circle the person is carrying: the order that keeps it nearest
+   position `at` in its column wins, but only among the orders with the fewest crossings, so a crossing is never accepted just to honour
+   where it was dropped. Returns the three columns as lists of ids. */
+function chBestOrder(cols, pin) {
+  var E = [[], []];
+  chEdges.forEach(function (e) {
+    if (!chVis[e.a] || !chVis[e.b]) return;
+    var la = CHLAYER[chNode(e.a).group], lb = CHLAYER[chNode(e.b).group];
+    if (Math.abs(la - lb) !== 1) return;
+    E[Math.min(la, lb)].push({ u: la < lb ? e.a : e.b, v: la < lb ? e.b : e.a, main: !!e.main });
   });
+  var wMain = chF.links === 'all' ? 1 : 1000, wAll = chF.links === 'all' ? 1000 : 1;
+  var prev = {}; cols.forEach(function (c) { c.forEach(function (n, i) { prev[n.id] = i; }); });
+  var pinLayer = pin ? CHLAYER[chNode(pin.id).group] : -1;
+  var pos = function (ids) { var p = {}; ids.forEach(function (id, i) { p[id] = i; }); return p; };
+  var cost = function (list, pu, nu, pv, nv) {
+    var cm = 0, ca = 0, i, j, x, y, len = 0;
+    for (i = 0; i < list.length; i++) {
+      x = list[i]; len += Math.abs(pu[x.u] / nu - pv[x.v] / nv);
+      for (j = i + 1; j < list.length; j++) { y = list[j]; if ((pu[x.u] - pu[y.u]) * (pv[x.v] - pv[y.v]) < 0) { ca++; if (x.main && y.main) cm++; } }
+    }
+    return wMain * cm + wAll * ca + 0.01 * len;
+  };
+  var moved = function (ids) { var d = 0; ids.forEach(function (id, i) { d += Math.abs(i - prev[id]); }); return 0.0005 * d; };
+  var dev = function (li, ids) { return li === pinLayer ? 0.05 * Math.abs(ids.indexOf(pin.id) - pin.at) : 0; };   // how far the carried circle is from where it was dropped
+  var variants = function (li) {
+    var ids = cols[li].map(function (n) { return n.id; }), out = [];
+    if (ids.length > 8) { out.push({ ids: ids, pos: pos(ids), dev: dev(li, ids) }); return out; }
+    chPermute(ids, function (a) { out.push({ ids: a.slice(), pos: pos(a), dev: dev(li, a) }); });
+    return out;
+  };
+  var v0 = variants(0), v2 = variants(2), n0 = cols[0].length || 1, n1 = cols[1].length || 1, n2 = cols[2].length || 1;
+  var best = null, bestCost = Infinity;
+  var try1 = function (ids1) {
+    var p1 = pos(ids1), b0 = null, c0 = Infinity, b2 = null, c2 = Infinity, i, c;
+    for (i = 0; i < v0.length; i++) { c = cost(E[0], v0[i].pos, n0, p1, n1) + moved(v0[i].ids) + v0[i].dev; if (c < c0) { c0 = c; b0 = v0[i]; } }
+    for (i = 0; i < v2.length; i++) { c = cost(E[1], p1, n1, v2[i].pos, n2) + moved(v2[i].ids) + v2[i].dev; if (c < c2) { c2 = c; b2 = v2[i]; } }
+    var tot = c0 + c2 + moved(ids1) + dev(1, ids1);
+    if (tot < bestCost - 1e-9) { bestCost = tot; best = [b0.ids, ids1.slice(), b2.ids]; }
+  };
+  var mid = cols[1].map(function (n) { return n.id; });
+  if (mid.length > 9) try1(mid);
+  else chPermute(mid, function (a) { try1(a); });
+  return best || cols.map(function (c) { return c.map(function (n) { return n.id; }); });
+}
+/* The best tidy arrangement, as target positions (see chBestOrder). `pin` ({ id, y }) is a circle the person is carrying: it keeps the
+   place in its column that it is being held at, and everything else is ordered around it. */
+function chTidyTargets(pin) {
+  var vis = chNodes.filter(function (n) { return chVis[n.id]; }), XS = [-300, 0, 300];
+  var cols = [[], [], []], out = {};
+  vis.forEach(function (n) { cols[CHLAYER[n.group]].push(n); });
+  cols.forEach(function (c) { c.sort(function (a, b) { return a.id < b.id ? -1 : 1; }); });   // a fixed starting order, so the result is the same every time
+  var at = null;
+  if (pin && chNode(pin.id)) {
+    var layer = CHLAYER[chNode(pin.id).group];
+    at = { id: pin.id, at: cols[layer].filter(function (n) { return n.id !== pin.id && ((chTarget[n.id] || chPos[n.id] || { y: 0 }).y) < pin.y; }).length };
+  }
+  var order = chBestOrder(cols, at);
+  order.forEach(function (ids, li) {
+    var list = ids.map(chNode), gap = 6, total = list.reduce(function (t, n) { return t + chItemH(n); }, 0) + gap * Math.max(0, list.length - 1), y = -total / 2;
+    list.forEach(function (n) { out[n.id] = { x: XS[li], y: y + n.r }; y += chItemH(n) + gap; });
+  });
+  return out;
+}
+function chTidyLayout() {
+  var t = chTidyTargets(null);
+  chPos = {}; chVel = {}; chTarget = {};
+  Object.keys(t).forEach(function (id) { chPos[id] = { x: t[id].x, y: t[id].y }; chVel[id] = { x: 0, y: 0 }; });
+}
+/* Glide every circle (except the one being carried) to its target, so the others move out of the way instead of jumping. */
+function chTweenTo(targets) {
+  chTarget = targets;
+  if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    Object.keys(targets).forEach(function (id) { if (id !== chDragging && chPos[id]) { chPos[id].x = targets[id].x; chPos[id].y = targets[id].y; } });
+    chDraw(); return;
+  }
+  if (!chTweenRaf) chTweenRaf = requestAnimationFrame(chTweenStep);
+}
+function chTweenStep() {
+  chTweenRaf = 0;
+  var moving = false;
+  Object.keys(chTarget).forEach(function (id) {
+    if (id === chDragging) return;
+    var P = chPos[id], T = chTarget[id]; if (!P || !T) return;
+    var dx = T.x - P.x, dy = T.y - P.y;
+    if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) { P.x = T.x; P.y = T.y; return; }
+    P.x += dx * 0.24; P.y += dy * 0.24; moving = true;
+  });
+  chDraw();
+  if (moving || chDragging) chTweenRaf = requestAnimationFrame(chTweenStep);
+}
+/* where in its column a circle held at height y would sit */
+function chRankOf(id, y) {
+  var layer = CHLAYER[chNode(id).group];
+  return chNodes.filter(function (n) { return n.id !== id && chVis[n.id] && CHLAYER[n.group] === layer && ((chTarget[n.id] || chPos[n.id] || { y: 0 }).y) < y; }).length;
 }
 var CHBIAS = { bank: -330, asset: -330, chan: 0, del: 330 };
 function chSimLayout(reseed) {
@@ -1459,7 +1545,7 @@ function chApplyView() {
   $('ch-world').setAttribute('transform', 'translate(' + chView.x.toFixed(1) + ' ' + chView.y.toFixed(1) + ') scale(' + chView.k.toFixed(3) + ')');
   var svg = $('ch-svg'); svg.classList.remove('z-far', 'z-away', 'z-near');
   chZoomClass().trim().split(' ').forEach(function (c) { if (c) svg.classList.add(c); });
-  $('ch-zoomhint').innerHTML = '<b>' + Math.round(chView.k * 100) + '%</b> · scroll or pinch to zoom, drag to move, drag a circle to rearrange. ' + (chView.k / chBase < 0.45 ? 'Zoomed out: names only for the accounts.' : chView.k / chBase < 0.7 ? 'Zoomed out: figures under the names are hidden.' : chView.k / chBase > 1.5 ? 'Zoomed in: counts and shares are shown.' : 'Zoom in for counts and shares, out for the overview.');
+  $('ch-zoomhint').innerHTML = '<b>' + Math.round(chView.k * 100) + '%</b> · scroll or pinch to zoom, drag to move, drag a circle and the rest rearrange around it. ' + (chView.k / chBase < 0.45 ? 'Zoomed out: names only for the accounts.' : chView.k / chBase < 0.7 ? 'Zoomed out: figures under the names are hidden.' : chView.k / chBase > 1.5 ? 'Zoomed in: counts and shares are shown.' : 'Zoom in for counts and shares, out for the overview.');
 }
 function chGo(k, x, y, ms) {
   cancelAnimationFrame(chRaf);
@@ -1501,7 +1587,7 @@ function chPanel() {
       '<span><i class="ch-sw planned"></i>Dashed means planned: nothing to show yet</span>' +
       '<span><i class="ch-sw mark warn">!</i>Something needs attention. Click the circle to see what</span>' +
       '<span><i class="ch-sw mark">+</i>A + or − opens or closes what hangs off a circle</span></div>' +
-      '<p class="small muted">What the money was for (salary, farm and household, projects, company, sinking fund; maintenance and stays on the way in) is not a channel, so it is a filter: choose it above and the same circles show only that money. Scroll or pinch to zoom and drag the background to move. Tidy puts the circles in columns with as few crossing links as possible; Organic lets them settle freely, and dragging one pulls the others along. Main links draws each circle’s strongest link and the big flows: select or hover a circle to see all of its links, or choose All links. Fit arranges everything again.</p>';
+      '<p class="small muted">What the money was for (salary, farm and household, projects, company, sinking fund; maintenance and stays on the way in) is not a channel, so it is a filter: choose it above and the same circles show only that money. Scroll or pinch to zoom and drag the background to move. Tidy puts the circles in columns in the order that makes as few links as possible cross (none with Main links), and when you drag one the others re-order around it to keep it that way; Organic lets them settle freely, and dragging one pulls the others along. Main links draws each circle’s strongest link and the big flows: select or hover a circle to see all of its links, or choose All links. Fit arranges everything again.</p>';
     return;
   }
   var h = '<h3>' + n.title + '</h3><p class="small muted">' + n.sub + '</p>';
@@ -1571,7 +1657,14 @@ function chClick(id, viaBadge) {
     if (drag) {
       var dx = p.x - drag.sx, dy = p.y - drag.sy;
       if (!drag.moved && Math.hypot(dx, dy) > 4) { drag.moved = true; if (!drag.id) svg.classList.add('panning'); }
-      if (drag.moved && drag.id) { chPos[drag.id] = { x: drag.node.x + dx / chView.k, y: drag.node.y + dy / chView.k }; chDragId = chArr === 'organic' ? drag.id : null; chView.moved = true; if (chArr === 'organic') chReheat(); else chDraw(); }
+      if (drag.moved && drag.id) {
+        chPos[drag.id] = { x: drag.node.x + dx / chView.k, y: drag.node.y + dy / chView.k }; chView.moved = true;
+        if (chArr === 'organic') { chDragId = drag.id; chReheat(); }
+        else {   // Tidy: as the circle is carried past its neighbours, the others re-order around it
+          chDragging = drag.id; var rk = chRankOf(drag.id, chPos[drag.id].y);
+          if (rk !== drag.rank) { drag.rank = rk; chTweenTo(chTidyTargets({ id: drag.id, y: chPos[drag.id].y })); } else chDraw();
+        }
+      }
       else if (drag.moved) { chView.moved = true; chView.x = drag.vx + dx; chView.y = drag.vy + dy; chApplyView(); }
       return;
     }
@@ -1583,6 +1676,7 @@ function chClick(id, viaBadge) {
     if (Object.keys(ptrs).length < 2) pinch = null;
     if (drag && Object.keys(ptrs).length === 0) {
       var d = drag; drag = null; chDragId = null; svg.classList.remove('panning');
+      if (d.moved && d.id && chArr === 'tidy') { chDragging = null; chTweenTo(chTidyTargets({ id: d.id, y: chPos[d.id].y })); }   // drop: settle into the best slot
       if (!d.moved && d.id) chClick(d.id, d.badge);
       else if (!d.moved && !d.id && chSel) { chSel = null; chApplyFocus(); chPanel(); }
     }
