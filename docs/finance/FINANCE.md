@@ -394,6 +394,7 @@ types the importer knows; each batch stores its `source`: `axis_statement`, `pay
   box, Group by defaults to Month (also App, Paid by, Account, Bank statement), Favorites are kept per account in the browser, and it shows cards on
   a phone. A `?ref=` link fills the search box. The list is cut at 500 rows with a note; filters narrow it. "Show them" on the delegate queue turns on
   the *Needs a delegate* chip. Choosing the delegate and writing a note still happen in the row, as before.
+  The page opens on the table: only what needs doing sits above it, as slim notices that appear when they apply (payments needing a delegate, with "Show them"; UPI payments in the bank with no BHIM or Paytm row; a month over the delegated allowance). Delegated spend by month, Operators and Delegates are collapsed panels below the table; each heading carries a one-line summary (the latest month and whether it is over, the operator names, how many delegates are active).
   Other channels (Paypro, gateway, card) have no page of their own to link to yet.
 - **Source badges** (migration `0090`, **applied 2026-11-07**). The Origin column shows small badges for the records that vouch for a line:
   its bank (always), then the BHIM or Paytm app when a UPI row is joined, Paypro or Razorpay when the narration says so
