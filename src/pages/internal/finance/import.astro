@@ -76,6 +76,17 @@ import SignInGate from '../../../components/SignInGate.astro';
         <p class="hint" id="account-msg" hidden></p>
       </div>
     </div>
+
+    <dialog id="delta-dialog" class="sheet delta-sheet" aria-labelledby="delta-title">
+      <h2 id="delta-title"></h2>
+      <p id="delta-totals" class="delta-totals"></p>
+      <div class="delta-scroll" id="delta-scroll" tabindex="0" role="region" aria-label="Lines this file would add"></div>
+      <p class="hint" id="delta-note" hidden></p>
+      <div class="sheet-actions">
+        <button type="button" class="button button--outline" id="delta-close">Close</button>
+        <button type="button" class="button" id="delta-import">Import</button>
+      </div>
+    </dialog>
   </section>
 </StaffLayout>
 
@@ -228,8 +239,78 @@ import SignInGate from '../../../components/SignInGate.astro';
       const text = describeBoundary(b);
       if (text) details.push(text);
     }
-    return row(f.name, details, pill);
+    const li = row(f.name, details, pill);
+    if (f.preview?.lines?.length && !f.stored) li.querySelector('.grow')!.append(previewTable(f, f.kind === 'axis_statement'));
+    return li;
   }
+
+  // The lines this file would add, so the director can see the delta before confirming. The row carries the totals and a
+  // button; the table itself opens in a dialog (see openDelta). Text goes in with textContent.
+  function previewTable(f: Result, withBalance: boolean): HTMLElement {
+    const p = f.preview;
+    const wrap = el('div', 'delta');
+    wrap.append(el('p', 'delta-totals', deltaTotals(p, withBalance)));
+    const open = el('button', 'button button--outline', `Review ${plural(p.lines.length, 'line')}`);
+    open.type = 'button';
+    open.addEventListener('click', () => openDelta(f, withBalance, open));
+    wrap.append(open);
+    return wrap;
+  }
+
+  function deltaTotals(p: any, withBalance: boolean): string {
+    const totals = [`In ${rupees(p.creditPaise)}`, `out ${rupees(p.debitPaise)}`];
+    if (withBalance && typeof p.closingPaise === 'number') totals.push(`balance after ${rupees(p.closingPaise)}`);
+    return totals.join(' · ');
+  }
+
+  const deltaDialog = $<HTMLDialogElement>('delta-dialog');
+  let deltaTrigger: HTMLElement | null = null;
+
+  function openDelta(f: Result, withBalance: boolean, trigger: HTMLElement) {
+    const p = f.preview;
+    $('delta-title').textContent = f.name;
+    $('delta-totals').textContent = `${plural(p.lines.length, 'line')} to add · ${deltaTotals(p, withBalance)}`;
+    const table = el('table', 'delta-table');
+    const head = el('tr');
+    for (const h of ['Date', 'Narration', 'Debit', 'Credit', ...(withBalance ? ['Balance'] : [])]) head.append(el('th', h === 'Debit' || h === 'Credit' || h === 'Balance' ? 'num' : undefined, h));
+    const thead = el('thead');
+    thead.append(head);
+    table.append(thead);
+    const body = el('tbody');
+    for (const l of p.lines) {
+      const tr = el('tr');
+      tr.append(el('td', undefined, day(l.date)), el('td', 'narration', l.text));
+      tr.append(el('td', 'num debit', l.direction === 'debit' ? rupees(l.amountPaise) : ''), el('td', 'num credit', l.direction === 'credit' ? rupees(l.amountPaise) : ''));
+      if (withBalance) tr.append(el('td', 'num bal', typeof l.balancePaise === 'number' ? rupees(l.balancePaise) : ''));
+      body.append(tr);
+    }
+    table.append(body);
+    $('delta-scroll').replaceChildren(table);
+    $('delta-scroll').scrollTop = 0;
+    const note = $('delta-note');
+    note.hidden = !p.truncated;
+    note.textContent = p.truncated ? `Only the first ${p.lines.length} lines are shown; all of them will be imported.` : '';
+    // The same import as the page's button (every file that is ready), so say so in its label.
+    const pageButton = $<HTMLButtonElement>('confirm');
+    const importButton = $<HTMLButtonElement>('delta-import');
+    importButton.hidden = pageButton.hidden || pageButton.disabled;
+    importButton.textContent = pageButton.textContent;
+    deltaTrigger = trigger;
+    deltaDialog.showModal();
+  }
+
+  $('delta-close').addEventListener('click', () => deltaDialog.close());
+  $('delta-import').addEventListener('click', () => {
+    deltaDialog.close();
+    $('confirm').click();
+  });
+  // A click on the backdrop (the dialog element itself, outside its content box) closes it, like Escape.
+  deltaDialog.addEventListener('click', (e) => {
+    if (e.target !== deltaDialog) return;
+    const r = deltaDialog.getBoundingClientRect();
+    if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) deltaDialog.close();
+  });
+  deltaDialog.addEventListener('close', () => deltaTrigger?.focus());
 
   function renderCoverage(target: HTMLElement, coverage: any[]) {
     target.replaceChildren();
@@ -548,5 +629,141 @@ import SignInGate from '../../../components/SignInGate.astro';
 
   .finance-import .row .detail {
     display: block;
+  }
+
+  .finance-import .delta {
+    margin-top: 8px;
+  }
+
+  .finance-import .delta-totals {
+    margin: 0 0 8px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* A wide sheet: the shared .sheet is a 420px card, too narrow for a table. Only the width and layout are set here. */
+  .finance-import .delta-sheet[open] {
+    display: flex;
+    flex-direction: column;
+    width: min(1040px, calc(100vw - 32px));
+    max-height: calc(100dvh - 48px);
+  }
+
+  .finance-import .delta-sheet .delta-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+  }
+
+  .finance-import .delta-sheet .sheet-actions {
+    flex: none;
+  }
+
+  .finance-import .delta-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: var(--text-sm);
+  }
+
+  .finance-import .delta-table th,
+  .finance-import .delta-table td {
+    padding: 6px 10px;
+    text-align: left;
+    border-bottom: 1px solid var(--tvc-line);
+    vertical-align: top;
+  }
+
+  .finance-import .delta-table th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    /* The tint is translucent in the admin shell, so it sits on the opaque card colour or rows show through. */
+    background: linear-gradient(var(--tvc-green-tint), var(--tvc-green-tint)), var(--tvc-white);
+  }
+
+  .finance-import .delta-table .num {
+    text-align: right;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .finance-import .delta-table .narration {
+    overflow-wrap: anywhere;
+  }
+
+  /* On a phone the sheet takes the whole screen: a table needs the room. */
+  @media (max-width: 560px) {
+    .finance-import .delta-sheet[open] {
+      width: 100vw;
+      max-width: none;
+      height: 100dvh;
+      max-height: none;
+      margin: 0;
+      border-radius: 0;
+    }
+
+    /* Five columns do not fit in 340px, so each line becomes a small card: date and amount, the narration, the balance. */
+    .finance-import .delta-table,
+    .finance-import .delta-table tbody {
+      display: block;
+    }
+
+    .finance-import .delta-table thead {
+      display: none;
+    }
+
+    .finance-import .delta-table tr {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 2px 12px;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--tvc-line);
+    }
+
+    .finance-import .delta-table td {
+      padding: 0;
+      border-bottom: 0;
+    }
+
+    .finance-import .delta-table td:empty {
+      display: none;
+    }
+
+    .finance-import .delta-table td.narration {
+      grid-column: 1 / -1;
+      grid-row: 2;
+      color: var(--tvc-ink-soft);
+    }
+
+    .finance-import .delta-table td.debit,
+    .finance-import .delta-table td.credit {
+      grid-column: 2;
+      grid-row: 1;
+      font-weight: 600;
+    }
+
+    .finance-import .delta-table td.debit::before {
+      content: 'Out ';
+      font-weight: 400;
+    }
+
+    .finance-import .delta-table td.credit::before {
+      content: 'In ';
+      font-weight: 400;
+    }
+
+    .finance-import .delta-table td.bal {
+      grid-column: 1 / -1;
+      grid-row: 3;
+      text-align: left;
+      color: var(--tvc-ink-soft);
+    }
+
+    .finance-import .delta-table td.bal::before {
+      content: 'Balance ';
+    }
   }
 </style>

@@ -88,6 +88,20 @@ test('preview writes nothing; commit stores every year once, with the raw files 
   assert.deepEqual(c.coverage[0].gaps, []);
 });
 
+test('preview lists exactly the new lines (with totals and closing balance) that commit then stores', async () => {
+  const s = fakeStore();
+  const { y22, y23 } = years();
+  await run(s, [up('2022.xlsx', y22.bytes)]);
+  const p = await run(s, [up('2022.xlsx', y22.bytes), up('2023.xlsx', y23.bytes)], false);
+  assert.equal(p.files[0].preview, undefined); // nothing new in a file already held
+  const pv = p.files[1].preview;
+  assert.deepEqual(pv.lines.map((l) => [l.date, l.text, l.direction, l.amountPaise]), [['2023-01-02', 'Rent', 'debit', 300000]]);
+  assert.deepEqual([pv.creditPaise, pv.debitPaise, pv.closingPaise, pv.truncated], [0, 300000, y23.closing, false]);
+  const c = await run(s, [up('2023.xlsx', y23.bytes)]);
+  assert.equal(c.files[0].preview, undefined); // only the preview carries line text
+  assert.equal(s.db.bank.filter((l) => l.tran_date.startsWith('2023')).length, pv.lines.length);
+});
+
 test('uploading the same files again stores nothing and logs nothing', async () => {
   const s = fakeStore();
   const { y22, y23 } = years();
