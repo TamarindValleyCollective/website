@@ -18,7 +18,7 @@ export const FILTER_KINDS = {
       noparty: ['No party', (l) => Boolean(l.missingParty)],
       // What has been filled in on the page but not posted yet (the page sets these two flags from its drafts).
       filled: ['Filled in, not posted', (l) => Boolean(l.filled)],
-      needswording: ['Needs wording', (l) => Boolean(l.needsWording)],
+      needswording: ['Needs a reason', (l) => Boolean(l.needsWording)],
       allocated: ['Allocated', (l) => l.state === 'allocated'],
     },
   },

@@ -81,7 +81,7 @@ import SignInGate from '../../../components/SignInGate.astro';
         <p><strong>Keyboard:</strong> <code>Ctrl+Enter</code> on a line accepts its suggestions and moves to the next · <code>Alt+Up</code> / <code>Alt+Down</code> go to the same cell on the line above or below · <code>Tab</code> walks every line · <code>Shift</code>-click a tick box for a range · <code>Ctrl+Z</code> undoes the last bulk change (for two minutes).</p>
         <p>The box above looks in every column. Under a heading you can be exact:</p>
         <ul>
-          <li><strong>Words</strong> (narration, category, party, wording): <code>fuel</code> contains · <code>=Fuel</code> exactly · <code>!=Bank charges</code> is not · <code>^UPI</code> starts with · <code>!tax</code> does not contain · <code>=</code> is empty · <code>!=</code> is not empty</li>
+          <li><strong>Words</strong> (narration, category, party, what it was for): <code>fuel</code> contains · <code>=Fuel</code> exactly · <code>!=Bank charges</code> is not · <code>^UPI</code> starts with · <code>!tax</code> does not contain · <code>=</code> is empty · <code>!=</code> is not empty</li>
           <li><strong>Amount</strong> (rupees): <code>2500</code> · <code>&gt;1000</code> · <code>&lt;=500</code> · <code>1000..3000</code> · <code>!=295</code></li>
           <li><strong>Date</strong>: <code>2026-10</code> · <code>oct</code> · <code>&gt;2026-10-15</code> · <code>2026-10-01..2026-10-31</code></li>
         </ul>
@@ -398,7 +398,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       { id: 'amount', header: 'Amount', accessorFn: (l: Line) => l.amountPaise },
       { id: 'category', header: 'Category', accessorFn: (l: Line) => l.allocation?.categoryId ?? '' },
       { id: 'party', header: 'Paid to / from', accessorFn: (l: Line) => l.allocation?.partyId ?? '' },
-      { id: 'nature', header: 'Wording', accessorFn: (l: Line) => l.effective?.nature ?? '' },
+      { id: 'nature', header: 'What it was for', accessorFn: (l: Line) => l.effective?.nature ?? '' },
       { id: 'status', header: 'Status', accessorFn: (l: Line) => (l.review ? 'review' : l.state) },
       { id: 'narration', header: 'Bank narration', accessorFn: (l: Line) => l.narration },
     ],
@@ -1165,7 +1165,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   // The chip, the narration search and the column conditions, then the sort, over every line already here (same rules as the server's:
   // scripts/lib/finance-columns.mjs). Nothing is fetched.
   const dateLabel = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
-  const COLUMN_LABELS: Record<string, string> = { date: 'Date', origin: 'Origin', narration: 'Narration', amount: 'Amount', category: 'Category', party: 'Party', nature: 'Wording', status: 'Status' };
+  const COLUMN_LABELS: Record<string, string> = { date: 'Date', origin: 'Origin', narration: 'Narration', amount: 'Amount', category: 'Category', party: 'Party', nature: 'What it was for', status: 'Status' };
   const PARSERS: Record<string, (raw: string) => any> = { date: parseDate, origin: parseText, narration: parseText, amount: parseAmount, category: parseText, party: parseText, nature: parseText };
   // What a screen reader hears once a search settles (the progress line itself is not a live region: it changes on every keystroke).
   let announceTimer: ReturnType<typeof setTimeout> | undefined;
@@ -1511,7 +1511,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       applyNarration();
       renderColMenu();
     });
-    const w = h('button', { class: 'sopt', attrs: { type: 'button', 'aria-pressed': String(showWording) } }, h('span', { class: 'sopt-tick', text: showWording ? '✓' : '' }), h('span', { text: 'Wording' }));
+    const w = h('button', { class: 'sopt', attrs: { type: 'button', 'aria-pressed': String(showWording) } }, h('span', { class: 'sopt-tick', text: showWording ? '✓' : '' }), h('span', { text: 'What it was for' }));
     w.addEventListener('click', () => {
       showWording = !showWording;
       try {
@@ -1756,7 +1756,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       p.title = `Suggested ${fields.join(', ')} (${sure}), shown in italics. Tick a value to accept it; nothing is saved until you tick the line and press Post.`;
       return p;
     }
-    return pill(d.categoryId ? 'Needs wording' : 'Needs category');
+    return pill(d.categoryId ? 'Needs a reason' : 'Needs category');
   }
 
   // Sets every cell of a mounted row from the line and its draft, without replacing any element.
@@ -1882,7 +1882,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       r.partyText.replaceChildren(a?.partyId ? document.createTextNode(nameOf(lk.parties, a.partyId)) : l.missingParty ? h('span', { class: 'noparty', text: 'No party', attrs: { title: 'Double-click to choose a party' } }) : document.createTextNode(''));
       r.natureText.textContent = a?.nature ?? '';
     }
-    // The Wording column: what was typed or restored, or what was posted; failing both, the suggestion in grey.
+    // The What it was for column: what was typed or restored, or what was posted; failing both, the suggestion in grey.
     const wordsNow = can ? d.nature : l.allocation?.nature ?? '';
     const wordsGhost = can && !wordsNow ? ghostOf(l, 'nature') : '';
     r.wordText.textContent = wordsNow || wordsGhost;
@@ -2314,7 +2314,7 @@ import SignInGate from '../../../components/SignInGate.astro';
           }),
       },
     }) as ComboEl;
-    const words = h('input', { attrs: { type: 'text', placeholder: 'What it was for…', 'aria-label': 'Wording for the selected lines', autocomplete: 'off', value: barFields.nature } }) as HTMLInputElement;
+    const words = h('input', { attrs: { type: 'text', placeholder: 'What it was for…', 'aria-label': 'What it was for, for the selected lines', autocomplete: 'off', value: barFields.nature } }) as HTMLInputElement;
     cat.addEventListener('change', () => {
       const path = cat.path;
       const got = readCategoryPath(path, typeOfCategory(path[0] ?? ''));
@@ -2328,7 +2328,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     words.addEventListener('input', () => (barFields.nature = words.value));
     const post = button(`Post ${ready} ready`, () => void postReady(), 'button abar-post') as HTMLButtonElement;
     post.disabled = ready === 0;
-    const why = ready === 0 ? 'Post is off until a selected line has a category and wording.' : ready < sel.length ? `${sel.length - ready} selected can't post yet: they need a category and wording.` : 'Posting asks you to confirm first.';
+    const why = ready === 0 ? 'Post is off until a selected line has a category and what it was for.' : ready < sel.length ? `${sel.length - ready} selected can't post yet: they need a category and what it was for.` : 'Posting asks you to confirm first.';
     bar.replaceChildren(
       h('span', { class: 'abar-count', text: `${sel.length} selected · ${ready} ready` }),
       cat,

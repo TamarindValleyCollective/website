@@ -133,7 +133,7 @@ async function readLedger(from: string | null, to: string | null) {
 }
 
 // What can be searched under a column header, and how each is read (scripts/lib/finance-columns.mjs).
-const COLUMNS = { date: 'Date', narration: 'Narration', amount: 'Amount', category: 'Category', party: 'Party', nature: 'Wording' } as const;
+const COLUMNS = { date: 'Date', narration: 'Narration', amount: 'Amount', category: 'Category', party: 'Party', nature: 'What it was for' } as const;
 type Column = keyof typeof COLUMNS;
 const PARSERS: Record<Column, (raw: string) => Json | null> = { date: parseDate, narration: parseText, amount: parseAmount, category: parseText, party: parseText, nature: parseText };
 const dateLabel = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });

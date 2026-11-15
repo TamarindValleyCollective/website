@@ -534,7 +534,7 @@ Modelled on how ServiceNow lists work, because the sheet's convenience was selec
 - **Drafts.** What you type is a draft that lives in the page only; a warning appears if you try to leave with unposted drafts. Posting
   is the second step: **"Post N ready"** (the bar) asks first, then posts the ready lines, each in full. Two steps by decision: filling
   cells is reversible, posting is not. Drafts are also kept in the browser and offered back on the next visit; **Fill them in again**
-  restores them, ticks the ready ones and turns on the **Filled in, not posted** status filter. That filter and **Needs wording**
+  restores them, ticks the ready ones and turns on the **Filled in, not posted** status filter. That filter and **Needs a reason**
   (a category or party but no wording yet) are in Filters, so you can see which lines carry something not yet posted. Server-side
   drafts without wording are not possible yet: the database requires wording on every allocation row.
 - **Selecting.** A checkbox on every editable line; the header checkbox selects the page; shift-click selects the run between two
@@ -633,7 +633,7 @@ Modelled on how ServiceNow lists work, because the sheet's convenience was selec
 - **Where it lives:** the pure rules (filters, periods, grouping, favorites) are `scripts/lib/finance-search.mjs`, tested in `finance-search.test.mjs`; the page only draws them.
 - **Quiet rows (the mockup's look).** A line at rest is one row of text: Date, Amount, Category, Paid to / from, Status. The bank's **narration is not a column**: it is the
   evidence the suggestions come from, so it shows on hover (desktop, a short delay, text only), under the fields when a line is open, in the line sheet (click the date), or as
-  a last column if **Columns -> Bank narration** is ticked (kept in this browser). **Columns -> Wording** adds a column (after Paid to / from, wide table only, off by default, kept in this browser) with the typed, restored or posted wording, or the suggestion in grey italics; it sorts and has a column search like the others. The fields (category and party selects, the ✓ to accept a suggestion, and the wording box on its own
+  a last column if **Columns -> Bank narration** is ticked (kept in this browser). **Columns -> What it was for** adds a column (after Paid to / from, wide table only, off by default, kept in this browser) with the typed, restored or posted wording, or the suggestion in grey italics; it sorts and has a column search like the others. The fields (category and party selects, the ✓ to accept a suggestion, and the wording box on its own
   line) appear when a line is ticked, has an error, or is opened by clicking its category or party; they close again when focus leaves. Filling in suggestions does not open rows. The
   search under each heading is behind **Column search**. On a phone a line is the date and amount, then category and party in one grey line and the status.
 - **Not done:** a Compact toggle and other columns in the picker, Project as a group (a line does not carry its project name), favorites on the server.
@@ -658,7 +658,7 @@ Modelled on how ServiceNow lists work, because the sheet's convenience was selec
   list read after a write, because another warm instance may not have seen it. Anything that writes behind the function's back (the
   history load, a script) shows up within 10 s.
   **The new ledger after the second review (26/40, five P1s fixed):** the status pill sits under the amount (no Status column), so Category,
-  Party and Wording are wide enough to read; below 1,240px the page is a list of cards (the table needs about 1,000px beside the shell);
+  Party and What it was for are wide enough to read; below 1,240px the page is a list of cards (the table needs about 1,000px beside the shell);
   a line under the progress says "a tick only fills a field in; nothing is saved until you tick the lines and press Post", and a note
   says how many lines are filled in but not posted, with a button to tick them; the previous calendar month's status (what is left, or
   Close month when it is done) sits above the table; text boxes and selects have a visible focus ring; sorting and the chips keep focus.
