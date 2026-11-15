@@ -102,16 +102,23 @@ export const groupLabel = (field) => GROUP_FIELDS[field]?.[0] ?? field;
 
 /**
  * Splits `lines` (already in the order the page wants inside a group) into the page's flat list of items:
- *   { kind: 'group', key, depth, label, count, netPaise } followed by its lines (or its sub-groups), or, when collapsed, nothing.
+ *   { kind: 'group', key, depth, label, count, netPaise, transfers } followed by its lines (or its sub-groups), or, when collapsed, nothing.
  * `fields` is at most two group fields; `collapsed` is a Set of group keys; `monthLabel` turns 2026-10 into a heading.
  * Groups are ordered newest first for months and biggest first for everything else, with "No ..." groups last.
  * Returns { items, visible } where `visible` is the lines that are showing (those of expanded groups), in order.
+ * `isTransfer(line)`: lines moved between TVC's own accounts, which a group total leaves out.
+ * @param {any[]} lines
+ * @param {string[]} fields
+ * @param {Set<string>} [collapsed]
+ * @param {(m: string) => string} [monthLabel]
+ * @param {{ isTransfer?: (line: any) => boolean }} [options]
  */
-export function buildItems(lines, fields, collapsed = new Set(), monthLabel = (m) => m) {
+export function buildItems(lines, fields, collapsed = new Set(), monthLabel = (m) => m, { isTransfer = () => false } = {}) {
   const useFields = fields.filter((f) => GROUP_FIELDS[f]).slice(0, 2);
   const items = [];
   const visible = [];
-  const net = (ls) => ls.reduce((n, l) => n + (l.direction === 'credit' ? l.amountPaise : -l.amountPaise), 0);
+  // Money moved between TVC's own accounts nets to nothing and is neither spending nor income, so a total leaves it out.
+  const net = (ls) => ls.reduce((n, l) => (isTransfer(l) ? n : n + (l.direction === 'credit' ? l.amountPaise : -l.amountPaise)), 0);
   const walk = (ls, depth, path) => {
     if (depth >= useFields.length) {
       for (const l of ls) {
@@ -137,7 +144,7 @@ export function buildItems(lines, fields, collapsed = new Set(), monthLabel = (m
       const members = groups.get(k);
       const key = `${path}/${field}:${k}`;
       const open = !collapsed.has(key);
-      items.push({ kind: 'group', key, depth, field, label: field === 'month' ? monthLabel(k) : k, count: members.length, netPaise: net(members), open });
+      items.push({ kind: 'group', key, depth, field, label: field === 'month' ? monthLabel(k) : k, count: members.length, netPaise: net(members), transfers: members.filter(isTransfer).length, open });
       if (open) walk(members, depth + 1, key);
     }
   };

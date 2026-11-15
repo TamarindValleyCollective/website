@@ -338,6 +338,15 @@
   background: var(--tvc-cream);
 }
 
+/* A credit or a transfer is marked by a stripe down the first cell (a fill would clash with a ticked row, which is green). */
+.dt .dt-row.dt-cr td:first-child {
+  box-shadow: inset 4px 0 0 var(--tvc-green-dark);
+}
+
+.dt .dt-row.dt-tr td:first-child {
+  box-shadow: inset 4px 0 0 var(--tvc-sky-blue-text);
+}
+
 .dt .dt-row.dt-selected td {
   background: var(--tvc-green-tint);
 }
@@ -394,6 +403,14 @@
     border: 1px solid var(--tvc-line);
     border-radius: var(--radius);
     background: var(--tvc-white);
+  }
+
+  .dt .dt-card.dt-cr {
+    box-shadow: inset 4px 0 0 var(--tvc-green-dark);
+  }
+
+  .dt .dt-card.dt-tr {
+    box-shadow: inset 4px 0 0 var(--tvc-sky-blue-text);
   }
 
   .dt .dt-card.dt-selected {

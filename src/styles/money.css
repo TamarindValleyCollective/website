@@ -1,0 +1,15 @@
+/* The amount cell, one style for every admin table that shows a transaction (scripts/lib/finance-ui.mjs, moneyNode). The sign is always
+   in the text; colour is the second cue: credits green, transfers blue, debits plain. The stripe down the row is in data-table.css
+   (and in the ledger's own rows). */
+
+.amt {
+  font-variant-numeric: tabular-nums;
+}
+
+.amt--cr {
+  color: var(--tvc-green-dark);
+}
+
+.amt--tr {
+  color: var(--tvc-sky-blue-text);
+}

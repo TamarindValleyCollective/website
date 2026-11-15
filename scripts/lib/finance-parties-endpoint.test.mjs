@@ -205,7 +205,7 @@ test('the list suggests a merge and a rename from the bank name on a verified ac
   const by = (t) => body.suggestions.filter((x) => x.type === t);
   assert.deepEqual(by('merge').map((x) => [x.partyId, x.targetId]), [['pa', 'pb']], 'the entry without payment details merges into the one holding it');
   assert.deepEqual(by('rename').map((x) => [x.partyId, x.to]), [['pc', 'Sri Lakshmi Hardware and Paints']]);
-  assert.ok(body.parties.every((p) => 'lastPaid' in p && 'paidPaise' in p), 'the stats columns are always present, empty when nothing is posted');
+  assert.ok(body.parties.every((p) => 'lastPaid' in p && 'paidPaise' in p && 'lastReceived' in p && 'receivedPaise' in p && 'lines' in p), 'the paid and received columns are always present, empty when nothing is posted');
   assert.equal(JSON.stringify(body).includes('details_enc'), false);
 });
 

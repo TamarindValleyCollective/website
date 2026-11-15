@@ -11,6 +11,7 @@
 import StaffLayout from '../../../layouts/StaffLayout.astro';
 import SignInGate from '../../../components/SignInGate.astro';
 import '../../../styles/data-table.css';
+import '../../../styles/money.css';
 ---
 
 <StaffLayout title="UPI" description="UPI payments." current="finance" currentPage="finance-upi">
@@ -107,6 +108,7 @@ import '../../../styles/data-table.css';
   import { StaffAuthError, clearStepUp, clearToken, closeOnBackdrop, decodeTokenEmail, getToken, setToken, showToast, staffFetch } from '../../../../scripts/lib/staff-client.mjs';
   import { clearState, showFailure, showLoading } from '../../../../scripts/lib/staff-states.mjs';
   import { createDataTable } from '../../../../scripts/lib/data-table-ui.mjs';
+  import { amountKind, kindClass, moneyNode } from '../../../../scripts/lib/finance-ui.mjs';
 
   declare const google: any;
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
@@ -459,6 +461,7 @@ import '../../../styles/data-table.css';
     rowId: (u: Upi) => u.id,
     noun: ['payment', 'payments'],
     cap: 500,
+    rowKind: (u: Upi) => kindClass(amountKind(u.direction)),
     searchPlaceholder: 'Search who, remark, reference, account…',
     favoritesKey: `tvc-upi-favorites:${decodeTokenEmail(getToken() ?? '')}`,
     defaultGroup: 'month',
@@ -468,8 +471,8 @@ import '../../../styles/data-table.css';
     columns: [
       { id: 'date', label: 'Date', type: 'date', value: (u: Upi) => u.paidAt, sortValue: (u: Upi) => `${u.paidAt} ${u.time ?? ''}`, render: (u: Upi) => `${day(u.paidAt)}${u.time ? ` ${u.time}` : ''}` },
       { id: 'counterparty', label: 'Paid to', value: (u: Upi) => u.counterparty ?? 'Unnamed payee' },
-      { id: 'direction', label: 'Debit / credit', value: (u: Upi) => (u.direction === 'credit' ? 'Credit' : 'Debit') },
-      { id: 'amount', label: 'Amount', type: 'amount', align: 'end', value: (u: Upi) => u.amountPaise, render: (u: Upi) => rupees(u.amountPaise) },
+      // The sign and colour say debit or credit (the Debits and Credits chips still filter); a credit also gets a stripe down its row.
+      { id: 'amount', label: 'Amount', type: 'amount', align: 'end', value: (u: Upi) => u.amountPaise, render: (u: Upi) => moneyNode(u.amountPaise, amountKind(u.direction)) },
       { id: 'app', label: 'App', value: (u: Upi) => APP[u.app] },
       { id: 'paidBy', label: 'Paid by', value: (u: Upi) => paidByText(u), render: (u: Upi) => paidByCell(u) },
       { id: 'account', label: 'Account', value: (u: Upi) => u.account ?? '', render: (u: Upi) => (u.account ? u.account : el('span', 'dim', 'Not known yet')) },
@@ -510,7 +513,7 @@ import '../../../styles/data-table.css';
     card: (u: Upi) => {
       const c = el('div', 'upi-card');
       const top = el('div', 'upi-card-top');
-      top.append(el('span', 'title', u.counterparty ?? 'Unnamed payee'), el('span', undefined, `${u.direction === 'credit' ? '+' : ''}${rupees(u.amountPaise)}`));
+      top.append(el('span', 'title', u.counterparty ?? 'Unnamed payee'), moneyNode(u.amountPaise, amountKind(u.direction)));
       c.append(top, el('div', 'sub', `${day(u.paidAt)}${u.time ? ` ${u.time}` : ''} · ${APP[u.app]} · ${paidByText(u)}`), el('span', `pill pill--${STATE[u.state].kind}`, STATE[u.state].text));
       const note = u.note ?? u.purpose ?? u.remark;
       if (note) c.append(el('div', 'sub', note));
