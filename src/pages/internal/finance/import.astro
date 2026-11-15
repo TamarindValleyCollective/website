@@ -235,10 +235,12 @@ import SignInGate from '../../../components/SignInGate.astro';
 
   // The lines this file would add, so the director can see the delta before confirming. Text goes in with textContent.
   function previewTable(p: any, withBalance: boolean): HTMLElement {
-    const box = el('details', 'delta');
+    const wrap = el('div', 'delta');
+    const box = el('details');
     const totals = [`In ${rupees(p.creditPaise)}`, `out ${rupees(p.debitPaise)}`];
     if (withBalance && typeof p.closingPaise === 'number') totals.push(`balance after ${rupees(p.closingPaise)}`);
-    box.append(el('summary', undefined, `Show the ${plural(p.lines.length, 'line')} to add · ${totals.join(' · ')}`));
+    wrap.append(el('p', 'delta-totals', totals.join(' · ')));
+    box.append(el('summary', undefined, `Show the ${plural(p.lines.length, 'line')} to add`));
     const table = el('table', 'delta-table');
     const head = el('tr');
     for (const h of ['Date', 'Narration', 'Debit', 'Credit', ...(withBalance ? ['Balance'] : [])]) head.append(el('th', h === 'Debit' || h === 'Credit' || h === 'Balance' ? 'num' : undefined, h));
@@ -258,7 +260,8 @@ import SignInGate from '../../../components/SignInGate.astro';
     scroll.append(table);
     box.append(scroll);
     if (p.truncated) box.append(el('p', 'hint', `Only the first ${p.lines.length} lines are shown; all of them will be imported.`));
-    return box;
+    wrap.append(box);
+    return wrap;
   }
 
   function renderCoverage(target: HTMLElement, coverage: any[]) {
@@ -584,6 +587,12 @@ import SignInGate from '../../../components/SignInGate.astro';
     margin-top: 8px;
   }
 
+  .finance-import .delta-totals {
+    margin: 0 0 4px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
   .finance-import .delta summary {
     cursor: pointer;
     font-weight: 600;
@@ -600,7 +609,8 @@ import SignInGate from '../../../components/SignInGate.astro';
 
   .finance-import .delta-table {
     width: 100%;
-    border-collapse: collapse;
+    border-collapse: separate;
+    border-spacing: 0;
     font-size: var(--text-sm);
   }
 
@@ -615,6 +625,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   .finance-import .delta-table th {
     position: sticky;
     top: 0;
+    z-index: 1;
     background: var(--tvc-green-tint);
   }
 
