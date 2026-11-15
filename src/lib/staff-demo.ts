@@ -552,6 +552,18 @@ export function installStaffDemo(tokenKey: string, kind: string): void {
     const jsonBody = () => { try { return JSON.parse(String(init?.body ?? '{}')); } catch { return {}; } };
     const answer = (done: { status: number; data: unknown }) => Promise.resolve(new Response(JSON.stringify(done.data), { status: done.status, headers: { 'content-type': 'application/json' } }));
     if (financeParty && init?.method === 'PATCH') return answer(demoFinanceRename(financeParty[1], jsonBody()));
+    const mergeRoute = /^\/api\/finance-admin\/parties\/([^/]+)\/merge$/.exec(path);
+    if (mergeRoute && init?.method === 'POST') {
+      // The party merged away leaves the list and its accounts appear under the one kept, as the real route does.
+      const list = demoFinanceParties().parties;
+      const source = list.find((x: any) => x.id === mergeRoute[1]);
+      const target = list.find((x: any) => x.id === jsonBody().into);
+      if (!source || !target || source === target) return answer({ status: 400, data: { error: 'Choose a different party to merge into.' } });
+      target.accounts.push(...source.accounts);
+      target.mergedCount += 1;
+      list.splice(list.indexOf(source), 1);
+      return answer({ status: 200, data: { ok: true } });
+    }
     const evidenceRoute = /^\/api\/finance-admin\/accounts\/([^/]+)\/evidence$/.exec(path);
     if (evidenceRoute && init?.method === 'POST') return answer(demoFinanceEvidence(evidenceRoute[1], init.body));
     if (evidenceRoute) {
