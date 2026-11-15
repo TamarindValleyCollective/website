@@ -380,9 +380,22 @@
   margin-block-start: 12px;
   padding: 10px 14px;
   border: 1px solid var(--tvc-line-strong);
+  /* A tinted band with a green top edge, as in the Ledger's bar, so it reads as the place to act and not as more table. The tint is
+     translucent in the admin shell, so it is layered on the opaque card colour: rows scrolling under the bar do not show through. */
+  border-top: 3px solid var(--tvc-green);
   border-radius: var(--radius);
-  background: var(--tvc-surface);
+  background: linear-gradient(var(--tvc-green-tint), var(--tvc-green-tint)), var(--tvc-white);
   box-shadow: 0 -4px 16px rgb(0 0 0 / 12%);
+}
+
+/* Clear sits at the far end, away from the actions, so it is not mistaken for one of them. */
+.dt .dt-bulk-spacer {
+  flex: 1 1 0;
+}
+
+/* The shell tucks every .hint up under a heading (margin -8px); right after a table that put the note on top of its last row. */
+.dt + .hint {
+  margin-top: 12px;
 }
 
 .dt .dt-cards {
