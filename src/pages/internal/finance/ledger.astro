@@ -2288,6 +2288,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     if (!data || !sel.length) {
       bar.hidden = true;
       bar.replaceChildren();
+      document.querySelector<HTMLElement>('.ledger')?.style.setProperty('--abar-h', '0px');
       $('selcount').textContent = '';
       return;
     }
@@ -2336,21 +2337,25 @@ import SignInGate from '../../../components/SignInGate.astro';
       renderBar();
       if (got.categoryId && !barFields.partyId) setTimeout(() => $('actionbar').querySelectorAll<HTMLInputElement>('.combo-input')[1]?.focus(), 0);
     });
-    party.addEventListener('change', () => (barFields.partyId = party.value));
-    words.addEventListener('input', () => (barFields.nature = words.value));
+    let syncApply: () => void = () => {};
+    party.addEventListener('change', () => {
+      barFields.partyId = party.value;
+      syncApply();
+    });
+    words.addEventListener('input', () => {
+      barFields.nature = words.value;
+      syncApply();
+    });
     const post = button(`Post ${ready} ready`, () => void postReady(), 'button abar-post') as HTMLButtonElement;
     post.disabled = ready === 0;
-    const why = ready === 0 ? 'Post is off until a selected line has a category and what it was for.' : ready < sel.length ? `${sel.length - ready} selected can't post yet: they need a category and what it was for.` : 'Posting asks you to confirm first.';
-    bar.replaceChildren(
-      h('span', { class: 'abar-count', text: `${sel.length} selected · ${ready} ready` }),
-      cat,
-      party,
-      words,
-      button('Apply to selected', async () => {
+    const plural = (n: number) => (n === 1 ? 'line' : 'lines');
+    const needReason = sel.filter((l) => draftOf(l.id).categoryId && !draftOf(l.id).nature.trim()).length;
+    const anyField = () => Boolean(barFields.categoryId || barFields.partyId || barFields.nature.trim() || (maint && (barExtra.year || barExtra.unit)));
+    const apply = button(`Apply to ${sel.length} ${plural(sel.length)}`, async () => {
         const patch = Object.fromEntries(Object.entries(barFields).filter(([, v]) => String(v).trim())) as Partial<Draft>;
         const extraPatch: Extra = { ...(maint && barExtra.year ? { maintenanceYear: barExtra.year } : {}), ...(maint && barExtra.unit ? { householdId: barExtra.unit } : {}) };
         if (!Object.keys(patch).length && !Object.keys(extraPatch).length) {
-          showToast('Choose a category, party or wording first.');
+          showToast('Choose a category, party or what it was for first.');
           return;
         }
         const clash = sel.filter((l) => (Object.entries(patch) as [Field, string][]).some(([f, v]) => draftOf(l.id)[f] && draftOf(l.id)[f] !== v)).length;
@@ -2365,13 +2370,35 @@ import SignInGate from '../../../components/SignInGate.astro';
             syncRow(l);
           }
         });
-      }, 'button button--outline button--small'),
-      button('Accept suggestions', () => withUndo('Suggestions accepted.', sel.map((l) => l.id), () => { for (const l of sel) acceptRow(l, true); }), 'button button--outline button--small'),
-      post,
-      button('Clear', () => table.resetRowSelection(), 'button button--outline button--small'),
-      h('span', { class: 'abar-why', text: why }),
+      }, 'button button--small') as HTMLButtonElement;
+    syncApply = () => {
+      apply.disabled = !anyField();
+      apply.classList.toggle('button--outline', !anyField());
+      applyNote.hidden = anyField();
+    };
+    const applyNote = h('span', { class: 'abar-note', text: 'Fill in at least one box to apply it.' });
+    const showThose = button('Show those', () => {
+      if (!chips.some((c) => c[0] === 'status' && c[1] === 'needswording')) chips.push(['status', 'needswording']);
+      searchChange();
+    }, 'button button--outline button--small');
+    const step = (title: string, ...kids: (Node | null)[]) => h('div', { class: 'abar-step' }, h('h3', { text: title }), h('div', { class: 'abar-body' }, ...(kids.filter(Boolean) as Node[])));
+    syncApply();
+    bar.replaceChildren(
+      h(
+        'div',
+        { class: 'abar-top' },
+        h('span', { class: 'abar-count', text: `${sel.length} selected · ${ready} ready${needReason ? ` · ${needReason} need what it was for` : ''}` }),
+        needReason ? showThose : null,
+        h('span', { class: 'abar-spacer' }),
+        button('Clear', () => table.resetRowSelection(), 'button button--outline button--small'),
+      ),
+      step('1 · Set for all', cat, party, words, apply, applyNote),
+      step('2 · Or use suggestions', button('Accept suggestions', () => withUndo('Suggestions accepted.', sel.map((l) => l.id), () => { for (const l of sel) acceptRow(l, true); }), 'button button--outline button--small'), h('span', { class: 'abar-note', text: 'Fills empty cells only. It never replaces what you set.' })),
+      step('3 · Post', h('span', { class: 'abar-note', text: ready === 0 ? 'Needs a category and what it was for on at least one line.' : ready < sel.length ? `${sel.length - ready} ${plural(sel.length - ready)} not ready, and will stay as drafts. Posting asks you to confirm.` : 'Posting asks you to confirm first.' }), post),
     );
     bar.hidden = false;
+    // Keep the last rows and the hint under the table clear of the docked bar.
+    document.querySelector<HTMLElement>('.ledger')?.style.setProperty('--abar-h', `${bar.offsetHeight}px`);
   }
   $('accept-all').addEventListener('click', () => {
     const todo = lines.filter((l) => editable(l) && hasGhost(l) && isStrong(l));
@@ -3709,13 +3736,74 @@ import SignInGate from '../../../components/SignInGate.astro';
     right: 0;
     bottom: 0;
     z-index: 20;
+    display: grid;
+    gap: 2px;
+    padding: 8px 16px 10px;
+    background: var(--tvc-surface);
+    border-top: 1px solid var(--tvc-line-strong);
+  }
+
+  /* The bar reads as three steps in the order they are used; the note beside each says what it does. */
+  .abar .abar-top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    padding-bottom: 6px;
+  }
+
+  .abar .abar-spacer {
+    flex: 1 1 0;
+  }
+
+  .abar .abar-step {
+    display: grid;
+    grid-template-columns: 11rem minmax(0, 1fr);
+    gap: 4px 14px;
+    align-items: center;
+    padding-block: 6px;
+    border-top: 1px solid var(--tvc-line);
+  }
+
+  .abar .abar-step h3 {
+    margin: 0;
+    font-size: var(--text-xs);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--tvc-ink-soft);
+  }
+
+  .abar .abar-body {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 8px;
-    padding: 10px 16px;
-    background: var(--tvc-surface);
-    border-top: 1px solid var(--tvc-line-strong);
+    min-width: 0;
+  }
+
+  .abar .abar-note {
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  .abar .abar-step:last-child .abar-body {
+    justify-content: space-between;
+  }
+
+  .abar .abar-post {
+    min-height: 44px;
+    padding-inline: 24px;
+    font-weight: 700;
+  }
+
+  .ledger {
+    padding-bottom: var(--abar-h, 0px);
+  }
+
+  @media (max-width: 640px) {
+    .abar .abar-step {
+      grid-template-columns: 1fr;
+    }
   }
 
   .abar[hidden] {
@@ -3724,12 +3812,6 @@ import SignInGate from '../../../components/SignInGate.astro';
 
   .abar .abar-count {
     font-weight: 650;
-  }
-
-  .abar .abar-why {
-    flex-basis: 100%;
-    font-size: var(--text-sm);
-    color: var(--tvc-ink-soft);
   }
 
   .abar select,
@@ -3908,6 +3990,8 @@ import SignInGate from '../../../components/SignInGate.astro';
 
     .abar {
       bottom: calc(var(--tabbar-h, 64px) + env(safe-area-inset-bottom));
+      max-height: 55vh;
+      overflow-y: auto;
     }
 
     .ledger .tick {
