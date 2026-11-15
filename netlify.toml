@@ -2,6 +2,11 @@
   command = "npm run build"
   publish = "dist"
   functions = "netlify/functions"
+  # A production deploy costs 15 Netlify credits, so a change that only touches documentation or the change log must not make one.
+  # The command exits 0 to skip and 1 to build, and skips only when EVERY file changed since the last deploy is documentation
+  # (the rule and what it must never skip, such as src/content/*.md and docs/site-map/, are in scripts/lib/netlify-ignore.mjs).
+  # Anything unexpected builds. See ARCHITECTURE.md, "Builds".
+  ignore = "node scripts/netlify-ignore-build.mjs"
 
 [build.environment]
   # FIN_REQUESTS_SHEET_ID is a spreadsheet ID, not a secret, and UPI-SYNC.md
