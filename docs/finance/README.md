@@ -77,4 +77,5 @@ run at any time. Run 13 last.
 | 02 | Mockup built and reviewed 2026-11-10, shipped with session 07 (PR #587) | Dashboard mockup with invented data (`mockups/dashboards.html`); its decisions are in that brief's Done section. |
 | 07 | Built 2026-11-10, draft PR #587 (`finance-07-dashboards`) | Metrics, endpoint, the dashboard page and the budget editor. Migration `0098` **applied 2026-11-10**; `0099` (budget editing) **applied 2026-11-10**. Plan import, member preview, CSV export next. See [FINANCE.md](FINANCE.md), "Dashboards" and "The budget editor". |
 | Delegates | Built 2026-11-15, PR #605 | UPI Circle delegates identified by number (or name), attributed by date with a pick for the ambiguous ones, a limit each. Migration `0100` **applied 2026-11-15**. See [FINANCE.md](FINANCE.md), "Delegates". |
+| Channels | Built 2026-11-15, PR `finance-channels-graph` | The dashboard's Channels tab: accounts, channels, delegates and the fixed deposits as a zoomable graph (Cytoscape.js + ELK, loaded on demand) from the real ledger, with purpose, period and account filters. No migration. See [FINANCE.md](FINANCE.md), "Channels". |
 | 09-13 | Not started | |
