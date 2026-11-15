@@ -626,7 +626,8 @@ import SignInGate from '../../../components/SignInGate.astro';
     position: sticky;
     top: 0;
     z-index: 1;
-    background: var(--tvc-green-tint);
+    /* The tint is translucent in the admin shell, so it sits on the opaque card colour or rows show through. */
+    background: linear-gradient(var(--tvc-green-tint), var(--tvc-green-tint)), var(--tvc-white);
   }
 
   .finance-import .delta-table .num {
