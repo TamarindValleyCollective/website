@@ -338,6 +338,27 @@ function demoFinanceParties() {
   );
   return { kinds: ['member', 'vendor', 'employee', 'customer', 'bank', 'government', 'director', 'other'], canEdit: true, canVerify: true, me: { id: 'demo-1', ready: true, hasPasskey: true, stepUpValid: false }, needsReviewCount: 0, parties: financeParties, suggestions };
 }
+// Invented rules and categories for /internal/finance/rules/.
+function demoRules() {
+  const categories = [
+    { id: 'c1', name: 'Utility bills', type: 'opex', active: true },
+    { id: 'c2', name: 'Bank charges', type: 'opex', active: true },
+    { id: 'c3', name: 'Structures and infrastructure', type: 'capex', active: true },
+    { id: 'c4', name: 'Event income', type: 'revenue', active: true },
+    { id: 'c5', name: 'Old petty cash', type: 'opex', active: false },
+    { id: 'c6', name: 'Maintenance', type: 'member_contribution', active: true },
+  ];
+  const parties = [{ id: 'p1', name: 'BESCOM', kind: 'government' }, { id: 'p2', name: 'Axis Bank', kind: 'bank' }, { id: 'p3', name: 'Test Electricals', kind: 'vendor' }];
+  const rule = (n: number, priority: number, matcher: Record<string, unknown>, categoryId: string, extra: Record<string, unknown> = {}) => ({ id: `ru${n}`, priority, matcher, partyId: null, categoryId, natureTemplate: '', needsReview: false, hitCount: 0, active: true, ...extra });
+  const rules = [
+    rule(1, 10, { narrationContains: 'BESCOM' }, 'c1', { partyId: 'p1', natureTemplate: 'Electricity {remark}', hitCount: 14 }),
+    rule(2, 20, { narrationContains: 'chrg', direction: 'debit', maxPaise: 50000 }, 'c2', { partyId: 'p2', natureTemplate: 'Bank charges', hitCount: 31 }),
+    rule(3, 100, { remarkKeywords: ['wiring', 'switch'], direction: 'debit' }, 'c3', { partyId: 'p3', needsReview: true, hitCount: 3 }),
+    rule(4, 100, { narrationContains: 'workshop', direction: 'credit', minPaise: 100000 }, 'c4', { hitCount: 0 }),
+    rule(5, 150, { narrationContains: 'petty' }, 'c5', { active: false, hitCount: 9 }),
+  ];
+  return { canConfigure: true, rules, lookups: { categories, parties, requesterPartyId: 'p3' } };
+}
 // Invented payment requests and logged spends for /internal/finance/requests/ and /internal/finance-requests/, in every state.
 function demoRequests() {
   const rec = (n: number, kind: 'request' | 'log', status: string, payee: string, rupees: number, purpose: string, createdAt: string, extra: Record<string, unknown> = {}) => ({
@@ -515,6 +536,7 @@ export function installStaffDemo(tokenKey: string, kind: string): void {
     }
     if (path === '/api/units-admin/overview') return reply(demoUnits());
     if (path === '/api/finance-admin/upi-lines' && (init?.method ?? 'GET') === 'GET') return reply(demoUpiLines());
+    if (path === '/api/finance-admin/rules' && (init?.method ?? 'GET') === 'GET') return reply(demoRules());
     if (path === '/api/finance-admin/requests' && (init?.method ?? 'GET') === 'GET') return reply(demoRequests());
     if (path === '/api/finance-admin/requests/mine' && (init?.method ?? 'GET') === 'GET') return reply({ payees: [], today: '2026-11-15', records: demoRequests().records.filter((r: any) => r.requesterId === 'demo-1') });
     if (path === '/api/finance-admin/parties' && (init?.method ?? 'GET') === 'GET') return reply(demoFinanceParties());

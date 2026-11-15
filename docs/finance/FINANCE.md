@@ -450,6 +450,10 @@ categories, the requester); routes in `lib/finance-ledger.ts`. `0083` is applied
   bill capture yet, so every reimbursement is flagged until session 08); a rule marked always-review. Flags are worked out by the
   server when rows are saved, from the same rules the screen showed. The person who entered a flagged row cannot mark it checked
   (a director can).
+- **The Rules page tables** (rules, and categories) are the shared admin table (docs/design-language.md, "Data tables"). Rules stay in the order they run
+  (Priority, lowest first) and show When, the category, party, wording, how often each was used and On / Off; chips for On / Off, Payments out / Money in,
+  Always reviewed, Names a party, Not used yet; Group by Category, Party, State or Direction. Categories group by Kind as before, with a Rules count and a
+  "No rule uses it" chip. Clicking a row (or Change) opens the same sheets as before; Turn on / Turn off is unchanged. Only a director can change either.
 - **The requester** is `fin_entities.requester_party_id`, set on the Rules page by a director.
 - **Categories can be merged or split later.** Rename, add and retire work at any time. `fin_merge_category` moves every allocation,
   rule and project line to another category of the **same type** (so no budget figure changes) and retires the old one.

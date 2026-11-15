@@ -8,6 +8,7 @@
 // with textContent only, never as HTML. Viewing is for anyone with finance access; changing needs a director.
 import StaffLayout from '../../../layouts/StaffLayout.astro';
 import '../../../styles/linked-picker.css';
+import '../../../styles/data-table.css';
 import SignInGate from '../../../components/SignInGate.astro';
 ---
 
@@ -25,18 +26,13 @@ import SignInGate from '../../../components/SignInGate.astro';
         <h2 class="list-title">Rules for suggesting a category</h2>
         <button type="button" id="add-rule" class="button button--primary" hidden>Add rule</button>
       </div>
-      <ul class="list" id="rules"></ul>
-      <div id="rules-empty" aria-live="polite" hidden></div>
+      <div id="rules-table"></div>
 
       <div class="head-row">
         <h2 class="list-title">Categories</h2>
         <button type="button" id="add-category" class="button button--outline" hidden>Add category</button>
       </div>
-      <label class="field cat-search">
-        <span class="visually-hidden">Search categories</span>
-        <input id="cat-q" type="search" placeholder="Search categories" autocomplete="off" />
-      </label>
-      <div id="categories"></div>
+      <div id="categories-table"></div>
 
       <div class="head-row">
         <h2 class="list-title">Who raises payment requests</h2>
@@ -51,7 +47,8 @@ import SignInGate from '../../../components/SignInGate.astro';
 
 <script>
   import { StaffAuthError, clearStepUp, clearToken, closeOnBackdrop, decodeTokenEmail, getToken, setToken, showToast, staffFetch } from '../../../../scripts/lib/staff-client.mjs';
-  import { clearState, showEmpty, showFailure, showLoading } from '../../../../scripts/lib/staff-states.mjs';
+  import { clearState, showFailure, showLoading } from '../../../../scripts/lib/staff-states.mjs';
+  import { createDataTable } from '../../../../scripts/lib/data-table-ui.mjs';
   import { button, categoryOptions, combo, h, input, labelled, parseRupees, partyOptions, pill, present, rupees, typeLabel } from '../../../../scripts/lib/finance-ui.mjs';
   import { matchOptions } from '../../../../scripts/lib/finance-search.mjs';
 
@@ -156,68 +153,128 @@ import SignInGate from '../../../components/SignInGate.astro';
     return `When ${when.join(' and ')}`;
   }
 
-  let catQuery = '';
-  $<HTMLInputElement>('cat-q').addEventListener('input', (e) => {
-    catQuery = (e.target as HTMLInputElement).value;
-    render();
+  const lookups = () => data!.lookups;
+  const canChange = () => Boolean(data?.canConfigure);
+  const directionText = (r: Rule) => (r.matcher.direction === 'debit' ? 'Payments out' : r.matcher.direction === 'credit' ? 'Money in' : 'Either way');
+  const usedText = (r: Rule) => (r.hitCount ? `${r.hitCount} time${r.hitCount === 1 ? '' : 's'}` : 'Not used yet');
+  const emailKey = () => decodeTokenEmail(getToken() ?? '');
+
+  // The rules, in the order they run: the lowest priority number wins.
+  const rulesTable = createDataTable({
+    root: $('rules-table'),
+    rowId: (r: Rule) => r.id,
+    noun: ['rule', 'rules'],
+    searchPlaceholder: 'Search rules…',
+    favoritesKey: `tvc-rules-favorites:${emailKey()}`,
+    defaultSort: ['priority', 1],
+    searchText: (r: Rule) => [describe(r), nameOf(lookups().categories, r.categoryId), nameOf(lookups().parties, r.partyId), r.natureTemplate].join(' '),
+    onOpen: (r: Rule) => { if (canChange()) openRule(r); },
+    rowClass: (r: Rule) => (r.active ? '' : 'is-off'),
+    empty: { title: 'No rules yet', text: "Without rules every line is allocated by hand, using the farm manager's UPI remark as a starting point. Add one for anything that repeats: the gas agency, the bank's own charges." },
+    columns: [
+      { id: 'priority', label: 'Priority', type: 'count', value: (r: Rule) => r.priority },
+      { id: 'when', label: 'When', wrap: true, value: (r: Rule) => describe(r), render: (r: Rule) => describe(r) },
+      { id: 'category', label: 'Suggest category', value: (r: Rule) => nameOf(lookups().categories, r.categoryId) },
+      { id: 'party', label: 'For party', value: (r: Rule) => nameOf(lookups().parties, r.partyId) },
+      { id: 'wording', label: 'Wording', wrap: true, value: (r: Rule) => r.natureTemplate, render: (r: Rule) => r.natureTemplate || h('span', { class: 'detail', text: 'From the UPI remark' }) },
+      { id: 'used', label: 'Used', type: 'count', value: (r: Rule) => r.hitCount, render: usedText },
+      {
+        id: 'state', label: 'State', value: (r: Rule) => `${r.active ? 'On' : 'Off'}${r.needsReview ? ' Always reviewed' : ''}`,
+        render: (r: Rule) => h('span', { class: 'tags' }, r.active ? pill('On', 'ok') : pill('Off'), r.needsReview ? pill('Always reviewed', 'warn') : null),
+      },
+      {
+        id: 'actions', label: 'Actions', sortable: false, sticky: true, filter: 'none', value: () => '',
+        render: (r: Rule) => {
+          if (!canChange()) return '';
+          const toggle = button(r.active ? 'Turn off' : 'Turn on', async () => {
+            const { status, data: out } = await call(`/api/finance-admin/rules/${r.id}`, 'PATCH', { active: !r.active });
+            if (status === 200) void load();
+            else showToast(out?.error ?? 'Could not change that.');
+          }, 'button button--outline button--small');
+          toggle.setAttribute('aria-label', `${r.active ? 'Turn off' : 'Turn on'} the rule: ${describe(r)}`);
+          return toggle;
+        },
+      },
+    ],
+    filters: [
+      { id: 'on', group: 'state', label: 'On', test: (r: Rule) => r.active },
+      { id: 'off', group: 'state', label: 'Off', test: (r: Rule) => !r.active },
+      { id: 'out', group: 'dir', label: 'Payments out', test: (r: Rule) => r.matcher.direction === 'debit' },
+      { id: 'in', group: 'dir', label: 'Money in', test: (r: Rule) => r.matcher.direction === 'credit' },
+      { id: 'reviewed', label: 'Always reviewed', test: (r: Rule) => r.needsReview },
+      { id: 'party', label: 'Names a party', test: (r: Rule) => Boolean(r.partyId) },
+      { id: 'unused', label: 'Not used yet', test: (r: Rule) => r.hitCount === 0 },
+    ],
+    groups: [
+      { id: 'category', label: 'Category', key: (r: Rule) => nameOf(lookups().categories, r.categoryId) || 'No category' },
+      { id: 'party', label: 'Party', key: (r: Rule) => nameOf(lookups().parties, r.partyId) || 'No party' },
+      { id: 'state', label: 'State', key: (r: Rule) => (r.active ? 'On' : 'Off'), order: ['On', 'Off'] },
+      { id: 'direction', label: 'Direction', key: directionText },
+    ],
+    card: (r: Rule) => {
+      const c = h('div', { class: 'rule-card' }, h('div', { class: 'title', text: `${describe(r)}, suggest ${nameOf(lookups().categories, r.categoryId)}` }), h('div', { class: 'detail', text: [r.partyId ? `for ${nameOf(lookups().parties, r.partyId)}` : '', r.natureTemplate ? `wording "${r.natureTemplate}"` : 'wording from the UPI remark', `priority ${r.priority}`, usedText(r).toLowerCase()].filter(Boolean).join(' · ') }), h('div', { class: 'tags' }, r.active ? null : pill('Off'), r.needsReview ? pill('Always reviewed', 'warn') : null));
+      if (canChange()) {
+        const toggle = button(r.active ? 'Turn off' : 'Turn on', async () => {
+          const { status, data: out } = await call(`/api/finance-admin/rules/${r.id}`, 'PATCH', { active: !r.active });
+          if (status === 200) void load();
+          else showToast(out?.error ?? 'Could not change that.');
+        }, 'button button--outline button--small');
+        c.append(h('div', { class: 'acts' }, button('Change', () => openRule(r), 'button button--outline button--small'), toggle));
+      }
+      return c;
+    },
+  });
+
+  // The categories, grouped by kind (running costs, member contributions...) as before.
+  const rulesUsing = (c: Category) => (data?.rules ?? []).filter((r) => r.categoryId === c.id).length;
+  const categoriesTable = createDataTable({
+    root: $('categories-table'),
+    rowId: (c: Category) => c.id,
+    noun: ['category', 'categories'],
+    searchPlaceholder: 'Search categories…',
+    favoritesKey: `tvc-categories-favorites:${emailKey()}`,
+    defaultGroup: 'kind',
+    defaultSort: ['name', 1],
+    searchText: (c: Category) => [c.name, typeLabel(c.type)].join(' '),
+    onOpen: (c: Category) => { if (canChange()) openCategory(c); },
+    rowClass: (c: Category) => (c.active ? '' : 'is-off'),
+    empty: { title: 'No categories', text: 'Add one to start.' },
+    columns: [
+      { id: 'name', label: 'Name', value: (c: Category) => c.name },
+      { id: 'kind', label: 'Kind', value: (c: Category) => typeLabel(c.type) },
+      { id: 'state', label: 'State', value: (c: Category) => (c.active ? 'Active' : 'Retired'), render: (c: Category) => (c.active ? pill('Active', 'ok') : pill('Retired')) },
+      { id: 'rules', label: 'Rules', type: 'count', align: 'end', value: rulesUsing },
+      {
+        id: 'actions', label: 'Actions', sortable: false, sticky: true, filter: 'none', value: () => '',
+        render: (c: Category) => {
+          if (!canChange()) return '';
+          const change = button('Change', () => openCategory(c), 'button button--outline button--small');
+          change.setAttribute('aria-label', `Change ${c.name}`);
+          return change;
+        },
+      },
+    ],
+    filters: [
+      { id: 'active', group: 'state', label: 'Active', test: (c: Category) => c.active },
+      { id: 'retired', group: 'state', label: 'Retired', test: (c: Category) => !c.active },
+      { id: 'norules', label: 'No rule uses it', test: (c: Category) => rulesUsing(c) === 0 },
+    ],
+    groups: [
+      { id: 'kind', label: 'Kind', key: (c: Category) => typeLabel(c.type) },
+      { id: 'state', label: 'State', key: (c: Category) => (c.active ? 'Active' : 'Retired'), order: ['Active', 'Retired'] },
+    ],
+    card: (c: Category) => h('div', { class: 'rule-card' }, h('div', { class: 'title', text: c.name }), h('div', { class: 'detail', text: `${typeLabel(c.type)} · ${rulesUsing(c)} rule${rulesUsing(c) === 1 ? '' : 's'}${c.active ? '' : ' · retired'}` }), canChange() ? h('div', { class: 'acts' }, button('Change', () => openCategory(c), 'button button--outline button--small')) : null),
   });
 
   function render() {
     if (!data) return;
-    const { canConfigure, rules, lookups } = data;
+    const { canConfigure } = data;
     $('add-rule').hidden = !canConfigure;
     $('add-category').hidden = !canConfigure;
-    if (!rules.length) {
-      $('rules').replaceChildren();
-      $('rules-empty').hidden = false;
-      showEmpty($('rules-empty'), { title: 'No rules yet', text: 'Without rules every line is allocated by hand, using the farm manager\'s UPI remark as a starting point. Add one for anything that repeats: the gas agency, the bank\'s own charges.' });
-    } else {
-      clearState($('rules-empty'));
-      $('rules-empty').hidden = true;
-      $('rules').replaceChildren(
-        ...rules.map((r) => {
-          const toggle = canConfigure
-            ? button(r.active ? 'Turn off' : 'Turn on', async () => {
-                const { status, data: out } = await call(`/api/finance-admin/rules/${r.id}`, 'PATCH', { active: !r.active });
-                if (status === 200) void load();
-                else showToast(out?.error ?? 'Could not change that.');
-              }, 'button button--outline button--small')
-            : null;
-          toggle?.setAttribute('aria-label', `${r.active ? 'Turn off' : 'Turn on'} the rule: ${describe(r)}`);
-          const main = h(
-            canConfigure ? 'button' : 'div',
-            { class: 'rule-main', attrs: canConfigure ? { type: 'button' } : {} },
-            h('span', { class: 'title', text: `${describe(r)}, suggest ${nameOf(lookups.categories, r.categoryId)}` }),
-            h('span', { class: 'detail', text: [r.partyId ? `for ${nameOf(lookups.parties, r.partyId)}` : '', r.natureTemplate ? `wording "${r.natureTemplate}"` : 'wording from the UPI remark', `priority ${r.priority}`, r.hitCount ? `used ${r.hitCount} time${r.hitCount === 1 ? '' : 's'}` : 'not used yet'].filter(Boolean).join(' · ') }),
-          );
-          if (canConfigure) main.addEventListener('click', () => openRule(r));
-          return h('li', {}, h('div', { class: `row${r.active ? '' : ' is-off'}` }, main, r.needsReview ? pill('Always reviewed', 'warn') : null, r.active ? null : pill('Off'), toggle));
-        }),
-      );
-    }
+    rulesTable.setRows(data.rules);
+    categoriesTable.setRows(data.lookups.categories);
 
-    // Grouped by kind (running costs, member contributions...), with a search, so thirty categories are not one long list.
-    const needle = catQuery.trim().toLowerCase();
-    const shown = lookups.categories.filter((c) => !needle || c.name.toLowerCase().includes(needle) || typeLabel(c.type).toLowerCase().includes(needle));
-    const kinds = [...new Set(shown.map((c) => c.type))];
-    $('categories').replaceChildren(
-      ...(shown.length ? [] : [h('p', { class: 'hint', text: 'No category matches that.' })]),
-      ...kinds.flatMap((kind) => [
-        h('h3', { class: 'group-title', text: typeLabel(kind) }),
-        h(
-          'ul',
-          { class: 'list' },
-          ...shown
-            .filter((c) => c.type === kind)
-            .map((c) => {
-              const change = canConfigure ? (button('Change', () => openCategory(c), 'button button--outline button--small') as HTMLElement) : null;
-              change?.setAttribute('aria-label', `Change ${c.name}`);
-              return h('li', {}, h('div', { class: `row${c.active ? '' : ' is-off'}` }, h('span', { class: 'grow' }, h('span', { class: 'title', text: c.name })), c.active ? null : pill('Retired'), change));
-            }),
-        ),
-      ]),
-    );
-
+    const lookups = data.lookups;
     const card = $('requester-card');
     if (!canConfigure) {
       card.replaceChildren(h('p', { class: 'hint', text: lookups.requesterPartyId ? `${nameOf(lookups.parties, lookups.requesterPartyId)}. Circle payments to them always go to review.` : 'Nobody is set yet.' }));
@@ -401,17 +458,6 @@ import SignInGate from '../../../components/SignInGate.astro';
     }
   }
 
-  .rules .group-title {
-    margin: 18px 0 6px 14px;
-    font-size: var(--text-sm);
-    font-weight: 600;
-    color: var(--tvc-ink-soft);
-  }
-
-  .rules .cat-search {
-    margin: 8px 0 0;
-  }
-
   .rules details summary {
     cursor: pointer;
     font-weight: 600;
@@ -425,36 +471,26 @@ import SignInGate from '../../../components/SignInGate.astro';
     color: var(--tvc-ink-soft);
   }
 
-  .rules .row {
-    gap: 12px;
-  }
-
-  .rules .row.is-off .title {
+  /* A rule or category that is off or retired reads quieter. */
+  .rules .dt .dt-row.is-off td {
     color: var(--tvc-ink-soft);
   }
 
-  .rules .rule-main {
+  .rules .dt .tags,
+  .rules .dt .acts {
     display: flex;
-    flex: 1;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-    padding: 0;
-    border: 0;
-    background: none;
-    font: inherit;
-    color: inherit;
-    text-align: left;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
   }
 
-  .rules button.rule-main {
-    cursor: pointer;
+  .rules .rule-card {
+    display: grid;
+    gap: 6px;
   }
 
-  .rules .rule-main:focus-visible {
-    outline: 2px solid var(--tvc-orange);
-    outline-offset: 2px;
-    border-radius: var(--radius-sm);
+  .rules .rule-card .title {
+    font-weight: 600;
   }
 
   .rules .detail {
