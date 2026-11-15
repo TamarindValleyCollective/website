@@ -850,7 +850,15 @@ a channel, so they appear only as the single "Projects" purpose.
   asking again (`flowOf`). It carries no narrations, UPI references or party names.
 - **The lines behind a box or band.** `GET /api/finance-admin/channels/lines?fy=&months=&dir=&channel=&purpose=&account=&fd=` sums the same
   pieces (`channelPieces`), so the count and amount agree with the figure on the box; it returns the number of lines, the amount and the largest
-  eight (date, account, channel, purpose, amount and the line's id, which the date links to in the Ledger). No narrations. `specOf` turns a click
+  eight (date, account, channel, purpose, project, amount and the line's id, which the date links to in the Ledger). No narrations. The details
+  are **pinned to the bottom of the screen** once something is chosen, so they are seen at once wherever the page is scrolled (they were first
+  placed under the diagram and were missed). **Every box opens by its natural breakdown, not by date** (`breakdownOf`): Projects by project,
+  Salary by employee (who it was paid to), Maintenance by who paid it, every other purpose by category, a channel by what its money was for;
+  an account or the deposits go straight to their lines. Each row shows its lines and amount, adds up to the box, and opens its own lines
+  (`&project=`, `&party=`, `&category=` or `&purpose=`; `none` for nothing named); *Show every line* lists them all. Project and purpose
+  breakdowns come from the cube in the browser; person and category need the lines, so `GET /channels/breakdown?by=party|category` groups them
+  on the server (a person merged into another counts as the one they were merged into). That is the one place a name leaves the server, to
+  people who may view finance and, for an auditor, with the visit logged. `specOf` turns a click
   into the filter and `cellMatches` applies it, and a test checks that for every box and band, in every grouping, the lines add up to its figure.
 - **Drawing.** `scripts/lib/finance-channels-view.mjs`: the layout is pure and tested (`layoutFlow`: one scale for the whole picture, the outer
   columns ordered by where their money goes so bands cross as little as possible, the deposits last, bands placed on each box in the order of the

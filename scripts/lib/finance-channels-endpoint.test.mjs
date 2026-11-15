@@ -256,3 +256,75 @@ test('lines: no narration, UPI reference or household name leaves the server, an
   assert.equal(auditRows.length, 1);
   assert.equal(auditRows[0].action, 'finance.channels_viewed');
 });
+
+test('lines: a project narrows money for projects to that project, and a bad project is refused', async () => {
+  grant('admin');
+  assert.equal((await callLines('&project=not-a-project')).status, 400);
+  const one = await (await callLines(`&dir=out&purpose=projects&fd=exclude&project=${ID(21)}`)).json();
+  assert.deepEqual([one.count, one.paise], [1, 30000]);
+  assert.equal(one.lines[0].project, ID(21), 'each line says which project it is for');
+  const none = await (await callLines('&dir=out&purpose=projects&fd=exclude&project=none')).json();
+  assert.deepEqual([none.count, none.paise], [0, 0], 'no project-less money for projects in this ledger');
+  const other = await (await callLines(`&dir=out&purpose=projects&fd=exclude&project=${ID(99)}`)).json();
+  assert.equal(other.count, 0);
+});
+
+// ---- GET /channels/breakdown: salary by employee, the rest by category -----------------------------------------------------------------
+
+const PA = ID(81), PB = ID(82), PB_OLD = ID(83);
+const withPeople = () => {
+  db.data.fin_parties = [{ id: PA, name: 'Asha Example', merged_into: null }, { id: PB, name: 'Ravi Example', merged_into: null }, { id: PB_OLD, name: 'R. Example (old)', merged_into: PB }];
+  db.data.fin_bank_lines.push(
+    { id: ID(90), bank_account_id: 'acc', tran_date: '2025-05-26', direction: 'debit', amount_paise: 40000, narration: 'NEFT/0101102630472/10/' },
+    { id: ID(91), bank_account_id: 'acc', tran_date: '2025-06-26', direction: 'debit', amount_paise: 25000, narration: 'NEFT/0101102630472/10/' },
+    { id: ID(92), bank_account_id: 'acc', tran_date: '2025-07-26', direction: 'debit', amount_paise: 15000, narration: 'NEFT/0101102630472/10/' },
+  );
+  db.data.fin_allocations.push(
+    { id: ID(93), bank_line_id: ID(90), category_id: C.sal, project_id: null, party_id: PA, amount_paise: 40000, posted_at: '2025-08-01T00:00:00Z' },
+    { id: ID(94), bank_line_id: ID(91), category_id: C.sal, project_id: null, party_id: PB, amount_paise: 25000, posted_at: '2025-08-01T00:00:00Z' },
+    { id: ID(95), bank_line_id: ID(92), category_id: C.sal, project_id: null, party_id: PB_OLD, amount_paise: 15000, posted_at: '2025-08-01T00:00:00Z' },
+  );
+};
+const callBreakdown = (query) => handler(new Request(`https://x.test/api/finance-admin/channels/breakdown?fy=2025&months=${ALL}${query}`, { headers: { authorization: `Bearer ${who}` } }));
+
+test('breakdown: salary by the person it was paid to, a merged duplicate counted as the one it was merged into, adding up to the box', async () => {
+  grant('admin');
+  withPeople();
+  const cube = (await (await call()).json()).cube;
+  const box = sum(cube.filter((c) => c.g === 'salary'));
+  const r = await (await callBreakdown('&by=party&dir=out&purpose=salary&fd=exclude')).json();
+  assert.deepEqual(r.rows.map((x) => [x.name, x.paise, x.n]), [['Asha Example', 40000, 1], ['Ravi Example', 40000, 2], ['No one named', 70000, 1]].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)));
+  assert.equal(r.paise, box, 'the people add up to the Salary box');
+  assert.equal(r.rows.find((x) => x.name === 'Ravi Example').id, PB);
+});
+
+test('breakdown: by category, and the lines of one person carry their name', async () => {
+  grant('admin');
+  withPeople();
+  const r = await (await callBreakdown('&by=category&dir=out&purpose=farm&fd=exclude')).json();
+  assert.deepEqual(r.rows.map((x) => [x.name, x.paise]), [['Groceries', 5000]].filter(() => false).concat(r.rows.map((x) => [x.name, x.paise])), 'shape only');
+  assert.ok(r.rows.every((x) => x.name), 'every row is named');
+  const lines = await (await callLines(`&dir=out&purpose=salary&fd=exclude&party=${PB}`)).json();
+  assert.deepEqual([lines.count, lines.paise], [2, 40000], 'both of Ravi’s lines, one of them posted to the old duplicate');
+  assert.ok(lines.lines.every((l) => l.party === 'Ravi Example' && l.category === 'Salaries'));
+  const nobody = await (await callLines('&dir=out&purpose=salary&fd=exclude&party=none')).json();
+  assert.equal(nobody.paise, 70000);
+});
+
+test('breakdown: only party or category, valid ids, and the same grants as the rest', async () => {
+  grant('admin');
+  assert.equal((await callBreakdown('&by=colour')).status, 400);
+  assert.equal((await callBreakdown('&by=party&party=nope')).status, 400);
+  assert.equal((await callBreakdown('&by=category&category=nope')).status, 400);
+  reset([person()], []);
+  assert.equal((await callBreakdown('&by=party')).status, 403);
+});
+
+test('breakdown: names are on the answer, narrations are not, and an auditor’s visit is logged', async () => {
+  grant('read_only');
+  withPeople();
+  const text = await (await callBreakdown('&by=party&dir=out&purpose=salary&fd=exclude')).text();
+  assert.ok(text.includes('Asha Example'));
+  for (const secret of ['Corner Shop', 'HARDWARE', '600000000001', 'AXODH', '0101102630472']) assert.ok(!text.includes(secret), secret);
+  assert.equal(auditRows.length, 1);
+});

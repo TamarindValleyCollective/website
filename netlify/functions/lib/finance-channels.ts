@@ -5,7 +5,7 @@
 //     browser draws any period and grouping of it.
 //   GET /api/finance-admin/channels/lines?fy=2026&months=2026-04,2026-05&dir=out&channel=paytm&purpose=farm&account=<id>&fd=exclude
 //     the lines behind one box or band of the picture: how many, how much, and the largest few (date, account, channel, purpose,
-//     amount, and the line's id so the Ledger can open it).
+//     project, amount, and the line's id so the Ledger can open it). `&project=<id>` (or `none`) narrows money for projects to one project.
 // Both need `finance` / `view`, the same as the dashboard, and an auditor's visit is logged the same way. Neither carries narrations,
 // UPI ids or party names: account labels, delegate labels and numbers (as on the UPI page), counts and amounts.
 import { requireStaff } from './staff-access';
@@ -18,7 +18,7 @@ import { financialYearOf } from '../../../scripts/lib/finance-allocation.mjs';
 import { todayIST } from '../../../scripts/lib/finance-parties.mjs';
 import { attribute, delegateLabel } from '../../../scripts/lib/finance-delegates.mjs';
 import { fdBalance } from '../../../scripts/lib/finance-metrics.mjs';
-import { cellMatches, channelCube, channelPieces, fyMonths, monthsSoFar } from '../../../scripts/lib/finance-channels.mjs';
+import { cellMatches, channelCube, channelPieces, fyMonths, groupPieces, monthsSoFar } from '../../../scripts/lib/finance-channels.mjs';
 import { CIRCLE_CAP_PAISE } from '../../../scripts/lib/finance-upi-circle.mjs';
 
 type Json = Record<string, any>;
@@ -27,15 +27,16 @@ const rows = async (path: string): Promise<Json[]> => (await (await rest(path)).
 const LINES_SHOWN = 8;
 
 async function loadLedger() {
-  const [lines, allocRows, categories, accounts, upiJoined] = await Promise.all([
+  const [lines, allocRows, categories, accounts, upiJoined, parties] = await Promise.all([
     rowsAll('/fin_bank_lines?select=id,bank_account_id,tran_date,direction,amount_paise,narration&order=tran_date.asc,id.asc'),
-    rowsAll('/fin_allocations?select=bank_line_id,category_id,project_id,amount_paise&posted_at=not.is.null&order=id.asc'),
+    rowsAll('/fin_allocations?select=bank_line_id,category_id,project_id,party_id,amount_paise&posted_at=not.is.null&order=id.asc'),
     rows('/fin_categories?select=id,name,type,head,is_salary&order=id.asc&limit=500').catch(() => rows('/fin_categories?select=id,name,type&order=id.asc&limit=500')),
     rows('/fin_bank_accounts?select=id,label&order=created_at.asc&limit=50'),
     rowsAll('/fin_upi_lines?select=bank_line_id,app&bank_line_id=not.is.null&order=id.asc'),
+    rowsAll('/fin_parties?select=id,name,merged_into&order=id.asc').catch(() => rowsAll('/fin_parties?select=id,name&order=id.asc')).catch(() => [] as Json[]),
   ]);
   const upiAppByLine = new Map<string, 'bhim' | 'paytm'>(upiJoined.map((u) => [u.bank_line_id as string, u.app as 'bhim' | 'paytm']));
-  return { lines, allocRows, categories, accounts, upiAppByLine };
+  return { lines, allocRows, categories, accounts, parties, upiAppByLine };
 }
 
 /** Signs in, checks the year, and records an auditor's visit. Returns the answer to send back, or what to carry on with. */
@@ -111,36 +112,82 @@ export async function getChannels(req: Request): Promise<Response> {
   }
 }
 
-/** The lines behind a box or band: the same pieces the picture is summed from, so the count and the amount agree with it. */
+const UUID = /^[0-9a-f-]{36}$/i;
+
+/**
+ * The pieces (lines, split by allocation) behind a box or band, from the query: the same pieces the picture is summed from, so counts and
+ * amounts agree with it. Returns { fail } with the answer to send, or the pieces and the names to put on them.
+ */
+async function piecesFor(req: Request, what: string) {
+  const o = await open(req, what);
+  if ('fail' in o) return { fail: o.fail! };
+  const { fy } = o;
+  const q = new URL(req.url).searchParams;
+  const valid = new Set(fyMonths(fy));
+  const months = (q.get('months') ?? '').split(',').filter(Boolean);
+  if (!months.length || months.length > 12 || months.some((m) => !valid.has(m))) return { fail: json({ error: 'Choose months of that year.' }, 400) };
+  const dir = q.get('dir');
+  if (dir !== null && dir !== 'in' && dir !== 'out') return { fail: json({ error: 'Choose in or out.' }, 400) };
+  const fd = q.get('fd');
+  if (fd !== null && fd !== 'only' && fd !== 'exclude') return { fail: json({ error: 'Choose only or exclude.' }, 400) };
+  const ids: Record<string, string | undefined> = {};
+  for (const key of ['project', 'party', 'category']) {
+    const v = q.get(key);
+    if (v !== null && v !== 'none' && !UUID.test(v)) return { fail: json({ error: `Choose a ${key}.` }, 400) };
+    ids[key] = v ?? undefined;
+  }
+  const spec = { dir: dir ?? undefined, channel: q.get('channel') ?? undefined, purpose: q.get('purpose') ?? undefined, account: q.get('account') ?? undefined, fd: fd ?? undefined, ...ids };
+
+  const { lines, allocRows, categories, accounts, parties, upiAppByLine } = await loadLedger();
+  // A party that was merged into another is that other one.
+  const mergedInto = new Map<string, string>(parties.filter((p) => p.merged_into).map((p) => [p.id as string, p.merged_into as string]));
+  const canon = (id: string) => { let at = id, hops = 0; while (at && mergedInto.has(at) && hops++ < 8) at = mergedInto.get(at)!; return at; };
+  const from = `${fy}-04-01`;
+  const to = `${fy + 1}-03-31`;
+  const pieces = channelPieces({ lines: lines.filter((l) => l.tran_date >= from && l.tran_date <= to), upiAppByLine, allocations: allocRows, categories })
+    .map((p: Json) => ({ ...p, party: canon(p.party) }))
+    .filter((p: Json) => cellMatches(p, spec, months));
+  return {
+    pieces: pieces as Json[],
+    accounts: new Map(accounts.map((a) => [a.id as string, a.label as string])),
+    partyNames: new Map(parties.map((p) => [p.id as string, p.name as string])),
+    categoryNames: new Map(categories.map((c) => [c.id as string, c.name as string])),
+  };
+}
+
+/** The lines behind a box or band: how many, how much, and the largest few. */
 export async function getChannelLines(req: Request): Promise<Response> {
   try {
-    const o = await open(req, 'lines');
-    if ('fail' in o) return o.fail!;
-    const { fy } = o;
-    const q = new URL(req.url).searchParams;
-    const valid = new Set(fyMonths(fy));
-    const months = (q.get('months') ?? '').split(',').filter(Boolean);
-    if (!months.length || months.length > 12 || months.some((m) => !valid.has(m))) return json({ error: 'Choose months of that year.' }, 400);
-    const dir = q.get('dir');
-    if (dir !== null && dir !== 'in' && dir !== 'out') return json({ error: 'Choose in or out.' }, 400);
-    const fd = q.get('fd');
-    if (fd !== null && fd !== 'only' && fd !== 'exclude') return json({ error: 'Choose only or exclude.' }, 400);
-    const spec = { dir: dir ?? undefined, channel: q.get('channel') ?? undefined, purpose: q.get('purpose') ?? undefined, account: q.get('account') ?? undefined, fd: fd ?? undefined };
-
-    const { lines, allocRows, categories, accounts, upiAppByLine } = await loadLedger();
-    const from = `${fy}-04-01`;
-    const to = `${fy + 1}-03-31`;
-    const pieces = channelPieces({ lines: lines.filter((l) => l.tran_date >= from && l.tran_date <= to), upiAppByLine, allocations: allocRows, categories }).filter((p: Json) => cellMatches(p, spec, months));
-    const label = new Map(accounts.map((a) => [a.id as string, a.label as string]));
-    const shown = pieces.slice().sort((a: Json, b: Json) => b.paise - a.paise || (a.date < b.date ? 1 : -1)).slice(0, LINES_SHOWN);
+    const r = await piecesFor(req, 'lines');
+    if ('fail' in r) return r.fail!;
+    const { pieces, accounts, partyNames, categoryNames } = r;
+    const shown = pieces.slice().sort((a, b) => b.paise - a.paise || (a.date < b.date ? 1 : -1)).slice(0, LINES_SHOWN);
     return json({
-      count: new Set(pieces.map((p: Json) => p.lineId)).size,
+      count: new Set(pieces.map((p) => p.lineId)).size,
       pieces: pieces.length,
-      paise: pieces.reduce((t: number, p: Json) => t + p.paise, 0),
-      lines: shown.map((p: Json) => ({ id: p.lineId, date: p.date, account: label.get(p.a) ?? '', channel: p.c, purpose: p.g, dir: p.d, paise: p.paise, uncategorised: Boolean(p.u) })),
+      paise: pieces.reduce((t, p) => t + p.paise, 0),
+      lines: shown.map((p) => ({
+        id: p.lineId, date: p.date, account: accounts.get(p.a) ?? '', channel: p.c, purpose: p.g, dir: p.d, paise: p.paise, project: p.p,
+        party: p.party ? partyNames.get(p.party) ?? '' : '', category: p.cat ? categoryNames.get(p.cat) ?? '' : '', uncategorised: Boolean(p.u),
+      })),
     });
   } catch (err) {
     console.error('[finance-channels] lines failed', err);
+    return json({ error: 'Server error' }, 500);
+  }
+}
+
+/** A box or band broken down by who it was paid to or by (`by=party`) or by category (`by=category`): the rows add up to the box. */
+export async function getChannelBreakdown(req: Request): Promise<Response> {
+  try {
+    const by = new URL(req.url).searchParams.get('by');
+    if (by !== 'party' && by !== 'category') return json({ error: 'Choose party or category.' }, 400);
+    const r = await piecesFor(req, 'breakdown');
+    if ('fail' in r) return r.fail!;
+    const rowsOut = groupPieces(r.pieces, by, by === 'party' ? r.partyNames : r.categoryNames);
+    return json({ by, rows: rowsOut, paise: rowsOut.reduce((t: number, x: Json) => t + x.paise, 0) });
+  } catch (err) {
+    console.error('[finance-channels] breakdown failed', err);
     return json({ error: 'Server error' }, 500);
   }
 }

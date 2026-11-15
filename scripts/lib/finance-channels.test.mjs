@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  FD, GROUPINGS, IN_PURPOSES, OUT_PURPOSES, cellMatches, channelCube, channelPieces, flowOf, fyMonths, monthBars, monthsSoFar, presetMonths, previousMonths, rangeOf, specOf, totalsOf,
+  FD, GROUPINGS, IN_PURPOSES, OUT_PURPOSES, breakdownOf, cellMatches, channelCube, channelPieces, flowOf, fyMonths, groupPieces, monthBars, monthsSoFar, presetMonths, previousMonths, projectsOf, purposesOf, rangeOf, specOf, totalsOf,
 } from './finance-channels.mjs';
 
 const categories = [
@@ -206,4 +206,75 @@ test('the deposits box means the sinking-fund money in that direction, and a cha
 test('a month outside the chosen ones never matches', () => {
   assert.equal(cellMatches(cell({ c: 'paytm' })[0], {}, ['2026-01']), false);
   assert.equal(cellMatches(cell({ c: 'paytm' })[0], { dir: 'in' }, MONTHS), false);
+});
+
+test('Projects opens by project: each project, then money for projects that names none, adding up to the box', () => {
+  const cats = [...categories, { id: 'c-proj', name: 'Fencing', type: 'capex', head: 'projects', is_salary: false }];
+  const ls = [
+    line('p1', '2026-10-03', 'debit', 90000, 'NEFT/0101102630472/10/'), line('p2', '2026-10-04', 'debit', 60000, 'POS/SHOP'),
+    line('p3', '2026-10-05', 'debit', 25000, 'POS/SHOP'), line('p4', '2026-11-05', 'debit', 15000, 'POS/SHOP'),
+  ];
+  const als = [alloc('p1', 'c-farm', 50000, 'P1'), alloc('p1', 'c-farm', 40000, 'P2'), alloc('p2', 'c-farm', 60000, 'P1'), alloc('p3', 'c-proj', 25000), alloc('p4', 'c-proj', 15000, 'P2')];
+  const pc = channelCube({ lines: ls, upiAppByLine: new Map(), allocations: als, categories: cats });
+  const projects = [{ id: 'P1', name: 'Water tank' }, { id: 'P2', name: 'Perimeter fencing' }];
+  const f = flowOf({ cube: pc, accounts, months: MONTHS, groupIn: 'channel', groupOut: 'purpose' });
+  const box = node(f, 'R:projects');
+  const spec = specOf({ node: box, nodes: f.nodes, groupIn: 'channel', groupOut: 'purpose' });
+  assert.equal(spec.purpose, 'projects');
+  const rows = projectsOf({ cube: pc, months: MONTHS, spec, projects });
+  assert.deepEqual(rows.map((r) => [r.id, r.name, r.paise]), [['P1', 'Water tank', 110000], ['P2', 'Perimeter fencing', 55000], ['', 'No project named', 25000]]);
+  assert.equal(sum(rows), box.paise, 'the projects add up to the Projects box');
+  assert.equal(rows[0].n, 2, 'two lines went to the water tank');
+  // one month, and a link from an account, narrow it the same way
+  assert.deepEqual(projectsOf({ cube: pc, months: ['2026-11'], spec, projects }).map((r) => [r.id, r.paise]), [['P2', 15000]]);
+  const link = f.links.find((l) => l.to === 'R:projects');
+  assert.equal(sum(projectsOf({ cube: pc, months: MONTHS, spec: specOf({ link, nodes: f.nodes, groupIn: 'channel', groupOut: 'purpose' }), projects })), link.paise);
+  // choosing a project narrows the lines behind it, and 'none' means the money that names no project
+  assert.equal(sum(pc.filter((c) => cellMatches(c, { ...spec, project: 'P1' }, MONTHS))), 110000);
+  assert.equal(sum(pc.filter((c) => cellMatches(c, { ...spec, project: 'none' }, MONTHS))), 25000);
+  assert.equal(sum(pc.filter((c) => cellMatches(c, { ...spec, project: 'P9' }, MONTHS))), 0);
+  assert.deepEqual(projectsOf({ cube: pc, months: MONTHS, spec: { ...spec, project: 'P1' }, projects }).length, 3, 'a project already chosen does not hide the others');
+});
+
+test('every purpose breaks down the same way: projects by project, salary and maintenance by person, the rest by category, a channel by purpose', () => {
+  assert.equal(breakdownOf({ dir: 'out', purpose: 'projects', fd: 'exclude' }), 'project');
+  assert.equal(breakdownOf({ dir: 'out', purpose: 'salary', fd: 'exclude' }), 'party');
+  assert.equal(breakdownOf({ dir: 'in', purpose: 'maintenance', fd: 'exclude' }), 'party');
+  for (const purpose of ['farm', 'company', 'other']) assert.equal(breakdownOf({ dir: 'out', purpose, fd: 'exclude' }), 'category', purpose);
+  assert.equal(breakdownOf({ dir: 'out', channel: 'paytm', fd: 'exclude' }), 'purpose');
+  assert.equal(breakdownOf({ account: 'A1' }), null, 'an account goes straight to its lines');
+  assert.equal(breakdownOf({ dir: 'out', fd: 'only' }), null, 'so do the fixed deposits');
+});
+
+test('a channel is broken down by what its money was for, adding up to the box', () => {
+  const f = flow();
+  const box = node(f, 'R:paytm');
+  const spec = specOf({ node: box, nodes: f.nodes, groupIn: 'channel', groupOut: 'channel' });
+  const rows = purposesOf({ cube, months: MONTHS, spec });
+  assert.deepEqual(rows.map((r) => [r.id, r.name, r.paise]), [['salary', 'Salary', 70000], ['farm', 'Farm and household', 30000]]);
+  assert.equal(sum(rows), box.paise);
+  const bank = purposesOf({ cube, months: MONTHS, spec: specOf({ node: node(f, 'R:bank'), nodes: f.nodes, groupIn: 'channel', groupOut: 'channel' }) });
+  assert.deepEqual(bank.map((r) => r.id), ['other'], 'the bank direct line to the deposits is not here');
+});
+
+test('pieces are grouped by person or by category, with what has none named, counting each line once', () => {
+  const ps = [
+    { lineId: 'a', paise: 500, party: 'P1', cat: 'C1' }, { lineId: 'b', paise: 300, party: 'P1', cat: 'C2' }, { lineId: 'b', paise: 100, party: 'P1', cat: 'C2' },
+    { lineId: 'c', paise: 200, party: 'P2', cat: 'C1' }, { lineId: 'd', paise: 50, party: '', cat: '' }, { lineId: 'e', paise: 20, party: 'P9', cat: 'C9' },
+  ];
+  const people = groupPieces(ps, 'party', new Map([['P1', 'Asha'], ['P2', 'Ravi']]));
+  assert.deepEqual(people.map((r) => [r.id, r.name, r.paise, r.n]), [['P1', 'Asha', 900, 2], ['P2', 'Ravi', 200, 1], ['', 'No one named', 50, 1], ['P9', 'Someone no longer listed', 20, 1]]);
+  const cats = groupPieces(ps, 'category', new Map([['C1', 'Wages'], ['C2', 'Repairs']]));
+  assert.deepEqual(cats.map((r) => [r.id, r.name, r.paise]), [['C1', 'Wages', 700], ['C2', 'Repairs', 400], ['', 'No category yet', 50], ['C9', 'Another category', 20]]);
+  assert.equal(sum(people), sum(ps));
+});
+
+test('a person or category narrows the lines behind a box, and none means nobody named', () => {
+  const ps = [{ m: '2026-10', d: 'out', g: 'salary', c: 'bank', a: 'A1', p: '', cat: 'C1', party: 'P1', paise: 1 }, { m: '2026-10', d: 'out', g: 'salary', c: 'bank', a: 'A1', p: '', cat: 'C1', party: '', paise: 1 }];
+  const hit = (spec) => ps.filter((p) => cellMatches(p, spec, ['2026-10'])).length;
+  assert.equal(hit({ party: 'P1' }), 1);
+  assert.equal(hit({ party: 'none' }), 1);
+  assert.equal(hit({ category: 'C1' }), 2);
+  assert.equal(hit({ category: 'none' }), 0);
+  assert.equal(hit({ party: 'P1', category: 'C1' }), 1);
 });

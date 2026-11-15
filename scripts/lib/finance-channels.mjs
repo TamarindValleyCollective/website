@@ -24,7 +24,8 @@ export const IN_PURPOSES = [
 export const GROUPINGS = ['channel', 'purpose'];
 
 /**
- * One piece per allocation of a line (and one for what is left unallocated): { lineId, date, m, a, c, d, g, p, paise, u }.
+ * One piece per allocation of a line (and one for what is left unallocated): { lineId, date, m, a, c, d, g, p, cat, party, paise, u }
+ * (cat: the category's id, party: who it was paid to or by; both '' when none; neither is in the cube, which stays small).
  * a: account id, c: channel, d: 'in'|'out', g: purpose (out: by head, with a project's money under `projects`; in: maintenance, money back
  * from the sinking fund, or everything else), p: project id or '', u: 1 when the money has no category yet. What nobody has allocated is
  * `other` with u: 1, so each direction always adds up to the bank lines. `upiAppByLine`: bank line id -> 'bhim' | 'paytm' for lines
@@ -43,10 +44,10 @@ export function channelPieces({ lines, upiAppByLine, allocations, categories }) 
     for (const a of allocBy.get(l.id) ?? []) {
       const cat = cats.get(a.category_id);
       const g = d === 'out' ? groupOf(cat, a.project_id) : cat?.type === 'member_contribution' ? 'maintenance' : cat?.type === 'sinking_fund' ? 'sinking' : 'other';
-      pieces.push({ ...base, g, p: d === 'out' ? a.project_id || '' : '', paise: a.amount_paise, u: 0 });
+      pieces.push({ ...base, g, p: d === 'out' ? a.project_id || '' : '', cat: a.category_id || '', party: a.party_id || '', paise: a.amount_paise, u: 0 });
       left -= a.amount_paise;
     }
-    if (left > 0) pieces.push({ ...base, g: 'other', p: '', paise: left, u: 1 });
+    if (left > 0) pieces.push({ ...base, g: 'other', p: '', cat: '', party: '', paise: left, u: 1 });
   }
   return pieces;
 }
@@ -203,5 +204,73 @@ export function cellMatches(cell, spec, months) {
   if (spec.purpose && cell.g !== spec.purpose) return false;
   if (spec.fd === 'only' && cell.g !== 'sinking') return false;
   if (spec.fd === 'exclude' && cell.g === 'sinking') return false;
+  if (spec.project && cell.p !== (spec.project === 'none' ? '' : spec.project)) return false;   // 'none': money for projects that names no project
+  // Who it was paid to or by, and its category, are on the pieces (the lines), not on the cube's cells; 'none' means nobody named / no category yet.
+  if (spec.party && cell.party !== (spec.party === 'none' ? '' : spec.party)) return false;
+  if (spec.category && cell.cat !== (spec.category === 'none' ? '' : spec.category)) return false;
   return true;
+}
+
+/**
+ * How a clicked box or band is broken down, the same way for every purpose: Projects by project, Salary by employee (who it was paid to),
+ * Maintenance by who paid it, every other purpose by category, and a channel by what its money was for. 'project' and 'purpose' come from the
+ * cube in the browser; 'party' and 'category' need the lines, so the server groups them (GET /channels/breakdown). null: an account or the
+ * fixed deposits, which go straight to their lines.
+ * @param {Record<string, string>} spec as made by specOf
+ * @returns {'project' | 'party' | 'category' | 'purpose' | null}
+ */
+export function breakdownOf(spec) {
+  if (spec.fd === 'only') return null;
+  if (spec.purpose === 'projects') return 'project';
+  if (spec.purpose === 'salary' || spec.purpose === 'maintenance') return 'party';
+  if (spec.purpose) return 'category';
+  if (spec.channel) return 'purpose';
+  return null;
+}
+
+/** What a channel's money was for, purpose by purpose (the fixed deposits left out): [{ id, name, paise, n }], biggest first. */
+export function purposesOf({ cube, months, spec }) {
+  const dir = spec.dir === 'in' ? 'in' : 'out';
+  const labels = new Map((dir === 'in' ? IN_PURPOSES : OUT_PURPOSES).map((p) => [p.id, p.label]));
+  const by = new Map();
+  for (const c of cube) {
+    if (!cellMatches(c, { ...spec, purpose: undefined }, months)) continue;
+    const e = by.get(c.g) ?? by.set(c.g, { id: c.g, name: labels.get(c.g) ?? c.g, paise: 0, n: 0 }).get(c.g);
+    e.paise += c.paise;
+    e.n += c.n;
+  }
+  return [...by.values()].sort((a, b) => b.paise - a.paise || (a.name < b.name ? -1 : 1));
+}
+
+/**
+ * Pieces grouped by party or category: [{ id ('' when none), name, paise, n: lines }], biggest first. `names`: id -> name; what has none is
+ * 'No one named' / 'No category yet'.
+ */
+export function groupPieces(pieces, by, names) {
+  const field = by === 'party' ? 'party' : 'cat';
+  const none = by === 'party' ? 'No one named' : 'No category yet';
+  const groups = new Map(), seen = new Set();
+  for (const p of pieces) {
+    const id = p[field];
+    const e = groups.get(id) ?? groups.set(id, { id, name: id ? names.get(id) ?? (by === 'party' ? 'Someone no longer listed' : 'Another category') : none, paise: 0, n: 0 }).get(id);
+    e.paise += p.paise;
+    if (!seen.has(`${id}|${p.lineId}`)) { seen.add(`${id}|${p.lineId}`); e.n += 1; }
+  }
+  return [...groups.values()].sort((a, b) => b.paise - a.paise || (a.name < b.name ? -1 : 1));
+}
+
+/**
+ * What the money grouped as "Projects" went to, project by project: [{ id ('' when no project is named), name, paise, n: lines }], biggest first.
+ * `spec` is the filter of the box or band that was clicked; its own `project`, if any, is ignored so every project is listed.
+ */
+export function projectsOf({ cube, months, spec, projects }) {
+  const names = new Map(projects.map((p) => [p.id, p.name]));
+  const by = new Map();
+  for (const c of cube) {
+    if (!cellMatches(c, { ...spec, project: undefined }, months)) continue;
+    const e = by.get(c.p) ?? by.set(c.p, { id: c.p, name: c.p ? names.get(c.p) ?? 'Another project' : 'No project named', paise: 0, n: 0 }).get(c.p);
+    e.paise += c.paise;
+    e.n += c.n;
+  }
+  return [...by.values()].sort((a, b) => b.paise - a.paise || (a.name < b.name ? -1 : 1));
 }

@@ -23,7 +23,7 @@ import { PARTY_ID, addEvidence, addMissingIfsc, getEvidence, listEvidence, addVe
 import { REQUEST_ID, addVoucher, cancelOrDecide, listFiles, createRecord, getVoucher, listMine, listRequests, matchRecord, reviewRecord, unmatchRecord } from './lib/finance-requests';
 import { listUpiLines } from './lib/finance-upi-view';
 import { assignDelegate, saveDelegate } from './lib/finance-delegates';
-import { getChannelLines, getChannels } from './lib/finance-channels';
+import { getChannelBreakdown, getChannelLines, getChannels } from './lib/finance-channels';
 import { getDashboard } from './lib/finance-dashboard';
 import { BUDGET_ID, approveDraft, discardDraft, getBudget, saveLines, startDraft } from './lib/finance-budget';
 import { setPaymentNote } from './lib/finance-notes';
@@ -264,6 +264,7 @@ const dispatch = async (req: Request): Promise<Response> => {
   if (route === '/upi-lines' && req.method === 'GET') return listUpiLines(req);
   if (route === '/channels' && req.method === 'GET') return getChannels(req);
   if (route === '/channels/lines' && req.method === 'GET') return getChannelLines(req);
+  if (route === '/channels/breakdown' && req.method === 'GET') return getChannelBreakdown(req);
   if (route === '/delegates' && req.method === 'POST') return saveDelegate(req, null);
   if (route === '/delegates/assign' && req.method === 'POST') return assignDelegate(req);
   const delegate = /^\/delegates\/([^/]+)$/.exec(route);
@@ -319,6 +320,7 @@ export const config = {
     '/api/finance-admin/upi-lines',
     '/api/finance-admin/channels',
     '/api/finance-admin/channels/lines',
+    '/api/finance-admin/channels/breakdown',
     '/api/finance-admin/delegates',
     '/api/finance-admin/delegates/*',
     '/api/finance-admin/requests',

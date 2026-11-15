@@ -119,6 +119,7 @@ import SignInGate from '../../../components/SignInGate.astro';
 
       <div class="dash-view" id="v-channels" hidden>
         <p id="ch-state" class="hint" hidden></p>
+        <div class="ch-top">
         <div class="card ch-period">
           <div class="ch-row">
             <h2>Period</h2>
@@ -146,7 +147,8 @@ import SignInGate from '../../../components/SignInGate.astro';
           </div>
           <div class="ch-scroll"><svg id="ch-flow" class="fl-flow" role="img" aria-label="The cashflow: where money came in from, through the accounts, to where it went out. The table below has the same figures as text."></svg></div>
           <p class="hint ch-legend"><i class="ch-swatch"></i>Green is money moved to or from the fixed deposits. They are a holding outside the accounts, so it is neither received nor spent.</p>
-          <div class="ch-detail" id="ch-detail" aria-live="polite"></div>
+        </div>
+        <div class="ch-detail" id="ch-detail" aria-live="polite"></div>
         </div>
         <div class="card">
           <h2>UPI Circle delegates</h2>
@@ -175,7 +177,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   import { StaffAuthError, clearStepUp, clearToken, decodeTokenEmail, getToken, setToken, staffFetch } from '../../../../scripts/lib/staff-client.mjs';
   import { clearState, showFailure, showLoading } from '../../../../scripts/lib/staff-states.mjs';
   import { CHANNELS } from '../../../../scripts/lib/finance-origin.mjs';
-  import { IN_PURPOSES, OUT_PURPOSES, flowOf, fyMonths, monthBars, monthsSoFar, presetMonths, previousMonths, rangeOf, specOf, totalsOf } from '../../../../scripts/lib/finance-channels.mjs';
+  import { IN_PURPOSES, OUT_PURPOSES, breakdownOf, flowOf, fyMonths, monthBars, monthsSoFar, presetMonths, previousMonths, projectsOf, purposesOf, rangeOf, specOf, totalsOf } from '../../../../scripts/lib/finance-channels.mjs';
   import { drawFlow, layoutFlow, moneyText, monthName, mountStrip, statusOf } from '../../../../scripts/lib/finance-channels-view.mjs';
   import {
     GROUPS, GROUP_CLASS, GROUP_LABELS, HEAD_LABELS, SPEND_HEADS, STATUS, balanceSvg, barsInOutSvg, circleBarsSvg, healthItems, lakhText, monthsText, percentText, ringSvg, rupeesText,
@@ -556,8 +558,8 @@ import SignInGate from '../../../components/SignInGate.astro';
   // purpose, so the period, the grouping and the compare switch all work on what arrived. The lines behind a box or band are asked for
   // when it is clicked (GET /channels/lines).
   type ChSel = { nodeId: string } | { from: string; to: string } | null;
-  const ch: { data: any; fy: number | null; months: string[]; groupIn: string; groupOut: string; cmp: boolean; sel: ChSel; strip: any; layout: any; drawn: any; flow: any; loading: boolean; seq: number } = {
-    data: null, fy: null, months: [], groupIn: 'channel', groupOut: 'channel', cmp: false, sel: null, strip: null, layout: null, drawn: null, flow: null, loading: false, seq: 0,
+  const ch: { data: any; fy: number | null; months: string[]; groupIn: string; groupOut: string; cmp: boolean; sel: ChSel; strip: any; layout: any; drawn: any; flow: any; loading: boolean; seq: number; projPick: string | null; projFor: string } = {
+    data: null, fy: null, months: [], groupIn: 'channel', groupOut: 'channel', cmp: false, sel: null, strip: null, layout: null, drawn: null, flow: null, loading: false, seq: 0, projPick: null, projFor: '',
   };
   const chMoney = (paise: number) => moneyText(paise);
   const chSoFar = (): string[] => monthsSoFar({ fy: ch.data.fy, today: ch.data.today });
@@ -718,6 +720,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     const box = $('ch-detail');
     box.replaceChildren();
     const s = selectionOf(), flow = ch.flow, layout = ch.layout;
+    box.classList.toggle('has-sel', Boolean(s && flow && layout));
     if (!s || !flow || !layout) {
       box.append(el('p', 'hint', 'Click any box or band to follow its money from where it came to where it went, and to see the lines behind it.'));
       return;
@@ -744,13 +747,86 @@ import SignInGate from '../../../components/SignInGate.astro';
     clear.type = 'button';
     clear.addEventListener('click', () => { ch.sel = null; ch.drawn?.select(null); renderDetail(); });
     box.append(title, clear);
-    const holder = el('div', 'ch-lines');
-    holder.append(el('p', 'hint', 'Loading the lines…'));
-    box.append(holder);
-    void loadLines(spec, holder, ++ch.seq);
+    // Every box is broken down the same way before its lines (breakdownOf): Projects by project, Salary by employee, Maintenance by who paid,
+    // the other purposes by category, a channel by what it was for. Each row opens that row's lines; an account or the deposits go straight to theirs.
+    const lineSpec: Record<string, string> = { ...spec };
+    const dim = breakdownOf(spec);
+    if (!dim) {
+      const holder = el('div', 'ch-lines');
+      holder.append(el('p', 'hint', 'Loading the lines…'));
+      box.append(holder);
+      void loadLines(lineSpec, holder, ++ch.seq, null);
+      return;
+    }
+    const key = JSON.stringify(ch.sel);
+    if (ch.projFor !== key) { ch.projFor = key; ch.projPick = null; }
+    const seq = ++ch.seq;
+    const tableBox = el('div', 'tablewrap ch-projects');
+    const rest = el('div', 'ch-rest');
+    tableBox.append(el('p', 'hint', 'Loading…'));
+    box.append(tableBox, rest);
+    const firstColumn = dim === 'project' ? 'Project' : dim === 'purpose' ? 'Purpose' : dim === 'category' ? 'Category' : spec.purpose === 'salary' ? 'Employee' : spec.dir === 'in' ? 'Paid by' : 'Paid to';
+    const extra = dim === 'purpose' ? null : { title: firstColumn, get: (l: any) => (dim === 'project' ? (l.project ? projectNames().get(l.project) ?? 'Another project' : 'No project named') : dim === 'party' ? l.party || 'No one named' : l.category || 'No category yet') };
+    const show = (rows: any[]) => {
+      if (seq !== ch.seq) return;
+      const table = document.createElement('table');
+      const head = table.createTHead().insertRow();
+      [firstColumn, 'Lines', 'Amount'].forEach((t, i) => { const th = document.createElement('th'); th.textContent = t; if (i > 0) th.className = 'num'; head.append(th); });
+      const body = table.createTBody();
+      for (const p of rows) {
+        const tr = body.insertRow();
+        const pick = p.id || 'none';
+        if (ch.projPick === pick) tr.className = 'on';
+        const b = el('button', 'ch-linkbtn', p.name) as HTMLButtonElement;
+        b.type = 'button';
+        b.setAttribute('aria-pressed', String(ch.projPick === pick));
+        b.title = ch.projPick === pick ? 'Hide these lines' : 'Show these lines';
+        b.addEventListener('click', () => { ch.projPick = ch.projPick === pick ? null : pick; renderDetail(); });
+        tr.insertCell().append(b);
+        const lines = tr.insertCell(); lines.className = 'num'; lines.textContent = String(p.n);
+        const amt = tr.insertCell(); amt.className = 'num'; amt.textContent = chMoney(p.paise);
+      }
+      tableBox.replaceChildren(table);
+      rest.replaceChildren();
+      if (ch.projPick === null) {
+        const all = el('button', 'ch-clear', 'Show every line') as HTMLButtonElement;
+        all.type = 'button';
+        all.addEventListener('click', () => { ch.projPick = '*'; renderDetail(); });
+        rest.append(el('p', 'hint', 'Choose a row to see its lines.'), all);
+        return;
+      }
+      if (ch.projPick !== '*') lineSpec[dim] = ch.projPick;
+      const holder = el('div', 'ch-lines');
+      holder.append(el('p', 'hint', 'Loading the lines…'));
+      rest.append(holder);
+      void loadLines(lineSpec, holder, seq, extra);
+    };
+    if (dim === 'project') show(projectsOf({ cube: ch.data.cube, months: ch.months, spec, projects: ch.data.projects }));
+    else if (dim === 'purpose') show(purposesOf({ cube: ch.data.cube, months: ch.months, spec }));
+    else void loadBreakdown(spec, dim, seq).then((rows) => { if (rows) show(rows); else if (seq === ch.seq) tableBox.replaceChildren(el('p', 'hint', "Couldn't load this. Nothing was changed. Click it again to retry.")); });
   }
 
-  async function loadLines(spec: Record<string, string>, holder: HTMLElement, seq: number) {
+  const projectNames = () => new Map<string, string>((ch.data.projects as any[]).map((p) => [p.id, p.name]));
+
+  /** Who a box's money was paid to or by, or its categories (the lines are needed for these, so the server groups them). */
+  async function loadBreakdown(spec: Record<string, string>, by: string, seq: number): Promise<any[] | null> {
+    const q = new URLSearchParams({ fy: String(ch.data.fy), months: ch.months.join(','), by });
+    for (const [k, v] of Object.entries(spec)) if (v) q.set(k, v);
+    try {
+      const res: any = await staffFetch(`/api/finance-admin/channels/breakdown?${q}`);
+      if (res.status !== 200) throw new Error('load failed');
+      return res.data.rows;
+    } catch (err) {
+      if (seq !== ch.seq) return null;
+      if (err instanceof StaffAuthError) {
+        if (err.kind === 'unauthorized') showGate('Your session expired. Sign in again.');
+        else showForbidden();
+      }
+      return null;
+    }
+  }
+
+  async function loadLines(spec: Record<string, string>, holder: HTMLElement, seq: number, extra: { title: string; get: (l: any) => string } | null) {
     const q = new URLSearchParams({ fy: String(ch.data.fy), months: ch.months.join(',') });
     for (const [k, v] of Object.entries(spec)) if (v) q.set(k, v);
     let res: any;
@@ -774,7 +850,8 @@ import SignInGate from '../../../components/SignInGate.astro';
     const wrap = el('div', 'tablewrap');
     const table = document.createElement('table');
     const head = table.createTHead().insertRow();
-    ['Date', 'Account', 'Channel', 'Purpose', 'Amount'].forEach((t, i) => { const th = document.createElement('th'); th.textContent = t; if (i === 4) th.className = 'num'; head.append(th); });
+    const cols = ['Date', 'Account', 'Channel', 'Purpose', ...(extra ? [extra.title] : []), 'Amount'];
+    cols.forEach((t, i) => { const th = document.createElement('th'); th.textContent = t; if (i === cols.length - 1) th.className = 'num'; head.append(th); });
     const body = table.createTBody();
     for (const l of r.lines) {
       const tr = body.insertRow();
@@ -786,6 +863,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       tr.insertCell().textContent = l.account;
       tr.insertCell().textContent = (CHANNELS as Record<string, any>)[l.channel]?.label ?? l.channel;
       tr.insertCell().textContent = purposeName(l.dir, l.purpose, l.uncategorised);
+      if (extra) tr.insertCell().textContent = extra.get(l);
       const amt = tr.insertCell();
       amt.className = 'num';
       amt.textContent = `${l.dir === 'in' ? '+' : '−'}${chMoney(l.paise)}`;
@@ -1531,6 +1609,15 @@ import SignInGate from '../../../components/SignInGate.astro';
 
   /* Channels: the period and month strip, the cashflow diagram and the lines behind it. The diagram is SVG drawn by
      scripts/lib/finance-channels-view.mjs; its colours are the chart tokens, so both appearances work. */
+  /* The period, the diagram and its details are one flex column, not grid rows: the details stick to the bottom of the screen once a box is
+     chosen, and a sticky item can only move inside its container, which therefore has to start above the window (a grid row, or the diagram's
+     own card, would only give it a few hundred pixels to move in). */
+  .ch-top {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
   .ch-period,
   .ch-main {
     display: grid;
@@ -1652,6 +1739,27 @@ import SignInGate from '../../../components/SignInGate.astro';
     gap: 8px;
   }
 
+  /* Once a box or band is chosen its details are pinned to the bottom of the screen, so they are seen the moment it is clicked, wherever the
+     page is scrolled; further down the page they settle into place under the diagram. */
+  .ch-detail.has-sel {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    max-height: 45vh;
+    overflow-y: auto;
+    padding: 12px 14px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: 12px;
+    background: var(--tvc-white);
+    box-shadow: 0 -6px 18px color-mix(in srgb, var(--tvc-ink) 14%, transparent);
+  }
+
+  @media (max-width: 899px) {
+    .ch-detail.has-sel {
+      bottom: calc(64px + env(safe-area-inset-bottom)); /* clear of the shell's phone tab bar (StaffLayout --tabbar-h, 64px) */
+    }
+  }
+
   .ch-head {
     margin: 0;
     max-width: 80ch;
@@ -1678,19 +1786,40 @@ import SignInGate from '../../../components/SignInGate.astro';
     gap: 6px;
   }
 
-  .ch-lines .hint,
-  .ch-controls .hint {
+  .dash .ch-lines .hint,
+  .dash .ch-controls .hint,
+  .dash .ch-detail .hint {
     margin: 0;
   }
 
   .ch-lines th,
-  .ch-lines td {
+  .ch-lines td,
+  .ch-projects th,
+  .ch-projects td {
     text-align: left;
   }
 
   .ch-lines th.num,
-  .ch-lines td.num {
+  .ch-lines td.num,
+  .ch-projects th.num,
+  .ch-projects td.num {
     text-align: right;
+  }
+
+  .ch-linkbtn {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--tvc-green-dark);
+    font: inherit;
+    text-align: left;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
+  .ch-projects tr.on td {
+    background: var(--tvc-cream);
+    font-weight: 650;
   }
 
   .ch-deleg {
