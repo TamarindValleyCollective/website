@@ -543,7 +543,7 @@ Modelled on how ServiceNow lists work, because the sheet's convenience was selec
   for all** (category, party and what it was for, then *Apply to N lines*, strong only once a box is filled), **2 · Or use suggestions**
   (*Accept suggestions*: fills empty cells only, never replaces what you set) and **3 · Post** (*Post N ready*, with why it is off beside
   it). The top line counts selected, ready and those needing what it was for, with *Show those* (turns on the *Needs a reason* filter),
-  and *Clear*. The page keeps space under the table so the bar never covers the last rows.
+  and *Clear*. The bar is a green-tinted band with a green top edge, so it reads as the place to act and not as more table. The page keeps space under the table so the bar never covers the last rows.
 - **Apply to the others.** Change a cell on a line that is one of several selected and the bar asks "Apply this to the other N
   selected lines too?" (Apply to all / Only this line).
 - **Keyboard.** Enter in a wording cell moves to the next line's wording cell.

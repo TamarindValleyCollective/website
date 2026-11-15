@@ -3830,8 +3830,10 @@ import SignInGate from '../../../components/SignInGate.astro';
     display: grid;
     gap: 2px;
     padding: 8px 16px 10px;
-    background: var(--tvc-surface);
-    border-top: 1px solid var(--tvc-line-strong);
+    /* A tinted band with a green top edge, so it reads as the place to act and not as more table. The tint is translucent in the admin
+       shell, so it is layered on the opaque card colour: rows scrolling under the bar do not show through. */
+    background: linear-gradient(var(--tvc-green-tint), var(--tvc-green-tint)), var(--tvc-white);
+    border-top: 3px solid var(--tvc-green);
   }
 
   /* The bar reads as three steps in the order they are used; the note beside each says what it does. */
