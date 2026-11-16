@@ -261,6 +261,40 @@ export async function createParty(req: Request): Promise<Response> {
   }
 }
 
+// The UPI page's reviewed add (finance-upi-view.ts). The person is added to the register with the UPI ID as an UNVERIFIED payment detail, so a
+// second admin verifies it; nothing is verified here. An exact twin of the name is refused (the page then offers it as a match instead).
+export async function addUpiParty(actorId: string, item: { name: string; kind: string; upi: string | null }): Promise<{ partyId: string } | { error: string }> {
+  const checked = validateParty({ name: item.name, kind: item.kind });
+  if (checked.error || !checked.party) return { error: checked.error ?? 'Enter the party.' };
+  const entity = await entityId();
+  const twins = await similarParties(entity, checked.party.name);
+  if (twins.length) return { error: 'There is already a party with that name.' };
+  const res = await rest('/fin_parties', {
+    method: 'POST',
+    headers: { Prefer: 'return=representation' },
+    body: JSON.stringify({ entity_id: entity, ...checked.party, household_id: null, created_by: actorId }),
+  });
+  const [party] = (await res.json()) as Json[];
+  // A plain-name row (BHIM) has no UPI ID to attach; the party is added by name alone.
+  const added = item.upi ? await addAccount(party.id, entity, actorId, { method: 'upi', upi: item.upi }, []) : null;
+  await audit(actorId, entity, 'finance.party_created', party.id, { kind: party.kind, linkedHousehold: false, withPayee: Boolean(item.upi), from: 'upi' });
+  if (added && 'created' in added && added.created) await audit(actorId, entity, 'finance.payee_added', added.created.id, { partyId: party.id, method: 'upi' });
+  return { partyId: party.id as string };
+}
+
+// Adds a UPI ID to a party already in the register, as unverified details (a second admin verifies them).
+export async function attachUpiToParty(actorId: string, partyId: string, upi: string): Promise<{ ok: true } | { error: string }> {
+  if (!ID.test(partyId)) return { error: 'Not found' };
+  const entity = await entityId();
+  const [party] = await rows(`/fin_parties?id=eq.${partyId}&select=id,active,merged_into`);
+  if (!party || !party.active || party.merged_into) return { error: 'That party is not in the register any more.' };
+  const existing = await accountRows(`party_id=eq.${partyId}&`);
+  const added = await addAccount(partyId, entity, actorId, { method: 'upi', upi }, existing);
+  if ('error' in added && added.error) return { error: added.error };
+  if ('created' in added && added.created) await audit(actorId, entity, 'finance.payee_added', added.created.id, { partyId, method: 'upi', from: 'upi' });
+  return { ok: true };
+}
+
 // A new vendor added by whoever raises payment requests (the farm manager, who has no `finance` access). Always a vendor, never
 // linked to a household, and its account details start unverified: an approver verifies them before anything is paid.
 export async function addVendor(req: Request): Promise<Response> {

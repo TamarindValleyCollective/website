@@ -96,7 +96,7 @@ globalThis.fetch = async (url, init = {}) => {
     }
     return json(db.fin_vpa_names.filter((r) => matches(r, u.searchParams)));
   }
-  if (table === 'fin_parties' || table === 'fin_party_accounts' || table === 'fin_party_account_files') {
+  if (table === 'fin_parties' || table === 'fin_party_accounts' || table === 'fin_party_account_files' || table === 'fin_upi_lines') {
     const rows = db[table];
     if (method === 'GET') return json(rows.filter((r) => matches(r, u.searchParams)));
     if (method === 'POST') {
@@ -117,7 +117,7 @@ globalThis.fetch = async (url, init = {}) => {
 const reset = (keyId = 'rzp_live_test') => {
   process.env.RAZORPAY_KEY_ID = keyId;
   razorpay = { asked: [], answers: {} };
-  db = { users: [], roles: [], fin_parties: [], fin_party_accounts: [], fin_party_account_files: [], fin_vpa_names: [], audit: [] };
+  db = { users: [], roles: [], fin_parties: [], fin_party_accounts: [], fin_party_account_files: [], fin_vpa_names: [], fin_upi_lines: [], audit: [] };
 };
 const sign = (id, role) => {
   const email = `${id}-${++n}@gmail.com`;
@@ -217,4 +217,106 @@ test('the audit row names the method and carries no UPI ID or name', async () =>
   assert.equal(entry.detail.method, 'razorpay_vpa');
   assert.ok(auditDetailIsSafe(entry.detail));
   assert.ok(!/ybl|q000111222|TEST VENDOR/i.test(JSON.stringify(entry)));
+});
+
+// ---- the UPI table's Party column and the reviewed add
+const upiRow = (id, counterparty, direction = 'debit') => ({ id, paid_at: '2026-10-02', paid_time: '10:00:00', app: 'paytm', counterparty, remarks: 'x', tag: null, amount_paise: 35400, direction, is_circle: false, upi_ref: `REF${id}`, bank_account_id: null, bank_line_id: null, ignored: false });
+const partyOf = async (email, rowId) => (await (await api(email, '/upi-lines')).json()).lines.find((l) => l.id === rowId).party;
+const addParties = (email, items) => api(email, '/upi-lines/add-parties', { method: 'POST', body: { items } });
+const kept = (vpa, name) => db.fin_vpa_names.push({ vpa, success: Boolean(name), name, key_mode: 'live' });
+
+test('the party column follows the UPI ID: on file, matches, differs, and not looked up', async () => {
+  reset();
+  const op = sign('u1', 'user');
+  db.fin_upi_lines.push(upiRow('r1', `${VPA} on PhonePe`));
+  await api(op, '/parties', { method: 'POST', body: { name: 'Test Vendor Works', kind: 'vendor', payee: { method: 'upi', upi: VPA } } });
+  assert.equal((await partyOf(op, 'r1')).state, 'onfile', 'the ID is on a party but has not been looked up');
+  kept(VPA, 'TEST VENDOR WORKS');
+  assert.deepEqual(await partyOf(op, 'r1'), { state: 'matches', partyId: db.fin_parties[0].id, partyName: 'Test Vendor Works', registeredName: 'TEST VENDOR WORKS' });
+  db.fin_vpa_names.length = 0;
+  kept(VPA, 'SOMEONE ELSE ENTIRELY');
+  const differs = await partyOf(op, 'r1');
+  assert.equal(differs.state, 'differs');
+  assert.equal(differs.registeredName, 'SOMEONE ELSE ENTIRELY');
+});
+
+test('a reviewed add puts the person in Parties with the UPI ID unverified, once, and the row then matches', async () => {
+  reset();
+  const op = sign('u1', 'user');
+  db.fin_upi_lines.push(upiRow('r1', `${VPA} on PhonePe`), upiRow('r2', `${VPA} on PhonePe`));
+  kept(VPA, 'NEW PERSON NAME');
+  assert.equal((await partyOf(op, 'r1')).state, 'missing');
+  const res = await addParties(op, [{ rowId: 'r1' }, { rowId: 'r2' }]);
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), { added: 1, attached: 0, skipped: 0, reasons: [] });
+  assert.equal(db.fin_parties.length, 1, 'two rows for the same ID make one party');
+  assert.equal(db.fin_parties[0].name, 'New Person Name');
+  assert.equal(db.fin_parties[0].kind, 'vendor');
+  assert.equal(db.fin_party_accounts[0].status, 'unverified', 'a second admin verifies it');
+  assert.equal(db.fin_party_accounts[0].method, 'upi');
+  assert.equal((await partyOf(op, 'r1')).state, 'matches');
+});
+
+test('the reviewer’s edited name and kind are used, and a credit is a customer by default', async () => {
+  reset();
+  const op = sign('u1', 'user');
+  db.fin_upi_lines.push(upiRow('r1', `${VPA} on PhonePe`, 'credit'));
+  kept(VPA, 'NEW PERSON NAME');
+  await addParties(op, [{ rowId: 'r1' }]);
+  assert.equal(db.fin_parties[0].kind, 'customer');
+  reset();
+  const op2 = sign('u1', 'user');
+  db.fin_upi_lines.push(upiRow('r1', `${VPA} on PhonePe`));
+  kept(VPA, 'NEW PERSON NAME');
+  await addParties(op2, [{ rowId: 'r1', name: 'Fixed Name Co', kind: 'other' }]);
+  assert.deepEqual([db.fin_parties[0].name, db.fin_parties[0].kind], ['Fixed Name Co', 'other']);
+});
+
+test('an ID whose registered name matches a party is attached to that party, not added again', async () => {
+  reset();
+  const op = sign('u1', 'user');
+  await api(op, '/parties', { method: 'POST', body: { name: 'Test Vendor Works', kind: 'vendor' } });
+  db.fin_upi_lines.push(upiRow('r1', `${VPA} on PhonePe`));
+  kept(VPA, 'TEST VENDOR WORKS');
+  const before = await partyOf(op, 'r1');
+  assert.equal(before.state, 'attach');
+  const res = await addParties(op, [{ rowId: 'r1' }]);
+  assert.deepEqual(await res.json(), { added: 0, attached: 1, skipped: 0, reasons: [] });
+  assert.equal(db.fin_parties.length, 1);
+  assert.equal(db.fin_party_accounts[0].party_id, db.fin_parties[0].id);
+  assert.equal(db.fin_party_accounts[0].status, 'unverified');
+  assert.equal((await partyOf(op, 'r1')).state, 'matches');
+});
+
+test('the server decides from its own data: rows that need nothing, are not looked up, or are gone are skipped, not forced in', async () => {
+  reset();
+  const op = sign('u1', 'user');
+  db.fin_upi_lines.push(upiRow('r-lookup', VPA));
+  const res = await (await addParties(op, [{ rowId: 'r-lookup', name: 'Forced Name', kind: 'vendor' }, { rowId: 'nope' }])).json();
+  assert.equal(res.added, 0);
+  assert.equal(res.skipped, 2);
+  assert.equal(db.fin_parties.length, 0, 'a typed name cannot add someone the lookup has not named');
+});
+
+test('a plain name from the app is added by name alone, with no UPI ID to attach', async () => {
+  reset();
+  const op = sign('u1', 'user');
+  db.fin_upi_lines.push(upiRow('r1', 'Brand New Farm Shop'));
+  assert.equal((await partyOf(op, 'r1')).state, 'missing');
+  await addParties(op, [{ rowId: 'r1' }]);
+  assert.equal(db.fin_parties[0].name, 'Brand New Farm Shop');
+  assert.equal(db.fin_party_accounts.length, 0);
+});
+
+test('only someone who may allocate can add, nothing is sent without items, and the audit has counts only', async () => {
+  reset();
+  db.fin_upi_lines.push(upiRow('r1', `${VPA} on PhonePe`));
+  kept(VPA, 'NEW PERSON NAME');
+  assert.equal((await addParties(sign('u9', 'read_only'), [{ rowId: 'r1' }])).status, 403);
+  const op = sign('u1', 'user');
+  assert.equal((await addParties(op, [])).status, 400);
+  await addParties(op, [{ rowId: 'r1' }]);
+  const entry = db.audit.find((a) => a.action === 'finance.upi_parties_added');
+  assert.deepEqual(entry.detail, { added: 1, attached: 0, skipped: 0 });
+  assert.ok(!/ybl|q000111222|NEW PERSON|New Person/i.test(JSON.stringify(entry)));
 });

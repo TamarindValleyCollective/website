@@ -21,7 +21,7 @@ import { attentionOf } from '../../scripts/lib/finance-attention.mjs';
 import { lookupIfsc } from '../../scripts/lib/finance-ifsc.mjs';
 import { PARTY_ID, addEvidence, addMissingIfsc, getEvidence, listEvidence, addVendor, addPayeeAccount, createParty, listParties, mergeParty, retirePayeeAccount, revealPayeeAccount, reviewParty, unmergeParty, updateParty, verifyPayeeAccount } from './lib/finance-parties';
 import { REQUEST_ID, addVoucher, cancelOrDecide, listFiles, createRecord, getVoucher, listMine, listRequests, matchRecord, autoMatchRecords, reviewRecord, unmatchRecord } from './lib/finance-requests';
-import { listUpiLines } from './lib/finance-upi-view';
+import { addUpiParties, listUpiLines } from './lib/finance-upi-view';
 import { assignDelegate, saveDelegate } from './lib/finance-delegates';
 import { saveOperator } from './lib/finance-upi-operators';
 import { getChannelBreakdown, getChannelLines, getChannels } from './lib/finance-channels';
@@ -273,6 +273,7 @@ const dispatch = async (req: Request): Promise<Response> => {
   }
   // Ledger and review (session 05)
   if (route === '/upi-lines' && req.method === 'GET') return listUpiLines(req);
+  if (route === '/upi-lines/add-parties' && req.method === 'POST') return addUpiParties(req);
   if (route === '/channels' && req.method === 'GET') return getChannels(req);
   if (route === '/channels/lines' && req.method === 'GET') return getChannelLines(req);
   if (route === '/channels/breakdown' && req.method === 'GET') return getChannelBreakdown(req);
@@ -333,6 +334,7 @@ export const config = {
     '/api/finance-admin/accounts/*',
     '/api/finance-admin/evidence/*',
     '/api/finance-admin/upi-lines',
+    '/api/finance-admin/upi-lines/add-parties',
     '/api/finance-admin/channels',
     '/api/finance-admin/channels/lines',
     '/api/finance-admin/channels/breakdown',

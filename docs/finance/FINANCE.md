@@ -546,6 +546,21 @@ Razorpay's validate-VPA call says whose ID it is, so the suggestion can be the p
   request by `vpaFieldsFor` and never stored: the UPI rows are locked after import. The existing "Paid to" column still shows the app's raw text,
   ID included, to anyone who can view (unchanged). `GET /upi-lines` returns `upiId`, `vpaName`, `vpaState` (`named`/`asked`/`new`/null) per row
   and `canSeeUpiIds`; before migration `0102` it answers with every ID as `new`.
+- **The UPI table's Party column says whether each person is in Parties** (`scripts/lib/finance-upi-parties.mjs`, `partyStateFor`, tested in
+  `finance-upi-parties.test.mjs` and `finance-vpa-verify-endpoint.test.mjs`). The match is by **UPI ID first** (a party holding that ID, compared by
+  the keyed fingerprint, never decrypted), the name only checking it. States: **In Parties** (ID on a party and Razorpay's name fits it, or a plain
+  app name matches one party), **In Parties, name not checked** (ID on a party, not looked up), **Name differs** (ID on a party but Razorpay's
+  registered name does not fit the party's name or the name the bank showed when verified: shown with both names, to review and, if the party is
+  wrong, rename on the Parties page), **ID not on file** (no party holds the ID but the registered name matches one), **Not in Parties**, **Not
+  looked up yet**, **No name on file**. "Fits" is the same `namesResemble` the verify sheet uses (honorifics, company suffixes and brackets
+  ignored; one name inside the other). Filter chips: Not in Parties, Name differs, ID not on file, In Parties; Group by Party.
+- **Reviewed add (`POST /upi-lines/add-parties`, `finance` / `allocate`).** The toolbar button **Add N to Parties** (one entry per person, not
+  per payment) opens a list: tick who to add, edit the name and kind (a debit's person is a vendor by default, a credit's a customer; never a
+  member). Confirming adds each person to Parties with their UPI ID attached as **unverified** details (a second admin verifies it), and attaches
+  an ID to the party whose name matches ("ID not on file"). The server works out each row's need from its own data and does only what that state
+  allows, so a name typed on the page cannot add someone the lookup has not named; a party with a similar name already is skipped with the reason.
+  Rows for the same person are done once. Audit: `finance.upi_parties_added` with counts, plus the usual `finance.party_created` and
+  `finance.payee_added` (ids and the method only). Nothing is auto-added: a person always reviews the list.
 - **What changes in a suggestion:** with a name on file, the register is searched for it first (an exact or shortened match suggests that
   party, "The UPI ID is registered to "X", which matches Y in the register"); otherwise the name, in readable case, is the new party to add.
   With no name on file (the ID has no linked bank account, or does not exist) the line reads as before. Nothing is created or posted until a
