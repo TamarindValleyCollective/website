@@ -61,8 +61,10 @@ export function parseAmount(raw) {
   return { kind: 'amount', op: single[1] ?? '=', a: toPaise(single[2]), shown: [single[2]] };
 }
 
-export function matchAmount(cond, paise) {
+export function matchAmount(cond, value) {
   if (!cond) return true;
+  // Exact matches compare whole paise: a value that arrives as a string ("394500") or as a float (19.99 * 100) still equals what was typed.
+  const paise = Math.round(Number(value));
   switch (cond.op) {
     case '>': return paise > cond.a;
     case '>=': return paise >= cond.a;
