@@ -31,6 +31,7 @@ import {
   todayIST,
 } from '../../../scripts/lib/finance-parties.mjs';
 import { fingerprintText } from '../../../scripts/lib/finance-party-import.mjs';
+import { LEGAL_ENTITY_NAME } from '../../../src/data/site-facts';
 import { postingStats, suggestChanges } from '../../../scripts/lib/finance-party-suggestions.mjs';
 import { rowsAll } from './finance-ledger';
 import { registeredNameOf } from './finance-vpa';
@@ -197,7 +198,7 @@ export async function listParties(req: Request): Promise<Response> {
     // Suggested changes are worked out over the whole directory, whatever the search text is.
     const suggestions = suggestChanges(
       everyone.map((p: Json) => ({ id: p.id, name: p.name, kind: p.kind, active: p.active, householdId: p.householdId, accounts: p.accounts.map((a: Json) => ({ verifiedName: a.verification?.name ?? null })), stats: p.stats })),
-      { kindLabels: KIND_WORDS },
+      { kindLabels: KIND_WORDS, selfNames: [LEGAL_ENTITY_NAME] },
     );
     const shown = everyone
       // The label, or a name a bank showed for one of the party's accounts ("milk" finds the label, a surname finds the bank's name).
