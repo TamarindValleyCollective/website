@@ -636,7 +636,7 @@ Modelled on how ServiceNow lists work, because the sheet's convenience was selec
   actions (select, fill in suggestions, post). The virtual list now holds items (headings and lines); `lines` is only the lines that are showing.
 - **Favorites.** A named set of chips, words and grouping. Kept in this browser per account (`tvc-ledger-favorites:<email>`), not on the server; saving under an existing name replaces it.
 - **Where it lives:** the pure rules (filters, periods, grouping, favorites) are `scripts/lib/finance-search.mjs`, tested in `finance-search.test.mjs`; the page only draws them.
-- **Quiet rows (the mockup's look).** A line at rest is one row of text: Date, Amount, Category, Paid to / from, Status. The bank's **narration is not a column**: it is the
+- **Quiet rows (the mockup's look).** A line at rest is one row of text: Date, Amount, Paid to / from, Category, Status. The bank's **narration is not a column**: it is the
   evidence the suggestions come from, so it shows on hover (desktop, a short delay, text only), under the fields when a line is open, in the line sheet (click the date), or as
   a last column if **Columns -> Bank narration** is ticked (kept in this browser). **Columns -> What it was for** adds a column (after Paid to / from, wide table only, off by default, kept in this browser) with the typed, restored or posted wording, or the suggestion in grey italics; it sorts and has a column search like the others. The fields (category and party selects, the ✓ to accept a suggestion, and the wording box on its own
   line) appear when a line is ticked, has an error, or is opened by clicking its category or party; they close again when focus leaves. Filling in suggestions does not open rows. The
