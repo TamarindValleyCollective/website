@@ -424,8 +424,8 @@ import SignInGate from '../../../components/SignInGate.astro';
       { id: 'date', header: 'Date', accessorFn: (l: Line) => l.date },
       { id: 'origin', header: 'Origin', accessorFn: (l: Line) => l.origin ?? '' },
       { id: 'amount', header: 'Amount', accessorFn: (l: Line) => l.amountPaise },
-      { id: 'category', header: 'Category', accessorFn: (l: Line) => l.allocation?.categoryId ?? '' },
       { id: 'party', header: 'Paid to / from', accessorFn: (l: Line) => l.allocation?.partyId ?? '' },
+      { id: 'category', header: 'Category', accessorFn: (l: Line) => l.allocation?.categoryId ?? '' },
       { id: 'nature', header: 'What it was for', accessorFn: (l: Line) => l.effective?.nature ?? '' },
       { id: 'status', header: 'Status', accessorFn: (l: Line) => (l.review ? 'review' : l.state) },
       { id: 'narration', header: 'Bank narration', accessorFn: (l: Line) => l.narration },
@@ -1795,8 +1795,8 @@ import SignInGate from '../../../components/SignInGate.astro';
       cell('date', '', dateBtn),
       cell('origin', 'Origin', originSlot),
       cell('amount', '', amountText),
-      cell('category', 'Category', catPeek, cat, catTick, catText, catHint),
       cell('party', l.direction === 'debit' ? 'Paid to' : 'Received from', partyPeek, party, partyTick, partyText),
+      cell('category', 'Category', catPeek, cat, catTick, catText, catHint),
       cell('wording', '', wordText),
       cell('status', '', pillSlot),
       cell('narration', '', narr, details),
@@ -1825,7 +1825,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault();
         acceptRow(l);
-        focusRow(index + 1, 'categoryId');
+        focusRow(index + 1, 'partyId');
       } else if (e.altKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
         e.preventDefault();
         const field: Field = e.target === nature ? 'nature' : e.target === party.input ? 'partyId' : 'categoryId';
@@ -2577,7 +2577,7 @@ import SignInGate from '../../../components/SignInGate.astro';
         h('span', { class: 'abar-spacer' }),
         button('Clear', () => table.resetRowSelection(), 'button button--outline button--small'),
       ),
-      step('1 · Set for all', cat, party, words, apply, applyNote),
+      step('1 · Set for all', party, cat, words, apply, applyNote),
       step('2 · Or use suggestions', button('Accept suggestions', () => withUndo('Suggestions accepted.', sel.map((l) => l.id), () => { for (const l of sel) acceptRow(l, true); }), 'button button--outline button--small'), h('span', { class: `abar-note${weakGuesses ? ' abar-note--warn' : ''}`, text: `Fills empty cells only. It never replaces what you set.${weakGuesses ? ` ${weakGuesses} of these ${weakGuesses === 1 ? 'is a guess' : 'are guesses'}: check ${weakGuesses === 1 ? 'it' : 'them'} before posting.` : ''}` })),
       step('3 · Post', h('span', { class: 'abar-note', text: ready === 0 ? 'Needs a category and what it was for on at least one line.' : ready < sel.length ? `${sel.length - ready} ${plural(sel.length - ready)} not ready, and will stay as drafts. Posting asks you to confirm.` : 'Posting asks you to confirm first.' }), post),
     );
@@ -4208,8 +4208,8 @@ import SignInGate from '../../../components/SignInGate.astro';
     .ledger.show-narr .lrow.is-active {
       grid-template-areas:
         'chk date amt'
-        'chk cat cat'
         'chk party party'
+        'chk cat cat'
         'chk narr narr'
         'chk nature nature'
         'chk status status';
