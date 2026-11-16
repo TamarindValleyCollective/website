@@ -1827,7 +1827,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   });
 
   // ---- rows. Built once when they scroll into view; an edit changes the cells in place (fill), never the row element.
-  type Refs = { wordText: HTMLElement; amountText: HTMLElement; catHint: HTMLElement; check: HTMLInputElement; narr: HTMLButtonElement; details: HTMLElement; cat: ComboEl; catTick: HTMLElement; catText: HTMLElement; party: ComboEl; partyTick: HTMLElement; partyText: HTMLElement; nature: HTMLInputElement; natureTick: HTMLElement; natureText: HTMLElement; pillSlot: HTMLElement; catPeek: HTMLButtonElement; partyPeek: HTMLButtonElement; natureCell: HTMLElement; meta: HTMLElement; originSlot: HTMLElement };
+  type Refs = { wordText: HTMLButtonElement; amountText: HTMLElement; catHint: HTMLElement; check: HTMLInputElement; narr: HTMLButtonElement; details: HTMLElement; cat: ComboEl; catTick: HTMLElement; catText: HTMLElement; party: ComboEl; partyTick: HTMLElement; partyText: HTMLElement; nature: HTMLInputElement; natureTick: HTMLElement; natureText: HTMLElement; pillSlot: HTMLElement; catPeek: HTMLButtonElement; partyPeek: HTMLButtonElement; natureCell: HTMLElement; meta: HTMLElement; originSlot: HTMLElement };
   const refs = new WeakMap<HTMLElement, Refs>();
   const tick = (label: string, onClick: () => void) => h('button', { class: 'tick', text: '✓', attrs: { type: 'button', 'aria-label': label, title: label }, on: { click: onClick } });
   // Each cell says which column it belongs to, so a row's cells can be put in the layout's order (the page order is the Tab order).
@@ -1900,7 +1900,8 @@ import SignInGate from '../../../components/SignInGate.astro';
     nature.addEventListener('change', () => offerToOthers(l, 'nature', nature.value));
     const natureTick = tick(`Accept the suggested wording for ${who}`, () => edit(l, 'nature', ghostOf(l, 'nature')));
     const natureText = h('span', { class: 'lcell-text' });
-    const wordText = h('span', { class: 'wordtext' });
+    // The wording column is a button on an editable line, so the mandatory answer is always visible and one click from being typed (it opens the line on the field).
+    const wordText = h('button', { class: 'peek wordtext', attrs: { type: 'button' } }) as HTMLButtonElement;
     const pillSlot = h('span', { class: 'pillslot' });
     const originSlot = h('span', { class: 'origin-text' });
     // A line at rest is one quiet row of text. The fields appear when the line is ticked, has something typed in it, or is opened
@@ -1937,6 +1938,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     };
     catPeek.addEventListener('click', () => open(cat));
     partyPeek.addEventListener('click', () => open(party));
+    wordText.addEventListener('click', () => open(nature));
     // Leaving the line closes it again, unless it has something in it that must stay visible.
     // (Checked a moment later: hiding the button that was clicked blurs it before the field takes focus.)
     rowEl.addEventListener('focusout', () => {
@@ -2158,9 +2160,11 @@ import SignInGate from '../../../components/SignInGate.astro';
     // The What it was for column: what was typed or restored, or what was posted; failing both, the suggestion in grey.
     const wordsNow = can ? d.nature : l.allocation?.nature ?? '';
     const wordsGhost = can && !wordsNow ? ghostOf(l, 'nature') : '';
-    r.wordText.textContent = wordsNow || wordsGhost;
-    r.wordText.classList.toggle('ghost', !wordsNow && Boolean(wordsGhost));
+    r.wordText.textContent = wordsNow || wordsGhost || (can ? 'What it was for…' : '');
+    r.wordText.classList.toggle('ghost', !wordsNow && can);
     r.wordText.title = wordsNow || wordsGhost;
+    r.wordText.disabled = !can;
+    r.wordText.setAttribute('aria-label', `What it was for ${l.narration.slice(0, 40)}: ${wordsNow || wordsGhost || 'not filled in'}.${can ? ' Press to edit.' : ''}`);
     // A line that cannot be edited in its row (partly allocated, flagged, or posted without a party) is finished or fixed in its sheet:
     // its pill opens it, so the way in is visible and not only the narration.
     const pillNode = pillFor(l);
@@ -3909,6 +3913,10 @@ import SignInGate from '../../../components/SignInGate.astro';
     border-radius: var(--radius-sm);
     background: var(--tvc-white);
     box-shadow: inset 0 0 0 2px var(--tvc-green);
+  }
+
+  .ledger .wordtext:disabled {
+    cursor: default;
   }
 
   .ledger .wordtext.ghost {
