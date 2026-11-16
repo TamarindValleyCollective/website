@@ -3647,6 +3647,12 @@ import SignInGate from '../../../components/SignInGate.astro';
     display: none;
   }
 
+  /* An open line edits its wording in the field under it, so the read-only column cell steps aside (kept blank, so the grid does not shift)
+     instead of showing the same text again in a draft outline that looks like a second field. */
+  .ledger .lrow.is-active .gcell--wording {
+    visibility: hidden;
+  }
+
   .ledger .gcell--wording {
     min-width: 0;
     overflow: hidden;
