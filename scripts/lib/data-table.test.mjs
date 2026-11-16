@@ -16,6 +16,15 @@ test('search words all have to appear, ignoring case and punctuation', () => {
   assert.ok(passesWords('MOHAN, ELECTRICALS', ['mohan electricals']));
 });
 
+test('the shared tables (UPI, Parties, Requests, Rules) match an exact amount the way the ledger does: whole paise, however the value arrives', () => {
+  const m = (typed, value) => matchColumn('amount', parseColumnFilter('amount', typed), value);
+  assert.ok(m('2500', 250000), 'a number');
+  assert.ok(m('2500', '250000'), 'a string, as a JSON amount can arrive');
+  assert.ok(m('19.99', 19.99 * 100), 'a float that is not quite whole paise (1998.9999999999998)');
+  assert.ok(!m('!=19.99', 19.99 * 100), 'and the same value is not "not equal"');
+  assert.ok(!m('2500', 250001), 'one paise out is still a different amount');
+});
+
 test('a typed column condition is parsed once and matched per cell, by the column type', () => {
   const m = (type, typed, value) => matchColumn(type, parseColumnFilter(type, typed), value);
   assert.ok(m('text', '^green', 'Green Valley'));
