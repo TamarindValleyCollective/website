@@ -221,14 +221,16 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
     if (p.householdId) sel.disabled = true; // a member linked to a household stays a member
     sel.addEventListener('click', (e) => e.stopPropagation());
     sel.addEventListener('change', async () => {
+      // The row changes at once and the save runs behind it; a failed save puts the old kind back and says why.
       const before = p.kind;
-      const { status, data: out } = await call(`/api/finance-admin/parties/${p.id}`, 'PATCH', { kind: sel.value });
+      p.kind = sel.value;
+      table.render();
+      const { status, data: out } = await call(`/api/finance-admin/parties/${p.id}`, 'PATCH', { kind: p.kind });
       if (status === 200) {
-        p.kind = sel.value;
         showToast('Saved.');
-        table.render();
       } else {
-        sel.value = before;
+        p.kind = before;
+        table.render();
         showToast(out?.error ?? 'Could not change that.');
       }
     });
