@@ -11,7 +11,7 @@ import { pairReversals } from '../../../scripts/lib/finance-reversals.mjs';
 import { loadNotes } from './finance-notes';
 import { loadPurposes } from './finance-requests';
 import { VPA_LOOKUP_LIMIT, vpasToLookUp } from '../../../scripts/lib/finance-vpa.mjs';
-import { keepVpaAnswer, vpaFailureText } from './finance-vpa';
+import { keepVpaAnswer, readVpaAnswers, vpaFailureText } from './finance-vpa';
 import { razorpayKeyMode, validateVpa } from './razorpay';
 import { requireStaff } from './staff-access';
 import { rest } from './staff-mfa-store';
@@ -398,15 +398,8 @@ type SuggestionContext = Awaited<ReturnType<typeof suggestionContext>>;
 const suggestFor = (line: Json, upi: Json | null, ctx: Awaited<ReturnType<typeof lookups>>, sc: SuggestionContext, purpose: string | null = null): Json =>
   suggest({ line, upi, rules: sc.rc.rules, parties: ctx.parties, categories: ctx.categories, history: sc.history, requesterPartyIds: sc.requesterIds, purpose, vpaNames: sc.vpaNames }) as Json;
 
-// What Razorpay has said about UPI IDs so far (fin_vpa_names), live-key answers only. `names` is the registered name by lowercase ID, for the
-// suggestion engine; `known` is every ID already asked about (with or without a name), so a lookup never asks twice.
-const vpaAnswers = () =>
-  cached('vpa-names', async () => {
-    const found = await rowsAll('/fin_vpa_names?select=vpa,success,name&key_mode=eq.live&order=vpa.asc');
-    const names: Record<string, string> = {};
-    for (const r of found) if (r.success && r.name) names[r.vpa as string] = r.name as string;
-    return { names, known: new Set(found.map((r) => r.vpa as string)) };
-  });
+// What Razorpay has said about UPI IDs so far (fin_vpa_names, read by readVpaAnswers), kept a few seconds like the other reference data.
+const vpaAnswers = () => cached('vpa-names', readVpaAnswers);
 
 // POST /vpa-names { texts: string[] }: ask Razorpay whose each UPI ID in `texts` is, for the ones not asked about yet, and keep the answers.
 // Deliberate and small: it is a billed call, so it runs only when an admin asks, at most VPA_LOOKUP_LIMIT IDs at a time, and stops at the first

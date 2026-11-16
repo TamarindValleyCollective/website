@@ -119,6 +119,7 @@ import '../../../styles/money.css';
   import { StaffAuthError, clearStepUp, clearToken, closeOnBackdrop, decodeTokenEmail, getToken, setToken, showToast, staffFetch } from '../../../../scripts/lib/staff-client.mjs';
   import { clearState, showFailure, showLoading } from '../../../../scripts/lib/staff-states.mjs';
   import { createDataTable } from '../../../../scripts/lib/data-table-ui.mjs';
+  import { VPA_LOOKUP_LIMIT, vpasToLookUp } from '../../../../scripts/lib/finance-vpa.mjs';
   import { amountKind, kindClass, moneyNode } from '../../../../scripts/lib/finance-ui.mjs';
 
   declare const google: any;
@@ -140,7 +141,7 @@ import '../../../styles/money.css';
   const APP = { bhim: 'BHIM', paytm: 'Paytm' } as const;
   const STATE = { matched: { text: 'In the ledger', kind: 'ok' }, waiting: { text: 'Waiting for statement', kind: 'warn' }, unmatched: { text: 'Not in the statement', kind: 'crit' } } as const;
 
-  type Upi = { operatorId?: string | null; id: string; paidAt: string; time: string | null; app: 'bhim' | 'paytm'; counterparty: string | null; remark: string | null; amountPaise: number; direction: 'debit' | 'credit'; isCircle: boolean; upiRef: string; note: string | null; purpose: string | null; bankLineId: string | null; account: string | null; delegateId: string | null; delegate: string | null; delegateHow: 'assigned' | 'auto' | 'ambiguous' | 'none' | null; state: 'matched' | 'waiting' | 'unmatched' };
+  type Upi = { operatorId?: string | null; id: string; paidAt: string; time: string | null; app: 'bhim' | 'paytm'; counterparty: string | null; upiId: string | null; vpaName: string | null; vpaState: 'named' | 'asked' | 'new' | null; remark: string | null; amountPaise: number; direction: 'debit' | 'credit'; isCircle: boolean; upiRef: string; note: string | null; purpose: string | null; bankLineId: string | null; account: string | null; delegateId: string | null; delegate: string | null; delegateHow: 'assigned' | 'auto' | 'ambiguous' | 'none' | null; state: 'matched' | 'waiting' | 'unmatched' };
   type Delegate = { id: string; identifier: string; displayName: string | null; activeFrom: string; activeTo: string | null; capPaise: number | null; operatorId?: string | null };
   type Operator = { id: string; name: string };
   let all: Upi[] = [];
@@ -475,6 +476,49 @@ import '../../../styles/money.css';
     return td;
   }
 
+  // ---- Name and UPI ID columns, and the lookup that fills them (docs/finance/FINANCE.md, "UPI ID names"). The answers are kept per UPI ID, so
+  // the same lookup also names the ledger lines these payments are joined to.
+  const nameText = (u: Upi) => u.vpaName ?? (u.vpaState === 'new' ? 'Not looked up yet' : u.vpaState === 'asked' ? 'No name on file' : (u.counterparty ?? ''));
+  function nameCell(u: Upi): Node | string {
+    if (u.vpaName) {
+      const s = el('span', undefined, u.vpaName);
+      s.title = 'The name registered for this UPI ID, from Razorpay';
+      return s;
+    }
+    return u.vpaState ? el('span', 'dim', nameText(u)) : (u.counterparty ?? '');
+  }
+  const lookUpButton = el('button', 'button button--outline button--small', '');
+  lookUpButton.type = 'button';
+  lookUpButton.hidden = true;
+  // A billed call, so it is a button and never automatic: rows whose "Paid to" is a UPI ID not looked up yet, at most VPA_LOOKUP_LIMIT IDs a click.
+  const toLookUp = () => all.filter((u) => u.vpaState === 'new').map((u) => u.counterparty);
+  function renderLookUp() {
+    const n = canEdit ? vpasToLookUp(toLookUp(), new Set(), Infinity).length : 0;
+    lookUpButton.hidden = n === 0;
+    if (n) {
+      const k = Math.min(n, VPA_LOOKUP_LIMIT);
+      lookUpButton.textContent = `Look up ${k} UPI ${k === 1 ? 'name' : 'names'}${n > VPA_LOOKUP_LIMIT ? ` (of ${n})` : ''}`;
+    }
+  }
+  lookUpButton.addEventListener('click', async () => {
+    lookUpButton.disabled = true;
+    lookUpButton.textContent = 'Looking up…';
+    try {
+      const { status, data: res } = await staffFetch('/api/finance-admin/vpa-names', { method: 'POST', body: { texts: toLookUp() } });
+      if (status !== 200) showToast(res?.error ?? 'Could not look up the names.');
+      else {
+        const parts = [res.named ? `${res.named} named` : '', res.noName ? `${res.noName} with no name on file` : '', res.notFound ? `${res.notFound} not found` : ''].filter(Boolean);
+        showToast(`${res.stoppedBecause ? `Stopped: ${res.stoppedBecause} ` : ''}${parts.length ? `${parts.join(', ')}.` : res.asked ? '' : 'Nothing new to look up.'}`.trim());
+        if (res.asked) await load();
+      }
+    } catch (err) {
+      if (!fail(err)) showToast('Could not look up the names.');
+    } finally {
+      lookUpButton.disabled = false;
+      renderLookUp();
+    }
+  });
+
   const monthOf = (u: Upi) => u.paidAt.slice(0, 7);
   const needsDelegate = (u: Upi) => u.delegateHow === 'ambiguous' || u.delegateHow === 'none';
   const table = createDataTable({
@@ -488,11 +532,17 @@ import '../../../styles/money.css';
     layoutKey: `tvc-upi-columns:${decodeTokenEmail(getToken() ?? '')}`,
     defaultGroup: 'month',
     defaultSort: ['date', -1],
-    searchText: (u: Upi) => [u.counterparty, u.remark, u.purpose ?? '', u.note, u.upiRef, u.account ?? '', u.delegate ?? ''].join(' '),
+    searchText: (u: Upi) => [u.counterparty, u.vpaName ?? '', u.upiId ?? '', u.remark, u.purpose ?? '', u.note, u.upiRef, u.account ?? '', u.delegate ?? ''].join(' '),
+    toolbarEnd: lookUpButton,
     empty: { title: 'No UPI payments yet', text: 'Add the BHIM history or the Paytm export on the Import page.' },
     columns: [
       { id: 'date', label: 'Date', type: 'date', value: (u: Upi) => u.paidAt, sortValue: (u: Upi) => `${u.paidAt} ${u.time ?? ''}`, render: (u: Upi) => `${day(u.paidAt)}${u.time ? ` ${u.time}` : ''}` },
       { id: 'counterparty', label: 'Paid to', value: (u: Upi) => u.counterparty ?? 'Unnamed payee' },
+      // Name: the registered name Razorpay gave for the UPI ID in "Paid to" when it has been looked up, else the name the app showed; a UPI ID
+      // not looked up yet says so. Derived on the server, never stored on the (locked) UPI row; the ledger suggestion reads the same answers.
+      { id: 'name', label: 'Name', value: (u: Upi) => nameText(u), render: (u: Upi) => nameCell(u) },
+      // UPI ID: the ID found in "Paid to", masked (p••••@bank) unless the person may see payee bank details. Hidden until turned on in Columns.
+      { id: 'upiId', label: 'UPI ID', hiddenByDefault: true, value: (u: Upi) => u.upiId ?? '', render: (u: Upi) => (u.upiId ? u.upiId : el('span', 'dim', 'None')) },
       // The sign and colour say debit or credit (the Debits and Credits chips still filter); a credit also gets a stripe down its row.
       { id: 'amount', label: 'Amount', type: 'amount', align: 'end', value: (u: Upi) => u.amountPaise, render: (u: Upi) => moneyNode(u.amountPaise, amountKind(u.direction)) },
       { id: 'app', label: 'App', value: (u: Upi) => APP[u.app] },
@@ -535,7 +585,7 @@ import '../../../styles/money.css';
     card: (u: Upi) => {
       const c = el('div', 'upi-card');
       const top = el('div', 'upi-card-top');
-      top.append(el('span', 'title', u.counterparty ?? 'Unnamed payee'), moneyNode(u.amountPaise, amountKind(u.direction)));
+      top.append(el('span', 'title', u.vpaName ?? u.counterparty ?? 'Unnamed payee'), moneyNode(u.amountPaise, amountKind(u.direction)));
       c.append(top, el('div', 'sub', `${day(u.paidAt)}${u.time ? ` ${u.time}` : ''} · ${APP[u.app]} · ${paidByText(u)}`), el('span', `pill pill--${STATE[u.state].kind}`, STATE[u.state].text));
       const note = u.note ?? u.purpose ?? u.remark;
       if (note) c.append(el('div', 'sub', note));
@@ -566,6 +616,7 @@ import '../../../styles/money.css';
       renderOperators();
       renderDelegates(data);
       table.setRows(all);
+      renderLookUp();
       if (!refApplied) {
         refApplied = true;
         if (askedRef) table.setText(askedRef);

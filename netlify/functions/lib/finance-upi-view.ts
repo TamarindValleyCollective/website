@@ -8,6 +8,9 @@ import { loadNotes } from './finance-notes';
 import { loadPurposes } from './finance-requests';
 import { loadDelegateLinks, loadDelegates } from './finance-delegates';
 import { loadOperators } from './finance-upi-operators';
+import { readVpaAnswers } from './finance-vpa';
+import { payeeFieldVisibility } from '../../../scripts/lib/finance-access.mjs';
+import { vpaFieldsFor } from '../../../scripts/lib/finance-vpa.mjs';
 import { attribute, delegateLabel } from '../../../scripts/lib/finance-delegates.mjs';
 import { pairReversals } from '../../../scripts/lib/finance-reversals.mjs';
 import { CIRCLE_CAP_PAISE, bankWithoutUpiRow, circleMonths, matchState } from '../../../scripts/lib/finance-upi-circle.mjs';
@@ -32,7 +35,7 @@ export async function listUpiLines(req: Request): Promise<Response> {
   const auth = await requireStaff(req, 'finance', 'view');
   if (!auth.ok) return json({ error: auth.error }, auth.status);
   try {
-    const [upi, bank, last, accounts, notes, purposeOf, delegates, picks, operators] = await Promise.all([
+    const [upi, bank, last, accounts, notes, purposeOf, delegates, picks, operators, vpaAnswers] = await Promise.all([
       withOperator('/fin_upi_lines?select=id,paid_at,paid_time,app,counterparty,remarks,tag,amount_paise,direction,is_circle,upi_ref,bank_account_id,bank_line_id&ignored=eq.false&order=paid_at.desc,paid_time.desc.nullslast,id.asc'),
       all('/fin_bank_lines?select=id,bank_account_id,tran_date,direction,amount_paise,upi_rrn&upi_rrn=not.is.null&order=tran_date.asc,id.asc'),
       rest('/fin_bank_lines?select=tran_date&order=tran_date.desc&limit=1').then((r) => r.json() as Promise<Json[]>),
@@ -42,7 +45,11 @@ export async function listUpiLines(req: Request): Promise<Response> {
       loadDelegates(),
       loadDelegateLinks(),
       loadOperators(),
+      // Before migration 0102 is applied there is no answers table: the page then has no names and the button simply finds nothing to look up.
+      readVpaAnswers().catch(() => ({ names: {} as Record<string, string>, known: new Set<string>() })),
     ]);
+    const capabilities = capabilitiesForRole('finance', auth.staff.role) as string[];
+    const canSeeUpiIds = payeeFieldVisibility(capabilities).payeeBankDetails as boolean;
     const lastBankDate: string | null = last[0]?.tran_date ?? null;
     // A UPI app can pay from any linked account, so a row's account is its own when the file named it, else the account of
     // the bank line it is joined to; a row with neither (its statement not imported yet) has no account yet.
@@ -51,6 +58,8 @@ export async function listUpiLines(req: Request): Promise<Response> {
     const lines = upi.map((u) => ({
       id: u.id as string, paidAt: u.paid_at as string, time: (u.paid_time as string | null)?.slice(0, 5) ?? null, app: u.app as 'bhim' | 'paytm',
       counterparty: u.counterparty as string | null, remark: u.remarks as string | null, amountPaise: Number(u.amount_paise), direction: u.direction as 'debit' | 'credit',
+      // The UPI ID in "Paid to" and the registered name Razorpay gave for it (src: scripts/lib/finance-vpa.mjs); derived, never stored on the row.
+      ...(vpaFieldsFor(u.counterparty, vpaAnswers, canSeeUpiIds) as { upiId: string | null; vpaName: string | null; vpaState: 'named' | 'asked' | 'new' | null }),
       isCircle: Boolean(u.is_circle), operatorId: (u.operator_id as string | null) ?? null, upiRef: u.upi_ref as string, note: notes.get(`upi:${u.upi_ref}`) ?? null, purpose: purposeOf({ upiRef: u.upi_ref, upiLineId: u.id, bankLineId: u.bank_line_id }) as string | null, account: accountName.get((u.bank_account_id ?? bankAccount.get(u.bank_line_id)) as string) ?? null, bankLineId: u.bank_line_id as string | null,
     }));
     // Who each delegated payment belongs to: a pick, else the one delegate active that day (scripts/lib/finance-delegates.mjs).
@@ -67,8 +76,9 @@ export async function listUpiLines(req: Request): Promise<Response> {
     // A payment the bank reversed (a credit under the same reference) needs no UPI record.
     const reversed = pairReversals(bankLines.map((b) => ({ id: b.id, date: b.tranDate, direction: b.direction, amountPaise: b.amountPaise, upiRrn: b.upiRrn }))).byLine;
     return json({
-      canEdit: (capabilitiesForRole('finance', auth.staff.role) as string[]).includes('allocate'),
-      canConfigure: (capabilitiesForRole('finance', auth.staff.role) as string[]).includes('configure'),
+      canEdit: capabilities.includes('allocate'),
+      canConfigure: capabilities.includes('configure'),
+      canSeeUpiIds,
       lines: withState,
       delegates,
       operators,

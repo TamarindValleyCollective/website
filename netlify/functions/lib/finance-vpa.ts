@@ -7,6 +7,23 @@ import { nameFromLookup } from '../../../scripts/lib/finance-vpa.mjs';
 
 type Json = Record<string, any>;
 
+/**
+ * Every live-key answer kept so far. `names` is the registered name by lowercase ID (only IDs that have one), `known` is every ID already asked
+ * about, with or without a name, so a lookup never asks twice. Read a page at a time (the API returns at most 1,000 rows a request).
+ */
+export async function readVpaAnswers(): Promise<{ names: Record<string, string>; known: Set<string> }> {
+  const names: Record<string, string> = {};
+  const known = new Set<string>();
+  for (let offset = 0; ; offset += 1000) {
+    const page = (await (await rest(`/fin_vpa_names?select=vpa,success,name&key_mode=eq.live&order=vpa.asc&limit=1000&offset=${offset}`)).json()) as Json[];
+    for (const r of page) {
+      known.add(r.vpa as string);
+      if (r.success && r.name) names[r.vpa as string] = r.name as string;
+    }
+    if (page.length < 1000) return { names, known };
+  }
+}
+
 /** Why a lookup call failed, in words for an admin. A 400 "not found" is Razorpay's way of saying the call is not enabled on the account. */
 export function vpaFailureText(got: Extract<VpaLookup, { ok: false }>): string {
   return got.status === 400 && /not found/i.test(got.description) ? 'Razorpay says its UPI ID lookup is not available on this account.' : got.description;

@@ -67,6 +67,8 @@ globalThis.fetch = async (url, init = {}) => {
     db.fin_vpa_names.push(body);
     return new Response(null, { status: 201 });
   }
+  // Before migration 0102 there is no answers table and PostgREST answers 404.
+  if (db.noVpaTable && table === 'fin_vpa_names') return new Response(JSON.stringify({ message: 'relation does not exist' }), { status: 404, headers: { 'content-type': 'application/json' } });
   if (table.startsWith('fin_') || table === 'member_households') {
     const rows = db[table] ?? [];
     if (method === 'GET') {
@@ -193,4 +195,60 @@ test('a test-key answer is kept but never used for a suggestion', async () => {
 test('a body without the texts is refused', async () => {
   reset();
   assert.equal((await api(sign('user'), '/vpa-names', { method: 'POST', body: { nope: 1 } })).status, 400);
+});
+
+// ---- the UPI table's Name and UPI ID columns
+const upiRow = (id, counterparty) => ({ id, paid_at: '2026-10-02', paid_time: '10:00:00', app: 'bhim', counterparty, remarks: 'x', tag: null, amount_paise: 35400, direction: 'debit', is_circle: false, upi_ref: `REF${id}`, bank_account_id: ID(2), bank_line_id: null, ignored: false });
+const upiRows = async (email) => (await (await api(email, '/upi-lines')).json());
+const seedUpi = () => {
+  db.fin_upi_lines.push(upiRow('u-named', `${VPA_A} on PhonePe`), upiRow('u-asked', `${VPA_B} on PhonePe`), upiRow('u-new', 'fresh.id@paytm'), upiRow('u-plain', 'Green Nursery'));
+  db.fin_vpa_names.push({ vpa: VPA_A, success: true, name: 'TEST VENDOR WORKS', key_mode: 'live' }, { vpa: VPA_B, success: false, name: null, key_mode: 'live' });
+};
+const byId = (res) => Object.fromEntries(res.lines.map((l) => [l.id, l]));
+
+test('an admin sees each row’s UPI ID in full, the registered name, and whether it was looked up', async () => {
+  reset();
+  seedUpi();
+  const res = await upiRows(sign('admin'));
+  assert.equal(res.canSeeUpiIds, true);
+  const rows = byId(res);
+  assert.deepEqual([rows['u-named'].upiId, rows['u-named'].vpaName, rows['u-named'].vpaState], [VPA_A, 'TEST VENDOR WORKS', 'named']);
+  assert.deepEqual([rows['u-asked'].upiId, rows['u-asked'].vpaName, rows['u-asked'].vpaState], [VPA_B, null, 'asked']);
+  assert.deepEqual([rows['u-new'].upiId, rows['u-new'].vpaState], ['fresh.id@paytm', 'new']);
+  assert.deepEqual([rows['u-plain'].upiId, rows['u-plain'].vpaName, rows['u-plain'].vpaState], [null, null, null], 'a plain name has no UPI ID');
+});
+
+test('the masking rule: someone without payee-bank-details access sees the name but only a masked UPI ID', async () => {
+  reset();
+  seedUpi();
+  const rows = byId(await upiRows(sign('user')));
+  assert.equal(rows['u-named'].vpaName, 'TEST VENDOR WORKS', 'names are shown to anyone who can view');
+  assert.equal(rows['u-named'].upiId, 'q••••@ybl');
+  assert.equal(rows['u-new'].upiId, 'f••••@paytm');
+  const viewer = await upiRows(sign('read_only'));
+  assert.equal(viewer.canSeeUpiIds, false);
+  assert.equal(viewer.canEdit, false, 'a viewer is not offered the lookup');
+  assert.ok(!JSON.stringify(viewer.lines.map((l) => [l.upiId, l.vpaName, l.vpaState])).includes('q000111222'), 'the new fields never carry the full ID for them');
+});
+
+test('a database without the answers table still lists the payments, with nothing looked up', async () => {
+  reset();
+  seedUpi();
+  db.noVpaTable = true;
+  const res = await upiRows(sign('admin'));
+  const rows = byId(res);
+  assert.equal(rows['u-named'].vpaState, 'new', 'no answers yet, so it can be looked up');
+  assert.equal(rows['u-named'].vpaName, null);
+});
+
+test('looking up from the UPI page names the ledger lines too: one lookup, two pages', async () => {
+  reset();
+  seedUpi();
+  razorpay.answers['fresh.id@paytm'] = { vpa: 'fresh.id@paytm', success: true, customer_name: 'FRESH PERSON' };
+  const op = sign('user');
+  const texts = (await upiRows(op)).lines.filter((l) => l.vpaState === 'new').map((l) => l.counterparty);
+  assert.deepEqual(texts, ['fresh.id@paytm']);
+  const res = await lookup(op, texts);
+  assert.deepEqual(await res.json(), { asked: 1, named: 1, noName: 0, notFound: 0, stoppedBecause: null });
+  assert.equal(byId(await upiRows(op))['u-new'].vpaName, 'FRESH PERSON');
 });

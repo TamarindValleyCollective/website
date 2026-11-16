@@ -4,6 +4,8 @@
 // line can be suggested under that person's name instead of the bare ID. The lookup itself lives in netlify/functions/lib/finance-vpa.ts;
 // the suggestion engine reads the answers through `vpaNames` (finance-suggest.mjs).
 
+import { maskUpiId } from './finance-access.mjs';
+
 /** How many IDs one lookup request may carry: the lookup is a billed call at Razorpay, so it is asked for in small, deliberate batches. */
 export const VPA_LOOKUP_LIMIT = 25;
 
@@ -39,6 +41,20 @@ export function vpasToLookUp(texts, known, limit = VPA_LOOKUP_LIMIT) {
     if (out.length >= limit) break;
   }
   return out;
+}
+
+/**
+ * The UPI table's two derived columns for one row, from its "Paid to" text and the answers kept so far (`answers.names` by lowercase ID,
+ * `answers.known` every ID already asked about). `upiId` follows the masking rule for payee UPI IDs: the whole ID only for someone who may see
+ * payee bank details (`canSeeIds`), otherwise "p••••@bank". `vpaState`: 'named' (Razorpay gave a name), 'asked' (looked up, no name on file),
+ * 'new' (not looked up yet), or null (no UPI ID in the text). Nothing here is stored on the UPI row.
+ * @param {string | null | undefined} text @param {{ names: Record<string, string>, known: Set<string> }} answers @param {boolean} canSeeIds
+ */
+export function vpaFieldsFor(text, answers, canSeeIds) {
+  const vpa = vpaIn(text);
+  if (!vpa) return { upiId: null, vpaName: null, vpaState: null };
+  const vpaName = answers.names[vpa] ?? null;
+  return { upiId: canSeeIds ? vpa : maskUpiId(vpa), vpaName, vpaState: vpaName ? 'named' : answers.known.has(vpa) ? 'asked' : 'new' };
 }
 
 /** The registered name in a Razorpay validate-VPA response, or null when the ID does not exist or came back without a name. */

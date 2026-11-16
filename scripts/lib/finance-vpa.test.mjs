@@ -2,7 +2,17 @@
 // Every UPI ID and name here is invented.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { VPA_LOOKUP_LIMIT, isVpa, nameFromLookup, vpaIn, vpasToLookUp } from './finance-vpa.mjs';
+import { VPA_LOOKUP_LIMIT, isVpa, nameFromLookup, vpaFieldsFor, vpaIn, vpasToLookUp } from './finance-vpa.mjs';
+
+test('the UPI table columns: the ID is masked unless the viewer may see payee bank details, and the lookup state says what to do', () => {
+  const answers = { names: { 'q000111222@ybl': 'Test Vendor Works' }, known: new Set(['q000111222@ybl', 'quiet.one@okaxis']) };
+  assert.deepEqual(vpaFieldsFor('q000111222@ybl on PhonePe', answers, true), { upiId: 'q000111222@ybl', vpaName: 'Test Vendor Works', vpaState: 'named' });
+  assert.deepEqual(vpaFieldsFor('q000111222@ybl on PhonePe', answers, false), { upiId: 'q••••@ybl', vpaName: 'Test Vendor Works', vpaState: 'named' }, 'the name is shown to anyone who can view; the ID is masked');
+  assert.deepEqual(vpaFieldsFor('Quiet.One@okaxis', answers, true), { upiId: 'quiet.one@okaxis', vpaName: null, vpaState: 'asked' }, 'looked up, no name on file');
+  assert.deepEqual(vpaFieldsFor('fresh.id@paytm', answers, false), { upiId: 'f••••@paytm', vpaName: null, vpaState: 'new' });
+  assert.deepEqual(vpaFieldsFor('Green Nursery', answers, true), { upiId: null, vpaName: null, vpaState: null }, 'a plain name has no UPI ID');
+  assert.deepEqual(vpaFieldsFor(null, answers, true), { upiId: null, vpaName: null, vpaState: null });
+});
 
 test('finds the UPI ID inside the text a UPI app leaves, lowercased', () => {
   assert.equal(vpaIn('q000111222@ybl on PhonePe'), 'q000111222@ybl');

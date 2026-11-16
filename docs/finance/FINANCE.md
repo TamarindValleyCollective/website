@@ -538,6 +538,14 @@ Razorpay's validate-VPA call says whose ID it is, so the suggestion can be the p
   while unallocated lines still carry a bare UPI ID and the person may allocate. One click asks about at most 25 IDs
   (`POST /api/finance-admin/vpa-names`, needs `finance` / `allocate`), stops at the first failure and says why, and the page then reloads.
   IDs already asked about, with or without a name, are not offered again.
+- **The UPI page (`/internal/finance/upi/`) has the same button and two columns.** The ledger suggestion reads a UPI row's "Paid to", so looking
+  names up there names every linked ledger line too (one saved answer per ID; the ledger and the UPI page ask the same endpoint). **Name** (shown
+  by default) is the registered name when looked up, else the name the app showed, else "Not looked up yet" / "No name on file" for a UPI ID.
+  **UPI ID** (hidden until turned on in Columns) is the ID found in "Paid to"; it follows the masking rule for payee UPI IDs (`payeeFieldVisibility`):
+  in full for holders of `verify-payee` or `export`, otherwise `p••••@bank`, while the name is shown to anyone who can view. Both are derived per
+  request by `vpaFieldsFor` and never stored: the UPI rows are locked after import. The existing "Paid to" column still shows the app's raw text,
+  ID included, to anyone who can view (unchanged). `GET /upi-lines` returns `upiId`, `vpaName`, `vpaState` (`named`/`asked`/`new`/null) per row
+  and `canSeeUpiIds`; before migration `0102` it answers with every ID as `new`.
 - **What changes in a suggestion:** with a name on file, the register is searched for it first (an exact or shortened match suggests that
   party, "The UPI ID is registered to "X", which matches Y in the register"); otherwise the name, in readable case, is the new party to add.
   With no name on file (the ID has no linked bank account, or does not exist) the line reads as before. Nothing is created or posted until a
@@ -554,8 +562,7 @@ Razorpay's validate-VPA call says whose ID it is, so the suggestion can be the p
   the method `razorpay_vpa` and no ID or name.
 - **Account setup:** Razorpay support enabled `/v1/payments/validate/vpa` on the live account on 2026-11-16 (before that it answered 400
   "URL not found"). The account's per-call charge is still unconfirmed; check the Razorpay dashboard before looking up in volume.
-- **Not done:** a lookup is not offered from the Parties or UPI pages, only from the ledger (the verify sheet does ask Razorpay once when no
-  answer is kept); migration `0103` was **applied 2026-11-16**; no auto-verify rule (a director decision); bank accounts are not checked this way
+- **Not done:** a lookup is not offered from the Parties page (the verify sheet does ask Razorpay once when no answer is kept); migration `0103` was **applied 2026-11-16**; no auto-verify rule (a director decision); bank accounts are not checked this way
   (Razorpay's bank-account validation is a RazorpayX product and is not set up).
 
 ## The table (the Ledger's list view, session 05 follow-up)
