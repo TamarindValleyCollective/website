@@ -174,7 +174,7 @@ export function createDataTable(opts) {
       }),
     );
   }
-  const HINTS = { amount: ['e.g. >1000', 'In rupees. Digits match as you type (15 finds 15, 150, 1,500). Exact: =2500. Also >1000, <=500, 1000..3000, !=295'], count: ['e.g. >=1', 'A number: 2, >1, <=3, 1..3'], date: ['e.g. 2026-10', 'Try: 2026-10, >2026-10-15, 2026-10-01..2026-10-31'], text: ['Search', 'Words match anywhere. = exact, != not, ^ starts with, ! does not contain.'] };
+  const HINTS = { amount: ['e.g. >1000', 'In rupees. Digits match as you type (15 finds 15, 150, 1,500). Exact: =2500. Also >1000, <=500, 1000..3000, !=295. A - or + in front limits to debits or credits: -219'], count: ['e.g. >=1', 'A number: 2, >1, <=3, 1..3'], date: ['e.g. 2026-10', 'Try: 2026-10, >2026-10-15, 2026-10-01..2026-10-31'], text: ['Search', 'Words match anywhere. = exact, != not, ^ starts with, ! does not contain.'] };
   let colTimer;
   function buildFilterRow() {
     filterRow.replaceChildren(

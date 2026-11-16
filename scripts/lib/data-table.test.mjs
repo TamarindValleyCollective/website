@@ -144,3 +144,16 @@ test('plain digits in an amount filter match as you type; an operator stays exac
   assert.ok(m('>=15', 1500) && m('10..20', 1500));
   assert.ok(!m('15', null), 'an empty cell matches no amount');
 });
+
+test('a - or + in an amount filter limits to money out or in, as the table shows it', () => {
+  const m = (typed, value, sign) => matchColumn('amount', parseColumnFilter('amount', typed), value, sign);
+  assert.ok(m('-219', 21900, -1), 'what the cell shows, "-219.00", finds it');
+  assert.ok(m('−219', 21900, -1), 'the typographic minus too');
+  assert.ok(!m('-219', 21900, 1), 'a credit of 219 is not a debit');
+  assert.ok(m('+219', 21900, 1) && !m('+219', 21900, -1));
+  assert.ok(m('-', 5000, -1) && !m('-', 5000, 1), 'a sign alone is "all debits"');
+  assert.ok(m('-=219', 21900, -1) && !m('-=219', 21950, -1), 'a sign with an operator stays exact');
+  assert.ok(m('->1000', 150000, -1) && !m('->1000', 50000, -1));
+  assert.ok(m('219', 21900, -1) && m('219', 21900, 1), 'no sign means either');
+  assert.ok(parseColumnFilter('amount', '-lots').error, 'what cannot be read is still an error');
+});

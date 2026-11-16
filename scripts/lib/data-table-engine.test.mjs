@@ -125,3 +125,13 @@ test('the search box finds an amount typed in rupees, with or without commas or 
   assert.deepEqual(found(['4120.00']), [4]);
   assert.deepEqual(found(['9999']), []);
 });
+
+test('an amount column that shows a sign filters on it: -219 finds the debit, not the credit', () => {
+  const data = [{ id: 1, paise: 21900, dir: 'debit' }, { id: 2, paise: 21900, dir: 'credit' }, { id: 3, paise: 22500, dir: 'debit' }];
+  const eng = createTableEngine({ columns: [{ id: 'amount', type: 'amount', value: (r) => r.paise, signOf: (r) => (r.dir === 'credit' ? 1 : -1) }] });
+  const ids = (typed) => eng.run({ rows: data, cols: { amount: typed } }).rows.map((r) => r.id);
+  assert.deepEqual(ids('-219'), [1]);
+  assert.deepEqual(ids('+219'), [2]);
+  assert.deepEqual(ids('219'), [1, 2]);
+  assert.deepEqual(ids('-'), [1, 3]);
+});

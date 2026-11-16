@@ -862,7 +862,7 @@ import '../../../styles/money.css';
       // UPI ID: the ID found in "Paid to", masked (p••••@bank) unless the person may see payee bank details. Hidden until turned on in Columns.
       { id: 'upiId', label: 'UPI ID', hiddenByDefault: true, value: (u: Upi) => u.upiId ?? '', render: (u: Upi) => (u.upiId ? u.upiId : el('span', 'dim', 'None')) },
       // The sign and colour say debit or credit (the Debits and Credits chips still filter); a credit also gets a stripe down its row.
-      { id: 'amount', label: 'Amount', type: 'amount', align: 'end', value: (u: Upi) => u.amountPaise, render: (u: Upi) => moneyNode(u.amountPaise, amountKind(u.direction)) },
+      { id: 'amount', label: 'Amount', type: 'amount', align: 'end', value: (u: Upi) => u.amountPaise, signOf: (u: Upi) => (u.direction === 'credit' ? 1 : -1), render: (u: Upi) => moneyNode(u.amountPaise, amountKind(u.direction)) },
       { id: 'app', label: 'App', value: (u: Upi) => APP[u.app] },
       { id: 'paidBy', label: 'Paid by', value: (u: Upi) => paidByText(u), render: (u: Upi) => paidByCell(u) },
       { id: 'account', label: 'Account', value: (u: Upi) => u.account ?? '', render: (u: Upi) => (u.account ? u.account : el('span', 'dim', 'Not known yet')) },

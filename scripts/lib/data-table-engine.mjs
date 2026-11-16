@@ -43,7 +43,7 @@ export function createTableEngine({ columns, filters = [], searchText = () => ''
       sortUndefined: 'last',
       sortingFn: compareCells,
       // The filter value is the parsed condition, so a row costs one match, not one parse.
-      filterFn: (row, _id, cond) => matchColumn(type, cond, filterGet(row.original)),
+      filterFn: (row, _id, cond) => matchColumn(type, cond, filterGet(row.original), c.signOf ? c.signOf(row.original) : 1),
     };
   });
 
