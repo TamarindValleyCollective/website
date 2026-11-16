@@ -16,7 +16,8 @@
 // onUserFilter: () => void   called when the person changes a chip, the search, a column filter or the grouping (not by setRows or setChips)
 // column extras: sortable: false (no sort button), wrap: true (the cell may wrap, for long text), sticky: true (the last column stays
 //   in view while the table scrolls sideways, for a column of buttons)
-import { buildItems, chipCounts, filterRows, readFavorites, sortRows, withFavorite } from './data-table.mjs';
+import { buildItems, chipCounts, readFavorites, withFavorite } from './data-table.mjs';
+import { createTableEngine } from './data-table-engine.mjs';
 import { h } from './finance-ui.mjs';
 
 const tick = (checked, label, onChange) => {
@@ -36,6 +37,7 @@ export function createDataTable(opts) {
   const allowed = { chipIds: filters.map((f) => f.id), groupIds: groups.map((g) => g.id) };
   const state = { rows: [], chips: [], words: [], text: '', group: defaultGroup, sort: defaultSort ?? [null, 1], cols: {}, collapsed: new Set(), sel: new Set(), favs: [], popOpen: false };
   const colById = new Map(columns.map((c) => [c.id, c]));
+  const engine = createTableEngine({ columns, filters, searchText });
 
   const readStore = () => {
     try { return localStorage.getItem(favoritesKey); } catch { return null; }
@@ -66,10 +68,9 @@ export function createDataTable(opts) {
   // ---- what is showing
   let shown = [];
   function compute() {
-    const sortCol = colById.get(state.sort[0]);
-    const filtered = filterRows(state.rows, { columns, chips: state.chips, filters, words: [...state.words, ...(state.text ? [state.text] : [])], searchText, cols: state.cols });
-    shown = sortRows(filtered.rows, sortCol, state.sort[1]);
-    const msgs = Object.entries(filtered.errors).map(([id, m]) => `${colById.get(id)?.label ?? id}: ${m}`);
+    const result = engine.run({ rows: state.rows, chips: state.chips, words: [...state.words, ...(state.text ? [state.text] : [])], cols: state.cols, sort: state.sort });
+    shown = result.rows;
+    const msgs = Object.entries(result.errors).map(([id, m]) => `${colById.get(id)?.label ?? id}: ${m}`);
     errors.textContent = msgs.join(' ');
     errors.hidden = msgs.length === 0;
   }

@@ -168,7 +168,7 @@ for esbuild, and Node 22.18+ or newer, which imports the registry `.ts` directly
   payees needing review, statement gaps, Paytm payments with no bank line and Paytm payments waiting, the last import date and
   counts of parties and bank accounts. Counts and labels only: no names, numbers or fingerprints. Each row links into the
   filtered Parties list (`?filter=unverified|review|verified`) or Import.
-- **The Parties list.** Now the shared admin table, in the Ledger's format (`scripts/lib/data-table.mjs` logic, `data-table-ui.mjs` DOM,
+- **The Parties list.** Now the shared admin table, in the Ledger's format (`scripts/lib/data-table-engine.mjs` engine on TanStack `table-core`, `data-table.mjs` pure pieces, `data-table-ui.mjs` DOM,
   `src/styles/data-table.css`; see docs/design-language.md, "Data tables"): a search box that holds chips, with Filters (Needs review,
   Unverified, Verified, No payment details, No evidence attached, Bank's name differs, Possible duplicate, Kind is Other, Inactive), Group by
   (Kind by default, Status, First letter) and Favorites (kept in the browser, per account); a filter box under every column header in the Ledger's

@@ -1,6 +1,7 @@
-// The logic of TVC's admin data table, the format the Ledger set: a search box that holds chips, a filter row under the column
-// headers, Group by, Favorites. Pure and I/O-free so it is tested directly (data-table.test.mjs); data-table-ui.mjs is the DOM
-// around it. A page describes its columns, chip filters and groupings, and hands over plain rows.
+// The pure pieces of TVC's admin data table, the format the Ledger set: a search box that holds chips, a filter row under the column
+// headers, Group by, Favorites. I/O-free so it is tested directly (data-table.test.mjs). The table itself, which filters and sorts
+// with these, is data-table-engine.mjs (a TanStack table-core instance); data-table-ui.mjs is the DOM around both. A page describes
+// its columns, chip filters and groupings, and hands over plain rows.
 //
 // Column filters use the Ledger's syntax (finance-columns.mjs): words match anywhere, = exact, != not, ^ starts with, ! does not
 // contain; numbers take >1000, <=500, 1000..3000; dates take 2026-10, >2026-10-15, 2026-10-01..2026-10-31.
@@ -39,63 +40,11 @@ export const passesWords = (hay, words) => {
   return words.every((w) => norm(w).split(' ').every((x) => !x || h.includes(x)));
 };
 
-/**
- * The rows that pass. `chips` are the ids of chip filters in force (all must pass); `filters` define them as { id, test(row) };
- * `words` come from the search box; `cols` maps a column id to the text typed under it.
- * Returns { rows, errors } where errors maps a column id to the message for a condition that cannot be understood.
- */
-export function filterRows(rows, { columns = [], chips = [], filters = [], words = [], searchText = () => '', cols = {} } = {}) {
-  // Chips of one `group` (BHIM and Paytm, say) are alternatives: a row passes if it passes any of them. Different groups all have to pass.
-  const byGroup = new Map();
-  for (const id of chips) {
-    const f = filters.find((x) => x.id === id);
-    if (f) byGroup.set(f.group ?? f.id, [...(byGroup.get(f.group ?? f.id) ?? []), f.test]);
-  }
-  const tests = [...byGroup.values()].map((list) => (r) => list.some((t) => t(r)));
-  const conds = [];
-  const errors = {};
-  for (const c of columns) {
-    const typed = cols[c.id];
-    if (!typed || c.filter === 'none') continue;
-    const type = c.type ?? 'text';
-    const cond = parseColumnFilter(type, typed);
-    if (cond?.error) errors[c.id] = cond.error;
-    else if (cond) conds.push({ c, type, cond });
-  }
-  const out = rows.filter(
-    (r) =>
-      tests.every((t) => t(r)) &&
-      (!words.length || passesWords(searchText(r), words)) &&
-      conds.every(({ c, type, cond }) => matchColumn(type, cond, (c.filterValue ?? c.value)(r))),
-  );
-  return { rows: out, errors };
-}
-
 /** How many rows each chip filter would give on its own (with the other conditions in force), for the counts in the Filters list. */
 export function chipCounts(rows, filters, base = () => true) {
   const counts = {};
   for (const f of filters) counts[f.id] = rows.filter((r) => base(r) && f.test(r)).length;
   return counts;
-}
-
-/** A comparator for a column. Empty cells go last whichever way; ties keep the order the rows came in. */
-export function compareBy(column, dir = 1) {
-  const get = column.sortValue ?? column.value;
-  const empty = (v) => v == null || v === '';
-  return (a, b) => {
-    const x = get(a);
-    const y = get(b);
-    if (empty(x) !== empty(y)) return empty(x) ? 1 : -1;
-    if (empty(x)) return 0;
-    const n = typeof x === 'number' && typeof y === 'number' ? x - y : String(x).toLowerCase().localeCompare(String(y).toLowerCase());
-    return n * dir;
-  };
-}
-
-export function sortRows(rows, column, dir = 1) {
-  if (!column) return rows;
-  const cmp = compareBy(column, dir);
-  return rows.map((r, i) => [r, i]).sort((a, b) => cmp(a[0], b[0]) || a[1] - b[1]).map(([r]) => r);
 }
 
 /**
