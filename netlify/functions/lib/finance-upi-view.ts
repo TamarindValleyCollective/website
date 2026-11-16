@@ -26,7 +26,11 @@ async function all(path: string): Promise<Json[]> {
 }
 
 // operator_id exists once migration 0101 is applied; before that the rows load without it.
-const withOperator = (path: string) => all(path.replace('select=', 'select=operator_id,')).catch(() => all(path));
+// payee_upi_id exists once migration 0102 is applied.
+const withOperator = (path: string) =>
+  all(path.replace('select=', 'select=payee_upi_id,operator_id,'))
+    .catch(() => all(path.replace('select=', 'select=operator_id,')))
+    .catch(() => all(path));
 
 export async function listUpiLines(req: Request): Promise<Response> {
   const auth = await requireStaff(req, 'finance', 'view');
@@ -50,7 +54,7 @@ export async function listUpiLines(req: Request): Promise<Response> {
     const bankAccount = new Map(bank.map((b) => [b.id as string, b.bank_account_id as string]));
     const lines = upi.map((u) => ({
       id: u.id as string, paidAt: u.paid_at as string, time: (u.paid_time as string | null)?.slice(0, 5) ?? null, app: u.app as 'bhim' | 'paytm',
-      counterparty: u.counterparty as string | null, remark: u.remarks as string | null, amountPaise: Number(u.amount_paise), direction: u.direction as 'debit' | 'credit',
+      counterparty: u.counterparty as string | null, payeeUpiId: (u.payee_upi_id as string | null) ?? null, remark: u.remarks as string | null, amountPaise: Number(u.amount_paise), direction: u.direction as 'debit' | 'credit',
       isCircle: Boolean(u.is_circle), operatorId: (u.operator_id as string | null) ?? null, upiRef: u.upi_ref as string, note: notes.get(`upi:${u.upi_ref}`) ?? null, purpose: purposeOf({ upiRef: u.upi_ref, upiLineId: u.id, bankLineId: u.bank_line_id }) as string | null, account: accountName.get((u.bank_account_id ?? bankAccount.get(u.bank_line_id)) as string) ?? null, bankLineId: u.bank_line_id as string | null,
     }));
     // Who each delegated payment belongs to: a pick, else the one delegate active that day (scripts/lib/finance-delegates.mjs).

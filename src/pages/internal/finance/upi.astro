@@ -140,7 +140,7 @@ import '../../../styles/money.css';
   const APP = { bhim: 'BHIM', paytm: 'Paytm' } as const;
   const STATE = { matched: { text: 'In the ledger', kind: 'ok' }, waiting: { text: 'Waiting for statement', kind: 'warn' }, unmatched: { text: 'Not in the statement', kind: 'crit' } } as const;
 
-  type Upi = { operatorId?: string | null; id: string; paidAt: string; time: string | null; app: 'bhim' | 'paytm'; counterparty: string | null; remark: string | null; amountPaise: number; direction: 'debit' | 'credit'; isCircle: boolean; upiRef: string; note: string | null; purpose: string | null; bankLineId: string | null; account: string | null; delegateId: string | null; delegate: string | null; delegateHow: 'assigned' | 'auto' | 'ambiguous' | 'none' | null; state: 'matched' | 'waiting' | 'unmatched' };
+  type Upi = { operatorId?: string | null; id: string; paidAt: string; time: string | null; app: 'bhim' | 'paytm'; counterparty: string | null; payeeUpiId: string | null; remark: string | null; amountPaise: number; direction: 'debit' | 'credit'; isCircle: boolean; upiRef: string; note: string | null; purpose: string | null; bankLineId: string | null; account: string | null; delegateId: string | null; delegate: string | null; delegateHow: 'assigned' | 'auto' | 'ambiguous' | 'none' | null; state: 'matched' | 'waiting' | 'unmatched' };
   type Delegate = { id: string; identifier: string; displayName: string | null; activeFrom: string; activeTo: string | null; capPaise: number | null; operatorId?: string | null };
   type Operator = { id: string; name: string };
   let all: Upi[] = [];
@@ -483,16 +483,18 @@ import '../../../styles/money.css';
     noun: ['payment', 'payments'],
     cap: 500,
     rowKind: (u: Upi) => kindClass(amountKind(u.direction)),
-    searchPlaceholder: 'Search who, remark, reference, account…',
+    searchPlaceholder: 'Search who, UPI ID, remark, reference, account…',
     favoritesKey: `tvc-upi-favorites:${decodeTokenEmail(getToken() ?? '')}`,
     layoutKey: `tvc-upi-columns:${decodeTokenEmail(getToken() ?? '')}`,
     defaultGroup: 'month',
     defaultSort: ['date', -1],
-    searchText: (u: Upi) => [u.counterparty, u.remark, u.purpose ?? '', u.note, u.upiRef, u.account ?? '', u.delegate ?? ''].join(' '),
+    searchText: (u: Upi) => [u.counterparty, u.payeeUpiId ?? '', u.remark, u.purpose ?? '', u.note, u.upiRef, u.account ?? '', u.delegate ?? ''].join(' '),
     empty: { title: 'No UPI payments yet', text: 'Add the BHIM history or the Paytm export on the Import page.' },
     columns: [
       { id: 'date', label: 'Date', type: 'date', value: (u: Upi) => u.paidAt, sortValue: (u: Upi) => `${u.paidAt} ${u.time ?? ''}`, render: (u: Upi) => `${day(u.paidAt)}${u.time ? ` ${u.time}` : ''}` },
       { id: 'counterparty', label: 'Paid to', value: (u: Upi) => u.counterparty ?? 'Unnamed payee' },
+      // Paytm rows carry the ID in Paid to already; BHIM rows keep the name there and the ID here (most are masked by the app).
+      { id: 'payeeUpiId', label: 'UPI ID', value: (u: Upi) => u.payeeUpiId ?? '', render: (u: Upi) => (u.payeeUpiId ? u.payeeUpiId : el('span', 'dim', '—')) },
       // The sign and colour say debit or credit (the Debits and Credits chips still filter); a credit also gets a stripe down its row.
       { id: 'amount', label: 'Amount', type: 'amount', align: 'end', value: (u: Upi) => u.amountPaise, render: (u: Upi) => moneyNode(u.amountPaise, amountKind(u.direction)) },
       { id: 'app', label: 'App', value: (u: Upi) => APP[u.app] },
