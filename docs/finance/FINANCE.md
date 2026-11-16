@@ -660,6 +660,7 @@ Modelled on how ServiceNow lists work, because the sheet's convenience was selec
   - text columns: `word` contains; `=word` exactly; `!=word` is not; `^word` starts with; `!word` does not contain; `=` alone is empty;
     `!=` alone is not empty. Any case.
   - amount, in rupees: `2500`, `>2500`, `>=`, `<`, `<=`, `!=2500`, `1000..3000`.
+    (The shared tables, UPI/Parties/Requests/Rules, differ in one thing: plain digits there are a search, `15` finds 15, 150 and 3,515; `=2500` is the exact amount. Their main search box also finds an amount.)
   - date: `2026-10` or `oct` (matches the ISO date or the day-and-month label), `>2026-10-15` (also `>=`, `<`, `<=`, `=`),
     `2026-10-01..2026-10-31`.
   - Category, party and wording match what a posted line was allocated to or, while it is unposted, what is suggested for it. So

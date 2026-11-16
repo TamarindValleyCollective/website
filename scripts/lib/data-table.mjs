@@ -12,7 +12,11 @@ import { parseText, matchText, parseAmount, matchAmount, parseDate, matchDate } 
  * typed like an amount without the paise), 'none' (no filter box).
  */
 export function parseColumnFilter(type, raw) {
-  if (type === 'amount') return parseAmount(raw);
+  if (type === 'amount') {
+    // Plain digits are a search: "15" finds 15, 150, 1,500 and 3,515. An operator or a range (=2500, >1000, 1000..3000) stays exact.
+    const t = String(raw ?? '').replace(/[,\s₹]/g, '');
+    return /^\d+(\.\d*)?$/.test(t) ? { kind: 'amount', op: 'has', text: t, shown: [t] } : parseAmount(raw);
+  }
   if (type === 'date') return parseDate(raw);
   if (type === 'count') {
     const t = String(raw ?? '').trim();
@@ -26,7 +30,10 @@ export function parseColumnFilter(type, raw) {
 
 export function matchColumn(type, cond, value) {
   if (!cond || cond.error) return true;
-  if (type === 'amount') return value == null ? false : matchAmount(cond, Number(value));
+  if (type === 'amount') {
+    if (value == null) return false;
+    return cond.op === 'has' ? (Math.round(Number(value)) / 100).toFixed(2).includes(cond.text) : matchAmount(cond, Number(value));
+  }
   if (type === 'count') return matchAmount(cond, Number(value ?? 0) * 100);
   if (type === 'date') return value ? matchDate(cond, String(value)) : false;
   return matchText(cond, value ?? '');
