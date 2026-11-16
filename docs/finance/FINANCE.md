@@ -534,10 +534,11 @@ Razorpay's validate-VPA call says whose ID it is, so the suggestion can be the p
   `validateVpa` in `lib/razorpay.ts`. Tests: `finance-vpa.test.mjs`, `finance-vpa-endpoint.test.mjs`, three more in `finance-suggest.test.mjs`.
 - **Cache:** every answer is kept in `fin_vpa_names` (ID, whether it exists, the name, live or test key, who asked, when), so an ID is asked
   about **once**. RLS on, no anon/authenticated grant. Only answers from live keys are used; a test-key answer is kept and ignored.
-- **It never runs by itself.** The call is billed by Razorpay (the price is not confirmed), so the ledger toolbar shows **Look up N UPI names**
-  while unallocated lines still carry a bare UPI ID and the person may allocate. One click asks about at most 25 IDs
+- **It never runs by itself, and it runs from the UPI page only.** The call is billed by Razorpay (the price is not confirmed), so the UPI page has a
+  toolbar button **Look up N UPI names** and a **Look up** on each row (below). One click asks about at most 25 IDs
   (`POST /api/finance-admin/vpa-names`, needs `finance` / `allocate`), stops at the first failure and says why, and the page then reloads.
-  IDs already asked about, with or without a name, are not offered again.
+  IDs already asked about, with or without a name, are not offered again. The ledger has no lookup button: the IDs come from the UPI rows' "Paid to"
+  (bank narrations carry none), so the lookup starts there, and the ledger shows the result.
 - **The UPI page (`/internal/finance/upi/`) has the same button and two columns.** The ledger suggestion reads a UPI row's "Paid to", so looking
   names up there names every linked ledger line too (one saved answer per ID; the ledger and the UPI page ask the same endpoint). **Name** (shown
   by default) is the registered name when looked up, else the name the app showed, else "Not looked up yet" / "No name on file" for a UPI ID.
@@ -548,8 +549,12 @@ Razorpay's validate-VPA call says whose ID it is, so the suggestion can be the p
   cell menu, the phone card title). The server works out names, parties and lookups from the real text and never sends it. Because the page may
   not hold the IDs, a row action sends **row ids** (`POST /vpa-names { upiRowIds }`, the server reads each row's "Paid to"), and each row carries
   `vpaGroup`, a small number per distinct UPI ID in that response (1, 2, 3...), so the page can count IDs and group one person's payments without
-  being told the IDs. The registered name is shown in readable case (Razorpay sends capitals); the popup quotes Razorpay exactly. The ledger's own
-  text for a line (its suggestion, `counterparty`) is not masked yet. `GET /upi-lines` returns `upiId`, `vpaName`, `vpaState`
+  being told the IDs. The registered name is shown in readable case (Razorpay sends capitals); the popup quotes Razorpay exactly. **The ledger and the
+  Requests page follow the same rule**: for someone without `verify-payee` or `export`, every UPI ID in what they send is masked: a line's narration,
+  its UPI "Paid to", the party suggested from them (and the party column's search and sort), the reasons given on the line sheet, the fill-parties
+  proposals, and the "who was paid" of a suggested payment on Requests. A suggestion says only whether its UPI ID can be attached (`newPartyHasId`),
+  never the ID; accepting it sends the **line** (`attachUpiOfLine` on `POST /parties`) and the server finds the ID (only one Razorpay has named, never a
+  gateway's). The import preview shows the person importing their own file's text and is not masked. `GET /upi-lines` returns `upiId`, `vpaName`, `vpaState`
   (`named`/`asked`/`new`/null), `vpaGroup` per row and `canSeeUpiIds`; before migration `0102` it answers with every ID as `new`.
 - **The Party cell says one thing** (no pills): a party exists, so its **name as a link** that opens a details popup (kind, the UPI ID it holds,
   whether that is verified or waiting for a second admin, what Razorpay says, the name the bank showed, and **Open in Parties**); no party, so
@@ -590,7 +595,7 @@ Razorpay's validate-VPA call says whose ID it is, so the suggestion can be the p
   With no name on file (the ID has no linked bank account, or does not exist) the line reads as before. Nothing is created or posted until a
   person accepts.
 - **Accepting a looked-up name attaches the UPI ID as evidence-backed, unverified details.** The new party is created with the ID as an
-  **unverified** UPI payment detail (the suggestion carries `newPartyVpa`, only when a lookup supplied the name). Nothing is auto-verified:
+  **unverified** UPI payment detail (the suggestion says `newPartyHasId` when a lookup supplied the name; the page sends the line, the server attaches the ID). Nothing is auto-verified:
   a different admin with `verify-payee` (the person who adds details cannot verify them, `canVerifyAccount`) opens the verify sheet, where a
   UPI account now offers a method **"Razorpay UPI ID lookup (registered name)"** (`razorpay_vpa`, migration `0103`; bank accounts do not).
   One click: the server takes the registered name from the saved answer, or asks Razorpay once, and records it as the name the bank showed

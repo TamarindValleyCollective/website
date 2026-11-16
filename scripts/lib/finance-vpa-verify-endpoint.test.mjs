@@ -377,3 +377,35 @@ test('only someone who may allocate can add, nothing is sent without items, and 
   assert.deepEqual(entry.detail, { added: 1, attached: 0, skipped: 0 });
   assert.ok(!/ybl|q000111222|NEW PERSON|New Person/i.test(JSON.stringify(entry)));
 });
+
+// ---- accepting a looked-up name on the ledger: the page names the line, the server finds the UPI ID (the page never holds it)
+const addFromLine = (email, body) => api(email, '/parties', { method: 'POST', body: { name: 'New Person Name', kind: 'vendor', ...body } });
+
+test('accepting a named suggestion on the ledger attaches that line’s UPI ID, unverified, found by the server', async () => {
+  reset();
+  const op = sign('u1', 'user');
+  db.fin_upi_lines.push({ ...upiRow('x1', `${VPA} on PhonePe`), bank_line_id: 'L-1' });
+  kept(VPA, 'NEW PERSON NAME');
+  const res = await addFromLine(op, { attachUpiOfLine: 'L-1' });
+  assert.equal(res.status, 201);
+  assert.equal(db.fin_party_accounts.length, 1);
+  assert.deepEqual([db.fin_party_accounts[0].method, db.fin_party_accounts[0].status, db.fin_party_accounts[0].last4], ['upi', 'unverified', '1222']);
+  assert.ok(!JSON.stringify(await res.json()).includes('q000111222'), 'the answer never carries the ID');
+});
+
+test('the line’s UPI ID is not attached when it has not been named, belongs to a gateway, or the page sends its own details', async () => {
+  reset();
+  const op = sign('u1', 'user');
+  db.fin_upi_lines.push({ ...upiRow('x1', `${VPA} on PhonePe`), bank_line_id: 'L-1' }, { ...upiRow('x2', 'razorpay.shop@icici'), bank_line_id: 'L-2' });
+  assert.equal((await addFromLine(op, { name: 'Not Looked Up', attachUpiOfLine: 'L-1' })).status, 201);
+  assert.equal(db.fin_party_accounts.length, 0, 'no lookup yet, so nothing to attach');
+  kept('razorpay.shop@icici', 'RAZORPAY SOFTWARE PRIVATE LIMITED');
+  assert.equal((await addFromLine(op, { name: 'Behind A Gateway', attachUpiOfLine: 'L-2' })).status, 201);
+  assert.equal(db.fin_party_accounts.length, 0, 'a gateway’s ID is never attached');
+  kept(VPA, 'SOMEONE');
+  const own = await addFromLine(op, { name: 'Has Own Details', attachUpiOfLine: 'L-1', payee: { method: 'upi', upi: 'own.details@okaxis' } });
+  assert.equal(own.status, 201);
+  assert.equal(db.fin_party_accounts.length, 1);
+  assert.equal(db.fin_party_accounts[0].last4, 'ails'.padStart(4), 'the details the page sent win, not the line’s');
+  assert.equal((await addFromLine(op, { name: 'Bad Line Id', attachUpiOfLine: '../../x' })).status, 201, 'a malformed line id is ignored, the party is still added');
+});

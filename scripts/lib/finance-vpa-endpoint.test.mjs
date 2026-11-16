@@ -112,11 +112,14 @@ const api = (email, path, { method = 'GET', body } = {}) =>
 const lookup = (email, texts) => api(email, '/vpa-names', { method: 'POST', body: { texts } });
 const suggestedName = async (email) => (await (await api(email, '/ledger?filter=all')).json()).lines.find((l) => l.id === L_VPA).suggestion?.newPartyName;
 
+const MASKED = 'q••••@ybl on PhonePe';
+
 test('an admin who allocates looks up the IDs, the names are kept, and the ledger suggests the name', async () => {
   reset();
   razorpay.answers[VPA_A] = { vpa: VPA_A, success: true, customer_name: 'TEST VENDOR WORKS' };
   const op = sign('user');
-  assert.equal(await suggestedName(op), `${VPA_A} on PhonePe`, 'before a lookup the line carries the bare ID');
+  assert.equal(await suggestedName(op), MASKED, 'before a lookup the line carries the bare ID, masked for this viewer');
+  assert.equal(await suggestedName(sign('admin')), `${VPA_A} on PhonePe`, 'and in full for a holder of verify-payee');
   const res = await lookup(op, [`${VPA_A} on PhonePe`, 'Plain Name', VPA_B]);
   assert.equal(res.status, 200);
   assert.deepEqual(await res.json(), { asked: 2, named: 1, noName: 0, notFound: 1, stoppedBecause: null });
@@ -125,24 +128,38 @@ test('an admin who allocates looks up the IDs, the names are kept, and the ledge
   assert.equal(await suggestedName(op), 'Test Vendor Works');
 });
 
-test('a named suggestion carries the UPI ID it came from, so accepting it can attach the ID; an unnamed one does not', async () => {
+test('a named suggestion says its UPI ID can be attached, without ever sending the ID; an unnamed one does not', async () => {
   reset();
   razorpay.answers[VPA_A] = { vpa: VPA_A, success: true, customer_name: 'TEST VENDOR WORKS' };
   const op = sign('user');
-  const vpaOf = async () => (await (await api(op, '/ledger?filter=all')).json()).lines.find((l) => l.id === L_VPA).suggestion.newPartyVpa;
-  assert.equal(await vpaOf(), null, 'before a lookup there is no name to attach it to');
+  const suggestion = async () => (await (await api(op, '/ledger?filter=all')).json()).lines.find((l) => l.id === L_VPA).suggestion;
+  assert.equal((await suggestion()).newPartyHasId, false, 'before a lookup there is no name to attach it to');
   await lookup(op, [VPA_A]);
-  assert.equal(await vpaOf(), VPA_A);
+  const after = await suggestion();
+  assert.equal(after.newPartyHasId, true);
+  assert.ok(!('newPartyVpa' in after), 'the page is told yes or no, never the ID');
+  assert.ok(!JSON.stringify(after).includes('q000111222'));
 });
 
-test('a line is flagged for lookup until its ID has been asked about, even when the answer was no name', async () => {
+test('a lookup that finds no name leaves the line as it was', async () => {
   reset();
   const op = sign('user');
-  const flag = async () => (await (await api(op, '/ledger?filter=all')).json()).lines.find((l) => l.id === L_VPA).suggestion.vpaToLookUp;
-  assert.equal(await flag(), true);
   await lookup(op, [`${VPA_A} on PhonePe`]); // the stub knows nothing of it: success false
-  assert.equal(await flag(), false, 'asked once, so not offered again');
-  assert.equal(await suggestedName(op), `${VPA_A} on PhonePe`, 'and still the bare ID, as there is no name');
+  assert.equal(await suggestedName(op), MASKED, 'still the bare ID (masked), as there is no name');
+  assert.equal((await (await api(op, '/ledger?filter=all')).json()).lines.find((l) => l.id === L_VPA).suggestion.newPartyHasId, false);
+});
+
+test('the ledger masks every UPI ID in what it sends to someone who may not see them: narration, "Paid to", the suggestion and its reasons', async () => {
+  reset();
+  db.fin_upi_lines.push({ id: 'u-link', bank_line_id: L_VPA, counterparty: `${VPA_A} on PhonePe`, remarks: 'x', is_circle: false, app: 'paytm', upi_ref: 'REFLINK' });
+  const text = async (email, path) => JSON.stringify(await (await api(email, path)).json());
+  for (const path of ['/ledger/all', '/ledger?filter=all', `/ledger/${L_VPA}`]) {
+    const viewer = await text(sign('user'), path);
+    assert.ok(!viewer.includes('q000111222'), `${path}: no full ID for a viewer`);
+    assert.ok(viewer.includes('q••••@ybl'), `${path}: the masked form is there`);
+    const admin = await text(sign('admin'), path);
+    assert.ok(admin.includes('q000111222'), `${path}: in full for a holder of verify-payee`);
+  }
 });
 
 test('the audit row carries a count and the key mode, never a UPI ID or a name', async () => {
@@ -189,7 +206,7 @@ test('a test-key answer is kept but never used for a suggestion', async () => {
   const op = sign('user');
   await lookup(op, [VPA_A]);
   assert.equal(db.fin_vpa_names[0].key_mode, 'test');
-  assert.equal(await suggestedName(op), `${VPA_A} on PhonePe`);
+  assert.equal(await suggestedName(op), MASKED);
 });
 
 test('a body without the texts is refused', async () => {

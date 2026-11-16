@@ -54,7 +54,6 @@ import SignInGate from '../../../components/SignInGate.astro';
         <button type="button" id="tips-toggle" class="button button--outline button--small" aria-expanded="false" aria-controls="tips">Help and shortcuts</button>
         <button type="button" id="accept-all" class="button button--outline" hidden>Fill in the confident suggestions</button>
         <button type="button" id="fill-parties" class="button button--outline button--small" hidden></button>
-        <button type="button" id="look-up-names" class="button button--outline button--small" hidden></button>
       </div>
       <div id="tips" class="tips" hidden>
         <h3 class="tips-title">How a line is described</h3>
@@ -129,12 +128,11 @@ import SignInGate from '../../../components/SignInGate.astro';
   import { cleanLayout } from '../../../../scripts/lib/data-table.mjs';
   import { createFloatingMenu, leaveToBrowser, onLongPress, valueFilterItems } from '../../../../scripts/lib/admin-menu.mjs';
   import { compareRows, describeCondition, matchAmount, matchDate, matchText, parseAmount, parseDate, parseText } from '../../../../scripts/lib/finance-columns.mjs';
-  import { VPA_LOOKUP_LIMIT, vpasToLookUp } from '../../../../scripts/lib/finance-vpa.mjs';
 
   declare const google: any;
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
 
-  type Suggestion = { categoryId: string | null; partyId: string | null; nature: string; confidence: string; newPartyName: string | null; newPartyVpa?: string | null; vpaToLookUp?: boolean };
+  type Suggestion = { categoryId: string | null; partyId: string | null; nature: string; confidence: string; newPartyName: string | null; newPartyHasId?: boolean };
   type Line = {
     id: string; date: string; narration: string; direction: 'debit' | 'credit'; amountPaise: number; account: string; remark: string | null; counterparty: string | null; origin?: string; sources?: string[]; reversal?: { role: 'original' | 'reversal'; otherId: string; otherDate: string | null } | null; noteKey?: string; note?: string | null; purpose?: string | null; upiRef?: string | null;
     allocatedPaise: number; state: 'unallocated' | 'partly_allocated' | 'allocated'; review: boolean; missingParty: boolean; filled?: boolean; needsWording?: boolean; suggestion: Suggestion | null;
@@ -1357,36 +1355,6 @@ import SignInGate from '../../../components/SignInGate.astro';
     if (on) btn.textContent = `Fill ${counts.noparty} missing ${counts.noparty === 1 ? 'party' : 'parties'}`;
   }
   $('fill-parties').addEventListener('click', () => void openFillParties());
-  // Lines whose payee is only a UPI ID that Razorpay has not been asked about. Asking is a billed call, so it is a button, not automatic, and
-  // never more than VPA_LOOKUP_LIMIT IDs at a time.
-  const vpaTexts = () => all.filter((l) => l.suggestion?.vpaToLookUp).map((l) => l.suggestion!.newPartyName);
-  function renderLookUpNames() {
-    const btn = $('look-up-names');
-    const n = data?.canAllocate ? vpasToLookUp(vpaTexts(), new Set(), Infinity).length : 0;
-    btn.hidden = !n;
-    if (n) btn.textContent = `Look up ${Math.min(n, VPA_LOOKUP_LIMIT)} UPI ${Math.min(n, VPA_LOOKUP_LIMIT) === 1 ? 'name' : 'names'}${n > VPA_LOOKUP_LIMIT ? ` (of ${n})` : ''}`;
-  }
-  $('look-up-names').addEventListener('click', async () => {
-    const btn = $<HTMLButtonElement>('look-up-names');
-    btn.disabled = true;
-    const label = btn.textContent;
-    btn.textContent = 'Looking up…';
-    try {
-      const { status, data: res } = await call('/api/finance-admin/vpa-names', 'POST', { texts: vpaTexts() });
-      if (status !== 200) showToast(res?.error ?? 'Could not look up the names.');
-      else {
-        const parts = [res.named ? `${res.named} named` : '', res.noName ? `${res.noName} with no name on file` : '', res.notFound ? `${res.notFound} not found` : ''].filter(Boolean);
-        showToast(`${res.stoppedBecause ? `Stopped: ${res.stoppedBecause} ` : ''}${parts.length ? `${parts.join(', ')}.` : res.asked ? '' : 'Nothing new to look up.'}`.trim());
-        if (res.asked) await load(true);
-      }
-    } catch (err) {
-      if (!(err instanceof StaffAuthError)) showToast('Could not look up the names.');
-    } finally {
-      btn.disabled = false;
-      btn.textContent = label;
-      renderLookUpNames();
-    }
-  });
   function renderSearch() {
     const now = today();
     $('schips').replaceChildren(
@@ -1397,7 +1365,6 @@ import SignInGate from '../../../components/SignInGate.astro';
     );
     $<HTMLInputElement>('q').placeholder = chips.length || words.length || groupBy.length ? '' : 'Search every column';
     renderFillParties();
-    renderLookUpNames();
     if (!$('spop').hidden) renderPopover();
   }
   function renderPopover() {
@@ -1922,14 +1889,14 @@ import SignInGate from '../../../components/SignInGate.astro';
       blank: 'No one in particular',
       ariaLabel: `Party for ${who}`,
       rootLabel: 'All kinds',
-      addNew: { label: 'Add as a new party', onAdd: (typed) => openAddParty(typed || strangerOf(l), kindFor(l), (id) => afterPartyAdded(l, id), !typed || typed === strangerOf(l) ? l.suggestion?.newPartyVpa ?? null : null), blockedAt: (path) => (path[0] === 'member' || path[0] === 'unit' ? NO_MEMBER_ADD : null) },
+      addNew: { label: 'Add as a new party', onAdd: (typed) => openAddParty(typed || strangerOf(l), kindFor(l), (id) => afterPartyAdded(l, id), !typed || typed === strangerOf(l) ? (l.suggestion?.newPartyHasId ? l.id : null) : null), blockedAt: (path) => (path[0] === 'member' || path[0] === 'unit' ? NO_MEMBER_ADD : null) },
     }) as ComboEl;
     party.addEventListener('change', () => edit(l, 'partyId', party.value)); // the party is the last part of the path (kind, then the party)
     const partyTick = tick(`Accept the suggested party for ${who}`, async () => {
       const gp = ghostOf(l, 'partyId');
       if (gp) return edit(l, 'partyId', gp);
       const stranger = strangerOf(l);
-      const id = stranger ? await createParty(stranger, kindFor(l), l.suggestion?.newPartyVpa ?? null) : null;
+      const id = stranger ? await createParty(stranger, kindFor(l), l.suggestion?.newPartyHasId ? l.id : null) : null;
       if (id) afterPartyAdded(l, id);
     });
     const partyText = h('span', { class: 'lcell-text' });
@@ -2383,13 +2350,13 @@ import SignInGate from '../../../components/SignInGate.astro';
   // ---- adding a party that is not in the register, from the cell or the suggestion
   const PARTY_KINDS: Record<string, string> = { vendor: 'Vendor', customer: 'Customer', member: 'Member', employee: 'Employee', bank: 'Bank', government: 'Government', director: 'Director', other: 'Other' };
   const kindFor = (l: Line) => (l.direction === 'credit' ? 'customer' : 'vendor');
-  // `vpa`: the UPI ID Razorpay named this person from. It is attached to the new party as unverified payment details, with the lookup as the
-  // evidence, so a different admin confirms it with one click on the Parties page (the person who adds details cannot verify them).
-  async function createParty(name: string, kind: string, vpa: string | null = null): Promise<string | null> {
+  // `fromLine`: the ledger line whose suggestion named this person from a UPI ID. The server finds that ID and attaches it to the new party as unverified
+  // payment details (this page never holds it), so a different admin confirms it with one click on the Parties page (the person who adds details cannot).
+  async function createParty(name: string, kind: string, fromLine: string | null = null): Promise<string | null> {
     const typed = name.trim().replace(/\s+/g, ' ');
     const twin = data!.lookups.parties.find((x) => x.name.toLowerCase() === typed.toLowerCase());
     if (twin) return twin.id;
-    const { status, data: out } = await call('/api/finance-admin/parties', 'POST', { name: typed, kind, ...(vpa ? { payee: { method: 'upi', upi: vpa } } : {}) });
+    const { status, data: out } = await call('/api/finance-admin/parties', 'POST', { name: typed, kind, ...(fromLine ? { attachUpiOfLine: fromLine } : {}) });
     if (status !== 201) {
       showToast(out?.error ?? 'Could not add that party.');
       return null;
@@ -2397,10 +2364,10 @@ import SignInGate from '../../../components/SignInGate.astro';
     const lk = data!.lookups;
     lk.parties.push({ id: out.party.id, name: out.party.name, kind: out.party.kind });
     lk.parties.sort((a, b) => a.name.localeCompare(b.name));
-    showToast(vpa ? `${out.party.name} added with their UPI ID, to be confirmed on the Parties page by someone else.` : `${out.party.name} added to the register. Add their bank details on the Parties page.`);
+    showToast((out.party.accounts?.length ?? 0) > 0 ? `${out.party.name} added with their UPI ID, to be confirmed on the Parties page by someone else.` : `${out.party.name} added to the register. Add their bank details on the Parties page.`);
     return out.party.id as string;
   }
-  function openAddParty(name: string, kind: string, onAdded: (id: string) => void, vpa: string | null = null) {
+  function openAddParty(name: string, kind: string, onAdded: (id: string) => void, fromLine: string | null = null) {
     const dlg = $<HTMLDialogElement>('party-sheet');
     const nameInput = input('newPartyName', { placeholder: 'Name as it should appear in the register' }) as HTMLInputElement;
     nameInput.value = name;
@@ -2423,7 +2390,7 @@ import SignInGate from '../../../components/SignInGate.astro';
         msg.textContent = 'Enter the name.';
         return;
       }
-      const id = await createParty(nameInput.value, kindSel.value, vpa);
+      const id = await createParty(nameInput.value, kindSel.value, fromLine);
       if (!id) return;
       dlg.close();
       onAdded(id);

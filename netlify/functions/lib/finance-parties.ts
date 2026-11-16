@@ -34,7 +34,7 @@ import { fingerprintText } from '../../../scripts/lib/finance-party-import.mjs';
 import { postingStats, suggestChanges } from '../../../scripts/lib/finance-party-suggestions.mjs';
 import { rowsAll } from './finance-ledger';
 import { registeredNameOf } from './finance-vpa';
-import { isGatewayName, isGatewayVpa } from '../../../scripts/lib/finance-vpa.mjs';
+import { isGatewayName, isGatewayVpa, vpaIn } from '../../../scripts/lib/finance-vpa.mjs';
 import { VOUCHER_MAX_BYTES, sniffVoucher } from '../../../scripts/lib/finance-requests.mjs';
 
 type Json = Record<string, any>;
@@ -217,6 +217,20 @@ export async function listParties(req: Request): Promise<Response> {
   }
 }
 
+// The UPI ID behind a ledger line, when it is safe to attach to a new party: the line's UPI row carries an ID, Razorpay has named it (a live answer
+// is kept), and it is not a payment gateway's. Otherwise null, and the party is simply added without an ID.
+async function upiIdOfLine(bankLineId: string): Promise<string | null> {
+  try {
+    const [u] = await rows(`/fin_upi_lines?bank_line_id=eq.${bankLineId}&select=counterparty&limit=1`);
+    const vpa = vpaIn(u?.counterparty as string | null | undefined);
+    if (!vpa || isGatewayVpa(vpa)) return null;
+    const [named] = await rows(`/fin_vpa_names?vpa=eq.${encodeURIComponent(vpa)}&key_mode=eq.live&success=eq.true&select=name&limit=1`);
+    return named && !isGatewayName(named.name as string) ? vpa : null;
+  } catch {
+    return null;
+  }
+}
+
 // -------------------------------------------------------------- create
 export async function createParty(req: Request): Promise<Response> {
   const auth = await requireStaff(req, 'finance', 'allocate');
@@ -224,6 +238,11 @@ export async function createParty(req: Request): Promise<Response> {
   const { staff } = auth;
   const body = await readBody(req);
   if (!body) return fail('Send the party as JSON.');
+  // From the ledger: "attach the UPI ID of this line". The page does not hold the ID (it may not be allowed to see it), so the server finds it.
+  if (typeof body.attachUpiOfLine === 'string' && ID.test(body.attachUpiOfLine) && (body.payee === undefined || body.payee === null)) {
+    const upi = await upiIdOfLine(body.attachUpiOfLine);
+    if (upi) body.payee = { method: 'upi', upi };
+  }
   const checked = validateParty(body);
   if (checked.error || !checked.party) return fail(checked.error ?? 'Enter the party.');
   // Validate the payee before writing anything, so a bad number leaves no half-made party.

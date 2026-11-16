@@ -48,6 +48,7 @@ globalThis.fetch = async (url, init = {}) => {
   calls.push(`${method} ${table}`);
   if (table === 'staff_users') return json(db.users.filter((x) => u.searchParams.get('email') === `eq.${x.email}`));
   if (table === 'staff_module_roles') return json(db.roles.filter((r) => r.staff_id === u.searchParams.get('staff_id')?.slice(3) && r.module === u.searchParams.get('module')?.slice(3)));
+  if (table === 'staff_mfa_factors' || table === 'staff_recovery_codes') return json([]);
   if (table === 'fin_audit_log') { db.audit.push(JSON.parse(init.body)); db.order.push('audit'); return new Response(null, { status: 201 }); }
   if (table === 'fin_entities') return json([{ id: 'ent', requester_party_id: null }]);
   if (table === 'fin_delegates' && method === 'POST') { const b = JSON.parse(init.body); db.order.push('delegate'); db.saved = b; return json([{ id: D1, ...b }], 201); }
@@ -318,6 +319,18 @@ test('unmatching by hand keeps the person on the record, and that record is neve
   // it is still offered as a suggestion, and a person can match it by hand
   const list = (await (await send(email, 'GET', '/requests')).json()).records;
   assert.equal(list[0].proposals.length, 1);
+});
+
+test('a suggested payment masks the UPI ID in who was paid, for someone who may not see payee UPI IDs', async () => {
+  // sign() starts a fresh fake database, so the data is set after each sign-in.
+  const who = async (role) => {
+    const email = sign([['finance', role]]);
+    db.upi = ONE_UPI.map((u) => ({ ...u, counterparty: 'q000111222@ybl on PhonePe' }));
+    db.records.push({ ...UNIQUE });
+    return (await (await send(email, 'GET', '/requests')).json()).records[0].proposals[0].who;
+  };
+  assert.equal(await who('user'), 'q••••@ybl on PhonePe');
+  assert.equal(await who('admin'), 'q000111222@ybl on PhonePe', 'in full for a holder of verify-payee');
 });
 
 test('auto-match needs allocate: a read-only viewer sees no pending count and is refused', async () => {

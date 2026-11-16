@@ -10,7 +10,8 @@ import { noteKeyOf } from '../../../scripts/lib/finance-notes.mjs';
 import { pairReversals } from '../../../scripts/lib/finance-reversals.mjs';
 import { loadNotes } from './finance-notes';
 import { loadPurposes } from './finance-requests';
-import { VPA_LOOKUP_LIMIT, vpasToLookUp } from '../../../scripts/lib/finance-vpa.mjs';
+import { VPA_LOOKUP_LIMIT, maskVpasIn, vpasToLookUp } from '../../../scripts/lib/finance-vpa.mjs';
+import { payeeFieldVisibility } from '../../../scripts/lib/finance-access.mjs';
 import { keepVpaAnswer, readVpaAnswers, vpaFailureText } from './finance-vpa';
 import { razorpayKeyMode, validateVpa } from './razorpay';
 import { requireStaff } from './staff-access';
@@ -30,6 +31,13 @@ const PAGE = 100;
 
 const jsonResponse = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
 const fail = (error: string, status = 400, extra: Json = {}) => jsonResponse({ error, ...extra }, status);
+
+// Whether this viewer may see payee UPI IDs: the UPI page's rule (verify-payee or export). Everyone else gets every UPI ID in the text sent out masked
+// ("q••••@ybl on PhonePe"): the narration, the app's "Paid to", the names suggested from them and the reasons given. The server works from the real
+// text and never sends it; the page asks for an ID to be attached by line (`attachUpiOfLine`), never by value.
+const mayPayeeIds = (capabilities: string[]): boolean => payeeFieldVisibility(capabilities).payeeBankDetails as boolean;
+type Shown = <T extends string | null | undefined>(text: T) => T;
+const maskFor = (see: boolean): Shown => (text) => (see ? text : (maskVpasIn(text) as typeof text));
 const rows = async (path: string): Promise<Json[]> => (await (await rest(path)).json()) as Json[];
 
 // Supabase's API returns at most 1,000 rows per request, whatever `limit` is asked for, so anything that may hold more
@@ -195,6 +203,7 @@ export async function listLedger(req: Request): Promise<Response> {
 
     // Category, party and wording need what each line was posted to, or is suggested: only worked out for all lines when a condition or the
     // sort needs it; otherwise just for the page being shown.
+    const shown = maskFor(mayPayeeIds(capabilitiesForRole('finance', auth.staff.role) as string[]));
     const categoryName = new Map(ctx.categories.map((c) => [c.id as string, c.name as string]));
     const partyName = new Map(ctx.parties.map((x) => [x.id as string, x.name as string]));
     const needsEffective = Boolean(conds.category || conds.party || conds.nature) || ['category', 'party', 'nature'].includes(sortKey);
@@ -211,7 +220,7 @@ export async function listLedger(req: Request): Promise<Response> {
         if (posted) effective.set(l.id, { category: categoryName.get(posted.categoryId) ?? '', party: posted.partyId ? partyName.get(posted.partyId) ?? '' : '', nature: posted.nature ?? '' });
         else {
           const sg = suggestFor(l, upiOf.get(l.id) ?? null, ctx, sc);
-          effective.set(l.id, { category: sg.categoryId ? categoryName.get(sg.categoryId) ?? '' : '', party: sg.partyId ? partyName.get(sg.partyId) ?? '' : sg.newParty?.name ?? '', nature: sg.nature ?? '' });
+          effective.set(l.id, { category: sg.categoryId ? categoryName.get(sg.categoryId) ?? '' : '', party: sg.partyId ? partyName.get(sg.partyId) ?? '' : shown(sg.newParty?.name ?? ''), nature: sg.nature ?? '' });
         }
       }
     }
@@ -260,17 +269,17 @@ export async function listLedger(req: Request): Promise<Response> {
       lines: page.map((l) => ({
         id: l.id,
         date: l.tran_date,
-        narration: l.narration,
+        narration: shown(l.narration as string),
         direction: l.direction,
         amountPaise: l.amount_paise,
         account: accountLabel.get(l.bank_account_id) ?? '',
         remark: upiOf.get(l.id)?.remarks ?? null,
-        counterparty: upiOf.get(l.id)?.counterparty ?? null,
+        counterparty: shown((upiOf.get(l.id)?.counterparty as string | null | undefined) ?? null),
         isCircle: Boolean(upiOf.get(l.id)?.is_circle),
         origin: originOf({ narration: l.narration, direction: l.direction as 'debit' | 'credit' }, upiOf.get(l.id)?.app as 'bhim' | 'paytm' | undefined),
         allocatedPaise: (byLine.get(l.id) ?? []).reduce((n, a) => n + a.amount_paise, 0),
         ...summarise(l),
-        suggestion: summarise(l).state === 'allocated' ? null : compactSuggestion(suggestFor(l, upiOf.get(l.id) ?? null, ctx, sc), sc),
+        suggestion: summarise(l).state === 'allocated' ? null : compactSuggestion(suggestFor(l, upiOf.get(l.id) ?? null, ctx, sc), shown),
         // What a posted line was allocated to (the first row, and how many there are), so the table can show it.
         allocation: (() => {
           const a = postedSummary(byLine.get(l.id) ?? []);
@@ -313,6 +322,7 @@ export async function ledgerAll(req: Request): Promise<Response> {
     const accountLabel = new Map(accounts.map((a) => [a.id as string, a.label as string]));
     const accountBadge = new Map(accounts.map((a) => [a.id as string, (a.badge_key as string | null) ?? null]));
     const capabilities = capabilitiesForRole('finance', auth.staff.role) as string[];
+    const shown = maskFor(mayPayeeIds(capabilities));
     const out = lines.map((l) => {
       const allocs = byLine.get(l.id) ?? [];
       const posted = allocs.some((a) => a.posted_at);
@@ -327,16 +337,16 @@ export async function ledgerAll(req: Request): Promise<Response> {
       const sg = posted ? null : suggestFor(l, upi, ctx, sc, purposeText);
       const effective = summary
         ? { category: categoryById.get(summary.categoryId)?.name ?? '', party: summary.partyId ? partyName.get(summary.partyId) ?? '' : '', nature: summary.nature ?? '' }
-        : { category: sg?.categoryId ? categoryById.get(sg.categoryId)?.name ?? '' : '', party: sg?.partyId ? partyName.get(sg.partyId) ?? '' : sg?.newParty?.name ?? '', nature: sg?.nature ?? '' };
+        : { category: sg?.categoryId ? categoryById.get(sg.categoryId)?.name ?? '' : '', party: sg?.partyId ? partyName.get(sg.partyId) ?? '' : shown(sg?.newParty?.name ?? ''), nature: sg?.nature ?? '' };
       return {
         id: l.id,
         date: l.tran_date,
-        narration: l.narration,
+        narration: shown(l.narration as string),
         direction: l.direction,
         amountPaise: l.amount_paise,
         account: accountLabel.get(l.bank_account_id) ?? '',
         remark: upi?.remarks ?? null,
-        counterparty: upi?.counterparty ?? null,
+        counterparty: shown((upi?.counterparty as string | null | undefined) ?? null),
         isCircle: Boolean(upi?.is_circle),
         origin,
         // The note on this payment (shared with its UPI row), and the UPI reference that links the ledger to the UPI page.
@@ -351,7 +361,7 @@ export async function ledgerAll(req: Request): Promise<Response> {
         state,
         review: allocs.some((a) => a.review_state !== 'ok'),
         missingParty,
-        suggestion: sg ? compactSuggestion(sg, sc) : null,
+        suggestion: sg ? compactSuggestion(sg, shown) : null,
         allocation: summary ? { ...summary, householdLabel: summary.householdId ? householdLabel.get(summary.householdId as string) ?? null : null } : null,
         effective,
       };
@@ -391,7 +401,7 @@ async function suggestionContext(lines: LineRow[], byLine: Map<string, Json[]>, 
   }
   const requesterIds: string[] = ctx.requesterPartyId ? [ctx.requesterPartyId] : [];
   const vpa = await vpaAnswers();
-  return { rc, history: buildHistory(past), requesterIds, vpaNames: vpa.names, vpaKnown: vpa.known };
+  return { rc, history: buildHistory(past), requesterIds, vpaNames: vpa.names };
 }
 type SuggestionContext = Awaited<ReturnType<typeof suggestionContext>>;
 
@@ -408,8 +418,8 @@ export async function lookupVpaNames(req: Request): Promise<Response> {
   const auth = await requireStaff(req, 'finance', 'allocate');
   if (!auth.ok) return fail(auth.error, auth.status);
   const body = await readBody(req);
-  // Either `texts` (the ledger sends the text of its suggestions) or `upiRowIds` (the UPI page sends row ids, so it never needs the UPI IDs, which it may
-  // not be allowed to see: the server reads each row's "Paid to" itself).
+  // Either `upiRowIds` (the UPI page sends row ids, so it never needs the UPI IDs, which it may not be allowed to see: the server reads each row's "Paid to"
+  // itself) or `texts` (text that carries IDs, for a caller that has them).
   const ids: string[] = Array.isArray(body?.upiRowIds) ? body!.upiRowIds.filter((i: unknown) => typeof i === 'string' && /^[\w-]{1,64}$/.test(i as string)).slice(0, 1000) : [];
   if (!body || (!Array.isArray(body.texts) && !ids.length) || (Array.isArray(body.texts) && body.texts.length > 5000)) return fail('Say which payments to look up.', 400);
   try {
@@ -448,10 +458,11 @@ const postedSummary = (allocs: Json[]) => {
   return posted.length ? { categoryId: posted[0].category_id, partyId: posted[0].party_id, nature: posted[0].nature, count: posted.length, householdId: posted[0].household_id ?? null, maintenanceYear: posted[0].maintenance_year ?? null } : null;
 };
 
-// `vpaToLookUp`: the new party is still only a UPI ID that Razorpay has not been asked about, so the page can offer to look it up.
-const compactSuggestion = (x: Json, sc: SuggestionContext) =>
+// `newPartyHasId`: the new party's name came from a UPI ID Razorpay named, so accepting it can attach that ID (the page says which line, the server finds the ID:
+// it is never sent). The name is masked for someone who may not see UPI IDs (a name not yet looked up is the bare ID).
+const compactSuggestion = (x: Json, shown: Shown) =>
   x.categoryId || x.partyId || x.nature || x.newParty
-    ? { categoryId: x.categoryId, partyId: x.partyId, nature: x.nature, confidence: x.confidence, newPartyName: x.newParty?.name ?? null, newPartyVpa: x.newParty?.vpa ?? null, vpaToLookUp: vpasToLookUp([x.newParty?.name], sc.vpaKnown).length > 0 }
+    ? { categoryId: x.categoryId, partyId: x.partyId, nature: x.nature, confidence: x.confidence, newPartyName: x.newParty?.name ? shown(x.newParty.name as string) : null, newPartyHasId: Boolean(x.newParty?.vpa) }
     : null;
 
 const reviewRef = () =>
@@ -502,10 +513,15 @@ export async function ledgerLine(req: Request, lineId: string): Promise<Response
       } else reasons = ['unexplained'];
     }
     const capabilities = capabilitiesForRole('finance', auth.staff.role) as string[];
+    const shown = maskFor(mayPayeeIds(capabilities));
+    // The suggestion as this viewer may see it: the names and the reasons in words are masked, and the UPI ID itself is replaced by a yes or no.
+    const publicSuggestion = suggestion
+      ? { ...suggestion, reasons: ((suggestion.reasons as string[] | undefined) ?? []).map((r) => shown(r)), newParty: suggestion.newParty ? { name: shown(suggestion.newParty.name as string), kind: suggestion.newParty.kind, hasId: Boolean(suggestion.newParty.vpa) } : null }
+      : null;
     return jsonResponse({
       canAllocate: capabilities.includes('allocate'),
-      line: { id: line.id, date: line.tran_date, narration: line.narration, direction: line.direction, amountPaise: line.amount_paise },
-      upi: upi ? { counterparty: upi.counterparty, remark: upi.remarks, isCircle: upi.is_circle, app: upi.app } : null,
+      line: { id: line.id, date: line.tran_date, narration: shown(line.narration as string), direction: line.direction, amountPaise: line.amount_paise },
+      upi: upi ? { counterparty: shown(upi.counterparty as string | null), remark: upi.remarks, isCircle: upi.is_circle, app: upi.app } : null,
       origin: originOf({ narration: String(line.narration), direction: line.direction as 'debit' | 'credit' }, upi?.app as 'bhim' | 'paytm' | undefined),
       upiRef: (upi?.upi_ref as string | undefined) ?? line.upi_rrn ?? null,
       noteKey: noteKeyOf({ upiRef: upi?.upi_ref as string | undefined, upiRrn: line.upi_rrn ?? undefined, bankLineId: line.id as string }),
@@ -531,7 +547,7 @@ export async function ledgerLine(req: Request, lineId: string): Promise<Response
         posted: Boolean(a.posted_at),
       })),
       proposal,
-      suggestion,
+      suggestion: publicSuggestion,
       reasons,
       reversible: capabilities.includes('allocate') && !posted ? await reversibleFor(line) : [],
       lookups: ctx,
@@ -796,6 +812,7 @@ export async function missingParties(req: Request): Promise<Response> {
       cached('upi-linked', () => rowsAll('/fin_upi_lines?select=bank_line_id,counterparty,remarks,is_circle,app&bank_line_id=not.is.null&order=id.asc')),
       rowsAll('/fin_allocations?select=id,bank_line_id,category_id,amount_paise,period,household_id&posted_at=not.is.null&party_id=is.null&reverses_allocation_id=is.null&order=id.asc'),
     ]);
+    const shown = maskFor(mayPayeeIds(capabilitiesForRole('finance', auth.staff.role) as string[]));
     const lineById = new Map(lines.map((l) => [l.id as string, l]));
     const upiOf = new Map(upis.map((u) => [u.bank_line_id as string, u]));
     const categoryById = new Map(ctx.categories.map((c) => [c.id as string, c]));
@@ -826,7 +843,7 @@ export async function missingParties(req: Request): Promise<Response> {
         let entry = payees.get(key);
         if (!entry) {
           entry = {
-            key, name: payee.name, group: maintenance ? 'Maintenance' : /^salar/i.test(category?.name ?? '') ? 'Salaries' : 'Everything else',
+            key: shown(key), name: shown(payee.name), group: maintenance ? 'Maintenance' : /^salar/i.test(category?.name ?? '') ? 'Salaries' : 'Everything else',
             category: category?.name ?? '', unitId, unit: unitId ? unitLabel.get(unitId) ?? '' : '', lines: 0, allocationIds: [] as string[], closed: false,
             best: (candidateParties(payee.name, ctx.parties) as Json[]).map((x) => ({ id: x.id, name: x.name })),
           };
@@ -838,7 +855,7 @@ export async function missingParties(req: Request): Promise<Response> {
         continue;
       }
       proposals.push({
-        allocationId: a.id, lineId: line.id, date: line.tran_date, narration: line.narration, direction: line.direction, amountPaise: a.amount_paise,
+        allocationId: a.id, lineId: line.id, date: line.tran_date, narration: shown(line.narration as string), direction: line.direction, amountPaise: a.amount_paise,
         period: String(a.period).slice(0, 10), category: category?.name ?? '', unit: a.household_id ? unitLabel.get(a.household_id) ?? '' : '',
         partyId: hit.partyId, partyName: partyById.get(hit.partyId)?.name ?? '', how: hit.how, from: hit.from,
       });

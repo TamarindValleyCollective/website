@@ -371,7 +371,7 @@ one answers `success: false`.
   and the live key got HTTP 400 "The requested URL was not found on the server", while other calls worked. Razorpay's docs limit it to
   businesses exempted from the UPI Collect deprecation (28 February 2026), so if it ever stops answering, ask support again.
 - **Cost:** not confirmed. Razorpay's own pages disagree on whether a validation is charged. It is therefore never automatic: an admin
-  presses **Look up N UPI names** on the ledger, at most 25 IDs a time, and each ID is asked about once (answers kept in `fin_vpa_names`).
+  presses **Look up N UPI names** (or **Look up** on a row) on the UPI page, at most 25 IDs a time, and each ID is asked about once (answers kept in `fin_vpa_names`).
 - **Payment gateways:** a UPI ID that Razorpay says belongs to a payment gateway (Razorpay itself, PayU, ...) is never used to name a payee, attach to a
   party or verify one: the ID serves many merchants. Those payments are named by hand (`docs/finance/FINANCE.md`).
 - **Test mode:** answers from a test key are stored but never used, and a test key never verifies anyone.
