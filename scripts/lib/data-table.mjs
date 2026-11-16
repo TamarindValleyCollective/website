@@ -114,13 +114,20 @@ const placeMovable = (ids, fixed, movable) => {
   return ids.map((id) => (fixed.includes(id) ? id : movable[k++]));
 };
 
-/** A saved layout made safe for the columns the table has today: unknown and repeated ids dropped, new columns follow in their default order. */
-export function cleanLayout(raw, ids, fixed = []) {
+/**
+ * A saved layout made safe for the columns the table has today: unknown and repeated ids dropped, new columns follow in their default order.
+ * `fixed` columns stay shown and where they are; `required` ones can move but never hide (the Ledger edits its category and party in their cells);
+ * `defaultHidden` columns start hidden, both when nothing is saved and when a column is new since the layout was saved. Hiding every column is not allowed.
+ */
+export function cleanLayout(raw, ids, fixed = [], required = [], defaultHidden = []) {
   const once = (list) => (Array.isArray(list) ? list.filter((id, i) => ids.includes(id) && !fixed.includes(id) && list.indexOf(id) === i) : []);
   const saved = once(raw?.order);
-  const movable = [...saved, ...ids.filter((id) => !fixed.includes(id) && !saved.includes(id))];
-  const hidden = once(raw?.hidden);
-  return { order: placeMovable(ids, fixed, movable), hidden: ids.every((id) => hidden.includes(id)) ? [] : hidden };
+  const fresh = ids.filter((id) => !fixed.includes(id) && !saved.includes(id));
+  const order = placeMovable(ids, fixed, [...saved, ...fresh]);
+  const hasSaved = raw && typeof raw === 'object' && (Array.isArray(raw.order) || Array.isArray(raw.hidden));
+  const wanted = hasSaved ? [...once(raw.hidden), ...(Array.isArray(raw.order) ? fresh.filter((id) => defaultHidden.includes(id)) : [])] : once(defaultHidden);
+  const hidden = [...new Set(wanted)].filter((id) => !required.includes(id));
+  return { order, hidden: ids.every((id) => hidden.includes(id)) ? [] : hidden };
 }
 
 /** Moves a column `delta` places among the movable ones (a fixed column never moves, and nothing passes it). `ids` is the default order. */

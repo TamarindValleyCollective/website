@@ -50,10 +50,7 @@ import SignInGate from '../../../components/SignInGate.astro';
         </label>
         <button type="button" id="more-tools" class="button button--outline button--small more-tools" aria-expanded="false">More</button>
         <button type="button" id="select-all-btn" class="button button--outline button--small select-all-btn" hidden>Select all</button>
-        <span class="colmenu-wrap">
-          <button type="button" id="cols-toggle" class="button button--outline button--small" aria-expanded="false" aria-controls="colmenu">Columns</button>
-          <div id="colmenu" class="colmenu" hidden></div>
-        </span>
+        <span id="cols-slot"></span>
         <button type="button" id="tips-toggle" class="button button--outline button--small" aria-expanded="false" aria-controls="tips">Help and shortcuts</button>
         <button type="button" id="accept-all" class="button button--outline" hidden>Fill in the confident suggestions</button>
         <button type="button" id="fill-parties" class="button button--outline button--small" hidden></button>
@@ -76,7 +73,7 @@ import SignInGate from '../../../components/SignInGate.astro';
             </ul>
           </li>
           <li><strong>What it was for</strong>, in your own words.</li>
-          <li><strong>The bank's narration</strong> is the evidence, not an answer. Hover a line to read it, open the line to see it under the fields, click the date for the full line, or switch on <em>Columns → Bank narration</em>.</li>
+          <li><strong>The bank's narration</strong> is the evidence, not an answer. Hover a line to read it, open the line to see it under the fields, click the date for the full line, or show the <em>Bank narration</em> column from the Columns button.</li>
         </ul>
         <p>Members come from the member records: everyone in a unit already has a party, and a person added to a unit gets one automatically, so a member is never added here by typing a name. Someone who leaves becomes a <strong>former member</strong>. Their old payments stay under their name and unit.</p>
         <p><strong>Keyboard:</strong> <code>Ctrl+Enter</code> on a line accepts its suggestions and moves to the next · <code>Alt+Up</code> / <code>Alt+Down</code> go to the same cell on the line above or below · <code>Tab</code> walks every line · <code>Shift</code>-click a tick box for a range · <code>Ctrl+Z</code> undoes the last bulk change (for two minutes).</p>
@@ -126,6 +123,8 @@ import SignInGate from '../../../components/SignInGate.astro';
   import { GROUP_FIELDS, buildItems, defaultUnitFor, financialYearOf, groupLabel, matchOptions, kindLabel, kindsInOrder, optionCounts, optionKeys, optionLabel, passesChips, passesWords, readFavorites, withFavorite } from '../../../../scripts/lib/finance-search.mjs';
   import { originLabel, ORIGINS } from '../../../../scripts/lib/finance-origin.mjs';
   import { iconButton } from '../../../../scripts/lib/admin-icons.mjs';
+  import { createColumnsMenu } from '../../../../scripts/lib/admin-columns-menu.mjs';
+  import { cleanLayout } from '../../../../scripts/lib/data-table.mjs';
   import { createFloatingMenu, leaveToBrowser, onLongPress, valueFilterItems } from '../../../../scripts/lib/admin-menu.mjs';
   import { compareRows, describeCondition, matchAmount, matchDate, matchText, parseAmount, parseDate, parseText } from '../../../../scripts/lib/finance-columns.mjs';
 
@@ -184,23 +183,19 @@ import SignInGate from '../../../components/SignInGate.astro';
   let itemIndexOfLine = new Map<string, number>();
   let matched = 0; // lines the search leaves, including those inside collapsed groups
   const today = () => new Date().toISOString().slice(0, 10);
-  // The bank's narration is the evidence the suggestions come from, not what you decide, so it is not a column until asked for (Columns).
-  // It is always one tap away: open a line (its date) for the full text, or open the row to see it under the fields.
-  const narrationKey = 'tvc-ledger-narration-column';
-  let showNarration = false;
-  try {
-    showNarration = localStorage.getItem(narrationKey) === '1';
-  } catch {
-    // storage blocked: the column is off for this visit
-  }
-  // Wording (what it was for) is a column only when asked for: at rest a line is one quiet row, and the wording opens with the line.
-  const wordingKey = 'tvc-ledger-wording-column';
-  let showWording = false;
-  try {
-    showWording = localStorage.getItem(wordingKey) === '1';
-  } catch {
-    // storage blocked: the column is off for this visit
-  }
+  // ---- the column layout: which columns show and in what order, edited with the Columns menu (the same menu as the other admin tables,
+  // scripts/lib/admin-columns-menu.mjs) and kept per account in this browser. The bank's narration is the evidence the suggestions come from, not what you
+  // decide, and the wording opens with the line, so both start hidden: at rest a line is one quiet row. The narration is always one tap away (open a line,
+  // or hover it). Category and party are edited in their cells, so they can move but never hide; the tick column stays first.
+  const COLUMN_IDS = ['select', 'date', 'origin', 'amount', 'party', 'category', 'nature', 'status', 'narration'];
+  const LAYOUT_FIXED = ['select'];
+  const LAYOUT_REQUIRED = ['party', 'category'];
+  const LAYOUT_HIDDEN = ['nature', 'narration'];
+  const cleanColumnLayout = (raw: unknown) => cleanLayout(raw, COLUMN_IDS, LAYOUT_FIXED, LAYOUT_REQUIRED, LAYOUT_HIDDEN);
+  let layout = cleanColumnLayout(null);
+  let layoutLoaded = false;
+  const layoutKey = () => `tvc-ledger-columns:${decodeTokenEmail(getToken() ?? '')}`;
+  const narrationShown = () => !layout.hidden.includes('narration');
   const colFilters: Record<string, string> = {};
   let loadSeq = 0;
   let postedThisSitting = 0;
@@ -522,6 +517,11 @@ import SignInGate from '../../../components/SignInGate.astro';
       accountCount = 0;
       unitLabelsCache = null;
       byId = new Map(all.map((l) => [l.id, l]));
+      if (!layoutLoaded) {
+        layoutLoaded = true;
+        layout = readLayout();
+        applyLayout(false);
+      }
       clearState(statusEl);
       intro.hidden = false;
       intro.textContent = 'Every line the bank has told us about, and what it was for.';
@@ -1466,7 +1466,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     if (focused) $('progress').querySelector<HTMLElement>(`[data-opt="${focused}"]`)?.focus(); // the button was rebuilt: keep the keyboard where it was
   }
   const SORTABLE = new Set(['date', 'origin', 'narration', 'amount', 'category', 'party', 'nature', 'status']);
-  const columnShown = (id: string) => (id === 'narration' ? showNarration : id === 'nature' ? showWording : true);
+  const columnShown = (id: string) => id === 'select' || !layout.hidden.includes(id);
   const columnClass = (id: string) => (id === 'nature' ? 'wording' : id); // gcell--nature is the field under an open line
   function renderHead() {
     keepFocus($('ghead'), () => renderHeadCells());
@@ -1499,6 +1499,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     { label: 'Sort ascending', run: () => table.setSorting([{ id, desc: false }]) },
     { label: 'Sort descending', run: () => table.setSorting([{ id, desc: true }]) },
     ...(HEAD_GROUPS[id] ?? []).map(groupToggle),
+    ...(LAYOUT_FIXED.includes(id) || LAYOUT_REQUIRED.includes(id) ? [] : [{ label: 'Hide column', run: () => setLayout({ ...layout, hidden: [...layout.hidden, id] }) }]),
   ];
   // What each cell can be filtered on or grouped by. `column` is the heading it sits under (the wording cell is the "What it was for" column).
   const CELLS: Record<string, { column: string; filter?: { id: string; type: string; raw: (l: Line) => unknown }; groups?: string[] }> = {
@@ -1627,53 +1628,71 @@ import SignInGate from '../../../components/SignInGate.astro';
     const open = document.querySelector('.ledger')!.classList.contains('show-tools');
     $('more-tools').textContent = open ? 'Less' : `More · ${counts.unallocated} left`;
   }
-  function renderColMenu() {
-    const b = h('button', { class: 'sopt', attrs: { type: 'button', 'aria-pressed': String(showNarration) } }, h('span', { class: 'sopt-tick', text: showNarration ? '✓' : '' }), h('span', { text: 'Bank narration' }));
-    b.addEventListener('click', () => {
-      showNarration = !showNarration;
-      try {
-        localStorage.setItem(narrationKey, showNarration ? '1' : '0');
-      } catch {
-        // not kept: it lasts for this visit
-      }
-      applyNarration();
-      renderColMenu();
-    });
-    const w = h('button', { class: 'sopt', attrs: { type: 'button', 'aria-pressed': String(showWording) } }, h('span', { class: 'sopt-tick', text: showWording ? '✓' : '' }), h('span', { text: 'What it was for' }));
-    w.addEventListener('click', () => {
-      showWording = !showWording;
-      try {
-        localStorage.setItem(wordingKey, showWording ? '1' : '0');
-      } catch {
-        // not kept: it lasts for this visit
-      }
-      applyNarration();
-      renderColMenu();
-    });
-    $('colmenu').replaceChildren(w, b);
+  // ---- the Columns menu and the layout it edits. The grid's columns are generated from the visible ones (--ledger-cols), the header and search row are drawn
+  // in the layout's order, and each row's cells are put in that order too, so the Tab order is what you see.
+  const TRACKS: Record<string, string> = { select: '34px', date: '76px', origin: '136px', amount: '112px', party: 'minmax(160px, 1fr)', category: 'minmax(160px, 1fr)', nature: 'minmax(160px, 1.2fr)', status: '124px', narration: 'minmax(190px, 1.3fr)' };
+  function orderRowCells(rowEl: HTMLElement) {
+    const kids = [...rowEl.children] as HTMLElement[];
+    const byColumn = new Map(kids.filter((k) => k.dataset.col).map((k) => [k.dataset.col!, k]));
+    const wanted = [...layout.order.filter((id) => byColumn.has(id)).map((id) => byColumn.get(id)!), ...kids.filter((k) => !k.dataset.col)];
+    if (wanted.some((k, i) => k !== kids[i])) rowEl.append(...wanted);
   }
-  function applyNarration() {
-    document.querySelector('.ledger')!.classList.toggle('show-narr', showNarration);
-    document.querySelector('.ledger')!.classList.toggle('show-word', showWording);
+  function applyLayout(redraw: boolean) {
+    const ledger = document.querySelector('.ledger') as HTMLElement;
+    tstate = { ...tstate, columnOrder: layout.order, columnVisibility: Object.fromEntries(layout.hidden.map((id) => [id, false])) };
+    syncTable();
+    ledger.style.setProperty('--ledger-cols', layout.order.filter(columnShown).map((id) => TRACKS[id]).join(' '));
+    ledger.classList.toggle('show-narr', narrationShown());
+    ledger.classList.toggle('show-word', !layout.hidden.includes('nature'));
+    for (const id of ['date', 'origin', 'amount', 'status']) ledger.classList.toggle(`hide-${id}`, layout.hidden.includes(id));
     renderHeadCells();
     renderFilterRow();
+    if (!redraw) return;
+    for (const el of mounted.values()) orderRowCells(el);
     virtualizer.measure();
     paint();
   }
-  $('cols-toggle').addEventListener('click', () => {
-    const open = $('colmenu').hidden;
-    $('colmenu').hidden = !open;
-    $('cols-toggle').setAttribute('aria-expanded', String(open));
-    if (open) renderColMenu();
-  });
-  document.addEventListener('click', (e) => {
-    if (!$('colmenu').hidden && !e.composedPath().includes($('colmenu').parentElement!)) {
-      $('colmenu').hidden = true;
-      $('cols-toggle').setAttribute('aria-expanded', 'false');
+  function saveLayout() {
+    try {
+      localStorage.setItem(layoutKey(), JSON.stringify(layout));
+    } catch {
+      // not kept: it lasts for this visit
     }
+  }
+  // The layout of this account; failing that, the two older toggles (Bank narration, What it was for), read once; failing that, the defaults.
+  function readLayout() {
+    try {
+      const saved = localStorage.getItem(layoutKey());
+      if (saved) return cleanColumnLayout(JSON.parse(saved));
+      const shown = [localStorage.getItem('tvc-ledger-narration-column') === '1' ? 'narration' : '', localStorage.getItem('tvc-ledger-wording-column') === '1' ? 'nature' : ''];
+      if (shown.some(Boolean) || localStorage.getItem('tvc-ledger-narration-column') !== null || localStorage.getItem('tvc-ledger-wording-column') !== null) {
+        return cleanColumnLayout({ order: COLUMN_IDS, hidden: LAYOUT_HIDDEN.filter((id) => !shown.includes(id)) });
+      }
+    } catch {
+      // storage blocked or unreadable: the defaults
+    }
+    return cleanColumnLayout(null);
+  }
+  function setLayout(next: unknown) {
+    layout = cleanColumnLayout(next);
+    saveLayout();
+    // A hidden column cannot go on filtering or sorting where nobody could see why.
+    for (const id of layout.hidden) delete colFilters[id];
+    if (layout.hidden.includes(sortOf().key) && !layout.hidden.includes('date')) tstate = { ...tstate, sorting: [{ id: 'date', desc: true }] };
+    applyLayout(true);
+    applyView();
+    columnsMenu.render();
+  }
+  const columnsMenu = createColumnsMenu({
+    labels: Object.fromEntries(COLUMN_IDS.map((id) => [id, String(table.getColumn(id)?.columnDef.header ?? id)])),
+    defaultOrder: COLUMN_IDS,
+    fixed: LAYOUT_FIXED,
+    required: LAYOUT_REQUIRED,
+    getLayout: () => layout,
+    onChange: (next) => setLayout(next),
   });
-  document.querySelector('.ledger')!.classList.toggle('show-narr', showNarration);
-  document.querySelector('.ledger')!.classList.toggle('show-word', showWording);
+  $('cols-slot').replaceWith(columnsMenu.element);
+  applyLayout(false);
   $('tips-toggle').addEventListener('click', () => {
     const open = $('tips').hidden;
     $('tips').hidden = !open;
@@ -1710,7 +1729,12 @@ import SignInGate from '../../../components/SignInGate.astro';
   type Refs = { wordText: HTMLElement; amountText: HTMLElement; catHint: HTMLElement; check: HTMLInputElement; narr: HTMLButtonElement; details: HTMLElement; cat: ComboEl; catTick: HTMLElement; catText: HTMLElement; party: ComboEl; partyTick: HTMLElement; partyText: HTMLElement; nature: HTMLInputElement; natureTick: HTMLElement; natureText: HTMLElement; pillSlot: HTMLElement; catPeek: HTMLButtonElement; partyPeek: HTMLButtonElement; natureCell: HTMLElement; meta: HTMLElement; originSlot: HTMLElement };
   const refs = new WeakMap<HTMLElement, Refs>();
   const tick = (label: string, onClick: () => void) => h('button', { class: 'tick', text: '✓', attrs: { type: 'button', 'aria-label': label, title: label }, on: { click: onClick } });
-  const cell = (cls: string, label: string, ...kids: (Node | null)[]) => h('span', { class: `gcell gcell--${cls}`, attrs: { role: 'cell', 'data-label': label } }, ...kids);
+  // Each cell says which column it belongs to, so a row's cells can be put in the layout's order (the page order is the Tab order).
+  const COLUMN_OF_CELL: Record<string, string> = { select: 'select', date: 'date', origin: 'origin', amount: 'amount', party: 'party', category: 'category', wording: 'nature', status: 'status', narration: 'narration' };
+  const cell = (cls: string, label: string, ...kids: (Node | null)[]) => {
+    const column = COLUMN_OF_CELL[cls.split(' ')[0]];
+    return h('span', { class: `gcell gcell--${cls}`, attrs: { role: 'cell', 'data-label': label, ...(column ? { 'data-col': column } : {}) } }, ...kids);
+  };
   const shortDate = (iso: string) => {
     const d = new Date(`${iso.slice(0, 10)}T00:00:00`);
     const text = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
@@ -1804,6 +1828,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     );
     const natureCell = cell('nature', 'What it was for', nature, natureTick, natureText);
     rowEl.append(natureCell);
+    orderRowCells(rowEl);
     const open = (focus: HTMLElement) => {
       rowEl.dataset.open = '1';
       fill(rowEl, l);
@@ -2294,7 +2319,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   };
   spacer.addEventListener('mouseover', (e) => {
     const row = (e.target as HTMLElement).closest<HTMLElement>('.lrow');
-    if (!row || !canHover.matches || showNarration || row.classList.contains('is-active') || row.contains(e.relatedTarget as Node | null) || spacer.contains(document.activeElement)) return;
+    if (!row || !canHover.matches || narrationShown() || row.classList.contains('is-active') || row.contains(e.relatedTarget as Node | null) || spacer.contains(document.activeElement)) return;
     const l = byId.get(row.dataset.id ?? '');
     if (!l) return;
     clearTimeout(tipTimer);
@@ -3319,7 +3344,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   .ledger .gfilter,
   .ledger .lrow {
     display: grid;
-    grid-template-columns: 34px 76px 136px 112px minmax(170px, 1fr) minmax(170px, 1fr) 124px;
+    grid-template-columns: var(--ledger-cols, 34px 76px 136px 112px minmax(160px, 1fr) minmax(160px, 1fr) 124px);
     align-items: center;
     gap: 10px;
     padding: 4px 14px;
@@ -3712,12 +3737,8 @@ import SignInGate from '../../../components/SignInGate.astro';
     grid-column: 2 / -1;
   }
 
-  /* The narration is a reference: not a column unless asked for, shown full width under the fields when a line is open. */
-  .ledger.show-narr .ghead,
-  .ledger.show-narr .gfilter,
-  .ledger.show-narr .lrow {
-    grid-template-columns: 34px 76px 136px 112px minmax(150px, 1fr) minmax(150px, 1fr) 124px minmax(200px, 1.4fr);
-  }
+  /* The columns of the grid come from the layout (--ledger-cols, set by the page from the Columns menu). The narration is a reference: not a column
+     unless asked for, shown full width under the fields when a line is open. */
 
   .ledger:not(.show-narr) .gcell--narration {
     display: none;
@@ -3773,17 +3794,13 @@ import SignInGate from '../../../components/SignInGate.astro';
     font-style: italic;
   }
 
+  /* A column the person has hidden. Wide table only: a phone's card keeps its date, amount and status. */
   @media (min-width: 1241px) {
-    .ledger.show-word .ghead,
-    .ledger.show-word .gfilter,
-    .ledger.show-word .lrow {
-      grid-template-columns: 34px 76px 136px 112px minmax(150px, 1fr) minmax(150px, 1fr) minmax(160px, 1.2fr) 124px;
-    }
-
-    .ledger.show-word.show-narr .ghead,
-    .ledger.show-word.show-narr .gfilter,
-    .ledger.show-word.show-narr .lrow {
-      grid-template-columns: 34px 76px 136px 112px minmax(140px, 1fr) minmax(140px, 1fr) minmax(150px, 1.1fr) 124px minmax(190px, 1.3fr);
+    .ledger.hide-date .gcell--date,
+    .ledger.hide-origin .gcell--origin,
+    .ledger.hide-amount .gcell--amount,
+    .ledger.hide-status .gcell--status {
+      display: none;
     }
   }
 
@@ -3832,28 +3849,6 @@ import SignInGate from '../../../components/SignInGate.astro';
   .ledger .datebtn:focus-visible {
     outline: 2px solid var(--tvc-orange);
     outline-offset: 2px;
-  }
-
-  .ledger .colmenu-wrap {
-    position: relative;
-    display: inline-block;
-  }
-
-  .ledger .colmenu {
-    position: absolute;
-    z-index: 30;
-    right: 0;
-    top: calc(100% + 4px);
-    min-width: 200px;
-    padding: 6px;
-    border: 1px solid var(--tvc-line);
-    border-radius: var(--radius-sm);
-    background: var(--tvc-white);
-    box-shadow: var(--shadow-soft);
-  }
-
-  .ledger .colmenu[hidden] {
-    display: none;
   }
 
   .ledger .gcell--meta {
@@ -4162,6 +4157,10 @@ import SignInGate from '../../../components/SignInGate.astro';
     }
 
     .ledger .gcell--origin {
+      display: none;
+    }
+
+    .ledger .admin-cols {
       display: none;
     }
 

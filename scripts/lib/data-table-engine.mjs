@@ -35,7 +35,7 @@ export function createTableEngine({ columns, filters = [], searchText = () => ''
         return empty(v) ? undefined : v;
       },
       enableSorting: c.sortable !== false,
-      enableHiding: !c.fixed,
+      enableHiding: !c.fixed && !c.required,
       enableColumnFilter: c.filter !== 'none' && type !== 'none',
       sortUndefined: 'last',
       sortingFn: compareCells,
@@ -61,6 +61,8 @@ export function createTableEngine({ columns, filters = [], searchText = () => ''
 
   const ids = columns.map((c) => c.id);
   const fixed = columns.filter((c) => c.fixed).map((c) => c.id);
+  const required = columns.filter((c) => c.required).map((c) => c.id);
+  const hiddenByDefault = columns.filter((c) => c.hiddenByDefault).map((c) => c.id);
   let state = { ...table.initialState };
   let current = [];
   const apply = (data) => {
@@ -110,7 +112,7 @@ export function createTableEngine({ columns, filters = [], searchText = () => ''
     },
     /** Which columns show and in what order. Anything unknown is dropped, new columns follow, a `fixed` column stays shown and in place; no layout is the default. */
     setLayout(raw) {
-      const clean = cleanLayout(raw, ids, fixed);
+      const clean = cleanLayout(raw, ids, fixed, required, hiddenByDefault);
       state = { ...state, columnOrder: clean.order, columnVisibility: Object.fromEntries(clean.hidden.map((id) => [id, false])) };
       apply(current);
     },
@@ -119,6 +121,7 @@ export function createTableEngine({ columns, filters = [], searchText = () => ''
     allColumnIds,
     defaultOrder: ids,
     fixedIds: fixed,
+    requiredIds: required,
     table,
   };
 }

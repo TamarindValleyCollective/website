@@ -21,10 +21,11 @@
 // onUserFilter: () => void   called when the person changes a chip, the search, a column filter or the grouping (not by setRows or setChips)
 // column extras: sortable: false (no sort button), wrap: true (the cell may wrap, for long text), sticky: true (the last column stays
 //   in view while the table scrolls sideways, for a column of buttons)
-import { buildItems, chipCounts, columnGroup, moveColumn, readFavorites, withFavorite } from './data-table.mjs';
+import { buildItems, chipCounts, columnGroup, readFavorites, withFavorite } from './data-table.mjs';
 import { createTableEngine } from './data-table-engine.mjs';
 import { h } from './finance-ui.mjs';
 import { iconButton } from './admin-icons.mjs';
+import { createColumnsMenu } from './admin-columns-menu.mjs';
 import { createFloatingMenu, leaveToBrowser, onLongPress, valueFilterItems } from './admin-menu.mjs';
 
 const tick = (checked, label, onChange) => {
@@ -49,6 +50,10 @@ export function createDataTable(opts) {
   const colById = new Map(columns.map((c) => [c.id, c]));
   const engine = createTableEngine({ columns: columns.map((c) => ({ ...c, fixed: c.fixed ?? c.sticky })), filters, searchText });
   const shownColumns = () => engine.visibleColumnIds().map((id) => colById.get(id));
+  const columnsMenu = layoutKey
+    ? createColumnsMenu({ labels: Object.fromEntries(columns.map((c) => [c.id, c.label])), defaultOrder: engine.defaultOrder, fixed: engine.fixedIds, required: engine.requiredIds, getLayout: () => engine.layout(), onChange: (next) => setLayout(next) })
+    : null;
+  const colsWrap = columnsMenu?.element ?? null;
 
   const readStore = () => {
     try { return localStorage.getItem(favoritesKey); } catch { return null; }
@@ -70,9 +75,6 @@ export function createDataTable(opts) {
   const caret = h('button', { class: 'dt-caret', attrs: { type: 'button', 'aria-expanded': 'false', 'aria-label': 'Filters, group by and favorites', title: 'Filters, group by and favorites' }, text: '▾' });
   const pop = h('div', { class: 'dt-pop', attrs: { hidden: '' } });
   const sbox = h('div', { class: 'dt-sbox' }, chipBox, input, caret);
-  const colsBtn = iconButton({ name: 'columns', label: 'Columns', tip: 'Choose columns', cls: 'dt-colsbtn', attrs: { 'aria-expanded': 'false', 'aria-controls': 'dt-colpop' } });
-  const colsPop = h('div', { class: 'dt-colpop', attrs: { id: 'dt-colpop', hidden: '' } });
-  const colsWrap = layoutKey ? h('div', { class: 'dt-cols' }, colsBtn, colsPop) : null;
   const errors = h('p', { class: 'dt-errors', attrs: { role: 'status', hidden: '' } });
   const headRow = h('tr', { class: 'dt-heads' });
   const filterRow = h('tr', { class: 'dt-filters' });
@@ -315,8 +317,7 @@ export function createDataTable(opts) {
   });
   onLongPress(body);
 
-  // ---- the Columns menu: show or hide a column, move it earlier or later, put the default back
-  let colsOpen = false;
+  // ---- a new column layout (from the Columns menu or a header's Hide column)
   function setLayout(next) {
     engine.setLayout(next);
     saveLayout();
@@ -326,34 +327,8 @@ export function createDataTable(opts) {
     if (gone.includes(state.sort[0])) state.sort = defaultSort ?? [null, 1];
     buildFilterRow();
     render();
-    renderCols();
+    columnsMenu?.render();
   }
-  function renderCols() {
-    colsPop.hidden = !colsOpen;
-    colsBtn.setAttribute('aria-expanded', String(colsOpen));
-    if (!colsOpen) return;
-    const layout = engine.layout();
-    const movable = layout.order.filter((id) => !engine.fixedIds.includes(id));
-    colsPop.replaceChildren(
-      h('h3', { text: 'Columns' }),
-      ...movable.map((id, i) => {
-        const c = colById.get(id);
-        const shown = !layout.hidden.includes(id);
-        const box = h('input', { attrs: { type: 'checkbox', id: `dt-col-${id}` } });
-        box.checked = shown;
-        box.disabled = shown && movable.length - layout.hidden.length <= 1 && engine.fixedIds.length === 0;
-        box.addEventListener('change', () => setLayout({ ...layout, hidden: box.checked ? layout.hidden.filter((x) => x !== id) : [...layout.hidden, id] }));
-        const move = (delta, label, glyph, off) => h('button', { class: 'dt-x', attrs: { type: 'button', 'aria-label': `Move ${c.label} ${label}`, ...(off ? { disabled: '' } : {}) }, text: glyph, on: { click: () => { setLayout(moveColumn(layout, id, delta, engine.defaultOrder, engine.fixedIds)); colsPop.querySelector(`[data-col="${id}"] .dt-x[aria-label$="${delta < 0 ? 'earlier' : 'later'}"]`)?.focus(); } } });
-        return h('div', { class: 'dt-colrow', attrs: { 'data-col': id } }, h('label', { attrs: { for: `dt-col-${id}` } }, box, h('span', { text: c.label })), move(-1, 'earlier', '↑', i === 0), move(1, 'later', '↓', i === movable.length - 1));
-      }),
-      h('button', { class: 'dt-opt dt-colreset', attrs: { type: 'button' }, text: 'Reset to default', on: { click: () => setLayout(null) } }),
-    );
-  }
-  colsBtn.addEventListener('click', () => { colsOpen = !colsOpen; renderCols(); });
-  // composedPath, not contains(e.target): a click on a button this menu has just re-drawn has a target that is no longer in the page.
-  document.addEventListener('click', (e) => { if (colsOpen && colsWrap && !e.composedPath().includes(colsWrap)) { colsOpen = false; renderCols(); } });
-  // On the whole control, not just the menu: focus is on the button when it has just been opened from the keyboard.
-  colsWrap?.addEventListener('keydown', (e) => { if (e.key === 'Escape' && colsOpen) { colsOpen = false; renderCols(); colsBtn.focus(); } });
 
   function clearAll() {
     onUserFilter();

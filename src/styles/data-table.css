@@ -174,17 +174,6 @@
   font-style: normal;
 }
 
-.dt .dt-cols {
-  position: relative;
-  align-self: flex-start;
-}
-
-/* The Columns button is as tall as the search box beside it. */
-.dt .dt-colsbtn {
-  width: 44px;
-  height: 44px;
-}
-
 /* The ▾ in a column header (Sort, Group by, Hide): quiet until the header is hovered or focused, and always there on a touch screen. */
 .dt .dt-hmenu {
   width: 24px;
@@ -216,62 +205,6 @@
     -webkit-touch-callout: none;
     user-select: none;
   }
-}
-
-.dt .dt-colpop {
-  position: absolute;
-  z-index: 20;
-  inset-inline-end: 0;
-  top: calc(100% + 6px);
-  width: min(320px, 86vw);
-  padding: 14px;
-  border: 1px solid var(--tvc-line-strong);
-  border-radius: var(--radius);
-  background: var(--tvc-white);
-  box-shadow: 0 10px 30px rgb(0 0 0 / 14%);
-}
-
-.dt .dt-colpop[hidden] {
-  display: none;
-}
-
-.dt .dt-colpop h3 {
-  margin: 0 0 6px;
-  color: var(--tvc-ink-soft);
-  font-size: 0.8rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.dt .dt-colrow {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.dt .dt-colrow label {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  gap: 8px;
-  min-height: 32px;
-  cursor: pointer;
-}
-
-.dt .dt-colrow .dt-x:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-
-.dt .dt-colrow .dt-x:disabled:hover {
-  background: none;
-}
-
-.dt .dt-colreset {
-  margin-block-start: 8px;
-  border-block-start: 1px solid var(--tvc-line);
-  border-radius: 0;
-  padding-block-start: 10px;
 }
 
 .dt .dt-fav {
@@ -506,7 +439,8 @@
 
 /* phones: the table becomes cards, as in the Ledger */
 @media (width <= 760px) {
-  .dt .dt-scroll {
+  .dt .dt-scroll,
+  .dt .admin-cols {
     display: none;
   }
 

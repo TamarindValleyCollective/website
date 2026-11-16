@@ -110,3 +110,17 @@ test('group by a column: rows with no value fall in a "No ..." group that comes 
   assert.deepEqual(items.map((i) => [i.label, i.count]), [['Employee', 1], ['Vendor', 2], ['No kind', 1]]);
   assert.equal(columnGroup({ id: 'x', value: (r) => r.x, groupValue: (r) => r.y }).key({ x: 'a', y: 'b' }), 'b', 'a column can group on a different value than it shows');
 });
+
+test('a column that is required stays shown but can still move, and some columns start hidden', () => {
+  const ids = ['sel', 'date', 'cat', 'party', 'word', 'narr'];
+  const opts = { fixed: ['sel'], required: ['cat', 'party'], defaultHidden: ['word', 'narr'] };
+  const clean = (raw) => cleanLayout(raw, ids, opts.fixed, opts.required, opts.defaultHidden);
+  assert.deepEqual(clean(null), { order: ids, hidden: ['word', 'narr'] }, 'nothing saved: the defaults');
+  assert.deepEqual(clean({ order: ids, hidden: [] }).hidden, [], 'a saved layout that shows everything is not overridden by the defaults');
+  assert.deepEqual(clean({ order: ['sel', 'party', 'cat', 'date', 'word', 'narr'], hidden: ['cat', 'date'] }), { order: ['sel', 'party', 'cat', 'date', 'word', 'narr'], hidden: ['date'] }, 'a required column cannot be hidden, but it keeps its place');
+  assert.deepEqual(clean({ order: ['sel', 'date', 'cat', 'party', 'word'], hidden: [] }).hidden, ['narr'], 'a column added since the layout was saved starts as the default says');
+  assert.deepEqual(clean({ order: ['sel', 'date', 'cat', 'party', 'word'], hidden: [] }).order, ids, 'and goes at its default place');
+  assert.deepEqual(clean('junk'), { order: ids, hidden: ['word', 'narr'] });
+  assert.deepEqual(cleanLayout(null, ['a', 'b'], [], [], ['a', 'b']).hidden, [], 'hiding every column is still not allowed, even by default');
+  assert.deepEqual(moveColumn({ order: ids, hidden: ['word'] }, 'party', -1, ids, ['sel']), { order: ['sel', 'date', 'party', 'cat', 'word', 'narr'], hidden: ['word'] });
+});
