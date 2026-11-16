@@ -2,6 +2,8 @@
    uses it. Colors are --tvc-* tokens only. Sticky header cells are layered on --tvc-white: --tvc-green-tint is translucent in the
    admin shell and would let rows show through. */
 
+@import './admin-controls.css';
+
 .dt .dt-tools {
   display: flex;
   flex-wrap: wrap;
@@ -170,6 +172,39 @@
   color: var(--tvc-ink-soft);
   font-size: var(--text-sm);
   font-style: normal;
+}
+
+/* The ▾ in a column header (Sort, Group by, Hide): quiet until the header is hovered or focused, and always there on a touch screen. */
+.dt .dt-hmenu {
+  width: 24px;
+  height: 24px;
+  margin-inline-start: 2px;
+  border-color: transparent;
+  background: none;
+  color: var(--tvc-ink-soft);
+  vertical-align: middle;
+  opacity: 0;
+}
+
+.dt th:hover .dt-hmenu,
+.dt th:focus-within .dt-hmenu,
+.dt .dt-hmenu[aria-expanded='true'] {
+  opacity: 1;
+}
+
+@media (pointer: coarse) {
+  .dt .dt-hmenu {
+    width: 44px;
+    height: 44px;
+    margin-block: -10px;
+    opacity: 1;
+  }
+
+  /* A long press opens the cell menu, so it must not start selecting the word under the finger. */
+  .dt tbody td {
+    -webkit-touch-callout: none;
+    user-select: none;
+  }
 }
 
 .dt .dt-fav {
@@ -398,13 +433,20 @@
   margin-top: 12px;
 }
 
+/* The keyboard's cell cursor (scripts/lib/cell-nav.mjs). */
+.dt td[data-col]:focus-visible {
+  outline: 2px solid var(--tvc-green);
+  outline-offset: -2px;
+}
+
 .dt .dt-cards {
   display: none;
 }
 
 /* phones: the table becomes cards, as in the Ledger */
 @media (width <= 760px) {
-  .dt .dt-scroll {
+  .dt .dt-scroll,
+  .dt .admin-cols {
     display: none;
   }
 

@@ -245,6 +245,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
     noun: ['party', 'parties'],
     searchPlaceholder: 'Search names, bank names, notes…',
     favoritesKey: `tvc-party-favorites:${decodeTokenEmail(getToken() ?? '')}`,
+    layoutKey: `tvc-party-columns:${decodeTokenEmail(getToken() ?? '')}`,
     defaultGroup: 'kind',
     defaultSort: ['name', 1],
     toolbarEnd: $('add'),

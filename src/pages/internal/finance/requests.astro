@@ -293,6 +293,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
     cap: 300,
     searchPlaceholder: 'Search payee, purpose, reference, requester…',
     favoritesKey: `tvc-requests-favorites:${decodeTokenEmail(getToken() ?? '')}`,
+    layoutKey: `tvc-requests-columns:${decodeTokenEmail(getToken() ?? '')}`,
     defaultGroup: 'month',
     defaultSort: ['date', -1],
     searchText: (r: Rec) => [r.payee, r.purpose, r.upiRef, r.requester, r.decisionReason].join(' '),

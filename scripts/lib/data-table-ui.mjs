@@ -13,11 +13,23 @@
 // bulk:    [{ id, label, run(rows) }]   shown when rows are ticked
 // detail:  (row) -> Node | null   a full-width row under that row (the Requests suggestions); built fresh for the table and for the card
 // rowKind: (row) -> 'cr' | 'tr' | ''   a credit or a transfer gets a coloured stripe down its row (and card); '' is the ordinary row
+// cell and header menus come with every table: right-click a cell (or long-press it) for Filter to / Filter out this value and Group by that column;
+//   each header has a ▾ (or right-click it) for Sort, Group by this column and Hide. A text column can be grouped unless it says `groupable: false`;
+//   `groupable: true` allows another type, and `groupValue(row)` groups on something other than what it shows.
+// layoutKey: 'tvc-…-columns:<account>'   turns on the Columns menu (show or hide a column, move it earlier or later, reset) and keeps the person's
+//   layout in this browser under that key. A column with `fixed: true` (or `sticky: true`) is always shown and does not move.
 // onUserFilter: () => void   called when the person changes a chip, the search, a column filter or the grouping (not by setRows or setChips)
+// keyboard: the table has one Tab stop (its cursor cell); the arrow keys, Home, End and Page Up / Down move it, the Menu key or Shift+F10 opens the cell's menu,
+//   and Enter (or Space) opens the row when the page gives `onOpen`. See scripts/lib/cell-nav.mjs.
 // column extras: sortable: false (no sort button), wrap: true (the cell may wrap, for long text), sticky: true (the last column stays
 //   in view while the table scrolls sideways, for a column of buttons)
-import { buildItems, chipCounts, filterRows, readFavorites, sortRows, withFavorite } from './data-table.mjs';
+import { buildItems, chipCounts, columnGroup, readFavorites, withFavorite } from './data-table.mjs';
+import { createTableEngine } from './data-table-engine.mjs';
 import { h } from './finance-ui.mjs';
+import { iconButton } from './admin-icons.mjs';
+import { createColumnsMenu } from './admin-columns-menu.mjs';
+import { cellHintText, isMenuKey, moveCursor } from './cell-nav.mjs';
+import { createFloatingMenu, leaveToBrowser, onLongPress, valueFilterItems } from './admin-menu.mjs';
 
 const tick = (checked, label, onChange) => {
   const box = h('input', { attrs: { type: 'checkbox', 'aria-label': label } });
@@ -27,15 +39,27 @@ const tick = (checked, label, onChange) => {
   return box;
 };
 
+let hintSerial = 0;
+
 export function createDataTable(opts) {
   const {
     root, columns, rowId, searchText = () => '', filters = [], groups = [], bulk = [], selectable = bulk.length > 0, onOpen = null, card = null,
     rowClass = () => '', noun = ['row', 'rows'], favoritesKey = null, searchPlaceholder = 'Search every column', toolbarEnd = null, empty = {},
-    defaultGroup = '', defaultSort = null, onChange = () => {}, onUserFilter = () => {}, detail = null, rowKind = () => '', cap = Infinity,
+    defaultGroup = '', defaultSort = null, layoutKey = null, onChange = () => {}, onUserFilter = () => {}, detail = null, rowKind = () => '', cap = Infinity,
   } = opts;
-  const allowed = { chipIds: filters.map((f) => f.id), groupIds: groups.map((g) => g.id) };
+  // "Group by this column" for any plain text column, besides the groupings the page lists.
+  const groupable = (c) => c.groupable ?? ((c.type ?? 'text') === 'text' && c.filter !== 'none' && !c.sticky && !c.fixed);
+  const columnGroups = new Map(columns.filter(groupable).map((c) => [`col:${c.id}`, columnGroup(c)]));
+  const allowed = { chipIds: filters.map((f) => f.id), groupIds: [...groups.map((g) => g.id), ...columnGroups.keys()] };
   const state = { rows: [], chips: [], words: [], text: '', group: defaultGroup, sort: defaultSort ?? [null, 1], cols: {}, collapsed: new Set(), sel: new Set(), favs: [], popOpen: false };
   const colById = new Map(columns.map((c) => [c.id, c]));
+  const navigable = (c) => c.filter !== 'none' && c.type !== 'none';
+  const engine = createTableEngine({ columns: columns.map((c) => ({ ...c, fixed: c.fixed ?? c.sticky })), filters, searchText });
+  const shownColumns = () => engine.visibleColumnIds().map((id) => colById.get(id));
+  const columnsMenu = layoutKey
+    ? createColumnsMenu({ labels: Object.fromEntries(columns.map((c) => [c.id, c.label])), defaultOrder: engine.defaultOrder, fixed: engine.fixedIds, required: engine.requiredIds, getLayout: () => engine.layout(), onChange: (next) => setLayout(next) })
+    : null;
+  const colsWrap = columnsMenu?.element ?? null;
 
   const readStore = () => {
     try { return localStorage.getItem(favoritesKey); } catch { return null; }
@@ -44,6 +68,12 @@ export function createDataTable(opts) {
     try { localStorage.setItem(favoritesKey, JSON.stringify(state.favs)); } catch { /* storage can be blocked: favorites just do not persist */ }
   };
   if (favoritesKey) state.favs = readFavorites(readStore(), allowed);
+  if (layoutKey) {
+    try { engine.setLayout(JSON.parse(localStorage.getItem(layoutKey) ?? 'null')); } catch { /* unreadable or blocked: the default layout */ }
+  }
+  const saveLayout = () => {
+    try { localStorage.setItem(layoutKey, JSON.stringify(engine.layout())); } catch { /* storage can be blocked: the layout just does not persist */ }
+  };
 
   // ---- the frame
   const input = h('input', { attrs: { type: 'search', placeholder: searchPlaceholder, autocomplete: 'off', 'aria-label': 'Search' } });
@@ -61,19 +91,18 @@ export function createDataTable(opts) {
   const foot = h('p', { class: 'dt-foot', attrs: { 'aria-live': 'polite' } });
   const bulkBar = h('div', { class: 'dt-bulk', attrs: { role: 'region', 'aria-label': 'Selected rows', hidden: '' } });
   root.classList.add('dt');
-  root.replaceChildren(h('div', { class: 'dt-tools' }, h('div', { class: 'dt-search' }, sbox, pop), toolbarEnd), errors, scroll, cards, emptyBox, foot, bulkBar);
+  root.replaceChildren(h('div', { class: 'dt-tools' }, h('div', { class: 'dt-search' }, sbox, pop), colsWrap, toolbarEnd), errors, scroll, cards, emptyBox, foot, bulkBar);
 
   // ---- what is showing
   let shown = [];
   function compute() {
-    const sortCol = colById.get(state.sort[0]);
-    const filtered = filterRows(state.rows, { columns, chips: state.chips, filters, words: [...state.words, ...(state.text ? [state.text] : [])], searchText, cols: state.cols });
-    shown = sortRows(filtered.rows, sortCol, state.sort[1]);
-    const msgs = Object.entries(filtered.errors).map(([id, m]) => `${colById.get(id)?.label ?? id}: ${m}`);
+    const result = engine.run({ rows: state.rows, chips: state.chips, words: [...state.words, ...(state.text ? [state.text] : [])], cols: state.cols, sort: state.sort });
+    shown = result.rows;
+    const msgs = Object.entries(result.errors).map(([id, m]) => `${colById.get(id)?.label ?? id}: ${m}`);
     errors.textContent = msgs.join(' ');
     errors.hidden = msgs.length === 0;
   }
-  const groupDef = () => groups.find((g) => g.id === state.group) ?? null;
+  const groupDef = () => groups.find((g) => g.id === state.group) ?? columnGroups.get(state.group) ?? null;
 
   // ---- search box chips
   function renderChips() {
@@ -134,13 +163,14 @@ export function createDataTable(opts) {
   function renderHead() {
     headRow.replaceChildren(
       ...(selectable ? [h('th', { class: 'dt-tick' }, tick(shown.length > 0 && shown.every((r) => state.sel.has(rowId(r))), 'Select all shown', (on) => { for (const r of shown) on ? state.sel.add(rowId(r)) : state.sel.delete(rowId(r)); renderBody(); renderHead(); renderBulk(); }))] : []),
-      ...columns.map((c) => {
+      ...shownColumns().map((c) => {
         const on = state.sort[0] === c.id;
-        if (c.sortable === false) return h('th', { class: `${c.align === 'end' ? 'dt-end' : ''}${c.sticky ? ' dt-sticky' : ''}`.trim(), text: c.label });
-        const th = h('th', { class: `${c.align === 'end' ? 'dt-end' : ''}${c.sticky ? ' dt-sticky' : ''}`.trim(), attrs: { 'aria-sort': on ? (state.sort[1] > 0 ? 'ascending' : 'descending') : 'none' } },
+        const cls = `${c.align === 'end' ? 'dt-end' : ''}${c.sticky ? ' dt-sticky' : ''}`.trim();
+        if (c.sortable === false) return withHeaderMenu(h('th', { class: cls, text: c.label }), c);
+        const th = h('th', { class: cls, attrs: { 'aria-sort': on ? (state.sort[1] > 0 ? 'ascending' : 'descending') : 'none' } },
           h('button', { class: 'dt-sort', attrs: { type: 'button' }, on: { click: () => { state.sort = [c.id, on ? -state.sort[1] : 1]; render(); } } }, c.label, h('span', { class: 'dt-arrow', attrs: { 'aria-hidden': 'true' }, text: on ? (state.sort[1] > 0 ? '▲' : '▼') : '⇕' })));
         if (on) th.classList.add('dt-sorted');
-        return th;
+        return withHeaderMenu(th, c);
       }),
     );
   }
@@ -149,10 +179,11 @@ export function createDataTable(opts) {
   function buildFilterRow() {
     filterRow.replaceChildren(
       ...(selectable ? [h('td')] : []),
-      ...columns.map((c) => {
+      ...shownColumns().map((c) => {
         if (c.filter === 'none' || c.type === 'none') return h('td', { class: c.sticky ? 'dt-sticky' : '' });
         const [placeholder, title] = HINTS[c.type ?? 'text'];
         const box = h('input', { class: 'dt-colfilter', attrs: { type: 'search', placeholder, title, 'aria-label': `Search the ${c.label} column`, autocomplete: 'off' } });
+        box.value = state.cols[c.id] ?? '';
         box.addEventListener('input', () => {
           onUserFilter();
           state.cols[c.id] = box.value;
@@ -168,7 +199,9 @@ export function createDataTable(opts) {
   function renderBody() {
     // `cap`: a very long list is cut after that many rows (the foot says so); filters narrow it.
     const { items } = buildItems(shown.slice(0, cap), groupDef(), state.collapsed);
-    const width = columns.length + (selectable ? 1 : 0);
+    const hadFocus = Boolean(document.activeElement?.matches?.('td[data-col]') && body.contains(document.activeElement));
+    const shownCols = shownColumns();
+    const width = shownCols.length + (selectable ? 1 : 0);
     const trs = [];
     const cardNodes = [];
     for (const item of items) {
@@ -187,16 +220,17 @@ export function createDataTable(opts) {
       const id = rowId(r);
       const sel = state.sel.has(id);
       const kind = rowKind(r);
-      const tr = h('tr', { class: `dt-row ${rowClass(r)}${sel ? ' dt-selected' : ''}${onOpen ? ' dt-clickable' : ''}${kind ? ` dt-${kind}` : ''}` });
+      const tr = h('tr', { attrs: { 'data-row': String(id) }, class: `dt-row ${rowClass(r)}${sel ? ' dt-selected' : ''}${onOpen ? ' dt-clickable' : ''}${kind ? ` dt-${kind}` : ''}` });
       if (selectable) tr.append(h('td', { class: 'dt-tick' }, tick(sel, 'Select row', (on) => { on ? state.sel.add(id) : state.sel.delete(id); renderBody(); renderHead(); renderBulk(); })));
-      for (const c of columns) {
+      for (const c of shownCols) {
         const out = c.render ? c.render(r) : c.value(r);
-        const td = h('td', { class: `${c.align === 'end' ? 'dt-end' : ''}${c.wrap ? ' dt-wrap' : ''}${c.sticky ? ' dt-sticky' : ''}`.trim() });
+        const td = h('td', { class: `${c.align === 'end' ? 'dt-end' : ''}${c.wrap ? ' dt-wrap' : ''}${c.sticky ? ' dt-sticky' : ''}`.trim(), attrs: { 'data-col': c.id, ...(navigable(c) ? { tabindex: '-1' } : {}) } });
         if (out instanceof Node) td.append(out);
         else td.textContent = out == null || out === '' ? '–' : String(out);
         tr.append(td);
       }
       if (onOpen) tr.addEventListener('click', (e) => { if (!e.target.closest('a,button,input,select,textarea,label')) onOpen(r); });
+      rowOf.set(tr, r);
       trs.push(tr);
       const more = detail?.(r) ?? null;
       if (more) {
@@ -215,6 +249,7 @@ export function createDataTable(opts) {
       }
     }
     body.replaceChildren(...trs);
+    restoreCursor(hadFocus);
     cards.replaceChildren(...cardNodes);
     const none = shown.length === 0;
     emptyBox.hidden = !none;
@@ -242,6 +277,127 @@ export function createDataTable(opts) {
       h('span', { class: 'dt-bulk-spacer' }),
       h('button', { class: 'button button--outline', attrs: { type: 'button' }, text: 'Clear', on: { click: () => api.clearSelection() } }),
     );
+  }
+
+  // ---- the cell and header menus (scripts/lib/admin-menu.mjs): opened at a cell (right-click or long press) or from a header's ▾
+  const rowOf = new WeakMap();
+  const menus = createFloatingMenu();
+  const groupItem = (c) => {
+    const id = `col:${c.id}`;
+    if (!columnGroups.has(id)) return null;
+    return state.group === id
+      ? { label: 'Remove grouping', run: () => { onUserFilter(); state.group = ''; render(); } }
+      : { label: `Group by ${c.label}`, run: () => { onUserFilter(); state.group = id; render(); } };
+  };
+  const headerItems = (c) => [
+    c.sortable !== false ? { label: 'Sort ascending', run: () => { state.sort = [c.id, 1]; render(); } } : null,
+    c.sortable !== false ? { label: 'Sort descending', run: () => { state.sort = [c.id, -1]; render(); } } : null,
+    groupItem(c),
+    layoutKey && !engine.fixedIds.includes(c.id) && engine.visibleColumnIds().length > 1 ? { label: 'Hide column', run: () => { const lay = engine.layout(); setLayout({ ...lay, hidden: [...lay.hidden, c.id] }); } } : null,
+  ].filter(Boolean);
+  function withHeaderMenu(th, c) {
+    if (!headerItems(c).length) return th;
+    const btn = iconButton({ name: 'chevron', label: `${c.label} column menu`, tip: 'Column menu', cls: 'dt-hmenu', attrs: { 'aria-haspopup': 'menu', 'aria-expanded': 'false' } });
+    btn.addEventListener('click', () => {
+      if (menus.from() === btn && menus.isOpen()) return menus.close(true);
+      const b = btn.getBoundingClientRect();
+      menus.open(headerItems(c), b.left, b.bottom + 4, btn);
+    });
+    th.append(btn);
+    th.addEventListener('contextmenu', (e) => { e.preventDefault(); menus.open(headerItems(c), e.clientX, e.clientY, btn); });
+    return th;
+  }
+  // A cell: filter to or out of its value, or group by its column. Left to the browser over a link, a button, a field or selected text.
+  function cellItems(c, r) {
+    if (c.filter === 'none' || c.type === 'none') return [];
+    const apply = (typed) => { onUserFilter(); state.cols[c.id] = typed; buildFilterRow(); render(); };
+    return [...valueFilterItems({ type: c.type ?? 'text', raw: (c.filterValue ?? c.value)(r), apply }), groupItem(c)].filter(Boolean);
+  }
+  // `e` is the mouse event, or null for the keyboard (the menu then opens under the cell and Escape gives the cell its focus back).
+  function openCellMenu(td, e) {
+    const r = rowOf.get(td.parentElement);
+    const c = colById.get(td.dataset.col);
+    const items = r && c ? cellItems(c, r) : [];
+    if (!items.length) return false;
+    if (e) menus.open(items, e.clientX, e.clientY);
+    else {
+      const b = td.getBoundingClientRect();
+      menus.open(items, b.left + 8, b.bottom, td);
+    }
+    return true;
+  }
+  body.addEventListener('contextmenu', (e) => {
+    const td = e.target.closest('td[data-col]');
+    if (!td || leaveToBrowser(e)) return;
+    // The Menu key sends a contextmenu event too, with no mouse button: that one belongs to the focused cell.
+    if (openCellMenu(td, e.button !== 2 && document.activeElement === td ? null : e)) e.preventDefault();
+  });
+  onLongPress(body);
+
+  // ---- keyboard: the cursor cell is the table's one Tab stop (a roving tabindex)
+  const hint = h('span', { class: 'sr-only', text: cellHintText(onOpen ? 'opens the row' : ''), attrs: { id: `dt-cell-hint-${++hintSerial}` } });
+  root.append(hint);
+  const bodyRows = () => [...body.querySelectorAll('tr.dt-row')];
+  const navCols = () => shownColumns().filter(navigable).map((c) => c.id);
+  const cellOf = (tr, col) => tr?.querySelector(`td[data-col="${CSS.escape(col)}"]`) ?? null;
+  function park(td) {
+    for (const t of body.querySelectorAll('td[tabindex="0"]')) {
+      t.tabIndex = -1;
+      t.removeAttribute('aria-describedby');
+    }
+    if (!td) return;
+    td.tabIndex = 0;
+    td.setAttribute('aria-describedby', hint.id);
+    state.cursor = { id: td.parentElement.dataset.row, col: td.dataset.col };
+  }
+  // After the rows are drawn again: the cursor stays on its row and column if they are still there, and keeps focus if it had it.
+  function restoreCursor(refocus) {
+    const rows = bodyRows();
+    const cols = navCols();
+    const tr = rows.find((r) => r.dataset.row === state.cursor?.id) ?? rows[0];
+    const td = cellOf(tr, cols.includes(state.cursor?.col) ? state.cursor.col : cols[0]);
+    park(td);
+    if (refocus) td?.focus({ preventScroll: true });
+  }
+  body.addEventListener('focusin', (e) => {
+    const td = e.target.closest?.('td[data-col]');
+    if (td && e.target === td) park(td);
+  });
+  body.addEventListener('keydown', (e) => {
+    const td = e.target;
+    if (!td.matches?.('td[data-col]') || e.altKey || e.metaKey) return;
+    if (isMenuKey(e)) {
+      if (openCellMenu(td, null)) e.preventDefault();
+      return;
+    }
+    const r = rowOf.get(td.parentElement);
+    if ((e.key === 'Enter' || e.key === ' ') && onOpen && r && !e.ctrlKey && !e.shiftKey) {
+      e.preventDefault();
+      onOpen(r);
+      return;
+    }
+    const rows = bodyRows();
+    const next = moveCursor({ row: rows.indexOf(td.parentElement), col: td.dataset.col }, e.key, { ctrl: e.ctrlKey }, { rows: rows.length, cols: navCols() });
+    if (!next) return;
+    e.preventDefault();
+    const target = cellOf(rows[next.row], next.col);
+    if (target) {
+      park(target);
+      target.focus();
+    }
+  });
+
+  // ---- a new column layout (from the Columns menu or a header's Hide column)
+  function setLayout(next) {
+    engine.setLayout(next);
+    saveLayout();
+    // A column that is no longer on screen cannot go on filtering or sorting, where nobody could see why.
+    const gone = engine.defaultOrder.filter((id) => !engine.visibleColumnIds().includes(id));
+    for (const id of gone) delete state.cols[id];
+    if (gone.includes(state.sort[0])) state.sort = defaultSort ?? [null, 1];
+    buildFilterRow();
+    render();
+    columnsMenu?.render();
   }
 
   function clearAll() {

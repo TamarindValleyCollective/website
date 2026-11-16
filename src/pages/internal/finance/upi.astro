@@ -485,6 +485,7 @@ import '../../../styles/money.css';
     rowKind: (u: Upi) => kindClass(amountKind(u.direction)),
     searchPlaceholder: 'Search who, remark, reference, account…',
     favoritesKey: `tvc-upi-favorites:${decodeTokenEmail(getToken() ?? '')}`,
+    layoutKey: `tvc-upi-columns:${decodeTokenEmail(getToken() ?? '')}`,
     defaultGroup: 'month',
     defaultSort: ['date', -1],
     searchText: (u: Upi) => [u.counterparty, u.remark, u.purpose ?? '', u.note, u.upiRef, u.account ?? '', u.delegate ?? ''].join(' '),

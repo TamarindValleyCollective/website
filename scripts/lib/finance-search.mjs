@@ -99,17 +99,21 @@ export const GROUP_FIELDS = {
   party: ['Paid to / from', (l) => l.effective?.party || 'No party'],
   unit: ['Unit', (l) => l.allocation?.householdLabel || 'No unit'],
   month: ['Month', (l) => l.date.slice(0, 7)],
+  year: ['Year', (l) => l.date.slice(0, 4)],
+  fy: ['Financial year', (l) => financialYearOf(l.date)],
   account: ['Account', (l) => l.account || 'No account'],
   origin: ['Origin', (l) => (l.origin ? originLabel(l.origin) : 'Not known')],
   status: ['Status', (l) => STATUS_WORDS[l.review ? 'review' : l.state] ?? l.state],
 };
+// Fields that run along time: their groups come newest first, not biggest first.
+const BY_TIME = new Set(['month', 'year', 'fy']);
 export const groupLabel = (field) => GROUP_FIELDS[field]?.[0] ?? field;
 
 /**
  * Splits `lines` (already in the order the page wants inside a group) into the page's flat list of items:
  *   { kind: 'group', key, depth, label, count, netPaise, transfers } followed by its lines (or its sub-groups), or, when collapsed, nothing.
  * `fields` is at most two group fields; `collapsed` is a Set of group keys; `monthLabel` turns 2026-10 into a heading.
- * Groups are ordered newest first for months and biggest first for everything else, with "No ..." groups last.
+ * Groups are ordered newest first for months, years and financial years and biggest first for everything else, with "No ..." groups last.
  * Returns { items, visible } where `visible` is the lines that are showing (those of expanded groups), in order.
  * `isTransfer(line)`: lines moved between TVC's own accounts, which a group total leaves out.
  * @param {any[]} lines
@@ -142,14 +146,14 @@ export function buildItems(lines, fields, collapsed = new Set(), monthLabel = (m
     const keys = [...groups.keys()].sort((a, b) => {
       const none = (k) => /^No /.test(k);
       if (none(a) !== none(b)) return none(a) ? 1 : -1;
-      if (field === 'month') return a < b ? 1 : a > b ? -1 : 0;
+      if (BY_TIME.has(field)) return a < b ? 1 : a > b ? -1 : 0;
       return groups.get(b).length - groups.get(a).length || a.localeCompare(b);
     });
     for (const k of keys) {
       const members = groups.get(k);
       const key = `${path}/${field}:${k}`;
       const open = !collapsed.has(key);
-      items.push({ kind: 'group', key, depth, field, label: field === 'month' ? monthLabel(k) : k, count: members.length, netPaise: net(members), transfers: members.filter(isTransfer).length, open });
+      items.push({ kind: 'group', key, depth, field, label: field === 'month' ? monthLabel(k) : field === 'fy' && !/^No /.test(k) ? `FY ${k}` : k, count: members.length, netPaise: net(members), transfers: members.filter(isTransfer).length, open });
       if (open) walk(members, depth + 1, key);
     }
   };

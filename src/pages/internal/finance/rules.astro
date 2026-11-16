@@ -49,6 +49,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   import { StaffAuthError, clearStepUp, clearToken, closeOnBackdrop, decodeTokenEmail, getToken, setToken, showToast, staffFetch } from '../../../../scripts/lib/staff-client.mjs';
   import { clearState, showFailure, showLoading } from '../../../../scripts/lib/staff-states.mjs';
   import { createDataTable } from '../../../../scripts/lib/data-table-ui.mjs';
+  import { iconButton } from '../../../../scripts/lib/admin-icons.mjs';
   import { button, categoryOptions, combo, h, input, labelled, parseRupees, partyOptions, pill, present, rupees, typeLabel } from '../../../../scripts/lib/finance-ui.mjs';
   import { matchOptions } from '../../../../scripts/lib/finance-search.mjs';
 
@@ -166,6 +167,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     noun: ['rule', 'rules'],
     searchPlaceholder: 'Search rules…',
     favoritesKey: `tvc-rules-favorites:${emailKey()}`,
+    layoutKey: `tvc-rules-columns:${emailKey()}`,
     defaultSort: ['priority', 1],
     searchText: (r: Rule) => [describe(r), nameOf(lookups().categories, r.categoryId), nameOf(lookups().parties, r.partyId), r.natureTemplate].join(' '),
     onOpen: (r: Rule) => { if (canChange()) openRule(r); },
@@ -233,6 +235,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     noun: ['category', 'categories'],
     searchPlaceholder: 'Search categories…',
     favoritesKey: `tvc-categories-favorites:${emailKey()}`,
+    layoutKey: `tvc-categories-columns:${emailKey()}`,
     defaultGroup: 'kind',
     defaultSort: ['name', 1],
     searchText: (c: Category) => [c.name, typeLabel(c.type)].join(' '),
@@ -248,9 +251,7 @@ import SignInGate from '../../../components/SignInGate.astro';
         id: 'actions', label: 'Actions', sortable: false, sticky: true, filter: 'none', value: () => '',
         render: (c: Category) => {
           if (!canChange()) return '';
-          const change = button('Change', () => openCategory(c), 'button button--outline button--small');
-          change.setAttribute('aria-label', `Change ${c.name}`);
-          return change;
+          return iconButton({ name: 'edit', label: `Change ${c.name}`, tip: 'Change', onClick: () => openCategory(c) });
         },
       },
     ],
