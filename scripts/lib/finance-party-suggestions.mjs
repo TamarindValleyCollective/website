@@ -93,7 +93,7 @@ export function isSelf(name, selfNames) {
   return w.length >= 3 && selfNames.some((own) => { const o = words(own); return w.length <= o.length && w.every((x, i) => x === o[i]); });
 }
 
-export function suggestChanges(parties, { kindLabels = {}, selfNames = [] } = {}) {
+export function suggestChanges(parties, { kindLabels = {}, selfNames = /** @type {string[]} */ ([]) } = {}) {
   const live = parties.filter((p) => p.active !== false && !isSelf(p.name, selfNames));
   const out = [];
   const absorbed = new Set();
