@@ -36,7 +36,7 @@ async function all(path: string): Promise<Json[]> {
 }
 
 // operator_id exists once migration 0101 is applied; before that the rows load without it.
-// payee_upi_id exists once migration 0102 is applied.
+// payee_upi_id exists once migration 0104 is applied.
 const withOperator = (path: string) =>
   all(path.replace('select=', 'select=payee_upi_id,operator_id,'))
     .catch(() => all(path.replace('select=', 'select=operator_id,')))
