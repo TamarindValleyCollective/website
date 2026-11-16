@@ -23,6 +23,9 @@ const compareCells = (rowA, rowB, id) => {
 };
 
 export function createTableEngine({ columns, filters = [], searchText = () => '' }) {
+  // The search box also finds an amount: every amount column adds its rupees ("1500.00") to the row's search text, so typing 1500 works.
+  const amountGets = columns.filter((c) => (c.type ?? 'text') === 'amount').map((c) => c.filterValue ?? c.value);
+  const hayOf = (row) => [searchText(row), ...amountGets.map((get) => { const v = get(row); return v == null || v === '' ? '' : (Math.round(Number(v)) / 100).toFixed(2); })].join(' ');
   const defs = columns.map((c) => {
     const type = c.type ?? 'text';
     const sortGet = c.sortValue ?? c.value;
@@ -54,7 +57,7 @@ export function createTableEngine({ columns, filters = [], searchText = () => ''
     getFilteredRowModel: getFilteredRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getColumnCanGlobalFilter: () => true,
-    globalFilterFn: (row, _id, words) => passesWords(searchText(row.original), words),
+    globalFilterFn: (row, _id, words) => passesWords(hayOf(row.original), words),
     enableMultiSort: false,
     enableSortingRemoval: true,
   });

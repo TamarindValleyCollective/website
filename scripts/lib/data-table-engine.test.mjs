@@ -116,3 +116,12 @@ test('column order and visibility live in the table state, and the rest of the t
   engine.setLayout(null);
   assert.deepEqual(engine.visibleColumnIds(), ['name', 'kind', 'files', 'paid', 'act'], 'no layout is the default');
 });
+
+test('the search box finds an amount typed in rupees, with or without commas or paise', () => {
+  const eng = createTableEngine({ columns, filters: [], searchText: (r) => r.name });
+  const found = (w) => eng.run({ rows, words: w }).rows.map((r) => r.id);
+  assert.deepEqual(found(['18250']), [1]);
+  assert.deepEqual(found(['18,250']), [1]);
+  assert.deepEqual(found(['4120.00']), [4]);
+  assert.deepEqual(found(['9999']), []);
+});
