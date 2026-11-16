@@ -5,11 +5,12 @@
 //
 //   const engine = createTableEngine({ columns, filters, searchText });
 //   const { rows, errors } = engine.run({ rows, chips, words, cols, sort: [columnId | null, 1 | -1] });
+//   engine.setLayout({ order, hidden });   which columns show and in what order; engine.visibleColumnIds() says what to draw
 //
 // `columns` and `filters` are the page's own descriptions (see data-table-ui.mjs). Chip filters are not tied to one column, so they
 // narrow the rows before the table sees them; everything else is TanStack's own filtering and sorting.
 import { createTable, getCoreRowModel, getFilteredRowModel, getSortedRowModel } from '@tanstack/table-core';
-import { matchColumn, parseColumnFilter, passesWords } from './data-table.mjs';
+import { cleanLayout, matchColumn, parseColumnFilter, passesWords } from './data-table.mjs';
 
 const empty = (v) => v == null || v === '';
 
@@ -34,6 +35,7 @@ export function createTableEngine({ columns, filters = [], searchText = () => ''
         return empty(v) ? undefined : v;
       },
       enableSorting: c.sortable !== false,
+      enableHiding: !c.fixed,
       enableColumnFilter: c.filter !== 'none' && type !== 'none',
       sortUndefined: 'last',
       sortingFn: compareCells,
@@ -57,8 +59,12 @@ export function createTableEngine({ columns, filters = [], searchText = () => ''
     enableSortingRemoval: true,
   });
 
+  const ids = columns.map((c) => c.id);
+  const fixed = columns.filter((c) => c.fixed).map((c) => c.id);
   let state = { ...table.initialState };
+  let current = [];
   const apply = (data) => {
+    current = data;
     table.setOptions((prev) => ({
       ...prev,
       data,
@@ -68,6 +74,9 @@ export function createTableEngine({ columns, filters = [], searchText = () => ''
       },
     }));
   };
+
+  apply([]);
+  const allColumnIds = () => table.getAllLeafColumns().map((c) => c.id);
 
   return {
     /** The rows that pass, in order, and `errors`: column id -> why a typed condition could not be read (that column is then left unfiltered). */
@@ -99,6 +108,17 @@ export function createTableEngine({ columns, filters = [], searchText = () => ''
       apply(data);
       return { rows: table.getRowModel().rows.map((r) => r.original), errors };
     },
+    /** Which columns show and in what order. Anything unknown is dropped, new columns follow, a `fixed` column stays shown and in place; no layout is the default. */
+    setLayout(raw) {
+      const clean = cleanLayout(raw, ids, fixed);
+      state = { ...state, columnOrder: clean.order, columnVisibility: Object.fromEntries(clean.hidden.map((id) => [id, false])) };
+      apply(current);
+    },
+    layout: () => ({ order: allColumnIds(), hidden: table.getAllLeafColumns().filter((c) => !c.getIsVisible()).map((c) => c.id) }),
+    visibleColumnIds: () => table.getVisibleLeafColumns().map((c) => c.id),
+    allColumnIds,
+    defaultOrder: ids,
+    fixedIds: fixed,
     table,
   };
 }

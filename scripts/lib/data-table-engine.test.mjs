@@ -102,3 +102,17 @@ test('filters and sorting work together, and the rows given are never reordered 
   assert.deepEqual(ids(engine.run({ rows: given, cols: { kind: 'vendor' }, sort: ['paid', -1] })), [1, 4]);
   assert.deepEqual(given.map((r) => r.id), [1, 2, 3, 4]);
 });
+
+test('column order and visibility live in the table state, and the rest of the table follows them', () => {
+  const engine = createTableEngine({ columns: [...columns.slice(0, 4), { id: 'act', fixed: true, filter: 'none', value: () => '' }] });
+  assert.deepEqual(engine.visibleColumnIds(), ['name', 'kind', 'files', 'paid', 'act']);
+  engine.setLayout({ order: ['paid', 'name', 'kind', 'files', 'act'], hidden: ['kind'] });
+  assert.deepEqual(engine.visibleColumnIds(), ['paid', 'name', 'files', 'act']);
+  assert.deepEqual(engine.allColumnIds(), ['paid', 'name', 'kind', 'files', 'act'], 'hidden columns are still listed, for the menu');
+  assert.deepEqual(engine.layout(), { order: ['paid', 'name', 'kind', 'files', 'act'], hidden: ['kind'] });
+  assert.deepEqual(ids(engine.run({ rows, cols: { name: 'test' } })), [2, 4], 'filtering and sorting still run');
+  engine.setLayout({ order: ['act', 'name'], hidden: ['act'] });
+  assert.deepEqual(engine.visibleColumnIds().at(-1), 'act', 'a fixed column cannot be hidden or moved');
+  engine.setLayout(null);
+  assert.deepEqual(engine.visibleColumnIds(), ['name', 'kind', 'files', 'paid', 'act'], 'no layout is the default');
+});

@@ -106,3 +106,29 @@ export function withFavorite(list, fav, allowed) {
   if (!clean) return list;
   return [...list.filter((f) => f.name.toLowerCase() !== clean.name.toLowerCase()), clean];
 }
+
+// ---- column layout: which columns show and in what order. Plain data { order, hidden }; a column marked `fixed` (a column of buttons,
+// say) is always shown and keeps the place it has by default, and only the others move around it.
+const placeMovable = (ids, fixed, movable) => {
+  let k = 0;
+  return ids.map((id) => (fixed.includes(id) ? id : movable[k++]));
+};
+
+/** A saved layout made safe for the columns the table has today: unknown and repeated ids dropped, new columns follow in their default order. */
+export function cleanLayout(raw, ids, fixed = []) {
+  const once = (list) => (Array.isArray(list) ? list.filter((id, i) => ids.includes(id) && !fixed.includes(id) && list.indexOf(id) === i) : []);
+  const saved = once(raw?.order);
+  const movable = [...saved, ...ids.filter((id) => !fixed.includes(id) && !saved.includes(id))];
+  const hidden = once(raw?.hidden);
+  return { order: placeMovable(ids, fixed, movable), hidden: ids.every((id) => hidden.includes(id)) ? [] : hidden };
+}
+
+/** Moves a column `delta` places among the movable ones (a fixed column never moves, and nothing passes it). `ids` is the default order. */
+export function moveColumn(layout, id, delta, ids, fixed = []) {
+  const movable = layout.order.filter((x) => !fixed.includes(x));
+  const i = movable.indexOf(id);
+  const j = Math.min(Math.max(i + delta, 0), movable.length - 1);
+  if (i < 0 || i === j) return layout;
+  [movable[i], movable[j]] = [movable[j], movable[i]];
+  return { ...layout, order: placeMovable(ids, fixed, movable) };
+}

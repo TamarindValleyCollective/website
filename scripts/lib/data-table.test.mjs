@@ -2,7 +2,7 @@
 // The shared admin table's pure pieces (the engine's filtering and sorting are in data-table-engine.test.mjs). Every row here is invented.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildItems, chipCounts, parseColumnFilter, matchColumn, passesWords, readFavorites, withFavorite } from './data-table.mjs';
+import { buildItems, chipCounts, cleanLayout, moveColumn, parseColumnFilter, matchColumn, passesWords, readFavorites, withFavorite } from './data-table.mjs';
 
 const rows = [
   { id: 1, name: 'Green Valley Nursery', kind: 'Vendor', files: 2, paid: 1825000, last: '2026-11-09' },
@@ -57,4 +57,24 @@ test('favorites keep only what is known, replace by name, and survive unreadable
   assert.deepEqual(readFavorites('not json'), []);
   assert.deepEqual(readFavorites(JSON.stringify(list), allowed), list);
   assert.deepEqual(withFavorite(list, { name: '' }, allowed), list);
+});
+
+test('a saved column layout is made safe for the columns the table has today', () => {
+  const ids = ['name', 'kind', 'files', 'paid', 'act'];
+  assert.deepEqual(cleanLayout(null, ids, ['act']), { order: ids, hidden: [] }, 'nothing saved is the default');
+  assert.deepEqual(cleanLayout({ order: ['paid', 'name'], hidden: ['kind'] }, ids, ['act']), { order: ['paid', 'name', 'kind', 'files', 'act'], hidden: ['kind'] }, 'columns not mentioned follow in their default order');
+  assert.deepEqual(cleanLayout({ order: ['gone', 'files', 'files', 'name'], hidden: ['gone'] }, ids, ['act']), { order: ['files', 'name', 'kind', 'paid', 'act'], hidden: [] }, 'unknown and repeated ids are dropped');
+  assert.deepEqual(cleanLayout({ order: ['act', 'name'], hidden: ['act'] }, ids, ['act']), { order: ['name', 'kind', 'files', 'paid', 'act'], hidden: [] }, 'a fixed column stays put and stays shown');
+  assert.deepEqual(cleanLayout({ hidden: ids }, ids, []).hidden, [], 'hiding every column is not allowed');
+  assert.deepEqual(cleanLayout('junk', ids, []), { order: ids, hidden: [] });
+});
+
+test('a column moves one place among the movable ones, and a fixed column keeps its place', () => {
+  const ids = ['a', 'b', 'c', 'act'];
+  const start = { order: ids, hidden: ['c'] };
+  assert.deepEqual(moveColumn(start, 'b', -1, ids, ['act']), { order: ['b', 'a', 'c', 'act'], hidden: ['c'] });
+  assert.deepEqual(moveColumn(start, 'a', -1, ids, ['act']), start, 'already first');
+  assert.deepEqual(moveColumn(start, 'c', 1, ids, ['act']), start, 'cannot pass the fixed column');
+  assert.deepEqual(moveColumn(start, 'act', -1, ids, ['act']), start, 'a fixed column does not move');
+  assert.deepEqual(moveColumn({ order: ['act', 'a', 'b', 'c'], hidden: [] }, 'a', 1, ['act', 'a', 'b', 'c'], ['act']).order, ['act', 'b', 'a', 'c'], 'a fixed column at the start stays at the start');
 });

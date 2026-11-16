@@ -264,6 +264,7 @@ import '../../styles/request-cells.css';
     cap: 300,
     searchPlaceholder: 'Search payee or purpose…',
     favoritesKey: `tvc-my-requests-favorites:${decodeTokenEmail(getToken() ?? '')}`,
+    layoutKey: `tvc-my-requests-columns:${decodeTokenEmail(getToken() ?? '')}`,
     defaultSort: ['date', -1],
     searchText: (r: Rec) => [r.payee, r.purpose, r.decisionReason].join(' '),
     empty: { title: 'Nothing yet', text: 'Ask for a payment, or record one already made, with the buttons above.' },
