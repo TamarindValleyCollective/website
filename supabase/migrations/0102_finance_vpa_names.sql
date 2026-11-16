@@ -1,6 +1,7 @@
 -- Finance module: the registered name behind a UPI ID (docs/finance/FINANCE.md, "UPI ID names").
--- NOT YET APPLIED to TVC ERP. Apply, then check: the table is RLS-on with no anon/authenticated grants, and a row with an upper-case
--- UPI ID or a name on a failed lookup is refused.
+-- Applied to TVC ERP on 2026-11-16 (recorded as finance_vpa_names). Checked afterwards: the table is RLS-on with no policy and no
+-- anon/authenticated grant, and (inside a block that raised to roll back) an upper-case UPI ID, a name on a failed lookup and a key mode other
+-- than live/test were each refused while a valid row was accepted; the table holds no rows.
 --
 -- A UPI payment to a person often shows only their UPI ID. Razorpay's validate-VPA call says whose ID it is; each answer is kept here so a
 -- UPI ID is asked about once, not on every page load (the call is billed by Razorpay, and its price is not confirmed). The ledger's

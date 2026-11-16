@@ -524,7 +524,7 @@ shapes), used by `lib/finance-ledger.ts`. It only proposes; a person posts, and 
 - **Not done:** suggestions are not yet turned into rules with one click; the amount (a repeating figure such as a rent or a salary) is
   not a clue yet; merchants on cards are only matched to the register by name.
 
-### UPI ID names (migration `0102_finance_vpa_names.sql`, **not yet applied**)
+### UPI ID names (migration `0102_finance_vpa_names.sql`, **applied 2026-11-16**)
 
 A UPI payment to a person often shows only their UPI ID, so the suggested new party reads like `Vendors › q000111222@ybl on PhonePe (new)`.
 Razorpay's validate-VPA call says whose ID it is, so the suggestion can be the person's name instead.
