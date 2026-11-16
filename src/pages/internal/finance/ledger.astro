@@ -54,6 +54,7 @@ import SignInGate from '../../../components/SignInGate.astro';
         <button type="button" id="tips-toggle" class="button button--outline button--small" aria-expanded="false" aria-controls="tips">Help and shortcuts</button>
         <button type="button" id="accept-all" class="button button--outline" hidden>Fill in the confident suggestions</button>
         <button type="button" id="fill-parties" class="button button--outline button--small" hidden></button>
+        <button type="button" id="look-up-names" class="button button--outline button--small" hidden></button>
       </div>
       <div id="tips" class="tips" hidden>
         <h3 class="tips-title">How a line is described</h3>
@@ -128,11 +129,12 @@ import SignInGate from '../../../components/SignInGate.astro';
   import { cleanLayout } from '../../../../scripts/lib/data-table.mjs';
   import { createFloatingMenu, leaveToBrowser, onLongPress, valueFilterItems } from '../../../../scripts/lib/admin-menu.mjs';
   import { compareRows, describeCondition, matchAmount, matchDate, matchText, parseAmount, parseDate, parseText } from '../../../../scripts/lib/finance-columns.mjs';
+  import { VPA_LOOKUP_LIMIT, vpasToLookUp } from '../../../../scripts/lib/finance-vpa.mjs';
 
   declare const google: any;
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
 
-  type Suggestion = { categoryId: string | null; partyId: string | null; nature: string; confidence: string; newPartyName: string | null };
+  type Suggestion = { categoryId: string | null; partyId: string | null; nature: string; confidence: string; newPartyName: string | null; vpaToLookUp?: boolean };
   type Line = {
     id: string; date: string; narration: string; direction: 'debit' | 'credit'; amountPaise: number; account: string; remark: string | null; counterparty: string | null; origin?: string; sources?: string[]; reversal?: { role: 'original' | 'reversal'; otherId: string; otherDate: string | null } | null; noteKey?: string; note?: string | null; purpose?: string | null; upiRef?: string | null;
     allocatedPaise: number; state: 'unallocated' | 'partly_allocated' | 'allocated'; review: boolean; missingParty: boolean; filled?: boolean; needsWording?: boolean; suggestion: Suggestion | null;
@@ -1355,6 +1357,36 @@ import SignInGate from '../../../components/SignInGate.astro';
     if (on) btn.textContent = `Fill ${counts.noparty} missing ${counts.noparty === 1 ? 'party' : 'parties'}`;
   }
   $('fill-parties').addEventListener('click', () => void openFillParties());
+  // Lines whose payee is only a UPI ID that Razorpay has not been asked about. Asking is a billed call, so it is a button, not automatic, and
+  // never more than VPA_LOOKUP_LIMIT IDs at a time.
+  const vpaTexts = () => all.filter((l) => l.suggestion?.vpaToLookUp).map((l) => l.suggestion!.newPartyName);
+  function renderLookUpNames() {
+    const btn = $('look-up-names');
+    const n = data?.canAllocate ? vpasToLookUp(vpaTexts(), new Set(), Infinity).length : 0;
+    btn.hidden = !n;
+    if (n) btn.textContent = `Look up ${Math.min(n, VPA_LOOKUP_LIMIT)} UPI ${Math.min(n, VPA_LOOKUP_LIMIT) === 1 ? 'name' : 'names'}${n > VPA_LOOKUP_LIMIT ? ` (of ${n})` : ''}`;
+  }
+  $('look-up-names').addEventListener('click', async () => {
+    const btn = $<HTMLButtonElement>('look-up-names');
+    btn.disabled = true;
+    const label = btn.textContent;
+    btn.textContent = 'Looking up…';
+    try {
+      const { status, data: res } = await call('/api/finance-admin/vpa-names', 'POST', { texts: vpaTexts() });
+      if (status !== 200) showToast(res?.error ?? 'Could not look up the names.');
+      else {
+        const parts = [res.named ? `${res.named} named` : '', res.noName ? `${res.noName} with no name on file` : '', res.notFound ? `${res.notFound} not found` : ''].filter(Boolean);
+        showToast(`${res.stoppedBecause ? `Stopped: ${res.stoppedBecause} ` : ''}${parts.length ? `${parts.join(', ')}.` : res.asked ? '' : 'Nothing new to look up.'}`.trim());
+        if (res.asked) await load(true);
+      }
+    } catch (err) {
+      if (!(err instanceof StaffAuthError)) showToast('Could not look up the names.');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = label;
+      renderLookUpNames();
+    }
+  });
   function renderSearch() {
     const now = today();
     $('schips').replaceChildren(
@@ -1365,6 +1397,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     );
     $<HTMLInputElement>('q').placeholder = chips.length || words.length || groupBy.length ? '' : 'Search every column';
     renderFillParties();
+    renderLookUpNames();
     if (!$('spop').hidden) renderPopover();
   }
   function renderPopover() {

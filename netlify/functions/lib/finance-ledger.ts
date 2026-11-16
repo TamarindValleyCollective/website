@@ -10,6 +10,8 @@ import { noteKeyOf } from '../../../scripts/lib/finance-notes.mjs';
 import { pairReversals } from '../../../scripts/lib/finance-reversals.mjs';
 import { loadNotes } from './finance-notes';
 import { loadPurposes } from './finance-requests';
+import { VPA_LOOKUP_LIMIT, nameFromLookup, vpasToLookUp } from '../../../scripts/lib/finance-vpa.mjs';
+import { razorpayKeyMode, validateVpa } from './razorpay';
 import { requireStaff } from './staff-access';
 import { rest } from './staff-mfa-store';
 import { capabilitiesForRole } from './staff-registry';
@@ -267,7 +269,7 @@ export async function listLedger(req: Request): Promise<Response> {
         origin: originOf({ narration: l.narration, direction: l.direction as 'debit' | 'credit' }, upiOf.get(l.id)?.app as 'bhim' | 'paytm' | undefined),
         allocatedPaise: (byLine.get(l.id) ?? []).reduce((n, a) => n + a.amount_paise, 0),
         ...summarise(l),
-        suggestion: summarise(l).state === 'allocated' ? null : compactSuggestion(suggestFor(l, upiOf.get(l.id) ?? null, ctx, sc)),
+        suggestion: summarise(l).state === 'allocated' ? null : compactSuggestion(suggestFor(l, upiOf.get(l.id) ?? null, ctx, sc), sc),
         // What a posted line was allocated to (the first row, and how many there are), so the table can show it.
         allocation: (() => {
           const a = postedSummary(byLine.get(l.id) ?? []);
@@ -348,7 +350,7 @@ export async function ledgerAll(req: Request): Promise<Response> {
         state,
         review: allocs.some((a) => a.review_state !== 'ok'),
         missingParty,
-        suggestion: sg ? compactSuggestion(sg) : null,
+        suggestion: sg ? compactSuggestion(sg, sc) : null,
         allocation: summary ? { ...summary, householdLabel: summary.householdId ? householdLabel.get(summary.householdId as string) ?? null : null } : null,
         effective,
       };
@@ -387,12 +389,61 @@ async function suggestionContext(lines: LineRow[], byLine: Map<string, Json[]>, 
     }
   }
   const requesterIds: string[] = ctx.requesterPartyId ? [ctx.requesterPartyId] : [];
-  return { rc, history: buildHistory(past), requesterIds };
+  const vpa = await vpaAnswers();
+  return { rc, history: buildHistory(past), requesterIds, vpaNames: vpa.names, vpaKnown: vpa.known };
 }
 type SuggestionContext = Awaited<ReturnType<typeof suggestionContext>>;
 
 const suggestFor = (line: Json, upi: Json | null, ctx: Awaited<ReturnType<typeof lookups>>, sc: SuggestionContext, purpose: string | null = null): Json =>
-  suggest({ line, upi, rules: sc.rc.rules, parties: ctx.parties, categories: ctx.categories, history: sc.history, requesterPartyIds: sc.requesterIds, purpose }) as Json;
+  suggest({ line, upi, rules: sc.rc.rules, parties: ctx.parties, categories: ctx.categories, history: sc.history, requesterPartyIds: sc.requesterIds, purpose, vpaNames: sc.vpaNames }) as Json;
+
+// What Razorpay has said about UPI IDs so far (fin_vpa_names), live-key answers only. `names` is the registered name by lowercase ID, for the
+// suggestion engine; `known` is every ID already asked about (with or without a name), so a lookup never asks twice.
+const vpaAnswers = () =>
+  cached('vpa-names', async () => {
+    const found = await rowsAll('/fin_vpa_names?select=vpa,success,name&key_mode=eq.live&order=vpa.asc');
+    const names: Record<string, string> = {};
+    for (const r of found) if (r.success && r.name) names[r.vpa as string] = r.name as string;
+    return { names, known: new Set(found.map((r) => r.vpa as string)) };
+  });
+
+// POST /vpa-names { texts: string[] }: ask Razorpay whose each UPI ID in `texts` is, for the ones not asked about yet, and keep the answers.
+// Deliberate and small: it is a billed call, so it runs only when an admin asks, at most VPA_LOOKUP_LIMIT IDs at a time, and stops at the first
+// failure (the call not enabled, a bad key, a limit) instead of repeating it. Audited before the first call, with a count and no ID.
+export async function lookupVpaNames(req: Request): Promise<Response> {
+  const auth = await requireStaff(req, 'finance', 'allocate');
+  if (!auth.ok) return fail(auth.error, auth.status);
+  const body = await readBody(req);
+  if (!body || !Array.isArray(body.texts) || body.texts.length > 5000) return fail('Send the lines’ UPI texts to look up.', 400);
+  try {
+    const { known } = await vpaAnswers();
+    const todo = vpasToLookUp(body.texts.filter((t: unknown) => typeof t === 'string'), known, VPA_LOOKUP_LIMIT);
+    if (!todo.length) return jsonResponse({ asked: 0, named: 0, noName: 0, notFound: 0, stoppedBecause: null });
+    const mode = razorpayKeyMode();
+    await logFinanceAction({ actorId: auth.staff.id, entityId: await entityId(), action: 'finance.vpa_names_looked_up', target: 'vpa-lookup', detail: { count: todo.length, key_mode: mode } });
+    const tally = { asked: 0, named: 0, noName: 0, notFound: 0, stoppedBecause: null as string | null };
+    for (const vpa of todo) {
+      const got = await validateVpa(vpa);
+      if (!got.ok) {
+        tally.stoppedBecause = got.status === 400 && /not found/i.test(got.description) ? 'Razorpay says its UPI ID lookup is not available on this account.' : got.description;
+        break;
+      }
+      tally.asked++;
+      const name = nameFromLookup(got.body);
+      if (name) tally.named++;
+      else if (got.body.success === true) tally.noName++;
+      else tally.notFound++;
+      await rest('/fin_vpa_names?on_conflict=vpa', {
+        method: 'POST',
+        headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+        body: JSON.stringify({ vpa, success: got.body.success === true, name, key_mode: mode, checked_by: auth.staff.id, checked_at: new Date().toISOString() }),
+      });
+    }
+    return jsonResponse(tally);
+  } catch (err) {
+    return serverError(err, 'vpa names');
+  }
+}
 
 // The short form shown in the list: no reasons (the line's own sheet has those).
 const postedSummary = (allocs: Json[]) => {
@@ -400,9 +451,10 @@ const postedSummary = (allocs: Json[]) => {
   return posted.length ? { categoryId: posted[0].category_id, partyId: posted[0].party_id, nature: posted[0].nature, count: posted.length, householdId: posted[0].household_id ?? null, maintenanceYear: posted[0].maintenance_year ?? null } : null;
 };
 
-const compactSuggestion = (x: Json) =>
+// `vpaToLookUp`: the new party is still only a UPI ID that Razorpay has not been asked about, so the page can offer to look it up.
+const compactSuggestion = (x: Json, sc: SuggestionContext) =>
   x.categoryId || x.partyId || x.nature || x.newParty
-    ? { categoryId: x.categoryId, partyId: x.partyId, nature: x.nature, confidence: x.confidence, newPartyName: x.newParty?.name ?? null }
+    ? { categoryId: x.categoryId, partyId: x.partyId, nature: x.nature, confidence: x.confidence, newPartyName: x.newParty?.name ?? null, vpaToLookUp: vpasToLookUp([x.newParty?.name], sc.vpaKnown).length > 0 }
     : null;
 
 const reviewRef = () =>

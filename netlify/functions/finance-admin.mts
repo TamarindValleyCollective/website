@@ -30,7 +30,7 @@ import { BUDGET_ID, approveDraft, discardDraft, getBudget, saveLines, startDraft
 import { setPaymentNote } from './lib/finance-notes';
 import { heldCoverage, reconciliationOf, runImport } from './lib/finance-import';
 import { supabaseImportStore } from './lib/finance-import-store';
-import { LEDGER_ID, clearLedgerCache, closePeriod, ledgerAll, ledgerCounts, ledgerLine, listLedger, listPeriods, listRules, missingParties, postBatch, recategorise, reviewAllocation, saveAllocations, saveCategory, saveRule, setAllocationParties, setAllocationParty, setRequester } from './lib/finance-ledger';
+import { LEDGER_ID, clearLedgerCache, closePeriod, ledgerAll, ledgerCounts, ledgerLine, listLedger, listPeriods, listRules, lookupVpaNames, missingParties, postBatch, recategorise, reviewAllocation, saveAllocations, saveCategory, saveRule, setAllocationParties, setAllocationParty, setRequester } from './lib/finance-ledger';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
@@ -288,6 +288,7 @@ const dispatch = async (req: Request): Promise<Response> => {
   if (route === '/ledger/all' && req.method === 'GET') return ledgerAll(req);
   if (route === '/ledger/post' && req.method === 'POST') return postBatch(req);
   if (route === '/ledger/missing-parties' && req.method === 'GET') return missingParties(req);
+  if (route === '/vpa-names' && req.method === 'POST') return lookupVpaNames(req);
   if (route === '/allocations/parties' && req.method === 'POST') return setAllocationParties(req);
   const line = /^\/ledger\/([^/]+)(\/allocations)?$/.exec(route);
   if (line && LEDGER_ID.test(line[1])) {
@@ -344,6 +345,7 @@ export const config = {
     '/api/finance-admin/vendors',
     '/api/finance-admin/vouchers/*',
     '/api/finance-admin/payment-note',
+    '/api/finance-admin/vpa-names',
     '/api/finance-admin/ledger',
     '/api/finance-admin/ledger/*',
     '/api/finance-admin/allocations/*',

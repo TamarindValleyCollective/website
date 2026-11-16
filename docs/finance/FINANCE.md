@@ -524,6 +524,30 @@ shapes), used by `lib/finance-ledger.ts`. It only proposes; a person posts, and 
 - **Not done:** suggestions are not yet turned into rules with one click; the amount (a repeating figure such as a rent or a salary) is
   not a clue yet; merchants on cards are only matched to the register by name.
 
+### UPI ID names (migration `0102_finance_vpa_names.sql`, **not yet applied**)
+
+A UPI payment to a person often shows only their UPI ID, so the suggested new party reads like `Vendors › q000111222@ybl on PhonePe (new)`.
+Razorpay's validate-VPA call says whose ID it is, so the suggestion can be the person's name instead.
+
+- **Where:** `scripts/lib/finance-vpa.mjs` (pure: find a UPI ID in text, pick the IDs still to ask about, read Razorpay's answer),
+  `suggest()` takes `vpaNames` (lowercase ID to registered name), `lib/finance-ledger.ts` (`lookupVpaNames`, `vpaAnswers`) and
+  `validateVpa` in `lib/razorpay.ts`. Tests: `finance-vpa.test.mjs`, `finance-vpa-endpoint.test.mjs`, three more in `finance-suggest.test.mjs`.
+- **Cache:** every answer is kept in `fin_vpa_names` (ID, whether it exists, the name, live or test key, who asked, when), so an ID is asked
+  about **once**. RLS on, no anon/authenticated grant. Only answers from live keys are used; a test-key answer is kept and ignored.
+- **It never runs by itself.** The call is billed by Razorpay (the price is not confirmed), so the ledger toolbar shows **Look up N UPI names**
+  while unallocated lines still carry a bare UPI ID and the person may allocate. One click asks about at most 25 IDs
+  (`POST /api/finance-admin/vpa-names`, needs `finance` / `allocate`), stops at the first failure and says why, and the page then reloads.
+  IDs already asked about, with or without a name, are not offered again.
+- **What changes in a suggestion:** with a name on file, the register is searched for it first (an exact or shortened match suggests that
+  party, "The UPI ID is registered to "X", which matches Y in the register"); otherwise the name, in readable case, is the new party to add.
+  With no name on file (the ID has no linked bank account, or does not exist) the line reads as before. Nothing is created or posted until a
+  person accepts.
+- **Audit:** `finance.vpa_names_looked_up` with a count and the key mode, never an ID or a name.
+- **Account setup:** Razorpay support enabled `/v1/payments/validate/vpa` on the live account on 2026-11-16 (before that it answered 400
+  "URL not found"). The account's per-call charge is still unconfirmed; check the Razorpay dashboard before looking up in volume.
+- **Not done:** the registered name is not yet stored on the party's payment details as a verified name, and a lookup is not offered from the
+  Parties or UPI pages, only from the ledger.
+
 ## The table (the Ledger's list view, session 05 follow-up)
 
 > **Update (2026-11-05):** the page no longer asks the server to search or sort: it fetches every line once (`GET /api/finance-admin/ledger/all`) and applies the same rules from `scripts/lib/finance-columns.mjs` in the browser. The server's `GET /ledger` list route and its column handling remain (tested), but nothing uses them now; remove them in a later change once the new page has been used on real data. The notes below under "After the first UX audit" describe the current page.
