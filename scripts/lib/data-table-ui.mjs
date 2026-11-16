@@ -252,10 +252,11 @@ export function createDataTable(opts) {
     restoreCursor(hadFocus);
     cards.replaceChildren(...cardNodes);
     const none = shown.length === 0;
+    const filtered = state.chips.length || state.words.length || state.text || Object.values(state.cols).some(Boolean);
     emptyBox.hidden = !none;
-    scroll.hidden = none;
+    // A filter that finds nothing keeps the header and filter row, or the box being typed in disappears mid-word.
+    scroll.hidden = none && !filtered;
     if (none) {
-      const filtered = state.chips.length || state.words.length || state.text || Object.values(state.cols).some(Boolean);
       emptyBox.replaceChildren(
         h('p', { class: 'dt-empty-title', text: filtered ? `No ${noun[0]} matches` : empty.title ?? `No ${noun[1]} yet` }),
         h('p', { class: 'hint', text: filtered ? 'Take a filter off, or clear the search.' : empty.text ?? '' }),
