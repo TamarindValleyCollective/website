@@ -568,8 +568,20 @@ import '../../../styles/money.css';
       cell.title = `The registered name matches ${p.partyName}, but this UPI ID is not on that party yet. "Add to Parties" attaches it.`;
     } else if (p.state === 'missing') cell.append(el('span', 'pill pill--crit', 'Not in Parties'));
     else cell.append(el('span', 'dim', PARTY_TEXT[p.state]));
+    if (canEdit && (p.state === 'missing' || p.state === 'attach')) {
+      // Just this person: the same review list as the toolbar button, with one entry.
+      const one = el('button', 'button button--outline button--small', p.state === 'missing' ? 'Add' : 'Add ID');
+      one.type = 'button';
+      one.setAttribute('aria-label', p.state === 'missing' ? `Add ${p.name} to Parties` : `Add this UPI ID to ${p.partyName}`);
+      one.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openReview(pendingAdds().filter((x) => x.rowId === u.id || pendingKey(u) === x.key));
+      });
+      cell.append(one);
+    }
     return cell;
   }
+  const pendingKey = (u: Upi) => `${u.party.state}:${(u.party.name ?? u.party.partyId ?? '').toLowerCase()}`;
   const toolbarTools = el('span', 'upi-tools');
   const addPartiesButton = el('button', 'button button--outline button--small', '');
   addPartiesButton.type = 'button';
@@ -577,16 +589,16 @@ import '../../../styles/money.css';
   toolbarTools.append(lookUpButton, addPartiesButton);
 
   // One entry per person, not per payment: people who are not in Parties (to add) and IDs that belong to a party already there (to attach).
-  type Pending = { action: 'add' | 'attach'; rowId: string; name: string; kind: string; partyName?: string; payments: number };
+  type Pending = { key: string; action: 'add' | 'attach'; rowId: string; name: string; kind: string; partyName?: string; payments: number };
   function pendingAdds(): Pending[] {
     const out = new Map<string, Pending>();
     for (const u of all) {
       const p = u.party;
       if (p.state !== 'missing' && p.state !== 'attach') continue;
-      const key = `${p.state}:${(p.name ?? p.partyId ?? '').toLowerCase()}`;
+      const key = pendingKey(u);
       const hit = out.get(key);
       if (hit) hit.payments++;
-      else out.set(key, { action: p.state === 'missing' ? 'add' : 'attach', rowId: u.id, name: p.name ?? p.registeredName ?? '', kind: p.kind ?? 'vendor', partyName: p.partyName, payments: 1 });
+      else out.set(key, { key, action: p.state === 'missing' ? 'add' : 'attach', rowId: u.id, name: p.name ?? p.registeredName ?? '', kind: p.kind ?? 'vendor', partyName: p.partyName, payments: 1 });
     }
     return [...out.values()];
   }
@@ -600,8 +612,9 @@ import '../../../styles/money.css';
   closeOnBackdrop(partyDialog);
   $('party-cancel').addEventListener('click', () => partyDialog.close());
   let reviewing: { item: Pending; tick: HTMLInputElement; name: HTMLInputElement; kind: HTMLSelectElement }[] = [];
-  addPartiesButton.addEventListener('click', () => {
-    const items = pendingAdds();
+  addPartiesButton.addEventListener('click', () => openReview(pendingAdds()));
+  // The review list for these people (everyone waiting, or the one a row's button names): tick, edit the name and kind, confirm.
+  function openReview(items: Pending[]) {
     if (!items.length) return;
     const toAdd = items.filter((i) => i.action === 'add').length;
     const toAttach = items.length - toAdd;
@@ -632,7 +645,7 @@ import '../../../styles/money.css';
     );
     $('party-error').hidden = true;
     partyDialog.showModal();
-  });
+  }
   $('party-form').addEventListener('submit', async (ev) => {
     ev.preventDefault();
     const chosen = reviewing.filter((r) => r.tick.checked);

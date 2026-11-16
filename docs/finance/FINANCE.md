@@ -556,7 +556,8 @@ Razorpay's validate-VPA call says whose ID it is, so the suggestion can be the p
   ignored; one name inside the other). Filter chips: Not in Parties, Name differs, ID not on file, In Parties; Group by Party.
 - **Reviewed add (`POST /upi-lines/add-parties`, `finance` / `allocate`).** The toolbar button **Add N to Parties** (one entry per person, not
   per payment) opens a list: tick who to add, edit the name and kind (a debit's person is a vendor by default, a credit's a customer; never a
-  member). Confirming adds each person to Parties with their UPI ID attached as **unverified** details (a second admin verifies it), and attaches
+  member). A row's own **Add** (nobody matches) or **Add ID** (the name matches a party) button opens the same list with just that person.
+  Confirming adds each person to Parties with their UPI ID attached as **unverified** details (a second admin verifies it), and attaches
   an ID to the party whose name matches ("ID not on file"). The server works out each row's need from its own data and does only what that state
   allows, so a name typed on the page cannot add someone the lookup has not named; a party with a similar name already is skipped with the reason.
   Rows for the same person are done once. Audit: `finance.upi_parties_added` with counts, plus the usual `finance.party_created` and
