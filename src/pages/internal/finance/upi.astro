@@ -155,7 +155,7 @@ import '../../../styles/money.css';
   const STATE = { matched: { text: 'In the ledger', kind: 'ok' }, waiting: { text: 'Waiting for statement', kind: 'warn' }, unmatched: { text: 'Not in the statement', kind: 'crit' } } as const;
 
   // Whether the person behind a payment is in the Parties register (the server works it out: scripts/lib/finance-upi-parties.mjs).
-  type PartyState = { state: 'matches' | 'onfile' | 'differs' | 'attach' | 'missing' | 'lookup' | 'noname' | 'unnamed'; partyId?: string; partyName?: string; registeredName?: string; name?: string; kind?: string; by?: string };
+  type PartyState = { state: 'matches' | 'onfile' | 'differs' | 'attach' | 'missing' | 'gateway' | 'lookup' | 'noname' | 'unnamed'; partyId?: string; partyName?: string; registeredName?: string; name?: string; kind?: string; by?: string };
   type Upi = { operatorId?: string | null; id: string; paidAt: string; time: string | null; app: 'bhim' | 'paytm'; counterparty: string | null; upiId: string | null; vpaName: string | null; vpaState: 'named' | 'asked' | 'new' | null; party: PartyState; remark: string | null; amountPaise: number; direction: 'debit' | 'credit'; isCircle: boolean; upiRef: string; note: string | null; purpose: string | null; bankLineId: string | null; account: string | null; delegateId: string | null; delegate: string | null; delegateHow: 'assigned' | 'auto' | 'ambiguous' | 'none' | null; state: 'matched' | 'waiting' | 'unmatched' };
   type Delegate = { id: string; identifier: string; displayName: string | null; activeFrom: string; activeTo: string | null; capPaise: number | null; operatorId?: string | null };
   type Operator = { id: string; name: string };
@@ -493,8 +493,10 @@ import '../../../styles/money.css';
 
   // ---- Name and UPI ID columns, and the lookup that fills them (docs/finance/FINANCE.md, "UPI ID names"). The answers are kept per UPI ID, so
   // the same lookup also names the ledger lines these payments are joined to.
-  const nameText = (u: Upi) => u.vpaName ?? (u.vpaState === 'new' ? 'Not looked up yet' : u.vpaState === 'asked' ? 'No name on file' : (u.counterparty ?? ''));
+  const nameText = (u: Upi) => (u.party.state === 'gateway' ? 'Payment gateway' : null) ?? u.vpaName ?? (u.vpaState === 'new' ? 'Not looked up yet' : u.vpaState === 'asked' ? 'No name on file' : (u.counterparty ?? ''));
   function nameCell(u: Upi): Node | string {
+    // A gateway's registered name (Razorpay...) is not the payee's, so it is not shown as the name.
+    if (u.party.state === 'gateway') return el('span', 'dim', nameText(u));
     if (u.vpaName) {
       const s = el('span', undefined, u.vpaName);
       s.title = 'The name registered for this UPI ID, from Razorpay';
@@ -553,7 +555,7 @@ import '../../../styles/money.css';
   }
 
   // ---- Party column and the reviewed add (docs/finance/FINANCE.md, "UPI ID names"). The server decides each row's state; this only shows it.
-  const PARTY_TEXT: Record<PartyState['state'], string> = { matches: 'In Parties', onfile: 'In Parties, name not checked', differs: 'Name differs', attach: 'ID not on file', missing: 'Not in Parties', lookup: 'Not looked up yet', noname: 'No name on file', unnamed: 'No name' };
+  const PARTY_TEXT: Record<PartyState['state'], string> = { matches: 'In Parties', onfile: 'In Parties, name not checked', differs: 'Name differs', attach: 'ID not on file', missing: 'Not in Parties', gateway: 'Payment gateway', lookup: 'Not looked up yet', noname: 'No name on file', unnamed: 'No name' };
   const partyText = (u: Upi) => PARTY_TEXT[u.party.state];
   function partyCell(u: Upi): Node | string {
     const p = u.party;
@@ -567,12 +569,16 @@ import '../../../styles/money.css';
       cell.append(el('span', 'pill pill--warn', 'ID not on file'), el('span', 'dim', ` ${p.partyName}`));
       cell.title = `The registered name matches ${p.partyName}, but this UPI ID is not on that party yet. "Add to Parties" attaches it.`;
     } else if (p.state === 'missing') cell.append(el('span', 'pill pill--crit', 'Not in Parties'));
-    else cell.append(el('span', 'dim', PARTY_TEXT[p.state]));
-    if (canEdit && (p.state === 'missing' || p.state === 'attach')) {
+    else if (p.state === 'gateway') {
+      // The UPI ID is a payment gateway's: it says nothing about who was paid, so no name is suggested and the payee is added by hand.
+      cell.append(el('span', 'pill', 'Payment gateway'), el('span', 'dim', ' name it yourself'));
+      cell.title = 'This UPI ID belongs to a payment gateway, which serves many merchants, so it says nothing about who was paid. Add the payee by name; the gateway’s ID is not attached to anyone.';
+    } else cell.append(el('span', 'dim', PARTY_TEXT[p.state]));
+    if (canEdit && (p.state === 'missing' || p.state === 'attach' || p.state === 'gateway')) {
       // Just this person: the same review list as the toolbar button, with one entry.
-      const one = el('button', 'button button--outline button--small', p.state === 'missing' ? 'Add' : 'Add ID');
+      const one = el('button', 'button button--outline button--small', p.state === 'attach' ? 'Add ID' : 'Add');
       one.type = 'button';
-      one.setAttribute('aria-label', p.state === 'missing' ? `Add ${p.name} to Parties` : `Add this UPI ID to ${p.partyName}`);
+      one.setAttribute('aria-label', p.state === 'missing' ? `Add ${p.name} to Parties` : p.state === 'gateway' ? 'Add the payee of this payment to Parties' : `Add this UPI ID to ${p.partyName}`);
       one.addEventListener('click', (e) => {
         e.stopPropagation();
         openReview(pendingAdds().filter((x) => x.rowId === u.id || pendingKey(u) === x.key));
@@ -581,7 +587,8 @@ import '../../../styles/money.css';
     }
     return cell;
   }
-  const pendingKey = (u: Upi) => `${u.party.state}:${(u.party.name ?? u.party.partyId ?? '').toLowerCase()}`;
+  // A gateway's ID serves many merchants, so each of its payments is its own person; everyone else is one entry per name or party.
+  const pendingKey = (u: Upi) => (u.party.state === 'gateway' ? `gateway:${u.id}` : `${u.party.state}:${(u.party.name ?? u.party.partyId ?? '').toLowerCase()}`);
   const toolbarTools = el('span', 'upi-tools');
   const addPartiesButton = el('button', 'button button--outline button--small', '');
   addPartiesButton.type = 'button';
@@ -589,16 +596,18 @@ import '../../../styles/money.css';
   toolbarTools.append(lookUpButton, addPartiesButton);
 
   // One entry per person, not per payment: people who are not in Parties (to add) and IDs that belong to a party already there (to attach).
-  type Pending = { key: string; action: 'add' | 'attach'; rowId: string; name: string; kind: string; partyName?: string; payments: number };
+  // `gateway`: the payee behind a payment gateway is unknown, so the name starts empty, must be typed, and no UPI ID is attached. `hasId`: there is a
+  // UPI ID the reviewer may choose to attach (a person nobody matches, not a gateway).
+  type Pending = { key: string; action: 'add' | 'attach'; rowId: string; name: string; kind: string; partyName?: string; payments: number; gateway: boolean; hasId: boolean };
   function pendingAdds(): Pending[] {
     const out = new Map<string, Pending>();
     for (const u of all) {
       const p = u.party;
-      if (p.state !== 'missing' && p.state !== 'attach') continue;
+      if (p.state !== 'missing' && p.state !== 'attach' && p.state !== 'gateway') continue;
       const key = pendingKey(u);
       const hit = out.get(key);
       if (hit) hit.payments++;
-      else out.set(key, { key, action: p.state === 'missing' ? 'add' : 'attach', rowId: u.id, name: p.name ?? p.registeredName ?? '', kind: p.kind ?? 'vendor', partyName: p.partyName, payments: 1 });
+      else out.set(key, { key, action: p.state === 'attach' ? 'attach' : 'add', rowId: u.id, name: p.state === 'gateway' ? '' : (p.name ?? p.registeredName ?? ''), kind: p.kind ?? 'vendor', partyName: p.partyName, payments: 1, gateway: p.state === 'gateway', hasId: p.state === 'missing' && Boolean(p.registeredName) });
     }
     return [...out.values()];
   }
@@ -611,35 +620,52 @@ import '../../../styles/money.css';
   const partyDialog = $<HTMLDialogElement>('party-dialog');
   closeOnBackdrop(partyDialog);
   $('party-cancel').addEventListener('click', () => partyDialog.close());
-  let reviewing: { item: Pending; tick: HTMLInputElement; name: HTMLInputElement; kind: HTMLSelectElement }[] = [];
+  let reviewing: { item: Pending; tick: HTMLInputElement; name: HTMLInputElement; kind: HTMLSelectElement; attach: HTMLInputElement | null }[] = [];
   addPartiesButton.addEventListener('click', () => openReview(pendingAdds()));
-  // The review list for these people (everyone waiting, or the one a row's button names): tick, edit the name and kind, confirm.
+  // The review list for these people (everyone waiting, or the one a row's button names): select, edit the name and kind, confirm.
   function openReview(items: Pending[]) {
     if (!items.length) return;
-    const toAdd = items.filter((i) => i.action === 'add').length;
-    const toAttach = items.length - toAdd;
-    $('party-lead').textContent = `${toAdd ? `${plural(toAdd, 'person', 'people')} not in Parties will be added as unverified, with their UPI ID where there is one. ` : ''}${toAttach ? `${plural(toAttach, 'UPI ID')} will be added to a party already in Parties. ` : ''}Edit a name or kind, or untick anyone you do not want. Someone else verifies each UPI ID afterwards.`;
+    const toAdd = items.filter((i) => i.action === 'add' && !i.gateway).length;
+    const toAttach = items.filter((i) => i.action === 'attach').length;
+    const byGateway = items.filter((i) => i.gateway).length;
+    $('party-lead').textContent = `${toAdd ? `${plural(toAdd, 'person', 'people')} not in Parties will be added as unverified, with their UPI ID where there is one. ` : ''}${toAttach ? `${plural(toAttach, 'UPI ID')} will be added to a party already in Parties. ` : ''}${byGateway ? `${plural(byGateway, 'payment')} went through a payment gateway: type who it was for (no name is taken from the gateway, and its ID is not attached to anyone). ` : ''}Edit a name or kind, or deselect anyone you do not want. Someone else verifies each UPI ID afterwards.`;
     reviewing = items.map((item) => {
       const tick = el('input');
       tick.type = 'checkbox';
-      tick.checked = true;
-      tick.setAttribute('aria-label', item.action === 'add' ? `Add ${item.name}` : `Add the UPI ID to ${item.partyName}`);
+      tick.checked = !item.gateway; // a gateway's payee has no name yet: it is selected once one is typed
+      tick.setAttribute('aria-label', item.gateway ? 'Add the payee of this payment' : item.action === 'add' ? `Add ${item.name}` : `Add the UPI ID to ${item.partyName}`);
       const name = el('input');
       name.value = item.name;
       name.maxLength = 120;
-      name.setAttribute('aria-label', 'Name');
+      name.setAttribute('aria-label', item.gateway ? 'Who this payment was for' : 'Name');
+      if (item.gateway) {
+        name.placeholder = 'Who was this payment for?';
+        name.addEventListener('input', () => (tick.checked = name.value.trim().length >= 2));
+      }
       const kind = el('select');
       for (const [value, label] of PARTY_KINDS_SHOWN) kind.append(Object.assign(el('option', undefined, label), { value }));
       kind.value = item.kind;
       kind.setAttribute('aria-label', 'What kind of party');
-      return { item, tick, name, kind };
+      // A UPI ID can be left off: for an ID that is not really this person's.
+      let attach: HTMLInputElement | null = null;
+      if (item.hasId) {
+        attach = el('input');
+        attach.type = 'checkbox';
+        attach.checked = true;
+      }
+      return { item, tick, name, kind, attach };
     });
     $('party-list').replaceChildren(
       ...reviewing.map((r) => {
         const row = el('div', 'party-row');
-        const what = el('span', 'dim', `${plural(r.item.payments, 'payment')}`);
+        const what = el('span', 'dim', r.item.gateway ? 'one payment, via a gateway' : `${plural(r.item.payments, 'payment')}`);
         if (r.item.action === 'add') row.append(r.tick, r.name, r.kind, what);
         else row.append(r.tick, el('span', undefined, `Add the UPI ID of ${r.item.name} to ${r.item.partyName}`), what);
+        if (r.attach) {
+          const label = el('label', 'party-attach');
+          label.append(r.attach, el('span', undefined, 'Attach their UPI ID'));
+          row.append(label);
+        }
         return row;
       }),
     );
@@ -651,14 +677,19 @@ import '../../../styles/money.css';
     const chosen = reviewing.filter((r) => r.tick.checked);
     const err = $('party-error');
     if (!chosen.length) {
-      err.textContent = 'Tick at least one, or cancel.';
+      err.textContent = 'Select at least one, or cancel.';
+      err.hidden = false;
+      return;
+    }
+    if (chosen.some((r) => r.item.gateway && r.name.value.trim().length < 2)) {
+      err.textContent = 'Type who each payment through a payment gateway was for, or deselect it.';
       err.hidden = false;
       return;
     }
     const save = $<HTMLButtonElement>('party-save');
     save.disabled = true;
     try {
-      const items = chosen.map((r) => ({ rowId: r.item.rowId, ...(r.item.action === 'add' ? { name: r.name.value, kind: r.kind.value } : {}) }));
+      const items = chosen.map((r) => ({ rowId: r.item.rowId, ...(r.item.action === 'add' ? { name: r.name.value, kind: r.kind.value, ...(r.attach && !r.attach.checked ? { attachId: false } : {}) } : {}) }));
       const { status, data: res } = await staffFetch('/api/finance-admin/upi-lines/add-parties', { method: 'POST', body: { items } });
       if (status !== 200) throw new Error(res?.error ?? 'failed');
       partyDialog.close();
@@ -735,6 +766,7 @@ import '../../../styles/money.css';
       { id: 'p-missing', group: 'party', label: 'Not in Parties', test: (u: Upi) => u.party.state === 'missing' },
       { id: 'p-differs', group: 'party', label: 'Name differs', test: (u: Upi) => u.party.state === 'differs' },
       { id: 'p-attach', group: 'party', label: 'ID not on file', test: (u: Upi) => u.party.state === 'attach' },
+      { id: 'p-gateway', group: 'party', label: 'Payment gateway', test: (u: Upi) => u.party.state === 'gateway' },
       { id: 'p-in', group: 'party', label: 'In Parties', test: (u: Upi) => u.party.state === 'matches' || u.party.state === 'onfile' },
     ],
     groups: [
@@ -748,7 +780,7 @@ import '../../../styles/money.css';
     card: (u: Upi) => {
       const c = el('div', 'upi-card');
       const top = el('div', 'upi-card-top');
-      top.append(el('span', 'title', u.vpaName ?? u.counterparty ?? 'Unnamed payee'), moneyNode(u.amountPaise, amountKind(u.direction)));
+      top.append(el('span', 'title', (u.party.state === 'gateway' ? null : u.vpaName) ?? u.counterparty ?? 'Unnamed payee'), moneyNode(u.amountPaise, amountKind(u.direction)));
       c.append(top, el('div', 'sub', `${day(u.paidAt)}${u.time ? ` ${u.time}` : ''} · ${APP[u.app]} · ${paidByText(u)}`), el('span', `pill pill--${STATE[u.state].kind}`, STATE[u.state].text));
       const note = u.note ?? u.purpose ?? u.remark;
       if (note) c.append(el('div', 'sub', note));
@@ -950,6 +982,14 @@ import '../../../styles/money.css';
 
   .finance-upi .party-row > span:nth-child(2) {
     grid-column: 2 / 4;
+  }
+
+  .finance-upi .party-attach {
+    grid-column: 2 / -1;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--tvc-ink-soft);
   }
 
   /* A UPI ID not looked up yet: the words, and a small button to ask for just this one. */

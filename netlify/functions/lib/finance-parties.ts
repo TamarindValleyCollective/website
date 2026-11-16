@@ -34,6 +34,7 @@ import { fingerprintText } from '../../../scripts/lib/finance-party-import.mjs';
 import { postingStats, suggestChanges } from '../../../scripts/lib/finance-party-suggestions.mjs';
 import { rowsAll } from './finance-ledger';
 import { registeredNameOf } from './finance-vpa';
+import { isGatewayName, isGatewayVpa } from '../../../scripts/lib/finance-vpa.mjs';
 import { VOUCHER_MAX_BYTES, sniffVoucher } from '../../../scripts/lib/finance-requests.mjs';
 
 type Json = Record<string, any>;
@@ -440,7 +441,10 @@ export async function verifyPayeeAccount(req: Request, accountId: string): Promi
     let bankName: string | null = how.name ?? null;
     if (how.lookup) {
       if (stored.method !== 'upi' || typeof stored.upi !== 'string') return fail('The Razorpay lookup is for a UPI ID only.');
+      // A payment gateway's ID names the gateway, not a payee, so it verifies no one (and is not asked about: the call is billed).
+      if (isGatewayVpa(stored.upi)) return fail('This UPI ID belongs to a payment gateway, so it cannot verify a payee. Check these details another way.', 409);
       const found = await registeredNameOf(stored.upi.trim().toLowerCase(), staff.id);
+      if (found.name && isGatewayName(found.name)) return fail('This UPI ID belongs to a payment gateway, so it cannot verify a payee. Check these details another way.', 409);
       bankName = found.name ? found.name.slice(0, 120) : null;
       if (!bankName || bankName.length < 2) return fail(found.error ?? 'Razorpay gave no name for this UPI ID.', 409);
     }

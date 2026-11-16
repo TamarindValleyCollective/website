@@ -94,6 +94,17 @@ test('the name from a UPI lookup is matched to the register before a new party i
   assert.ok(s.reasons.some((r) => r.includes('registered to "TEST VENDOR WORKS"') && r.includes('Test Vendor Works')));
 });
 
+test('a payment gateway’s registered name is never suggested: the line stays as it was and a person names the payee', () => {
+  const l = line('UPI/P2A/123456789012/q000111222@ybl on PhonePe/Okbank/x');
+  const base = { line: l, upi: null, rules: [], parties: [{ id: 'P1', name: 'Razorpay Software', kind: 'vendor' }], categories: [], history: buildHistory([]) };
+  const s = suggest({ ...base, vpaNames: { 'q000111222@ybl': 'RAZORPAY SOFTWARE PRIVATE LIMITED' } });
+  assert.equal(s.partyId, null, 'not matched to a party of that name either');
+  assert.equal(s.newParty.name, 'q000111222@ybl on PhonePe', 'as before the lookup');
+  assert.equal(s.newParty.vpa, undefined, 'and no UPI ID carried to attach');
+  const byId = suggest({ ...base, line: line('UPI/P2A/123456789012/razorpay.shop@icici on PhonePe/Okbank/x'), vpaNames: { 'razorpay.shop@icici': 'Some Merchant Name' } });
+  assert.equal(byId.newParty.name, 'razorpay.shop@icici on PhonePe', 'an ID that starts with a gateway name is not trusted for a name either');
+});
+
 test('a lookup with no answer changes nothing, and a line without a UPI ID ignores the lookups', () => {
   const base = { rules: [], parties: [], categories: [], history: buildHistory([]), upi: null };
   assert.equal(suggest({ ...base, line: line('UPI/P2A/123456789012/q000111222@ybl on PhonePe/Okbank/x'), vpaNames: {} }).newParty.name, 'q000111222@ybl on PhonePe');

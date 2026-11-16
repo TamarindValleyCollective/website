@@ -562,6 +562,14 @@ Razorpay's validate-VPA call says whose ID it is, so the suggestion can be the p
   allows, so a name typed on the page cannot add someone the lookup has not named; a party with a similar name already is skipped with the reason.
   Rows for the same person are done once. Audit: `finance.upi_parties_added` with counts, plus the usual `finance.party_created` and
   `finance.payee_added` (ids and the method only). Nothing is auto-added: a person always reviews the list.
+- **Payment gateways are never used to name anyone.** An ID that belongs to a gateway or aggregator (Razorpay, PayU, Cashfree, BillDesk,
+  CCAvenue, PhonePe, ...) names the gateway, not whoever was paid through it, and one ID serves many merchants. `isGatewayName` / `isGatewayVpa` in
+  `finance-vpa.mjs` recognise one by the registered name Razorpay returns or by the ID starting with a gateway's name (a list to extend). For such
+  an ID: the ledger suggests **no name** (the line stays as it was); the UPI Party column says **Payment gateway** (no lookup is wasted on an ID
+  recognised by its own text); it is never matched to a party, even one named after the gateway; the reviewed add asks for a **name typed by hand**,
+  attaches **no UPI ID** to anyone, and treats **each payment on its own** (never merged by ID); and the Razorpay verify method refuses it. The
+  reviewed add also has an **Attach their UPI ID** option on every person it adds, for an ID that is not really theirs that the list does not
+  recognise (`attachId: false`). The Name column shows "Payment gateway" in place of the gateway's registered name.
 - **What changes in a suggestion:** with a name on file, the register is searched for it first (an exact or shortened match suggests that
   party, "The UPI ID is registered to "X", which matches Y in the register"); otherwise the name, in readable case, is the new party to add.
   With no name on file (the ID has no linked bank account, or does not exist) the line reads as before. Nothing is created or posted until a

@@ -13,6 +13,19 @@ export const VPA_LOOKUP_LIMIT = 25;
 // characters or a dot, so an e-mail address ("name@example.com") is not taken for one.
 const VPA = /(?<![\w.@-])([a-z0-9][a-z0-9._-]{1,255})@([a-z][a-z0-9]{1,63})(?![\w.-])/i;
 
+// A UPI ID that belongs to a payment gateway or aggregator (Razorpay, PayU, ...) names the gateway, not whoever was paid through it: one ID
+// serves many merchants. Such an ID must never supply a suggested name, be attached to a party as that party's payment detail, or verify a
+// payee; the person types the payee's name by hand. Detected by the registered name Razorpay gives back, or by the ID itself starting with a
+// gateway's name. A list to extend as new ones turn up; it is a safeguard, and the reviewed add also lets a person decline to attach an ID.
+const GATEWAY_NAME = /\b(razorpay|payu|cashfree|billdesk|bill desk|ccavenue|cc avenue|instamojo|juspay|easebuzz|pine ?labs|paytm payments|phonepe|bharatpe|stripe|paypal|worldline|atom technologies|mswipe)\b/i;
+const GATEWAY_ID = /^(razorpay|rzp[._-]|payu|cashfree|billdesk|ccavenue|instamojo|juspay|easebuzz|pinelabs)/i;
+
+/** True when a registered or shown name is a payment gateway's own. */
+export const isGatewayName = (name) => GATEWAY_NAME.test(String(name ?? ''));
+
+/** True when the UPI ID itself starts with a payment gateway's name. */
+export const isGatewayVpa = (vpa) => GATEWAY_ID.test(String(vpa ?? '').split('@')[0]);
+
 /** The UPI ID inside `text`, lowercased, or null. */
 export function vpaIn(text) {
   const m = VPA.exec(String(text ?? ''));

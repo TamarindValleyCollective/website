@@ -2,7 +2,17 @@
 // Every UPI ID and name here is invented.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { VPA_LOOKUP_LIMIT, isVpa, nameFromLookup, vpaFieldsFor, vpaIn, vpasToLookUp } from './finance-vpa.mjs';
+import { VPA_LOOKUP_LIMIT, isGatewayName, isGatewayVpa, isVpa, nameFromLookup, vpaFieldsFor, vpaIn, vpasToLookUp } from './finance-vpa.mjs';
+
+test('a payment gateway is told apart from a person, by the registered name or by the ID', () => {
+  for (const name of ['RAZORPAY SOFTWARE PRIVATE LIMITED', 'Razorpay', 'PayU Payments Pvt Ltd', 'CASHFREE PAYMENTS INDIA', 'BillDesk', 'Paytm Payments Bank', 'Pine Labs']) assert.equal(isGatewayName(name), true, name);
+  for (const name of ['Test Vendor Works', 'Razor Singh', 'Payal Menon', 'Green Nursery', '', null]) assert.equal(isGatewayName(name), false, String(name));
+  assert.equal(isGatewayVpa('razorpay.1234@icici'), true);
+  assert.equal(isGatewayVpa('rzp.shop@hdfcbank'), true);
+  assert.equal(isGatewayVpa('payu.abc@axisbank'), true);
+  assert.equal(isGatewayVpa('q000111222@ybl'), false);
+  assert.equal(isGatewayVpa('razor.singh@ybl'), false, 'a person whose handle merely starts like a gateway');
+});
 
 test('the UPI table columns: the ID is masked unless the viewer may see payee bank details, and the lookup state says what to do', () => {
   const answers = { names: { 'q000111222@ybl': 'Test Vendor Works' }, known: new Set(['q000111222@ybl', 'quiet.one@okaxis']) };

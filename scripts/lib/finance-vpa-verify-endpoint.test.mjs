@@ -308,6 +308,63 @@ test('a plain name from the app is added by name alone, with no UPI ID to attach
   assert.equal(db.fin_party_accounts.length, 0);
 });
 
+// ---- a payment gateway's UPI ID names the gateway, not the payee
+const GATEWAY = 'RAZORPAY SOFTWARE PRIVATE LIMITED';
+
+test('a gateway ID shows as a payment gateway, offers no name, and each payment is added by hand with no ID attached', async () => {
+  reset();
+  const op = sign('u1', 'user');
+  db.fin_upi_lines.push(upiRow('g1', `${VPA} on PhonePe`), upiRow('g2', `${VPA} on PhonePe`));
+  kept(VPA, GATEWAY);
+  assert.deepEqual(await partyOf(op, 'g1'), { state: 'gateway', registeredName: GATEWAY, kind: 'vendor' });
+  // No name typed: nothing is made up from the gateway.
+  const none = await (await addParties(op, [{ rowId: 'g1' }])).json();
+  assert.deepEqual([none.added, none.skipped], [0, 1]);
+  assert.match(none.reasons[0], /Type the name/);
+  assert.equal(db.fin_parties.length, 0);
+  // The gateway's own name is refused as the payee.
+  assert.equal((await (await addParties(op, [{ rowId: 'g1', name: 'Razorpay Software' }])).json()).added, 0);
+  // Two payments through the same gateway ID are two different payees: not merged.
+  const res = await (await addParties(op, [{ rowId: 'g1', name: 'First Real Payee' }, { rowId: 'g2', name: 'Second Real Payee', kind: 'other' }])).json();
+  assert.deepEqual([res.added, res.skipped], [2, 0]);
+  assert.deepEqual(db.fin_parties.map((p) => p.name), ['First Real Payee', 'Second Real Payee']);
+  assert.equal(db.fin_party_accounts.length, 0, 'the gateway’s UPI ID is attached to nobody');
+});
+
+test('a gateway ID is recognised by its own name before any lookup, so no billed call is wasted on it', async () => {
+  reset();
+  const op = sign('u1', 'user');
+  db.fin_upi_lines.push(upiRow('g1', 'razorpay.shop@icici on PhonePe'));
+  assert.equal((await partyOf(op, 'g1')).state, 'gateway');
+});
+
+test('a gateway ID cannot verify anyone, whether it was given to a party earlier or not', async () => {
+  reset();
+  const maker = sign('u1', 'admin');
+  await api(maker, '/parties', { method: 'POST', body: { name: 'Some Payee', kind: 'vendor', payee: { method: 'upi', upi: VPA } } });
+  kept(VPA, GATEWAY);
+  const res = await verify(sign('u2', 'admin'), db.fin_party_accounts[0].id);
+  assert.equal(res.status, 409);
+  assert.match((await res.json()).error, /payment gateway/i);
+  assert.equal(db.fin_party_accounts[0].status, 'unverified');
+  reset();
+  const maker2 = sign('u1', 'admin');
+  await api(maker2, '/parties', { method: 'POST', body: { name: 'Some Payee', kind: 'vendor', payee: { method: 'upi', upi: 'razorpay.shop@icici' } } });
+  const byId = await verify(sign('u2', 'admin'), db.fin_party_accounts[0].id);
+  assert.equal(byId.status, 409);
+  assert.deepEqual(razorpay.asked, [], 'recognised by the ID alone: Razorpay is not asked');
+});
+
+test('the reviewer can add someone without attaching their UPI ID', async () => {
+  reset();
+  const op = sign('u1', 'user');
+  db.fin_upi_lines.push(upiRow('r1', `${VPA} on PhonePe`));
+  kept(VPA, 'NEW PERSON NAME');
+  await addParties(op, [{ rowId: 'r1', attachId: false }]);
+  assert.equal(db.fin_parties[0].name, 'New Person Name');
+  assert.equal(db.fin_party_accounts.length, 0);
+});
+
 test('only someone who may allocate can add, nothing is sent without items, and the audit has counts only', async () => {
   reset();
   db.fin_upi_lines.push(upiRow('r1', `${VPA} on PhonePe`));

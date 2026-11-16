@@ -17,7 +17,7 @@ import { loadDelegateLinks, loadDelegates } from './finance-delegates';
 import { loadOperators } from './finance-upi-operators';
 import { readVpaAnswers } from './finance-vpa';
 import { payeeFieldVisibility } from '../../../scripts/lib/finance-access.mjs';
-import { vpaFieldsFor, vpaIn } from '../../../scripts/lib/finance-vpa.mjs';
+import { isGatewayName, vpaFieldsFor, vpaIn } from '../../../scripts/lib/finance-vpa.mjs';
 import { attribute, delegateLabel } from '../../../scripts/lib/finance-delegates.mjs';
 import { pairReversals } from '../../../scripts/lib/finance-reversals.mjs';
 import { CIRCLE_CAP_PAISE, bankWithoutUpiRow, circleMonths, matchState } from '../../../scripts/lib/finance-upi-circle.mjs';
@@ -160,13 +160,25 @@ export async function addUpiParties(req: Request): Promise<Response> {
       }
       const vpa = vpaIn(row.counterparty as string | null);
       const state = partyStateFor({ counterparty: row.counterparty as string | null, direction: row.direction as string }, ctx) as Json;
-      const key = vpa ?? `name:${String(row.counterparty ?? '').toLowerCase().replace(/\s+/g, ' ').trim()}`;
+      // A payment gateway's ID serves many merchants, so its rows are each their own person, never merged by ID.
+      const key = state.state === 'gateway' ? `row:${row.id}` : (vpa ?? `name:${String(row.counterparty ?? '').toLowerCase().replace(/\s+/g, ' ').trim()}`);
       if (done.has(key)) continue;
       done.add(key);
-      if (state.state === 'missing') {
+      const kind = typeof item.kind === 'string' && (PARTY_KINDS as string[]).includes(item.kind) && item.kind !== 'member' ? item.kind : (state.kind as string);
+      if (state.state === 'gateway') {
+        // The payee behind a gateway is unknown to us: a person types the name, and the gateway's ID is never attached to anyone.
+        const typed = typeof item.name === 'string' ? item.name.trim() : '';
+        if (typed.length < 2) skip('Type the name of whoever each payment through a payment gateway was for.');
+        else if (isGatewayName(typed)) skip('That is the payment gateway’s name, not the payee’s.');
+        else {
+          const made = await addUpiParty(auth.staff.id, { name: typed, kind, upi: null });
+          if ('error' in made) skip(made.error);
+          else result.added++;
+        }
+      } else if (state.state === 'missing') {
         const name = typeof item.name === 'string' && item.name.trim() ? item.name : (state.name as string);
-        const kind = typeof item.kind === 'string' && (PARTY_KINDS as string[]).includes(item.kind) && item.kind !== 'member' ? item.kind : (state.kind as string);
-        const made = await addUpiParty(auth.staff.id, { name, kind, upi: vpa });
+        // `attachId: false` adds the person without their UPI ID (the reviewer unticked it, for an ID that is not really theirs).
+        const made = await addUpiParty(auth.staff.id, { name, kind, upi: item.attachId === false ? null : vpa });
         if ('error' in made) skip(made.error);
         else result.added++;
       } else if (state.state === 'attach' && vpa) {

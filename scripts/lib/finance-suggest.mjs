@@ -11,7 +11,7 @@
 // of exactly one party; a name that is not in the register is offered as a NEW party for a person to add.
 import { applyRules } from './finance-rules.mjs';
 import { periodOf } from './finance-allocation.mjs';
-import { vpaIn } from './finance-vpa.mjs';
+import { isGatewayName, isGatewayVpa, vpaIn } from './finance-vpa.mjs';
 import { niceName } from './finance-party-suggestions.mjs';
 
 const BANK_WORDS = /bank|\bbk\b|^[A-Z]{4}0[A-Z0-9]{6}$|^(sbi|hdfc|icici|axis|ifsc)\b/i;
@@ -269,7 +269,8 @@ export function suggest({ line, upi, rules, parties, categories, history, reques
   // Who: the register by name. The Paytm counterparty is the cleanest name, then the one in the narration.
   // A line that names only a UPI ID is read by the name Razorpay gave for it, when a lookup has been made.
   const vpa = vpaIn(upi?.counterparty) ?? vpaIn(parsed.counterparty);
-  const vpaName = vpa && vpaNames[vpa] ? vpaNames[vpa] : null;
+  // Never a payment gateway's own name (Razorpay, PayU...): the ID serves many merchants, so it says nothing about who was paid.
+  const vpaName = vpa && vpaNames[vpa] && !isGatewayName(vpaNames[vpa]) && !isGatewayVpa(vpa) ? vpaNames[vpa] : null;
   let how = null;
   let viaVpa = false;
   for (const name of [upi?.counterparty, parsed.counterparty, vpaName]) {

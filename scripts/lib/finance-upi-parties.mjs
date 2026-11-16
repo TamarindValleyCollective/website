@@ -14,11 +14,13 @@
 //   missing   nobody matches: the person can be added to Parties
 //   lookup    a UPI ID not looked up yet
 //   noname    looked up, no name on file, no party holds the ID: cannot be added without a name
+//   gateway   the UPI ID belongs to a payment gateway (Razorpay, PayU...): it names the gateway, not who was paid, so no name is taken from it, it
+//             is never matched to a party or attached to one, and a person types the payee's name (one payment at a time: an ID serves many merchants)
 //   unnamed   no name and no UPI ID at all
 import { matchParty } from './finance-suggest.mjs';
 import { namesResemble } from './finance-parties.mjs';
 import { niceName } from './finance-party-suggestions.mjs';
-import { vpaIn } from './finance-vpa.mjs';
+import { isGatewayName, isGatewayVpa, vpaIn } from './finance-vpa.mjs';
 
 /**
  * @param {{ counterparty?: string | null, direction?: string }} row  a UPI row ("Paid to" text and its direction)
@@ -35,6 +37,8 @@ export function partyStateFor(row, ctx) {
   const vpa = vpaIn(row.counterparty);
   if (vpa) {
     const registered = ctx.answers.names[vpa] ?? null;
+    // A gateway's ID says nothing about the payee, even if a party was once given it: decided before any matching.
+    if (isGatewayVpa(vpa) || isGatewayName(registered)) return { state: 'gateway', registeredName: registered ?? undefined, kind };
     const fp = ctx.fingerprintOf(vpa);
     const held = fp ? ctx.byFingerprint.get(fp) : null;
     const party = held ? partyById(held.partyId) : null;
@@ -58,4 +62,4 @@ export function partyStateFor(row, ctx) {
 }
 
 /** What a reviewed add would do for a state, in words for the review list; null when nothing can be added from this row. */
-export const addActionFor = (state) => (state === 'missing' ? 'add' : state === 'attach' ? 'attach' : null);
+export const addActionFor = (state) => (state === 'missing' || state === 'gateway' ? 'add' : state === 'attach' ? 'attach' : null);

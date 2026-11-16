@@ -68,6 +68,18 @@ test('a plain name from the app is matched to the register by name, else offered
   assert.deepEqual(partyStateFor(row('Brand New Farm Shop'), ctx()), { state: 'missing', name: 'Brand New Farm Shop', kind: 'vendor', by: 'name' });
 });
 
+test('a payment gateway’s UPI ID takes no name, matches no party and is never attached: the payee is named by hand', () => {
+  const byName = partyStateFor(row(VPA), ctx(named('RAZORPAY SOFTWARE PRIVATE LIMITED')));
+  assert.deepEqual(byName, { state: 'gateway', registeredName: 'RAZORPAY SOFTWARE PRIVATE LIMITED', kind: 'vendor' });
+  assert.equal(addActionFor(byName.state), 'add', 'it can be added, with a name typed by hand');
+  const byId = partyStateFor(row('razorpay.shop@icici', 'credit'), ctx());
+  assert.deepEqual(byId, { state: 'gateway', registeredName: undefined, kind: 'customer' }, 'by the ID alone, before any lookup');
+  const matchedAnyway = partyStateFor(row(VPA), ctx({ parties: [...parties, { id: 'P3', name: 'Razorpay Software', kind: 'vendor' }], ...named('RAZORPAY SOFTWARE PRIVATE LIMITED') }));
+  assert.equal(matchedAnyway.state, 'gateway', 'not matched to a party named after the gateway');
+  const held = partyStateFor(row(VPA), ctx({ byFingerprint: holding('P1'), ...named('RAZORPAY SOFTWARE PRIVATE LIMITED') }));
+  assert.equal(held.state, 'gateway', 'even when a party was once given the ID');
+});
+
 test('a row with no name and no UPI ID is unnamed', () => {
   assert.deepEqual(partyStateFor(row(null), ctx()), { state: 'unnamed' });
   assert.deepEqual(partyStateFor(row('  '), ctx()), { state: 'unnamed' });
