@@ -390,9 +390,18 @@ import SignInGate from '../../../components/SignInGate.astro';
   // A party as it reads everywhere in the lines, posted, drafted or suggested: its kind, then its name (Vendors › Test Fuels), the way the party field
   // shows it once chosen. The searches and the Filter to / Group by items still use the plain name.
   const partyShown = (id: string | null | undefined) => (id ? suggestedPartyText({ party: partyById(id) }) || nameOf(data?.lookups.parties ?? [], id) : '');
+  // A unit's maintenance is usually paid by its one current resident: with a unit chosen and nobody else suggested, offer them (grey, accepted with the tick, never filled in).
+  const unitPayerOf = (l: Line): string => {
+    const x = describedWith(l);
+    if (!x.maintenance || !x.unit || l.suggestion?.newPartyName) return '';
+    const people = (data?.lookups.parties ?? []).filter((q) => q.household_id === x.unit && !q.former_since);
+    return people.length === 1 ? people[0].id : '';
+  };
   const ghostOf = (l: Line, f: Field): string => {
     const s = l.suggestion;
-    if (!s || draftOf(l.id)[f]) return '';
+    if (draftOf(l.id)[f]) return '';
+    if (f === 'partyId' && !s?.partyId) return unitPayerOf(l);
+    if (!s) return '';
     return f === 'categoryId' ? s.categoryId ?? '' : f === 'partyId' ? s.partyId ?? '' : s.nature ?? '';
   };
   const strangerOf = (l: Line) => (!draftOf(l.id).partyId && !l.suggestion?.partyId ? l.suggestion?.newPartyName ?? '' : '');
@@ -1827,7 +1836,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   });
 
   // ---- rows. Built once when they scroll into view; an edit changes the cells in place (fill), never the row element.
-  type Refs = { wordText: HTMLButtonElement; amountText: HTMLElement; catHint: HTMLElement; check: HTMLInputElement; narr: HTMLButtonElement; details: HTMLElement; cat: ComboEl; catTick: HTMLElement; catText: HTMLElement; party: ComboEl; partyTick: HTMLElement; partyText: HTMLElement; nature: HTMLInputElement; natureTick: HTMLElement; natureText: HTMLElement; pillSlot: HTMLElement; catPeek: HTMLButtonElement; partyPeek: HTMLButtonElement; natureCell: HTMLElement; meta: HTMLElement; originSlot: HTMLElement };
+  type Refs = { wordText: HTMLInputElement; wordRead: HTMLElement; amountText: HTMLElement; catHint: HTMLElement; check: HTMLInputElement; narr: HTMLButtonElement; details: HTMLElement; cat: ComboEl; catTick: HTMLElement; catText: HTMLElement; party: ComboEl; partyTick: HTMLElement; partyText: HTMLElement; nature: HTMLInputElement; natureTick: HTMLElement; natureText: HTMLElement; pillSlot: HTMLElement; catPeek: HTMLButtonElement; partyPeek: HTMLButtonElement; natureCell: HTMLElement; meta: HTMLElement; originSlot: HTMLElement };
   const refs = new WeakMap<HTMLElement, Refs>();
   const tick = (label: string, onClick: () => void) => h('button', { class: 'tick', text: '✓', attrs: { type: 'button', 'aria-label': label, title: label }, on: { click: onClick } });
   // Each cell says which column it belongs to, so a row's cells can be put in the layout's order (the page order is the Tab order).
@@ -1900,8 +1909,15 @@ import SignInGate from '../../../components/SignInGate.astro';
     nature.addEventListener('change', () => offerToOthers(l, 'nature', nature.value));
     const natureTick = tick(`Accept the suggested wording for ${who}`, () => edit(l, 'nature', ghostOf(l, 'nature')));
     const natureText = h('span', { class: 'lcell-text' });
-    // The wording column is a button on an editable line, so the mandatory answer is always visible and one click from being typed (it opens the line on the field).
-    const wordText = h('button', { class: 'peek wordtext', attrs: { type: 'button' } }) as HTMLButtonElement;
+    // The wording column is a real input on an editable line, so the mandatory answer is typed right in the row. It writes the same draft as the
+    // field under an open line (nature); posted lines show it as plain text.
+    const wordText = h('input', { class: 'cellfield wordtext', attrs: { type: 'text', placeholder: 'What it was for…', autocomplete: 'off' } }) as HTMLInputElement;
+    wordText.addEventListener('input', () => {
+      setDraft(l.id, { nature: wordText.value });
+      syncRow(l);
+    });
+    wordText.addEventListener('change', () => offerToOthers(l, 'nature', wordText.value));
+    const wordRead = h('span', { class: 'wordread' });
     const pillSlot = h('span', { class: 'pillslot' });
     const originSlot = h('span', { class: 'origin-text' });
     // A line at rest is one quiet row of text. The fields appear when the line is ticked, has something typed in it, or is opened
@@ -1923,7 +1939,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       cell('amount', '', amountText),
       cell('party', l.direction === 'debit' ? 'Paid to' : 'Received from', partyPeek, party, partyTick, partyText),
       cell('category', 'Category', catPeek, cat, catTick, catText, catHint),
-      cell('wording', '', wordText),
+      cell('wording', '', wordText, wordRead),
       cell('status', '', pillSlot),
       cell('narration', '', narr, details),
       meta,
@@ -1938,7 +1954,6 @@ import SignInGate from '../../../components/SignInGate.astro';
     };
     catPeek.addEventListener('click', () => open(cat));
     partyPeek.addEventListener('click', () => open(party));
-    wordText.addEventListener('click', () => open(nature));
     // Leaving the line closes it again, unless it has something in it that must stay visible.
     // (Checked a moment later: hiding the button that was clicked blurs it before the field takes focus.)
     rowEl.addEventListener('focusout', () => {
@@ -1956,7 +1971,7 @@ import SignInGate from '../../../components/SignInGate.astro';
         focusRow(index + 1, 'partyId');
       } else if (e.altKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
         e.preventDefault();
-        const field: Field = e.target === nature ? 'nature' : e.target === party.input ? 'partyId' : 'categoryId';
+        const field: Field = e.target === nature || e.target === wordText ? 'nature' : e.target === party.input ? 'partyId' : 'categoryId';
         const step = e.key === 'ArrowDown' ? 1 : -1;
         focusRow(index + step, field, step);
       } else if (e.key === 'Tab') {
@@ -1969,7 +1984,7 @@ import SignInGate from '../../../components/SignInGate.astro';
           e.preventDefault();
           goToLine(index - 1, 'end');
         }
-      } else if (e.key === 'Enter' && e.target === nature) {
+      } else if (e.key === 'Enter' && (e.target === nature || e.target === wordText)) {
         e.preventDefault();
         focusRow(index + 1, 'nature');
       }
@@ -1983,7 +1998,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       if (now.missingParty && now.state === 'allocated' && (e.target as HTMLElement).closest('.gcell--party')) editPartyInline(now, partyText);
       else void openLine(l.id);
     });
-    refs.set(rowEl, { wordText, amountText, catHint, check, narr, details, cat, catTick, catText, party, partyTick, partyText, nature, natureTick, natureText, pillSlot, catPeek, partyPeek, natureCell, meta, originSlot });
+    refs.set(rowEl, { wordText, wordRead, amountText, catHint, check, narr, details, cat, catTick, catText, party, partyTick, partyText, nature, natureTick, natureText, pillSlot, catPeek, partyPeek, natureCell, meta, originSlot });
     fill(rowEl, l);
     return rowEl;
   }
@@ -2104,7 +2119,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     // or on the kind that goes with the category (members for nothing in particular: the top, all kinds).
     r.cat.setStartAt(() => {
       const x = describedWith(l);
-      return x.maintenance && !x.unit ? [draftOf(l.id).categoryId] : null;
+      return x.maintenance && !x.unit ? [draftOf(l.id).categoryId, x.year] : null; // the payment date's financial year is already chosen: open on its units, the year level stays above to change it
     });
     r.party.setStartAt(() => {
       const x = describedWith(l);
@@ -2113,7 +2128,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     r.catHint.hidden = !(active && dw.maintenance && !dw.unit);
     if (!r.catHint.hidden) {
       const p = partyById(d.partyId);
-      r.catHint.textContent = dw.suggestedUnit ? `${p?.name ?? 'The payer'} lives in ${unitLabels().get(dw.suggestedUnit) ?? 'a unit'}, which is listed first. Choose the year, then the unit.` : 'Choose the year, then which unit’s maintenance this is. Whoever paid, it is booked to the unit.';
+      r.catHint.textContent = dw.suggestedUnit ? `${p?.name ?? 'The payer'} lives in ${unitLabels().get(dw.suggestedUnit) ?? 'a unit'}, which is listed first. Choose the unit.` : `Year ${dw.year} (from the payment date; go up a level to change it). Choose which unit’s maintenance this is. Whoever paid, it is booked to the unit.`;
     }
     for (const x of [r.catPeek, r.partyPeek]) x.hidden = !(can && !active);
     for (const x of [r.catText, r.partyText]) x.hidden = can;
@@ -2160,11 +2175,16 @@ import SignInGate from '../../../components/SignInGate.astro';
     // The What it was for column: what was typed or restored, or what was posted; failing both, the suggestion in grey.
     const wordsNow = can ? d.nature : l.allocation?.nature ?? '';
     const wordsGhost = can && !wordsNow ? ghostOf(l, 'nature') : '';
-    r.wordText.textContent = wordsNow || wordsGhost || (can ? 'What it was for…' : '');
-    r.wordText.classList.toggle('ghost', !wordsNow && can);
-    r.wordText.title = wordsNow || wordsGhost;
-    r.wordText.disabled = !can;
-    r.wordText.setAttribute('aria-label', `What it was for ${l.narration.slice(0, 40)}: ${wordsNow || wordsGhost || 'not filled in'}.${can ? ' Press to edit.' : ''}`);
+    r.wordText.hidden = !can;
+    if (can) {
+      if (r.wordText.value !== wordsNow && document.activeElement !== r.wordText) r.wordText.value = wordsNow;
+      r.wordText.placeholder = wordsGhost || 'What it was for…';
+      r.wordText.classList.toggle('ghost', Boolean(wordsGhost));
+      r.wordText.setAttribute('aria-label', `What it was for: ${l.narration.slice(0, 40)}`);
+    }
+    r.wordRead.hidden = can;
+    r.wordRead.textContent = wordsNow;
+    r.wordRead.title = wordsNow;
     // A line that cannot be edited in its row (partly allocated, flagged, or posted without a party) is finished or fixed in its sheet:
     // its pill opens it, so the way in is visible and not only the narration.
     const pillNode = pillFor(l);
@@ -2560,7 +2580,7 @@ import SignInGate from '../../../components/SignInGate.astro';
           if (pendingFocus.field === 'start' || pendingFocus.field === 'end') {
             const stops = [...el.querySelectorAll<HTMLElement>('input, select, button')].filter((x) => !(x as HTMLInputElement).disabled && !x.hidden && x.offsetParent !== null);
             (pendingFocus.field === 'start' ? stops[0] : stops[stops.length - 1])?.focus();
-          } else (pendingFocus.field === 'nature' ? r.nature : pendingFocus.field === 'partyId' ? r.party : r.cat).focus();
+          } else (pendingFocus.field === 'nature' ? (r.wordText.offsetParent !== null ? r.wordText : r.nature) : pendingFocus.field === 'partyId' ? r.party : r.cat).focus();
           pendingFocus = null;
         }
       }
@@ -4058,6 +4078,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   .ledger .gcell--category .cellfield,
   .ledger .gcell--party .cellfield,
   .ledger .gcell--nature .cellfield,
+  .ledger .gcell--wording .cellfield,
   .ledger .gcell--category .combo,
   .ledger .gcell--party .combo {
     flex: 1 1 0;
