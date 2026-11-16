@@ -2,7 +2,7 @@
 // The Ledger's search chips, Group By and Favorites. Every value here is invented.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildItems, cleanFavorite, optionCounts, passesChips, passesWords, periodOptions, readFavorites, withFavorite } from './finance-search.mjs';
+import { buildItems, cleanFavorite, groupLabel, optionCounts, passesChips, passesWords, periodOptions, readFavorites, withFavorite } from './finance-search.mjs';
 
 const line = (id, date, direction, amountPaise, over = {}) => ({
   id, date, direction, amountPaise, state: 'unallocated', review: false, missingParty: false,
@@ -89,6 +89,27 @@ test('group by month: newest first, with count and net (money in minus money out
   assert.equal(groups[1].netPaise, 250000 - 10000);
   assert.equal(visible.length, 4);
   assert.equal(items.length, 4 + 3);
+});
+
+test('group by year and by financial year (April to March): newest first, "FY" headings, and months nest inside', () => {
+  const dated = [
+    line('a', '2026-04-01', 'debit', 100),
+    line('b', '2026-03-31', 'debit', 200),
+    line('c', '2025-12-15', 'credit', 300),
+    line('d', '2025-04-02', 'debit', 400),
+    line('e', '2025-03-01', 'debit', 500),
+  ];
+  const heads = (fields) => buildItems(dated, fields, new Set(), (m) => `M ${m}`).items.filter((i) => i.kind === 'group').map((g) => [g.depth, g.label, g.count]);
+  assert.deepEqual(heads(['year']), [[0, '2026', 2], [0, '2025', 3]]);
+  assert.deepEqual(heads(['fy']), [[0, 'FY 2026-27', 1], [0, 'FY 2025-26', 3], [0, 'FY 2024-25', 1]], 'April 1 starts the new year; March 31 does not');
+  assert.deepEqual(heads(['fy', 'month']), [
+    [0, 'FY 2026-27', 1], [1, 'M 2026-04', 1],
+    [0, 'FY 2025-26', 3], [1, 'M 2026-03', 1], [1, 'M 2025-12', 1], [1, 'M 2025-04', 1],
+    [0, 'FY 2024-25', 1], [1, 'M 2025-03', 1],
+  ], 'newest year first, newest month first inside it');
+  assert.equal(groupLabel('fy'), 'Financial year');
+  assert.equal(groupLabel('year'), 'Year');
+  assert.deepEqual(cleanFavorite({ name: 'By year', groups: ['fy', 'month', 'bogus'] }).groups, ['fy', 'month']);
 });
 
 test('a collapsed group keeps its heading but hides its lines', () => {

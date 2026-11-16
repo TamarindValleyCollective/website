@@ -21,10 +21,11 @@
 // onUserFilter: () => void   called when the person changes a chip, the search, a column filter or the grouping (not by setRows or setChips)
 // column extras: sortable: false (no sort button), wrap: true (the cell may wrap, for long text), sticky: true (the last column stays
 //   in view while the table scrolls sideways, for a column of buttons)
-import { buildItems, cellFilterText, chipCounts, columnGroup, moveColumn, readFavorites, withFavorite } from './data-table.mjs';
+import { buildItems, chipCounts, columnGroup, moveColumn, readFavorites, withFavorite } from './data-table.mjs';
 import { createTableEngine } from './data-table-engine.mjs';
-import { h, rupees } from './finance-ui.mjs';
+import { h } from './finance-ui.mjs';
 import { iconButton } from './admin-icons.mjs';
+import { createFloatingMenu, leaveToBrowser, onLongPress, valueFilterItems } from './admin-menu.mjs';
 
 const tick = (checked, label, onChange) => {
   const box = h('input', { attrs: { type: 'checkbox', 'aria-label': label } });
@@ -72,7 +73,6 @@ export function createDataTable(opts) {
   const colsBtn = iconButton({ name: 'columns', label: 'Columns', tip: 'Choose columns', cls: 'dt-colsbtn', attrs: { 'aria-expanded': 'false', 'aria-controls': 'dt-colpop' } });
   const colsPop = h('div', { class: 'dt-colpop', attrs: { id: 'dt-colpop', hidden: '' } });
   const colsWrap = layoutKey ? h('div', { class: 'dt-cols' }, colsBtn, colsPop) : null;
-  const menu = h('div', { class: 'dt-menu', attrs: { role: 'menu', hidden: '' } });
   const errors = h('p', { class: 'dt-errors', attrs: { role: 'status', hidden: '' } });
   const headRow = h('tr', { class: 'dt-heads' });
   const filterRow = h('tr', { class: 'dt-filters' });
@@ -83,7 +83,7 @@ export function createDataTable(opts) {
   const foot = h('p', { class: 'dt-foot', attrs: { 'aria-live': 'polite' } });
   const bulkBar = h('div', { class: 'dt-bulk', attrs: { role: 'region', 'aria-label': 'Selected rows', hidden: '' } });
   root.classList.add('dt');
-  root.replaceChildren(h('div', { class: 'dt-tools' }, h('div', { class: 'dt-search' }, sbox, pop), colsWrap, toolbarEnd), errors, scroll, cards, emptyBox, foot, bulkBar, menu);
+  root.replaceChildren(h('div', { class: 'dt-tools' }, h('div', { class: 'dt-search' }, sbox, pop), colsWrap, toolbarEnd), errors, scroll, cards, emptyBox, foot, bulkBar);
 
   // ---- what is showing
   let shown = [];
@@ -269,47 +269,9 @@ export function createDataTable(opts) {
     );
   }
 
-  // ---- the cell and header menus: one floating menu, opened at a cell (right-click or long-press) or from a header's ▾
+  // ---- the cell and header menus (scripts/lib/admin-menu.mjs): opened at a cell (right-click or long press) or from a header's ▾
   const rowOf = new WeakMap();
-  let menuFrom = null;
-  function closeMenu(refocus = false) {
-    if (menu.hidden) return;
-    menu.hidden = true;
-    menu.replaceChildren();
-    for (const b of root.querySelectorAll('.dt-hmenu[aria-expanded="true"]')) b.setAttribute('aria-expanded', 'false');
-    if (refocus && menuFrom?.isConnected) menuFrom.focus();
-    menuFrom = null;
-  }
-  function openMenu(items, x, y, from = null) {
-    closeMenu();
-    const list = items.filter(Boolean);
-    if (!list.length) return;
-    menuFrom = from;
-    from?.setAttribute('aria-expanded', 'true');
-    menu.replaceChildren(...list.map((it) => h('button', { class: 'dt-menuitem', attrs: { type: 'button', role: 'menuitem', tabindex: '-1' }, text: it.label, on: { click: () => { closeMenu(); it.run(); } } })));
-    menu.hidden = false;
-    menu.style.left = `${Math.max(4, Math.min(x, window.innerWidth - menu.offsetWidth - 8))}px`;
-    menu.style.top = `${Math.max(4, Math.min(y, window.innerHeight - menu.offsetHeight - 8))}px`;
-    menu.firstChild.focus({ preventScroll: true });
-  }
-  menu.addEventListener('keydown', (e) => {
-    const items = [...menu.querySelectorAll('.dt-menuitem')];
-    const i = items.indexOf(document.activeElement);
-    if (e.key === 'ArrowDown') items[(i + 1) % items.length].focus();
-    else if (e.key === 'ArrowUp') items[(i - 1 + items.length) % items.length].focus();
-    else if (e.key === 'Home') items[0].focus();
-    else if (e.key === 'End') items.at(-1).focus();
-    else if (e.key === 'Escape') closeMenu(true);
-    else if (e.key === 'Tab') closeMenu();
-    else return;
-    if (e.key !== 'Tab') e.preventDefault();
-  });
-  // Captured, so the menu is closed before whatever was clicked (or right-clicked) acts; a click on the ▾ that opened it is that button's own business.
-  document.addEventListener('click', (e) => { const path = e.composedPath(); if (!menu.hidden && !path.includes(menu) && !(menuFrom && path.includes(menuFrom))) closeMenu(); }, true);
-  document.addEventListener('contextmenu', (e) => { if (!menu.hidden && !e.composedPath().includes(menu)) closeMenu(); }, true);
-  window.addEventListener('scroll', () => closeMenu(), true);
-  window.addEventListener('resize', () => closeMenu());
-
+  const menus = createFloatingMenu();
   const groupItem = (c) => {
     const id = `col:${c.id}`;
     if (!columnGroups.has(id)) return null;
@@ -327,46 +289,31 @@ export function createDataTable(opts) {
     if (!headerItems(c).length) return th;
     const btn = iconButton({ name: 'chevron', label: `${c.label} column menu`, tip: 'Column menu', cls: 'dt-hmenu', attrs: { 'aria-haspopup': 'menu', 'aria-expanded': 'false' } });
     btn.addEventListener('click', () => {
-      if (menuFrom === btn && !menu.hidden) return closeMenu(true);
+      if (menus.from() === btn && menus.isOpen()) return menus.close(true);
       const b = btn.getBoundingClientRect();
-      openMenu(headerItems(c), b.left, b.bottom + 4, btn);
+      menus.open(headerItems(c), b.left, b.bottom + 4, btn);
     });
     th.append(btn);
-    th.addEventListener('contextmenu', (e) => { e.preventDefault(); openMenu(headerItems(c), e.clientX, e.clientY, btn); });
+    th.addEventListener('contextmenu', (e) => { e.preventDefault(); menus.open(headerItems(c), e.clientX, e.clientY, btn); });
     return th;
   }
   // A cell: filter to or out of its value, or group by its column. Left to the browser over a link, a button, a field or selected text.
   function cellItems(c, r) {
     if (c.filter === 'none' || c.type === 'none') return [];
-    const type = c.type ?? 'text';
-    const raw = (c.filterValue ?? c.value)(r);
-    const text = type === 'amount' && raw != null && raw !== '' ? rupees(raw) : String(raw ?? '').trim();
-    const quoted = text ? `“${text.length > 28 ? `${text.slice(0, 27)}…` : text}”` : 'empty';
     const apply = (typed) => { onUserFilter(); state.cols[c.id] = typed; buildFilterRow(); render(); };
-    const to = cellFilterText(type, raw);
-    const out = cellFilterText(type, raw, true);
-    return [to ? { label: `Filter to ${quoted}`, run: () => apply(to) } : null, out ? { label: `Filter out ${quoted}`, run: () => apply(out) } : null, groupItem(c)].filter(Boolean);
+    return [...valueFilterItems({ type: c.type ?? 'text', raw: (c.filterValue ?? c.value)(r), apply }), groupItem(c)].filter(Boolean);
   }
   body.addEventListener('contextmenu', (e) => {
     const td = e.target.closest('td[data-col]');
-    // (A long press is our own event, not trusted: the finger has just selected a word, and that must not count.)
-    if (!td || e.target.closest('a, button, input, select, textarea, label') || (e.isTrusted && String(window.getSelection()).trim())) return;
+    if (!td || leaveToBrowser(e)) return;
     const r = rowOf.get(td.parentElement);
     const c = colById.get(td.dataset.col);
     const items = r && c ? cellItems(c, r) : [];
     if (!items.length) return;
     e.preventDefault();
-    openMenu(items, e.clientX, e.clientY);
+    menus.open(items, e.clientX, e.clientY);
   });
-  // iOS never sends a right-click, so a long press (a finger held still) opens the same menu.
-  let press = null;
-  body.addEventListener('pointerdown', (e) => {
-    if (e.pointerType !== 'touch') return;
-    const { clientX: x, clientY: y, target } = e;
-    clearTimeout(press);
-    press = setTimeout(() => { press = null; target.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: x, clientY: y })); }, 550);
-  });
-  for (const t of ['pointerup', 'pointercancel', 'pointermove']) body.addEventListener(t, () => { clearTimeout(press); press = null; });
+  onLongPress(body);
 
   // ---- the Columns menu: show or hide a column, move it earlier or later, put the default back
   let colsOpen = false;

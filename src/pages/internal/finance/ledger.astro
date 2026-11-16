@@ -13,6 +13,7 @@
 import StaffLayout from '../../../layouts/StaffLayout.astro';
 import '../../../styles/linked-picker.css';
 import '../../../styles/money.css';
+import '../../../styles/admin-controls.css';
 import SignInGate from '../../../components/SignInGate.astro';
 ---
 
@@ -53,7 +54,6 @@ import SignInGate from '../../../components/SignInGate.astro';
           <button type="button" id="cols-toggle" class="button button--outline button--small" aria-expanded="false" aria-controls="colmenu">Columns</button>
           <div id="colmenu" class="colmenu" hidden></div>
         </span>
-        <button type="button" id="colsearch-toggle" class="button button--outline button--small colsearch-toggle" aria-expanded="false">Column search</button>
         <button type="button" id="tips-toggle" class="button button--outline button--small" aria-expanded="false" aria-controls="tips">Help and shortcuts</button>
         <button type="button" id="accept-all" class="button button--outline" hidden>Fill in the confident suggestions</button>
         <button type="button" id="fill-parties" class="button button--outline button--small" hidden></button>
@@ -125,6 +125,8 @@ import SignInGate from '../../../components/SignInGate.astro';
   import { amountKind, button, categoryOptions, combo, h, input, labelled, niceDate, niceMonth, parseRupees, partyOptions, kindClass, moneyText, pill, present, rupees, unitOptions } from '../../../../scripts/lib/finance-ui.mjs';
   import { GROUP_FIELDS, buildItems, defaultUnitFor, financialYearOf, groupLabel, matchOptions, kindLabel, kindsInOrder, optionCounts, optionKeys, optionLabel, passesChips, passesWords, readFavorites, withFavorite } from '../../../../scripts/lib/finance-search.mjs';
   import { originLabel, ORIGINS } from '../../../../scripts/lib/finance-origin.mjs';
+  import { iconButton } from '../../../../scripts/lib/admin-icons.mjs';
+  import { createFloatingMenu, leaveToBrowser, onLongPress, valueFilterItems } from '../../../../scripts/lib/admin-menu.mjs';
   import { compareRows, describeCondition, matchAmount, matchDate, matchText, parseAmount, parseDate, parseText } from '../../../../scripts/lib/finance-columns.mjs';
 
   declare const google: any;
@@ -1469,6 +1471,65 @@ import SignInGate from '../../../components/SignInGate.astro';
   function renderHead() {
     keepFocus($('ghead'), () => renderHeadCells());
   }
+  // ---- the cell and header menus (scripts/lib/admin-menu.mjs). Filtering types the condition into the column's own search box under the heading,
+  // so it is visible there and can be taken off there; grouping is the same Group by as the search box's arrow, up to two levels.
+  const menus = createFloatingMenu();
+  const HEAD_GROUPS: Record<string, string[]> = { date: ['month', 'year', 'fy'], origin: ['origin'], category: ['category'], party: ['party'], status: ['status'] };
+  // A year or a financial year is coarser than a month, so it goes outside whatever is grouped already (Financial year, then Month); anything else
+  // goes inside, as in the search box's Group by. Two levels at most: the one that would be a third is let go.
+  const OUTER_FIELDS = new Set(['year', 'fy']);
+  const groupToggle = (field: string) => {
+    const i = groupBy.indexOf(field);
+    return {
+      label: i >= 0 ? `Stop grouping by ${groupLabel(field)}` : `Group by ${groupLabel(field)}`,
+      run: () => {
+        if (i >= 0) groupBy.splice(i, 1);
+        else if (OUTER_FIELDS.has(field)) {
+          groupBy.unshift(field);
+          if (groupBy.length > 2) groupBy.pop();
+        } else {
+          if (groupBy.length >= 2) groupBy.shift();
+          groupBy.push(field);
+        }
+        searchChange();
+      },
+    };
+  };
+  const headerMenuItems = (id: string) => [
+    { label: 'Sort ascending', run: () => table.setSorting([{ id, desc: false }]) },
+    { label: 'Sort descending', run: () => table.setSorting([{ id, desc: true }]) },
+    ...(HEAD_GROUPS[id] ?? []).map(groupToggle),
+  ];
+  // What each cell can be filtered on or grouped by. `column` is the heading it sits under (the wording cell is the "What it was for" column).
+  const CELLS: Record<string, { column: string; filter?: { id: string; type: string; raw: (l: Line) => unknown }; groups?: string[] }> = {
+    date: { column: 'date', filter: { id: 'date', type: 'date', raw: (l) => l.date }, groups: HEAD_GROUPS.date },
+    origin: { column: 'origin', filter: { id: 'origin', type: 'text', raw: (l) => originText(l) }, groups: HEAD_GROUPS.origin },
+    amount: { column: 'amount', filter: { id: 'amount', type: 'amount', raw: (l) => l.amountPaise } },
+    category: { column: 'category', filter: { id: 'category', type: 'text', raw: (l) => l.effective.category }, groups: HEAD_GROUPS.category },
+    party: { column: 'party', filter: { id: 'party', type: 'text', raw: (l) => l.effective.party }, groups: HEAD_GROUPS.party },
+    wording: { column: 'nature', filter: { id: 'nature', type: 'text', raw: (l) => l.effective.nature } },
+    narration: { column: 'narration', filter: { id: 'narration', type: 'text', raw: (l) => l.narration } },
+    status: { column: 'status', groups: HEAD_GROUPS.status },
+  };
+  $('grid').addEventListener('contextmenu', (e: MouseEvent) => {
+    if (phone.matches) return; // the cards of a phone have no cells to point at
+    const target = e.target as HTMLElement;
+    const cellEl = target.closest<HTMLElement>('.lrow .gcell');
+    const rowEl = target.closest<HTMLElement>('.lrow');
+    if (!cellEl || !rowEl || leaveToBrowser(e, '.peek, .datebtn, .narr')) return;
+    const kind = [...cellEl.classList].map((c) => /^gcell--(.+)$/.exec(c)?.[1]).find((k) => k && CELLS[k]);
+    const line = byId.get(rowEl.dataset.id ?? '');
+    const def = kind ? CELLS[kind] : undefined;
+    if (!def || !line || !columnShown(def.column)) return;
+    const items = [
+      ...(def.filter ? valueFilterItems({ type: def.filter.type, raw: def.filter.raw(line), apply: (typed: string) => { colFilters[def.filter!.id] = typed; renderFilterRow(); applyView(true); } }) : []),
+      ...(def.groups ?? []).map(groupToggle),
+    ];
+    if (!items.length) return;
+    e.preventDefault();
+    menus.open(items, e.clientX, e.clientY);
+  });
+  onLongPress($('grid'), { accept: () => !phone.matches });
   // Select all: every line that can be filled in here and is showing (not those inside a closed group). Pressing it again clears them.
   const selectAllBox = h('input', { attrs: { type: 'checkbox' } }) as HTMLInputElement;
   const selectAllBtn = $('select-all-btn');
@@ -1509,6 +1570,17 @@ import SignInGate from '../../../components/SignInGate.astro';
           const b = h('button', { class: 'sorthead', text: `${label}${sorted === 'asc' ? ' ▲' : sorted === 'desc' ? ' ▼' : ' ↕'}`, attrs: { type: 'button', 'data-key': id } });
           b.addEventListener('click', () => header.column.toggleSorting());
           cellEl.append(b);
+          const btn = iconButton({ name: 'chevron', label: `${label} column menu`, tip: 'Column menu', cls: 'hmenu', attrs: { 'aria-haspopup': 'menu', 'aria-expanded': 'false', 'data-key': `hmenu:${id}` } });
+          btn.addEventListener('click', () => {
+            if (menus.from() === btn && menus.isOpen()) return menus.close(true);
+            const r = btn.getBoundingClientRect();
+            menus.open(headerMenuItems(id), r.left, r.bottom + 4, btn);
+          });
+          cellEl.append(btn);
+          cellEl.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            menus.open(headerMenuItems(id), e.clientX, e.clientY, btn);
+          });
         } else if (id === 'select') cellEl.append(selectAllBox);
         else cellEl.textContent = label;
         return cellEl;
@@ -1523,6 +1595,7 @@ import SignInGate from '../../../components/SignInGate.astro';
         const cellEl = h('span', { class: `gcell gcell--${columnClass(id)}`, attrs: { role: 'cell' } });
         if (SORTABLE.has(id) && PARSERS[id]) {
           const box = h('input', { class: 'colfilter', attrs: { 'data-col': id, type: 'search', title: id === 'amount' ? 'In rupees: 2500, >1000, <=500, 1000..3000, !=295' : id === 'date' ? 'Try: 2026-10, oct, >2026-10-15, 2026-10-01..2026-10-31' : 'Words match anywhere. = exact, != not, ^ starts with, ! does not contain. See Search tips.', placeholder: id === 'amount' ? 'e.g. >1000' : id === 'date' ? 'e.g. 2026-10' : 'Search', 'aria-label': `Search the ${String(header.column.columnDef.header)} column`, autocomplete: 'off' } }) as HTMLInputElement;
+          box.value = colFilters[id] ?? ''; // rebuilt when a column is toggled: the filter in force stays in its box
           let timer: ReturnType<typeof setTimeout>;
           box.addEventListener('input', () => {
             clearTimeout(timer);
@@ -1601,11 +1674,6 @@ import SignInGate from '../../../components/SignInGate.astro';
   });
   document.querySelector('.ledger')!.classList.toggle('show-narr', showNarration);
   document.querySelector('.ledger')!.classList.toggle('show-word', showWording);
-  $('colsearch-toggle').addEventListener('click', () => {
-    const open = !document.querySelector('.ledger')!.classList.contains('show-colsearch');
-    document.querySelector('.ledger')!.classList.toggle('show-colsearch', open);
-    $('colsearch-toggle').setAttribute('aria-expanded', String(open));
-  });
   $('tips-toggle').addEventListener('click', () => {
     const open = $('tips').hidden;
     $('tips').hidden = !open;
@@ -3284,6 +3352,35 @@ import SignInGate from '../../../components/SignInGate.astro';
     align-items: center;
   }
 
+  /* The ▾ in a heading (Sort, Group by): quiet until the heading is hovered or focused, and always there on a touch screen. */
+  /* The Date heading is only 76px wide: its words, its sort arrow and the ▾ stay on one line. */
+  .ledger .ghead .gcell {
+    white-space: nowrap;
+  }
+
+  .ledger .ghead .hmenu {
+    width: 20px;
+    height: 24px;
+    margin-inline-start: 0;
+    border-color: transparent;
+    background: none;
+    color: var(--tvc-ink-soft);
+    vertical-align: middle;
+    opacity: 0;
+  }
+
+  .ledger .ghead .gcell:hover .hmenu,
+  .ledger .ghead .gcell:focus-within .hmenu,
+  .ledger .ghead .hmenu[aria-expanded='true'] {
+    opacity: 1;
+  }
+
+  @media (pointer: coarse) {
+    .ledger .ghead .hmenu {
+      opacity: 1;
+    }
+  }
+
   .ledger .sorthead:focus-visible {
     outline: 2px solid var(--tvc-orange);
     outline-offset: 2px;
@@ -3794,10 +3891,6 @@ import SignInGate from '../../../components/SignInGate.astro';
     display: none;
   }
 
-  .ledger:not(.show-colsearch) .gfilter {
-    display: none;
-  }
-
   .ledger .lcell-text {
     display: block;
     min-width: 0;
@@ -4077,10 +4170,6 @@ import SignInGate from '../../../components/SignInGate.astro';
 
     .ledger .sortpick {
       display: inline-flex;
-    }
-
-    main .ledger.section .colsearch-toggle {
-      display: none;
     }
 
     main .ledger.section .select-all-btn:not([hidden]) {

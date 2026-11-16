@@ -1,0 +1,84 @@
+/* Controls shared by the shared admin tables and the Ledger: the icon-only button (scripts/lib/admin-icons.mjs) and the floating cell and
+   header menu (scripts/lib/admin-menu.mjs). Colors are --tvc-* tokens only. */
+
+/* An icon-only button (scripts/lib/admin-icons.mjs): for a familiar, repeated action. It always has an aria-label and a tooltip. */
+.dt .icon-btn,
+.ledger .icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--tvc-line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--tvc-white);
+  color: var(--tvc-ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+.dt .icon-btn:hover,
+.ledger .icon-btn:hover {
+  background: var(--tvc-cream);
+}
+
+.dt .icon-btn:focus-visible,
+.ledger .icon-btn:focus-visible {
+  outline: 2px solid var(--tvc-green);
+  outline-offset: 2px;
+}
+
+.dt .icon-btn[aria-expanded='true'],
+.ledger .icon-btn[aria-expanded='true'] {
+  background: var(--tvc-green-tint);
+  border-color: var(--tvc-green);
+}
+
+@media (pointer: coarse) {
+  .dt .icon-btn:not(.dt-hmenu),
+  .ledger .icon-btn:not(.hmenu) {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+/* The cell and header menu: one floating list at the pointer (scripts/lib/admin-menu.mjs). */
+.admin-menu {
+  position: fixed;
+  z-index: 40;
+  min-width: 200px;
+  max-width: min(320px, 90vw);
+  padding: 4px;
+  border: 1px solid var(--tvc-line-strong);
+  border-radius: var(--radius);
+  background: var(--tvc-white);
+  box-shadow: 0 10px 30px rgb(0 0 0 / 14%);
+}
+
+.admin-menu[hidden] {
+  display: none;
+}
+
+.admin-menuitem {
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--tvc-ink);
+  font: inherit;
+  text-align: start;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.admin-menuitem:hover,
+.admin-menuitem:focus-visible {
+  background: var(--tvc-cream);
+  outline: none;
+}
+
+.admin-menuitem:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--tvc-green);
+}
