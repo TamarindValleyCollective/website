@@ -298,6 +298,35 @@ test('payments of one UPI ID share a group number the page can count by, and the
   assert.ok([rows.a1.vpaGroup, rows.b1.vpaGroup].every((g) => Number.isInteger(g) && g >= 1 && g <= 2), 'small counting numbers, not a hash of the ID');
 });
 
+test('a UPI row carries its bank icon and a summary of the ledger line it is joined to (masked like the rest); an unjoined row has no ledger summary', async () => {
+  reset();
+  db.fin_bank_accounts[0].badge_key = 'axis';
+  db.fin_source_badges = [{ key: 'axis', label: 'Axis Bank', short_label: 'Axis', kind: 'bank', logo_url: 'https://media.test/axis.png', active: true }];
+  db.fin_parties = [{ id: ID(21), name: 'Meera Nursery', kind: 'vendor', active: true, merged_into: null }];
+  db.fin_allocations = [{ id: ID(41), bank_line_id: L_VPA, category_id: ID(11), party_id: ID(21), amount_paise: 35400, posted_at: '2026-11-04T00:00:00Z' }];
+  db.fin_upi_lines.push({ ...upiRow('j1', `${VPA_A} on PhonePe`), bank_line_id: L_VPA, bank_account_id: ID(2) }, upiRow('j2', VPA_B));
+  const admin = await upiRows(sign('admin'));
+  assert.deepEqual(admin.badges.axis, { label: 'Axis Bank', short: 'Axis', kind: 'bank', logoUrl: 'https://media.test/axis.png' });
+  const joined = byId(admin).j1;
+  assert.equal(joined.bankBadge, 'axis');
+  assert.deepEqual([joined.ledger.id, joined.ledger.status, joined.ledger.category, joined.ledger.party, joined.ledger.parts, joined.ledger.amountPaise], [L_VPA, 'posted', 'Materials and supplies', 'Meera Nursery', 1, 35400]);
+  assert.ok(joined.ledger.narration.includes('q000111222'), 'the narration in full for a holder of verify-payee');
+  assert.equal(byId(admin).j2.ledger, null, 'a payment not joined to a bank line has no ledger line to open (its icon is shown only when there is one)');
+  const viewer = byId(await upiRows(sign('user'))).j1;
+  assert.ok(!JSON.stringify(viewer.ledger).includes('q000111222'), 'and masked for anyone else');
+  assert.ok(viewer.ledger.narration.includes('q••••@ybl'));
+});
+
+test('a joined line nobody has posted yet says so, and a split reports its parts', async () => {
+  reset();
+  db.fin_upi_lines.push({ ...upiRow('j1', 'Green Nursery'), bank_line_id: L_VPA });
+  const open = byId(await upiRows(sign('admin'))).j1.ledger;
+  assert.deepEqual([open.status, open.category, open.party, open.parts], ['open', null, null, 0]);
+  db.fin_allocations = [{ id: ID(41), bank_line_id: L_VPA, category_id: ID(11), party_id: null, amount_paise: 20000, posted_at: '2026-11-04T00:00:00Z' }, { id: ID(42), bank_line_id: L_VPA, category_id: ID(11), party_id: null, amount_paise: 15400, posted_at: '2026-11-04T00:00:00Z' }];
+  const split = byId(await upiRows(sign('admin'))).j1.ledger;
+  assert.deepEqual([split.status, split.parts], ['posted', 2]);
+});
+
 test('a lookup by row id skips a gateway’s ID without a call, and refuses a body that names nothing', async () => {
   reset();
   db.fin_upi_lines.push(upiRow('g1', 'razorpay.shop@icici on PhonePe'), upiRow('r1', 'fresh.id@paytm'));

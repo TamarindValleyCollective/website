@@ -564,6 +564,15 @@ Razorpay's validate-VPA call says whose ID it is, so the suggestion can be the p
   changes the register, `.button--soft-neutral` for Look up, which only asks Razorpay), 24px, words kept, icons from `admin-icons.mjs`. Cells do not
   wrap, so every row keeps one height. A phone card shows the same link or button under the payment. Checked by rendering the page with mocked data
   in headless Chrome, light, dark and phone width.
+- **The UPI table and the ledger refer to each other the same way: an icon that opens a popup, never a bare reference number.** On the UPI page the
+  **Ledger** column (it was Reference) shows the **bank's icon** (the account's `badge_key`, from `fin_source_badges`) for a payment joined to a bank
+  line, a button that opens a popup about that line (its date and account, the bank narration, whether and how it was posted: category and party,
+  "and N more parts" for a split, or "Not allocated yet", and the UPI reference) with **Open in Ledger** (`/internal/finance/ledger/?line=`); an unjoined
+  payment shows a dash. The plain reference number moves to a **Reference** column (hidden until turned on in Columns) and stays searchable and
+  filterable. On the ledger the **Paytm or BHIM icon** on a line that has its UPI record opens a popup about that record (app, paid to, remark, who
+  paid, reference, note, what it was for) with **Open in UPI table** (`/internal/finance/upi/?ref=`); the line sheet keeps its own link too. The UPI
+  endpoint returns each row's `bankBadge` and a `ledger` summary (read for the joined lines only) and a `badges` map; the narration in the summary is
+  masked by the same rule as everything else, and the ledger popup shows only what the ledger already holds.
 - **The UPI table's Party column says whether each person is in Parties** (`scripts/lib/finance-upi-parties.mjs`, `partyStateFor`, tested in
   `finance-upi-parties.test.mjs` and `finance-vpa-verify-endpoint.test.mjs`). The match is by **UPI ID first** (a party holding that ID, compared by
   the keyed fingerprint, never decrypted), the name only checking it. The states below are what the filter chips, Group by and search use; the cell

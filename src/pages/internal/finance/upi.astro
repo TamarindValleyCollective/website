@@ -126,6 +126,18 @@ import '../../../styles/money.css';
       </div>
     </dialog>
 
+    <dialog id="ledger-peek" class="sheet delegate-sheet" aria-labelledby="ledger-peek-title">
+      <div class="delegate-form">
+        <h2 id="ledger-peek-title"></h2>
+        <p class="sheet-text" id="ledger-peek-sub"></p>
+        <dl class="detail-list" id="ledger-peek-list"></dl>
+        <div class="sheet-actions">
+          <a class="button button--outline" id="ledger-peek-open" href="/internal/finance/ledger/">Open in Ledger</a>
+          <button type="button" class="button" id="ledger-peek-close">Close</button>
+        </div>
+      </div>
+    </dialog>
+
     <dialog id="party-dialog" class="sheet delegate-sheet party-sheet" aria-labelledby="party-title">
       <form id="party-form" class="delegate-form" novalidate>
         <h2 id="party-title">Add to Parties</h2>
@@ -171,7 +183,10 @@ import '../../../styles/money.css';
 
   // Whether the person behind a payment is in the Parties register (the server works it out: scripts/lib/finance-upi-parties.mjs).
   type PartyState = { state: 'matches' | 'onfile' | 'differs' | 'attach' | 'missing' | 'gateway' | 'lookup' | 'noname' | 'unnamed'; partyId?: string; partyName?: string; partyKind?: string | null; accountStatus?: string | null; verifiedName?: string | null; registeredName?: string; name?: string; kind?: string; by?: string };
-  type Upi = { operatorId?: string | null; id: string; paidAt: string; time: string | null; app: 'bhim' | 'paytm'; counterparty: string | null; upiId: string | null; vpaName: string | null; vpaState: 'named' | 'asked' | 'new' | null; vpaGroup: number | null; party: PartyState; remark: string | null; amountPaise: number; direction: 'debit' | 'credit'; isCircle: boolean; upiRef: string; note: string | null; purpose: string | null; bankLineId: string | null; account: string | null; delegateId: string | null; delegate: string | null; delegateHow: 'assigned' | 'auto' | 'ambiguous' | 'none' | null; state: 'matched' | 'waiting' | 'unmatched' };
+  // The ledger line a payment is joined to, as much as the popup behind the bank's icon shows (the server works it out; the narration is masked for some viewers).
+  type LedgerSummary = { id: string; date: string; direction: 'debit' | 'credit'; amountPaise: number; narration: string; status: 'posted' | 'open'; parts: number; category: string | null; party: string | null };
+  type Badge = { label: string; short: string | null; kind: string | null; logoUrl: string | null };
+  type Upi = { operatorId?: string | null; id: string; paidAt: string; time: string | null; app: 'bhim' | 'paytm'; counterparty: string | null; upiId: string | null; vpaName: string | null; vpaState: 'named' | 'asked' | 'new' | null; vpaGroup: number | null; party: PartyState; bankBadge: string | null; ledger: LedgerSummary | null; remark: string | null; amountPaise: number; direction: 'debit' | 'credit'; isCircle: boolean; upiRef: string; note: string | null; purpose: string | null; bankLineId: string | null; account: string | null; delegateId: string | null; delegate: string | null; delegateHow: 'assigned' | 'auto' | 'ambiguous' | 'none' | null; state: 'matched' | 'waiting' | 'unmatched' };
   type Delegate = { id: string; identifier: string; displayName: string | null; activeFrom: string; activeTo: string | null; capPaise: number | null; operatorId?: string | null };
   type Operator = { id: string; name: string };
   let all: Upi[] = [];
@@ -181,6 +196,7 @@ import '../../../styles/money.css';
   let operators: Operator[] = []; // whose UPI a payment went through (migration 0101); empty until it is applied
   const operatorName = (id?: string | null) => operators.find((o) => o.id === id)?.name ?? null;
   let defaultCapPaise = 0;
+  let badges: Record<string, Badge> = {}; // the bank's and the app's small icons (fin_source_badges)
   // A link from the ledger arrives as ?ref=<UPI reference>: the table opens filtered to that one payment.
   const askedRef = new URLSearchParams(location.search).get('ref')?.replace(/\D/g, '').slice(0, 12) ?? '';
 
@@ -642,6 +658,47 @@ import '../../../styles/money.css';
     detailDialog.showModal();
   }
 
+  // The cross-reference to the ledger: the bank's icon (a button) opens a popup about the ledger line this payment is joined to, with a link to open it there.
+  const ledgerDialog = $<HTMLDialogElement>('ledger-peek');
+  closeOnBackdrop(ledgerDialog);
+  let ledgerOpener: HTMLElement | null = null;
+  ledgerDialog.addEventListener('close', () => ledgerOpener?.focus());
+  $('ledger-peek-close').addEventListener('click', () => ledgerDialog.close());
+  function bankIcon(u: Upi): HTMLElement {
+    const b = badges[u.bankBadge ?? 'bank'];
+    const label = b?.label ?? 'Bank';
+    const btn = el('button', `badge badge--${b?.kind ?? 'bank'} ${b?.logoUrl ? 'badge--icon' : 'badge--text'}`);
+    btn.type = 'button';
+    btn.title = `${label}: see the ledger line for this payment`;
+    btn.setAttribute('aria-label', `${label}: see the ledger line for this payment`);
+    btn.setAttribute('aria-haspopup', 'dialog');
+    if (b?.logoUrl) {
+      const img = el('img');
+      img.src = b.logoUrl;
+      img.alt = '';
+      img.width = 17;
+      img.height = 17;
+      btn.append(img);
+    } else btn.append(document.createTextNode(b?.short ?? label));
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openLedgerPeek(u, btn);
+    });
+    return btn;
+  }
+  function openLedgerPeek(u: Upi, trigger: HTMLElement) {
+    const l = u.ledger;
+    if (!l) return;
+    ledgerOpener = trigger;
+    $('ledger-peek-title').textContent = `Ledger line of ${day(l.date)}`;
+    $('ledger-peek-sub').textContent = [u.account, `${l.direction === 'debit' ? '−' : '+'}${rupees(l.amountPaise)}`].filter(Boolean).join(' · ');
+    const posted = l.status === 'posted' ? `${[l.category, l.party].filter(Boolean).join(' · ') || 'Posted'}${l.parts > 1 ? ` (and ${l.parts - 1} more part${l.parts === 2 ? '' : 's'})` : ''}` : 'Not allocated yet';
+    const rows: [string, string][] = [['Bank narration', l.narration], ['In the ledger as', posted], ['UPI reference', u.upiRef]];
+    $('ledger-peek-list').replaceChildren(...rows.flatMap(([k, v]) => [el('dt', undefined, k), el('dd', undefined, v)]));
+    $<HTMLAnchorElement>('ledger-peek-open').href = `/internal/finance/ledger/?line=${l.id}`;
+    ledgerDialog.showModal();
+  }
+
   // One entry per person, not per payment, and per UPI ID (two IDs are two entries even for one name): people who are not in Parties (to add) and IDs that
   // belong to a party already there (to attach). A gateway's ID serves many merchants, so each of its payments is its own entry.
   const pendingKey = (u: Upi) => (u.party.state === 'gateway' ? `gateway:${u.id}` : `${u.party.state}:${u.vpaGroup !== null ? `id${u.vpaGroup}` : (u.party.name ?? u.party.partyId ?? '').toLowerCase()}`);
@@ -811,17 +868,10 @@ import '../../../styles/money.css';
       { id: 'account', label: 'Account', value: (u: Upi) => u.account ?? '', render: (u: Upi) => (u.account ? u.account : el('span', 'dim', 'Not known yet')) },
       { id: 'note', label: 'Note', value: (u: Upi) => u.note ?? u.purpose ?? u.remark ?? '', render: (u: Upi) => noteCell(u) },
       { id: 'state', label: 'Bank statement', value: (u: Upi) => STATE[u.state].text, render: (u: Upi) => el('span', `pill pill--${STATE[u.state].kind}`, STATE[u.state].text) },
-      {
-        id: 'ref', label: 'Reference', value: (u: Upi) => u.upiRef,
-        // The reference is the link: a payment joined to a bank line opens that line in the ledger.
-        render: (u: Upi) => {
-          if (!u.bankLineId) return u.upiRef;
-          const link = el('a', 'ref-link', u.upiRef);
-          link.href = `/internal/finance/ledger/?line=${u.bankLineId}`;
-          link.title = 'Open this payment in the ledger';
-          return link;
-        },
-      },
+      // Ledger: a payment joined to a bank line shows that bank's icon, a button that opens a popup about the ledger line (and a link to it). The same
+      // cross-reference as the party's name. Filtering and search still use the reference number, which the next column shows plainly.
+      { id: 'ref', label: 'Ledger', value: (u: Upi) => u.upiRef, render: (u: Upi) => (u.ledger ? bankIcon(u) : el('span', 'dim', '–')) },
+      { id: 'refNo', label: 'Reference', hiddenByDefault: true, value: (u: Upi) => u.upiRef },
     ],
     // Chips of one group are alternatives (BHIM or Paytm); different groups all have to hold.
     filters: [
@@ -860,6 +910,7 @@ import '../../../styles/money.css';
       const next = el('div', 'upi-card-next');
       const pc = partyCell(u);
       if (typeof pc !== 'string') next.append(pc);
+      if (u.ledger) next.append(bankIcon(u));
       if (u.party.state === 'lookup') {
         const n = nameCell(u);
         if (typeof n !== 'string') next.append(n);
@@ -887,6 +938,7 @@ import '../../../styles/money.css';
       canConfigure = Boolean(data.canConfigure);
       delegates = data.delegates ?? [];
       operators = data.operators ?? [];
+      badges = data.badges ?? {};
       defaultCapPaise = data.capPaise;
       renderMonths(data);
       renderOperators();
@@ -1130,6 +1182,50 @@ import '../../../styles/money.css';
   .finance-upi .upi-card-next .party-cell {
     flex-wrap: wrap;
     white-space: normal;
+  }
+
+  /* The bank's (or the app's) icon, a small circle as in a payment app's receipt, here a button that opens the ledger line; same look as the ledger's badges. A
+     bank with no logo yet shows its short name in quiet text. */
+  .finance-upi .badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--tvc-ink);
+    font: inherit;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    line-height: 1.4;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  .finance-upi .badge--icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--tvc-white);
+    box-shadow: 0 0 0 1px var(--tvc-line);
+  }
+
+  .finance-upi .badge--text {
+    padding: 0 4px;
+    color: var(--tvc-ink-soft);
+    text-decoration: underline;
+  }
+
+  .finance-upi .badge--icon:hover,
+  .finance-upi .badge--icon:focus-visible {
+    box-shadow: 0 0 0 2px var(--tvc-green);
+  }
+
+  .finance-upi .badge img {
+    display: block;
+    width: 17px;
+    height: 17px;
+    object-fit: contain;
   }
 
   /* A party's name is a link to its details; one whose name differs from what Razorpay says is the same link in amber, with a mark (never colour alone). */

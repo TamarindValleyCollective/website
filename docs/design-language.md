@@ -83,6 +83,9 @@ disagree `global.css` wins. In any `.astro` or `.css` file:
   words kept (adding someone to Parties is consequential) with a 12px icon from `admin-icons.mjs` as a helper (`icon('plus', 12)`). A cell holds one thing: a
   record's name as a link to its details, or just the button; never a label that says what the button already says. Never a pill for a status the cell's own
   words or button already show: pills are for a status that has no other place to be said.
+- **Cross-references between tables.** A record that lives in another table is shown as a small thing that opens a **popup** about it, with a button to open
+  it there: a party's name (a link), the bank's or the app's icon (a button, the same 24px circle as the ledger's source badges, with the name as its tooltip and
+  accessible name). Never the bare reference number as the link text: the number is shown in the popup, in its own column that is hidden by default, and in search.
 - **Icon buttons.** An icon replaces the words only for a familiar action repeated down a table or in a toolbar: change (pencil), choose columns, search, close. A
   primary or consequential action keeps its words: Post, Save, Accept suggestions, Add rule, Turn on or off, Approve, Reject, anything that deletes or cannot be undone. An
   icon-only button always has an `aria-label` (specific: "Change Fuel") and a tooltip (`title`), is at least 36px square (44px on a touch screen), and one icon

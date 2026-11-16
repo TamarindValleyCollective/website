@@ -109,6 +109,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     <div id="actionbar" class="abar" role="region" aria-label="Selected lines" hidden></div>
     <dialog id="party-sheet" class="sheet" aria-labelledby="party-title"></dialog>
     <dialog id="line-sheet" class="sheet" aria-labelledby="line-title"></dialog>
+    <dialog id="upi-peek" class="sheet" aria-labelledby="upi-peek-title"></dialog>
   </section>
 </StaffLayout>
 
@@ -134,7 +135,7 @@ import SignInGate from '../../../components/SignInGate.astro';
 
   type Suggestion = { categoryId: string | null; partyId: string | null; nature: string; confidence: string; newPartyName: string | null; newPartyHasId?: boolean };
   type Line = {
-    id: string; date: string; narration: string; direction: 'debit' | 'credit'; amountPaise: number; account: string; remark: string | null; counterparty: string | null; origin?: string; sources?: string[]; reversal?: { role: 'original' | 'reversal'; otherId: string; otherDate: string | null } | null; noteKey?: string; note?: string | null; purpose?: string | null; upiRef?: string | null;
+    id: string; date: string; narration: string; direction: 'debit' | 'credit'; amountPaise: number; account: string; remark: string | null; counterparty: string | null; isCircle?: boolean; origin?: string; sources?: string[]; reversal?: { role: 'original' | 'reversal'; otherId: string; otherDate: string | null } | null; noteKey?: string; note?: string | null; purpose?: string | null; upiRef?: string | null;
     allocatedPaise: number; state: 'unallocated' | 'partly_allocated' | 'allocated'; review: boolean; missingParty: boolean; filled?: boolean; needsWording?: boolean; suggestion: Suggestion | null;
     allocation: { categoryId: string; partyId: string | null; nature: string; count: number; householdLabel: string | null; maintenanceYear: string | null } | null;
     hay?: string; // lower-case text the search box looks in, worked out once
@@ -2066,9 +2067,15 @@ import SignInGate from '../../../components/SignInGate.astro';
       const b = data?.badges?.[key];
       const label = b?.label ?? key;
       const inner = b?.logoUrl ? h('img', { attrs: { src: b.logoUrl, alt: label, height: '17', width: '17' } }) : document.createTextNode(b?.short ?? key);
+      // The app's icon (Paytm, BHIM) on a line that has its UPI record is a button: it opens a popup about that record, with a link to it on the UPI page.
       const linked = l.upiRef && (key === 'bhim' || key === 'paytm');
-      const node = h(linked ? 'a' : 'span', { class: `badge badge--${b?.kind ?? 'bank'} ${b?.logoUrl ? 'badge--icon' : 'badge--text'}`, attrs: { title: linked ? `${label}: open this payment in the UPI table` : label, ...(linked ? { href: `/internal/finance/upi/?ref=${l.upiRef}` } : {}) } }, inner);
-      if (linked) node.addEventListener('click', (ev: Event) => ev.stopPropagation());
+      const node = h(linked ? 'button' : 'span', { class: `badge badge--${b?.kind ?? 'bank'} ${b?.logoUrl ? 'badge--icon' : 'badge--text'}`, attrs: { title: linked ? `${label}: see this UPI payment` : label, ...(linked ? { type: 'button', 'aria-haspopup': 'dialog' } : {}) } }, inner);
+      if (linked) {
+        node.addEventListener('click', (ev: Event) => {
+          ev.stopPropagation();
+          openUpiPeek(l, node);
+        });
+      }
       return node;
     };
     const originNode = h('span', { class: 'badges', attrs: { 'aria-label': `${originText(l)}: ${(l.sources ?? []).map((k) => data?.badges?.[k]?.label ?? k).join(', ')}` } }, ...(l.sources?.length ? l.sources.map(badgeFor) : [document.createTextNode(originText(l))]));
@@ -2366,6 +2373,34 @@ import SignInGate from '../../../components/SignInGate.astro';
     lk.parties.sort((a, b) => a.name.localeCompare(b.name));
     showToast((out.party.accounts?.length ?? 0) > 0 ? `${out.party.name} added with their UPI ID, to be confirmed on the Parties page by someone else.` : `${out.party.name} added to the register. Add their bank details on the Parties page.`);
     return out.party.id as string;
+  }
+  // The cross-reference to the UPI table: the app's icon on a line opens a popup about the UPI record behind it, with a link to open it there. It shows what
+  // the ledger already holds about that record (the app's own words are masked for someone who may not see UPI IDs, by the server).
+  function openUpiPeek(l: Line, trigger: HTMLElement) {
+    const dlg = $<HTMLDialogElement>('upi-peek');
+    const app = data?.badges?.[l.origin ?? '']?.label ?? 'UPI app';
+    const rows: [string, string][] = [
+      ['App', app],
+      ['Paid to', l.counterparty ?? '–'],
+      ['Remark', l.remark ?? '–'],
+      ['Paid by', l.isCircle ? 'A delegate, through the UPI Circle' : 'Directly'],
+      ['UPI reference', l.upiRef ?? '–'],
+    ];
+    if (l.note) rows.push(['Note', l.note]);
+    else if (l.purpose) rows.push(['What it was for', l.purpose]);
+    const list = h('dl', { class: 'peek-list' }, ...rows.flatMap(([k, v]) => [h('dt', { text: k }), h('dd', { text: v })]));
+    dlg.addEventListener('close', () => {
+      dlg.replaceChildren();
+      trigger.focus();
+    }, { once: true });
+    present(
+      dlg,
+      closeOnBackdrop,
+      h('h2', { text: `${app} payment`, attrs: { id: 'upi-peek-title' } }),
+      h('p', { class: 'hint', text: `${niceDate(l.date)} · ${l.direction === 'debit' ? '−' : '+'}${rupees(l.amountPaise)}` }),
+      list,
+      h('div', { class: 'sheet-actions' }, h('a', { class: 'button button--outline', text: 'Open in UPI table', attrs: { href: `/internal/finance/upi/?ref=${l.upiRef}` } }), button('Close', () => dlg.close())),
+    );
   }
   function openAddParty(name: string, kind: string, onAdded: (id: string) => void, fromLine: string | null = null) {
     const dlg = $<HTMLDialogElement>('party-sheet');
@@ -3794,6 +3829,38 @@ import SignInGate from '../../../components/SignInGate.astro';
 
   .ledger a.badge:hover {
     text-decoration: underline;
+  }
+
+  /* The app's icon on a line is a button (it opens the UPI payment); a button has its own border, padding and fill to drop. */
+  .ledger button.badge {
+    padding: 0;
+    border: 0;
+    font: inherit;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .ledger button.badge--text {
+    background: none;
+    text-decoration: underline;
+  }
+
+  /* The popup about a UPI payment: a label and a value per line. */
+  .ledger .peek-list {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 0.5rem 1rem;
+    margin: 0 0 1rem;
+  }
+
+  .ledger .peek-list dt {
+    color: var(--tvc-ink-soft);
+  }
+
+  .ledger .peek-list dd {
+    margin: 0;
+    overflow-wrap: anywhere;
   }
 
   .ledger .badge--icon:hover,
