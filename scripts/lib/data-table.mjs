@@ -12,7 +12,17 @@ import { parseText, matchText, parseAmount, matchAmount, parseDate, matchDate } 
  * typed like an amount without the paise), 'none' (no filter box).
  */
 export function parseColumnFilter(type, raw) {
-  if (type === 'amount') return parseAmount(raw);
+  if (type === 'amount') {
+    // A leading - or + (the sign the table shows) limits the rows to debits or credits, whatever follows: "-219", "+>1000", "-" alone.
+    const signed = /^\s*([-−–+])\s*(.*)$/.exec(String(raw ?? ''));
+    const sign = signed ? (signed[1] === '+' ? 1 : -1) : 0;
+    const body = signed ? signed[2] : raw;
+    // Plain digits are a search: "15" finds 15, 150, 1,500 and 3,515. An operator or a range (=2500, >1000, 1000..3000) stays exact.
+    const t = String(body ?? '').replace(/[,\s₹]/g, '');
+    const cond = /^\d+(\.\d*)?$/.test(t) ? { kind: 'amount', op: 'has', text: t, shown: [t] } : parseAmount(body);
+    if (!signed || cond?.error) return cond;
+    return { ...(cond ?? { kind: 'amount', op: 'any', shown: [] }), sign };
+  }
   if (type === 'date') return parseDate(raw);
   if (type === 'count') {
     const t = String(raw ?? '').trim();
@@ -24,9 +34,15 @@ export function parseColumnFilter(type, raw) {
   return parseText(raw);
 }
 
-export function matchColumn(type, cond, value) {
+// `sign` is 1 for money in and -1 for money out; only an amount column that shows a sign gives one (`signOf`), the rest are 1.
+export function matchColumn(type, cond, value, sign = 1) {
   if (!cond || cond.error) return true;
-  if (type === 'amount') return value == null ? false : matchAmount(cond, Number(value));
+  if (type === 'amount') {
+    if (value == null) return false;
+    if (cond.sign && cond.sign !== sign) return false;
+    if (cond.op === 'any') return true;
+    return cond.op === 'has' ? (Math.round(Number(value)) / 100).toFixed(2).includes(cond.text) : matchAmount(cond, Number(value));
+  }
   if (type === 'count') return matchAmount(cond, Number(value ?? 0) * 100);
   if (type === 'date') return value ? matchDate(cond, String(value)) : false;
   return matchText(cond, value ?? '');
