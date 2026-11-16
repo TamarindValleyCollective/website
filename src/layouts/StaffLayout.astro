@@ -314,6 +314,34 @@ const hasPanel = Boolean(currentBlock && currentBlock.pages.length > 1);
     font-size: var(--text-xs);
   }
 
+  /* A quiet action repeated down a table (Add, Add ID, Look up on the UPI page): 24px, a light tint and no outline, so a column of them weighs
+     less than the data beside it. The words stay, because it changes the register or asks a billed service; a small icon (admin-icons.mjs) is
+     only a helper. Green (--soft) changes something; the neutral one (--soft-neutral) only reads. */
+  main :global(.button--soft),
+  main :global(.button--soft-neutral) {
+    gap: 5px;
+    min-height: 24px;
+    padding: 0 10px 0 8px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: var(--tvc-green-tint);
+    color: color-mix(in srgb, var(--tvc-green-dark) 78%, var(--tvc-ink));
+    font-size: var(--text-xs);
+  }
+
+  main :global(.button--soft-neutral) {
+    background: var(--tvc-cream);
+    color: var(--tvc-ink);
+  }
+
+  main :global(.button--soft:hover:not(:disabled)) {
+    background: color-mix(in srgb, var(--tvc-green-dark) 22%, transparent);
+  }
+
+  main :global(.button--soft-neutral:hover:not(:disabled)) {
+    background: color-mix(in srgb, var(--tvc-ink) 12%, transparent);
+  }
+
   /* ---- shared primitives. Pages use these and do not redefine them (CLAUDE.md, Design language): the card
      surface, the line under a page title, small notes, error text, the page's vertical rhythm, text-style
      buttons, and visually hidden labels. A page may add to one (WhatsApp's panes run edge to edge) but

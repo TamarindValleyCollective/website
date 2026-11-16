@@ -11,6 +11,8 @@
 // of exactly one party; a name that is not in the register is offered as a NEW party for a person to add.
 import { applyRules } from './finance-rules.mjs';
 import { periodOf } from './finance-allocation.mjs';
+import { isGatewayName, isGatewayVpa, vpaIn } from './finance-vpa.mjs';
+import { niceName } from './finance-party-suggestions.mjs';
 
 const BANK_WORDS = /bank|\bbk\b|^[A-Z]{4}0[A-Z0-9]{6}$|^(sbi|hdfc|icici|axis|ifsc)\b/i;
 const GENERIC_REMARK = /^(upi|na|nil|none|-+|\.+)$/i;
@@ -246,12 +248,14 @@ const fill = (template, upi, parsed) =>
 
 /**
  * The suggestion for one bank line.
- * args: { line, upi, rules, parties, categories, history, requesterPartyIds, purpose }
+ * args: { line, upi, rules, parties, categories, history, requesterPartyIds, purpose, vpaNames }
  * purpose: what a matched payment request or spend log (an Approval) says the payment was for, if one is matched to this line.
+ * vpaNames: the registered name Razorpay gave for a UPI ID, keyed by the lowercase ID. A line that names only a UPI ID is suggested under
+ * that name (the register's party when one matches it, otherwise a new party), not under the bare ID.
  * Returns { categoryId, partyId, nature, newParty: {name, kind} | null, confidence: 'high'|'medium'|'low'|'none', reasons[],
  *           source: 'rule'|'history'|'bank_entry'|'narration'|'none', ruleId, needsReview, reimbursement, mode, amountPaise, period }
  */
-export function suggest({ line, upi, rules, parties, categories, history, requesterPartyIds = /** @type {string[]} */ ([]), purpose = /** @type {string | null} */ (null) }) {
+export function suggest({ line, upi, rules, parties, categories, history, requesterPartyIds = /** @type {string[]} */ ([]), purpose = /** @type {string | null} */ (null), vpaNames = /** @type {Record<string, string>} */ ({}) }) {
   const active = categories.filter((c) => c.active);
   const catById = new Map(active.map((c) => [c.id, c]));
   const partyById = new Map(parties.map((p) => [p.id, p]));
@@ -263,16 +267,23 @@ export function suggest({ line, upi, rules, parties, categories, history, reques
   };
 
   // Who: the register by name. The Paytm counterparty is the cleanest name, then the one in the narration.
+  // A line that names only a UPI ID is read by the name Razorpay gave for it, when a lookup has been made.
+  const vpa = vpaIn(upi?.counterparty) ?? vpaIn(parsed.counterparty);
+  // Never a payment gateway's own name (Razorpay, PayU...): the ID serves many merchants, so it says nothing about who was paid.
+  const vpaName = vpa && vpaNames[vpa] && !isGatewayName(vpaNames[vpa]) && !isGatewayVpa(vpa) ? vpaNames[vpa] : null;
   let how = null;
-  for (const name of [upi?.counterparty, parsed.counterparty]) {
+  let viaVpa = false;
+  for (const name of [upi?.counterparty, parsed.counterparty, vpaName]) {
     const m = name ? matchParty(name, parties) : null;
     if (m) {
       out.partyId = m.partyId;
       how = m.how;
+      viaVpa = name === vpaName && name !== upi?.counterparty && name !== parsed.counterparty;
       break;
     }
   }
-  if (out.partyId) reasons.push(how === 'exact' ? `The name matches ${partyById.get(out.partyId)?.name} in the register` : how === 'extended' ? `The bank printed more than the name; it starts with ${partyById.get(out.partyId)?.name}` : `The bank shortened the name; it looks like ${partyById.get(out.partyId)?.name}`);
+  if (out.partyId && viaVpa) reasons.push(`The UPI ID is registered to "${vpaName}", which ${how === 'exact' ? 'matches' : 'looks like'} ${partyById.get(out.partyId)?.name} in the register`);
+  else if (out.partyId) reasons.push(how === 'exact' ? `The name matches ${partyById.get(out.partyId)?.name} in the register` : how === 'extended' ? `The bank printed more than the name; it starts with ${partyById.get(out.partyId)?.name}` : `The bank shortened the name; it looks like ${partyById.get(out.partyId)?.name}`);
   // What the wording is taken from, best first: what a matched Approval (payment request or spend log) says, then the UPI app's own
   // remark (the bank's narration carries only a shortened copy of it), then the bank's narration. A rule with its own wording
   // template, below, still wins over all three.
@@ -343,10 +354,12 @@ export function suggest({ line, upi, rules, parties, categories, history, reques
   if (remark && out.nature === remark && !reasons.some((r) => r.startsWith('The payer') || r.startsWith('The approved'))) reasons.push(approved ? `The approved request says "${approved}"` : `The payer wrote "${remark}"`);
 
   // A named stranger is offered as a new party; nothing is created until a person says so.
-  const stranger = upi?.counterparty ? cleanName(upi.counterparty) : parsed.counterparty;
+  // When the line names only a UPI ID and Razorpay has said whose it is, the person's name is offered, not the ID.
+  const stranger = vpaName ? niceName(vpaName) : upi?.counterparty ? cleanName(upi.counterparty) : parsed.counterparty;
   if (!out.partyId && stranger && ['upi', 'neft', 'imps', 'card'].includes(parsed.mode)) {
-    out.newParty = { name: stranger, kind: line.direction === 'credit' ? 'customer' : 'vendor' };
-    reasons.push(`"${stranger}" is not in the register yet`);
+    // `vpa`: the UPI ID the name came from, only when a lookup supplied the name, so accepting it can attach that ID to the new party.
+    out.newParty = { name: stranger, kind: line.direction === 'credit' ? 'customer' : 'vendor', ...(vpaName ? { vpa } : {}) };
+    reasons.push(vpaName ? `The UPI ID is registered to "${stranger}", who is not in the register yet` : `"${stranger}" is not in the register yet`);
   }
   return out;
 }

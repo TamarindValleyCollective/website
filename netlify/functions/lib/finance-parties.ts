@@ -33,6 +33,8 @@ import {
 import { fingerprintText } from '../../../scripts/lib/finance-party-import.mjs';
 import { postingStats, suggestChanges } from '../../../scripts/lib/finance-party-suggestions.mjs';
 import { rowsAll } from './finance-ledger';
+import { registeredNameOf } from './finance-vpa';
+import { isGatewayName, isGatewayVpa, vpaIn } from '../../../scripts/lib/finance-vpa.mjs';
 import { VOUCHER_MAX_BYTES, sniffVoucher } from '../../../scripts/lib/finance-requests.mjs';
 
 type Json = Record<string, any>;
@@ -215,6 +217,20 @@ export async function listParties(req: Request): Promise<Response> {
   }
 }
 
+// The UPI ID behind a ledger line, when it is safe to attach to a new party: the line's UPI row carries an ID, Razorpay has named it (a live answer
+// is kept), and it is not a payment gateway's. Otherwise null, and the party is simply added without an ID.
+async function upiIdOfLine(bankLineId: string): Promise<string | null> {
+  try {
+    const [u] = await rows(`/fin_upi_lines?bank_line_id=eq.${bankLineId}&select=counterparty&limit=1`);
+    const vpa = vpaIn(u?.counterparty as string | null | undefined);
+    if (!vpa || isGatewayVpa(vpa)) return null;
+    const [named] = await rows(`/fin_vpa_names?vpa=eq.${encodeURIComponent(vpa)}&key_mode=eq.live&success=eq.true&select=name&limit=1`);
+    return named && !isGatewayName(named.name as string) ? vpa : null;
+  } catch {
+    return null;
+  }
+}
+
 // -------------------------------------------------------------- create
 export async function createParty(req: Request): Promise<Response> {
   const auth = await requireStaff(req, 'finance', 'allocate');
@@ -222,6 +238,11 @@ export async function createParty(req: Request): Promise<Response> {
   const { staff } = auth;
   const body = await readBody(req);
   if (!body) return fail('Send the party as JSON.');
+  // From the ledger: "attach the UPI ID of this line". The page does not hold the ID (it may not be allowed to see it), so the server finds it.
+  if (typeof body.attachUpiOfLine === 'string' && ID.test(body.attachUpiOfLine) && (body.payee === undefined || body.payee === null)) {
+    const upi = await upiIdOfLine(body.attachUpiOfLine);
+    if (upi) body.payee = { method: 'upi', upi };
+  }
   const checked = validateParty(body);
   if (checked.error || !checked.party) return fail(checked.error ?? 'Enter the party.');
   // Validate the payee before writing anything, so a bad number leaves no half-made party.
@@ -258,6 +279,40 @@ export async function createParty(req: Request): Promise<Response> {
   } catch (err) {
     return serverError(err, 'create party');
   }
+}
+
+// The UPI page's reviewed add (finance-upi-view.ts). The person is added to the register with the UPI ID as an UNVERIFIED payment detail, so a
+// second admin verifies it; nothing is verified here. An exact twin of the name is refused (the page then offers it as a match instead).
+export async function addUpiParty(actorId: string, item: { name: string; kind: string; upi: string | null }): Promise<{ partyId: string } | { error: string }> {
+  const checked = validateParty({ name: item.name, kind: item.kind });
+  if (checked.error || !checked.party) return { error: checked.error ?? 'Enter the party.' };
+  const entity = await entityId();
+  const twins = await similarParties(entity, checked.party.name);
+  if (twins.length) return { error: 'There is already a party with that name.' };
+  const res = await rest('/fin_parties', {
+    method: 'POST',
+    headers: { Prefer: 'return=representation' },
+    body: JSON.stringify({ entity_id: entity, ...checked.party, household_id: null, created_by: actorId }),
+  });
+  const [party] = (await res.json()) as Json[];
+  // A plain-name row (BHIM) has no UPI ID to attach; the party is added by name alone.
+  const added = item.upi ? await addAccount(party.id, entity, actorId, { method: 'upi', upi: item.upi }, []) : null;
+  await audit(actorId, entity, 'finance.party_created', party.id, { kind: party.kind, linkedHousehold: false, withPayee: Boolean(item.upi), from: 'upi' });
+  if (added && 'created' in added && added.created) await audit(actorId, entity, 'finance.payee_added', added.created.id, { partyId: party.id, method: 'upi' });
+  return { partyId: party.id as string };
+}
+
+// Adds a UPI ID to a party already in the register, as unverified details (a second admin verifies them).
+export async function attachUpiToParty(actorId: string, partyId: string, upi: string): Promise<{ ok: true } | { error: string }> {
+  if (!ID.test(partyId)) return { error: 'Not found' };
+  const entity = await entityId();
+  const [party] = await rows(`/fin_parties?id=eq.${partyId}&select=id,active,merged_into`);
+  if (!party || !party.active || party.merged_into) return { error: 'That party is not in the register any more.' };
+  const existing = await accountRows(`party_id=eq.${partyId}&`);
+  const added = await addAccount(partyId, entity, actorId, { method: 'upi', upi }, existing);
+  if ('error' in added && added.error) return { error: added.error };
+  if ('created' in added && added.created) await audit(actorId, entity, 'finance.payee_added', added.created.id, { partyId, method: 'upi', from: 'upi' });
+  return { ok: true };
 }
 
 // A new vendor added by whoever raises payment requests (the farm manager, who has no `finance` access). Always a vendor, never
@@ -399,8 +454,19 @@ export async function verifyPayeeAccount(req: Request, accountId: string): Promi
     const verdict = canVerifyAccount(account, staff.id);
     if (!verdict.ok) return fail(verdict.error ?? 'Not allowed.', 403);
     // How it was checked is recorded with who and when (the database refuses a verification without it).
-    const how = validateVerification((await readBody(req)) ?? {});
+    const how = validateVerification((await readBody(req)) ?? {}) as { error?: string; method?: string; note?: string | null; name?: string | null; evidence?: 'payment' | 'name_check' | null; lookup?: boolean };
     if (how.error || !how.method) return fail(how.error ?? 'Say how you checked these details.');
+    // The Razorpay lookup is for a UPI ID, and the name it records is Razorpay's answer, never one typed or sent by the page.
+    let bankName: string | null = how.name ?? null;
+    if (how.lookup) {
+      if (stored.method !== 'upi' || typeof stored.upi !== 'string') return fail('The Razorpay lookup is for a UPI ID only.');
+      // A payment gateway's ID names the gateway, not a payee, so it verifies no one (and is not asked about: the call is billed).
+      if (isGatewayVpa(stored.upi)) return fail('This UPI ID belongs to a payment gateway, so it cannot verify a payee. Check these details another way.', 409);
+      const found = await registeredNameOf(stored.upi.trim().toLowerCase(), staff.id);
+      if (found.name && isGatewayName(found.name)) return fail('This UPI ID belongs to a payment gateway, so it cannot verify a payee. Check these details another way.', 409);
+      bankName = found.name ? found.name.slice(0, 120) : null;
+      if (!bankName || bankName.length < 2) return fail(found.error ?? 'Razorpay gave no name for this UPI ID.', 409);
+    }
     // A screenshot method needs its file attached to THIS account first (the database refuses it too).
     if (how.evidence) {
       const attached = await rows(`/fin_party_account_files?account_id=eq.${accountId}&kind=eq.${how.evidence}&select=id&limit=1`).catch(() => null);
@@ -409,7 +475,7 @@ export async function verifyPayeeAccount(req: Request, accountId: string): Promi
     }
     await rest(`/fin_party_accounts?id=eq.${accountId}&status=eq.unverified`, {
       method: 'PATCH',
-      body: JSON.stringify({ status: 'verified', verified_by: staff.id, verified_at: new Date().toISOString(), verification_method: how.method, verification_note: how.note, ...(how.name ? { verified_name: how.name } : {}) }),
+      body: JSON.stringify({ status: 'verified', verified_by: staff.id, verified_at: new Date().toISOString(), verification_method: how.method, verification_note: how.note, ...(bankName ? { verified_name: bankName } : {}) }),
     });
     // The method goes in the audit log; the free-text note stays on the row.
     await audit(staff.id, account.entity_id, 'finance.payee_verified', account.id, { partyId: account.party_id, method: how.method });

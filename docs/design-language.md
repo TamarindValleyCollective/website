@@ -43,7 +43,7 @@ disagree `global.css` wins. In any `.astro` or `.css` file:
   run time needs `:global()` styles, since Astro's scoped CSS never reaches it.
 - Admin portal (`StaffLayout.astro`, `src/pages/internal/*`): the shell owns the shared primitives (`.card`,
   `.hint`, `.note`, `.error`, `.section.wrapper`, `[hidden]`, `.visually-hidden`, `.link-button`, and the button
-  modifiers `--outline`, `--primary`, `--danger`, `--danger-outline`, `--small`) and the building blocks of the
+  modifiers `--outline`, `--primary`, `--danger`, `--danger-outline`, `--small`, `--soft`, `--soft-neutral`) and the building blocks of the
   Apple-style layout: `.field` (search), `.segmented` (one choice from a few), `.list` with `.row` (a grouped list;
   `a.row` and `button.row` are tappable), `.pill` (`--ok`, `--warn`, `--crit`), `.sheet` (a modal `<dialog>`),
   `.toast` via `showToast(message, undo?)` in `staff-client.mjs`, and `.crit-row` (a destructive action as plain red
@@ -78,6 +78,14 @@ disagree `global.css` wins. In any `.astro` or `.css` file:
 
 - **Cell and header menus.** Every shared table has them. A **cell menu** (right-click, or a long press on a touch screen) offers Filter to this value, Filter out this value and Group by this column; it types the condition (`=Vendor`, `!=Vendor`, `=18250`) into that column's filter box, so the filter is visible and removable there, and it leaves the browser's own menu alone over a link, a button, a field or selected text. Dates have no "filter out" (the syntax has no "not this date"), and a cell with nothing to filter on shows no menu. Each **header** has a ▾ (or right-click) menu: Sort ascending, Sort descending, Group by this column, Hide column. Any plain text column can be grouped unless it says `groupable: false` (`groupable: true` allows another type, `groupValue(row)` groups on something other than what it shows); rows with no value fall in a "No ..." group that comes last. Right-click is never the only way in. The header ▾ is an ordinary button, reachable by keyboard (arrow keys, Home, End, Escape). The cells have a **keyboard cursor** (`scripts/lib/cell-nav.mjs`, the same on the shared tables and the Ledger): the table has ONE Tab stop, its cursor cell (a roving `tabindex`, announced with a short hint); the arrow keys, Home, End, Ctrl+Home / Ctrl+End and Page Up / Page Down move it; the **Menu key or Shift+F10** opens the cell menu under the cell (Escape gives the cell its focus back, and choosing an item keeps the cursor there after the table redraws); **Enter** (or Space on the shared tables) does what clicking the cell does: it opens the row. Buttons inside a cell (a Change button) keep their own Tab stops and are never taken over. A phone shows cards, which have no cell cursor. The Ledger has the same menus (`scripts/lib/admin-menu.mjs`, `styles/admin-controls.css`), wired to its own column filters and grouping, and its column search under the headings is always shown (there is no button to open it).
 
+- **Quiet row actions.** An action that repeats down a table (Add, Add ID, Look up on the UPI page) is a **soft button**: `.button button--soft` (a light green
+  tint, for what changes something) or `.button button--soft-neutral` (a light grey tint, for what only reads or asks a billed service). 24px, no outline, the
+  words kept (adding someone to Parties is consequential) with a 12px icon from `admin-icons.mjs` as a helper (`icon('plus', 12)`). A cell holds one thing: a
+  record's name as a link to its details, or just the button; never a label that says what the button already says. Never a pill for a status the cell's own
+  words or button already show: pills are for a status that has no other place to be said.
+- **Cross-references between tables.** A record that lives in another table is shown as a small thing that opens a **popup** about it, with a button to open
+  it there: a party's name (a link), the bank's or the app's icon (a button, the same 24px circle as the ledger's source badges, with the name as its tooltip and
+  accessible name). Never the bare reference number as the link text: the number is shown in the popup, in its own column that is hidden by default, and in search.
 - **Icon buttons.** An icon replaces the words only for a familiar action repeated down a table or in a toolbar: change (pencil), choose columns, search, close. A
   primary or consequential action keeps its words: Post, Save, Accept suggestions, Add rule, Turn on or off, Approve, Reject, anything that deletes or cannot be undone. An
   icon-only button always has an `aria-label` (specific: "Change Fuel") and a tooltip (`title`), is at least 36px square (44px on a touch screen), and one icon

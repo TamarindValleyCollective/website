@@ -21,7 +21,7 @@ import { attentionOf } from '../../scripts/lib/finance-attention.mjs';
 import { lookupIfsc } from '../../scripts/lib/finance-ifsc.mjs';
 import { PARTY_ID, addEvidence, addMissingIfsc, getEvidence, listEvidence, addVendor, addPayeeAccount, createParty, listParties, mergeParty, retirePayeeAccount, revealPayeeAccount, reviewParty, unmergeParty, updateParty, verifyPayeeAccount } from './lib/finance-parties';
 import { REQUEST_ID, addVoucher, cancelOrDecide, listFiles, createRecord, getVoucher, listMine, listRequests, matchRecord, autoMatchRecords, reviewRecord, unmatchRecord } from './lib/finance-requests';
-import { listUpiLines } from './lib/finance-upi-view';
+import { addUpiParties, listUpiLines } from './lib/finance-upi-view';
 import { assignDelegate, saveDelegate } from './lib/finance-delegates';
 import { saveOperator } from './lib/finance-upi-operators';
 import { getChannelBreakdown, getChannelLines, getChannels } from './lib/finance-channels';
@@ -30,7 +30,7 @@ import { BUDGET_ID, approveDraft, discardDraft, getBudget, saveLines, startDraft
 import { setPaymentNote } from './lib/finance-notes';
 import { heldCoverage, reconciliationOf, runImport } from './lib/finance-import';
 import { supabaseImportStore } from './lib/finance-import-store';
-import { LEDGER_ID, clearLedgerCache, closePeriod, ledgerAll, ledgerCounts, ledgerLine, listLedger, listPeriods, listRules, missingParties, postBatch, recategorise, reviewAllocation, saveAllocations, saveCategory, saveRule, setAllocationParties, setAllocationParty, setRequester } from './lib/finance-ledger';
+import { LEDGER_ID, clearLedgerCache, closePeriod, ledgerAll, ledgerCounts, ledgerLine, listLedger, listPeriods, listRules, lookupVpaNames, missingParties, postBatch, recategorise, reviewAllocation, saveAllocations, saveCategory, saveRule, setAllocationParties, setAllocationParty, setRequester } from './lib/finance-ledger';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
@@ -273,6 +273,7 @@ const dispatch = async (req: Request): Promise<Response> => {
   }
   // Ledger and review (session 05)
   if (route === '/upi-lines' && req.method === 'GET') return listUpiLines(req);
+  if (route === '/upi-lines/add-parties' && req.method === 'POST') return addUpiParties(req);
   if (route === '/channels' && req.method === 'GET') return getChannels(req);
   if (route === '/channels/lines' && req.method === 'GET') return getChannelLines(req);
   if (route === '/channels/breakdown' && req.method === 'GET') return getChannelBreakdown(req);
@@ -288,6 +289,7 @@ const dispatch = async (req: Request): Promise<Response> => {
   if (route === '/ledger/all' && req.method === 'GET') return ledgerAll(req);
   if (route === '/ledger/post' && req.method === 'POST') return postBatch(req);
   if (route === '/ledger/missing-parties' && req.method === 'GET') return missingParties(req);
+  if (route === '/vpa-names' && req.method === 'POST') return lookupVpaNames(req);
   if (route === '/allocations/parties' && req.method === 'POST') return setAllocationParties(req);
   const line = /^\/ledger\/([^/]+)(\/allocations)?$/.exec(route);
   if (line && LEDGER_ID.test(line[1])) {
@@ -332,6 +334,7 @@ export const config = {
     '/api/finance-admin/accounts/*',
     '/api/finance-admin/evidence/*',
     '/api/finance-admin/upi-lines',
+    '/api/finance-admin/upi-lines/add-parties',
     '/api/finance-admin/channels',
     '/api/finance-admin/channels/lines',
     '/api/finance-admin/channels/breakdown',
@@ -344,6 +347,7 @@ export const config = {
     '/api/finance-admin/vendors',
     '/api/finance-admin/vouchers/*',
     '/api/finance-admin/payment-note',
+    '/api/finance-admin/vpa-names',
     '/api/finance-admin/ledger',
     '/api/finance-admin/ledger/*',
     '/api/finance-admin/allocations/*',

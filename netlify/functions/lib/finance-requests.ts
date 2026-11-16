@@ -21,6 +21,8 @@ import { deleteFinanceVoucher, getFinanceVoucher, putFinanceVoucher } from './fi
 import { sendEmail } from './booking-notify';
 import { escapeHtml, renderStaffEmail } from './email-layout';
 import { todayIST } from '../../../scripts/lib/finance-parties.mjs';
+import { payeeFieldVisibility } from '../../../scripts/lib/finance-access.mjs';
+import { maskVpasIn } from '../../../scripts/lib/finance-vpa.mjs';
 import { VOUCHER_MAX_BYTES, decide, exactMatches, planMatch, deriveLinks, fulfilledVia, proposeMatches, autoMatchPicks, purposeIndex, reviewFlag, sniffVoucher, validateRecord, agingUnmatched } from '../../../scripts/lib/finance-requests.mjs';
 
 type Json = Record<string, any>;
@@ -349,11 +351,15 @@ export async function listRequests(req: Request): Promise<Response> {
     const { records, names, exact, stored, derived, upiById, bankById, proposals } = state;
     const shaped = records.map((r) => shape(r, names, vouchers));
     const proposalsBy = new Map<string, Json[]>();
+    // The suggested payments say who was paid in the app's own words, which carry the UPI ID: masked for someone who may not see payee UPI IDs, like the
+    // UPI page and the ledger (the same rule, `payeeFieldVisibility`).
+    const mayIds = payeeFieldVisibility(capabilitiesForRole('finance', auth.staff.role) as string[]).payeeBankDetails as boolean;
+    const shown = (text: string) => (mayIds ? text : (maskVpasIn(text) as string));
     for (const p of proposals) {
       const t = p.type === 'upi' ? upiById.get(p.targetId) : bankById.get(p.targetId);
       if (!t) continue;
       const via = p.type === 'upi' ? fulfilledVia({ upiApp: (t as any).app }) : fulfilledVia({ narration: (t as any).narration });
-      const view = p.type === 'upi' ? { date: (t as any).paidAt, who: [(t as any).counterparty, (t as any).remark ? `“${(t as any).remark}”` : ''].filter(Boolean).join(' · ') } : { date: (t as any).tranDate, who: (t as any).narration };
+      const view = p.type === 'upi' ? { date: (t as any).paidAt, who: shown([(t as any).counterparty, (t as any).remark ? `“${(t as any).remark}”` : ''].filter(Boolean).join(' · ')) } : { date: (t as any).tranDate, who: shown((t as any).narration as string) };
       proposalsBy.set(p.recordId, [...(proposalsBy.get(p.recordId) ?? []), { type: p.type, targetId: p.targetId, reasons: p.reasons, alsoBank: p.type === 'upi' && Boolean((t as any).bankLineId), via: (via as { label: string } | null)?.label ?? null, ...view }]);
     }
     const requesterIds = ent[0]?.requester_party_id ? [ent[0].requester_party_id as string] : [];

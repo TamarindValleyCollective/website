@@ -524,6 +524,100 @@ shapes), used by `lib/finance-ledger.ts`. It only proposes; a person posts, and 
 - **Not done:** suggestions are not yet turned into rules with one click; the amount (a repeating figure such as a rent or a salary) is
   not a clue yet; merchants on cards are only matched to the register by name.
 
+### UPI ID names (migration `0102_finance_vpa_names.sql`, **applied 2026-11-16**)
+
+A UPI payment to a person often shows only their UPI ID, so the suggested new party reads like `Vendors › q000111222@ybl on PhonePe (new)`.
+Razorpay's validate-VPA call says whose ID it is, so the suggestion can be the person's name instead.
+
+- **Where:** `scripts/lib/finance-vpa.mjs` (pure: find a UPI ID in text, pick the IDs still to ask about, read Razorpay's answer),
+  `suggest()` takes `vpaNames` (lowercase ID to registered name), `lib/finance-ledger.ts` (`lookupVpaNames`, `vpaAnswers`) and
+  `validateVpa` in `lib/razorpay.ts`. Tests: `finance-vpa.test.mjs`, `finance-vpa-endpoint.test.mjs`, three more in `finance-suggest.test.mjs`.
+- **Cache:** every answer is kept in `fin_vpa_names` (ID, whether it exists, the name, live or test key, who asked, when), so an ID is asked
+  about **once**. RLS on, no anon/authenticated grant. Only answers from live keys are used; a test-key answer is kept and ignored.
+- **It never runs by itself, and it runs from the UPI page only.** The call is billed by Razorpay (the price is not confirmed), so the UPI page has a
+  toolbar button **Look up N UPI names** and a **Look up** on each row (below). One click asks about at most 25 IDs
+  (`POST /api/finance-admin/vpa-names`, needs `finance` / `allocate`), stops at the first failure and says why, and the page then reloads.
+  IDs already asked about, with or without a name, are not offered again. The ledger has no lookup button: the IDs come from the UPI rows' "Paid to"
+  (bank narrations carry none), so the lookup starts there, and the ledger shows the result.
+- **The UPI page (`/internal/finance/upi/`) has the same button and two columns.** The ledger suggestion reads a UPI row's "Paid to", so looking
+  names up there names every linked ledger line too (one saved answer per ID; the ledger and the UPI page ask the same endpoint). **Name** (shown
+  by default) is the registered name when looked up, else the name the app showed, else "Not looked up yet" / "No name on file" for a UPI ID.
+  **UPI ID** (hidden until turned on in Columns) is the ID found in "Paid to"; it follows the masking rule for payee UPI IDs (`payeeFieldVisibility`):
+  in full for holders of `verify-payee` or `export`, otherwise `p••••@bank`, while the name is shown to anyone who can view. Both are derived per
+  request by `vpaFieldsFor` and never stored: the UPI rows are locked after import. **"Paid to" follows the same rule** (`maskVpasIn`): the UPI ID in
+  it is masked (`q••••@ybl on PhonePe`) unless the viewer holds `verify-payee` or `export`, and so is everything the page builds from it (search, the
+  cell menu, the phone card title). The server works out names, parties and lookups from the real text and never sends it. Because the page may
+  not hold the IDs, a row action sends **row ids** (`POST /vpa-names { upiRowIds }`, the server reads each row's "Paid to"), and each row carries
+  `vpaGroup`, a small number per distinct UPI ID in that response (1, 2, 3...), so the page can count IDs and group one person's payments without
+  being told the IDs. The registered name is shown in readable case (Razorpay sends capitals); the popup quotes Razorpay exactly. **The ledger and the
+  Requests page follow the same rule**: for someone without `verify-payee` or `export`, every UPI ID in what they send is masked: a line's narration,
+  its UPI "Paid to", the party suggested from them (and the party column's search and sort), the reasons given on the line sheet, the fill-parties
+  proposals, and the "who was paid" of a suggested payment on Requests. A suggestion says only whether its UPI ID can be attached (`newPartyHasId`),
+  never the ID; accepting it sends the **line** (`attachUpiOfLine` on `POST /parties`) and the server finds the ID (only one Razorpay has named, never a
+  gateway's). The import preview shows the person importing their own file's text and is not masked. `GET /upi-lines` returns `upiId`, `vpaName`, `vpaState`
+  (`named`/`asked`/`new`/null), `vpaGroup` per row and `canSeeUpiIds`; before migration `0102` it answers with every ID as `new`.
+- **The Party cell says one thing** (no pills): a party exists, so its **name as a link** that opens a details popup (kind, the UPI ID it holds,
+  whether that is verified or waiting for a second admin, what Razorpay says, the name the bank showed, and **Open in Parties**); no party, so
+  **just an Add button**; the name matches a party but the ID is not on it, so the party's link and **Add ID**; a name that differs from what
+  Razorpay says is the same link in amber with a ≠ mark and the popup states both names; a payment gateway, only **Add**, since the Name column
+  already says "Payment gateway". Look up stays in the Name column. Row actions are the shell's **soft buttons** (`.button--soft` green for what
+  changes the register, `.button--soft-neutral` for Look up, which only asks Razorpay), 24px, words kept, icons from `admin-icons.mjs`. Cells do not
+  wrap, so every row keeps one height. A phone card shows the same link or button under the payment. Checked by rendering the page with mocked data
+  in headless Chrome, light, dark and phone width.
+- **The UPI table and the ledger refer to each other the same way: an icon that opens a popup, never a bare reference number.** On the UPI page the
+  **Ledger** column (it was Reference) shows the **bank's icon** (the account's `badge_key`, from `fin_source_badges`) for a payment joined to a bank
+  line, a button that opens a popup about that line (its date and account, the bank narration, whether and how it was posted: category and party,
+  "and N more parts" for a split, or "Not allocated yet", and the UPI reference) with **Open in Ledger** (`/internal/finance/ledger/?line=`); an unjoined
+  payment shows a dash. The plain reference number moves to a **Reference** column (hidden until turned on in Columns) and stays searchable and
+  filterable. On the ledger the **Paytm or BHIM icon** on a line that has its UPI record opens a popup about that record (app, paid to, remark, who
+  paid, reference, note, what it was for) with **Open in UPI table** (`/internal/finance/upi/?ref=`); the line sheet keeps its own link too. The UPI
+  endpoint returns each row's `bankBadge` and a `ledger` summary (read for the joined lines only) and a `badges` map; the narration in the summary is
+  masked by the same rule as everything else, and the ledger popup shows only what the ledger already holds.
+- **The UPI table's Party column says whether each person is in Parties** (`scripts/lib/finance-upi-parties.mjs`, `partyStateFor`, tested in
+  `finance-upi-parties.test.mjs` and `finance-vpa-verify-endpoint.test.mjs`). The match is by **UPI ID first** (a party holding that ID, compared by
+  the keyed fingerprint, never decrypted), the name only checking it. The states below are what the filter chips, Group by and search use; the cell
+  itself shows the link or the button (next bullet). States: **In Parties** (ID on a party and Razorpay's name fits it, or a plain
+  app name matches one party), **In Parties, name not checked** (ID on a party, not looked up), **Name differs** (ID on a party but Razorpay's
+  registered name does not fit the party's name or the name the bank showed when verified: shown with both names, to review and, if the party is
+  wrong, rename on the Parties page), **ID not on file** (no party holds the ID but the registered name matches one), **Not in Parties**, **Not
+  looked up yet**, **No name on file**. "Fits" is the same `namesResemble` the verify sheet uses (honorifics, company suffixes and brackets
+  ignored; one name inside the other). Filter chips: Not in Parties, Name differs, ID not on file, In Parties; Group by Party.
+- **Reviewed add (`POST /upi-lines/add-parties`, `finance` / `allocate`).** The toolbar button **Add N to Parties** (one entry per person, not
+  per payment, and per UPI ID: two IDs are two entries) opens a list: select who to add, edit the name and kind (a debit's person is a vendor by
+  default, a credit's a customer; never a member), and each line shows the masked ID it would attach. The confirm button says how many ("Add 3") and
+  is disabled at none; on a phone each row stacks. A row's own **Add** (nobody matches) or **Add ID** (the name matches a party) button opens the same list with just that person.
+  Confirming adds each person to Parties with their UPI ID attached as **unverified** details (a second admin verifies it), and attaches
+  an ID to the party whose name matches ("ID not on file"). The server works out each row's need from its own data and does only what that state
+  allows, so a name typed on the page cannot add someone the lookup has not named; a party with a similar name already is skipped with the reason.
+  Rows for the same person are done once. Audit: `finance.upi_parties_added` with counts, plus the usual `finance.party_created` and
+  `finance.payee_added` (ids and the method only). Nothing is auto-added: a person always reviews the list.
+- **Payment gateways are never used to name anyone.** An ID that belongs to a gateway or aggregator (Razorpay, PayU, Cashfree, BillDesk,
+  CCAvenue, PhonePe, ...) names the gateway, not whoever was paid through it, and one ID serves many merchants. `isGatewayName` / `isGatewayVpa` in
+  `finance-vpa.mjs` recognise one by the registered name Razorpay returns or by the ID starting with a gateway's name (a list to extend). For such
+  an ID: the ledger suggests **no name** (the line stays as it was); the UPI Party column says **Payment gateway** (no lookup is wasted on an ID
+  recognised by its own text); it is never matched to a party, even one named after the gateway; the reviewed add asks for a **name typed by hand**,
+  attaches **no UPI ID** to anyone, and treats **each payment on its own** (never merged by ID); and the Razorpay verify method refuses it. The
+  reviewed add also has an **Attach their UPI ID** option on every person it adds, for an ID that is not really theirs that the list does not
+  recognise (`attachId: false`). The Name column shows "Payment gateway" in place of the gateway's registered name.
+- **What changes in a suggestion:** with a name on file, the register is searched for it first (an exact or shortened match suggests that
+  party, "The UPI ID is registered to "X", which matches Y in the register"); otherwise the name, in readable case, is the new party to add.
+  With no name on file (the ID has no linked bank account, or does not exist) the line reads as before. Nothing is created or posted until a
+  person accepts.
+- **Accepting a looked-up name attaches the UPI ID as evidence-backed, unverified details.** The new party is created with the ID as an
+  **unverified** UPI payment detail (the suggestion says `newPartyHasId` when a lookup supplied the name; the page sends the line, the server attaches the ID). Nothing is auto-verified:
+  a different admin with `verify-payee` (the person who adds details cannot verify them, `canVerifyAccount`) opens the verify sheet, where a
+  UPI account now offers a method **"Razorpay UPI ID lookup (registered name)"** (`razorpay_vpa`, migration `0103`; bank accounts do not).
+  One click: the server takes the registered name from the saved answer, or asks Razorpay once, and records it as the name the bank showed
+  (`verified_name`). The name is Razorpay's, never typed or sent by the page; with no registered name, no live key or a failed call it is
+  refused with the reason and the details stay unverified. Needs the MFA step-up like every verification. Code: `lib/finance-vpa.ts`
+  (`registeredNameOf`), `verifyPayeeAccount`, `verifyMethodsFor` in `finance-parties.mjs`; tests: `finance-vpa-verify-endpoint.test.mjs`.
+- **Audit:** `finance.vpa_names_looked_up` with a count and the key mode, never an ID or a name; verifying logs `finance.payee_verified` with
+  the method `razorpay_vpa` and no ID or name.
+- **Account setup:** Razorpay support enabled `/v1/payments/validate/vpa` on the live account on 2026-11-16 (before that it answered 400
+  "URL not found"). The account's per-call charge is still unconfirmed; check the Razorpay dashboard before looking up in volume.
+- **Not done:** a lookup is not offered from the Parties page (the verify sheet does ask Razorpay once when no answer is kept); migration `0103` was **applied 2026-11-16**; no auto-verify rule (a director decision); bank accounts are not checked this way
+  (Razorpay's bank-account validation is a RazorpayX product and is not set up).
+
 ## The table (the Ledger's list view, session 05 follow-up)
 
 > **Update (2026-11-05):** the page no longer asks the server to search or sort: it fetches every line once (`GET /api/finance-admin/ledger/all`) and applies the same rules from `scripts/lib/finance-columns.mjs` in the browser. The server's `GET /ledger` list route and its column handling remain (tested), but nothing uses them now; remove them in a later change once the new page has been used on real data. The notes below under "After the first UX audit" describe the current page.

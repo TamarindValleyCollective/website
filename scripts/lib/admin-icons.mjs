@@ -11,6 +11,10 @@ const SVG = 'http://www.w3.org/2000/svg';
 export const ICONS = {
   // a pencil: change this
   edit: [['path', { d: 'M12 20h9' }], ['path', { d: 'M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z' }]],
+  // a plus: add this (a person to Parties, a UPI ID to a party)
+  plus: [['path', { d: 'M12 5v14M5 12h14' }]],
+  // a magnifier: look this up (ask for a name)
+  search: [['circle', { cx: '11', cy: '11', r: '7' }], ['path', { d: 'M20 20l-3.5-3.5' }]],
   // a chevron pointing down: this opens a menu
   chevron: [['path', { d: 'M7 10l5 5 5-5' }]],
   // three columns in a frame: choose the table's columns

@@ -1,0 +1,88 @@
+// UPI IDs (VPAs) in a ledger line and what Razorpay's lookup says about them. Pure and I/O-free (finance-vpa.test.mjs).
+//
+// A UPI payment to a person often carries no name, only their UPI ID ("q000111222@ybl on PhonePe"). Razorpay can say whose ID it is, so a
+// line can be suggested under that person's name instead of the bare ID. The lookup itself lives in netlify/functions/lib/finance-vpa.ts;
+// the suggestion engine reads the answers through `vpaNames` (finance-suggest.mjs).
+
+import { maskUpiId } from './finance-access.mjs';
+
+/** How many IDs one lookup request may carry: the lookup is a billed call at Razorpay, so it is asked for in small, deliberate batches. */
+export const VPA_LOOKUP_LIMIT = 25;
+
+// name@handle: the part before the @ is letters, digits, dot, dash, underscore; the handle is letters and digits. Not followed by more handle
+// characters or a dot, so an e-mail address ("name@example.com") is not taken for one.
+const VPA = /(?<![\w.@-])([a-z0-9][a-z0-9._-]{1,255})@([a-z][a-z0-9]{1,63})(?![\w.-])/i;
+
+// A UPI ID that belongs to a payment gateway or aggregator (Razorpay, PayU, ...) names the gateway, not whoever was paid through it: one ID
+// serves many merchants. Such an ID must never supply a suggested name, be attached to a party as that party's payment detail, or verify a
+// payee; the person types the payee's name by hand. Detected by the registered name Razorpay gives back, or by the ID itself starting with a
+// gateway's name. A list to extend as new ones turn up; it is a safeguard, and the reviewed add also lets a person decline to attach an ID.
+const GATEWAY_NAME = /\b(razorpay|payu|cashfree|billdesk|bill desk|ccavenue|cc avenue|instamojo|juspay|easebuzz|pine ?labs|paytm payments|phonepe|bharatpe|stripe|paypal|worldline|atom technologies|mswipe)\b/i;
+const GATEWAY_ID = /^(razorpay|rzp[._-]|payu|cashfree|billdesk|ccavenue|instamojo|juspay|easebuzz|pinelabs)/i;
+
+/** True when a registered or shown name is a payment gateway's own. */
+export const isGatewayName = (name) => GATEWAY_NAME.test(String(name ?? ''));
+
+/** True when the UPI ID itself starts with a payment gateway's name. */
+export const isGatewayVpa = (vpa) => GATEWAY_ID.test(String(vpa ?? '').split('@')[0]);
+
+/** The UPI ID inside `text`, lowercased, or null. */
+export function vpaIn(text) {
+  const m = VPA.exec(String(text ?? ''));
+  return m ? `${m[1]}@${m[2]}`.toLowerCase() : null;
+}
+
+/**
+ * `text` with every UPI ID in it masked ("q000111222@ybl on PhonePe" -> "q••••@ybl on PhonePe"), for someone who may not see payee UPI IDs. The rest
+ * of the text is left as it is, so the app's wording survives. null and '' come back unchanged.
+ * @param {string | null | undefined} text
+ */
+export function maskVpasIn(text) {
+  if (text == null || text === '') return text;
+  return String(text).replace(new RegExp(VPA.source, 'gi'), (_m, user, handle) => maskUpiId(`${user}@${handle}`.toLowerCase()));
+}
+
+/** True when the whole string is one UPI ID (nothing else around it). */
+export function isVpa(text) {
+  const s = String(text ?? '').trim();
+  return Boolean(s) && vpaIn(s) === s.toLowerCase();
+}
+
+/**
+ * The IDs worth looking up: those in `texts`, once each, that are not in `known` (a Set of lowercase IDs already looked up), and never more than
+ * `limit`. Order is the order first seen, so the lines at the top of the ledger come first.
+ * @param {Array<string | null | undefined>} texts @param {Set<string>} known @param {number} [limit]
+ */
+export function vpasToLookUp(texts, known, limit = VPA_LOOKUP_LIMIT) {
+  const out = [];
+  const seen = new Set();
+  for (const t of texts) {
+    const v = vpaIn(t);
+    if (!v || known.has(v) || seen.has(v) || isGatewayVpa(v)) continue; // a gateway's ID needs no (billed) lookup: it names nobody
+    seen.add(v);
+    out.push(v);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+/**
+ * The UPI table's two derived columns for one row, from its "Paid to" text and the answers kept so far (`answers.names` by lowercase ID,
+ * `answers.known` every ID already asked about). `upiId` follows the masking rule for payee UPI IDs: the whole ID only for someone who may see
+ * payee bank details (`canSeeIds`), otherwise "p••••@bank". `vpaState`: 'named' (Razorpay gave a name), 'asked' (looked up, no name on file),
+ * 'new' (not looked up yet), or null (no UPI ID in the text). Nothing here is stored on the UPI row.
+ * @param {string | null | undefined} text @param {{ names: Record<string, string>, known: Set<string> }} answers @param {boolean} canSeeIds
+ */
+export function vpaFieldsFor(text, answers, canSeeIds) {
+  const vpa = vpaIn(text);
+  if (!vpa) return { upiId: null, vpaName: null, vpaState: null };
+  const vpaName = answers.names[vpa] ?? null;
+  return { upiId: canSeeIds ? vpa : maskUpiId(vpa), vpaName, vpaState: vpaName ? 'named' : answers.known.has(vpa) ? 'asked' : 'new' };
+}
+
+/** The registered name in a Razorpay validate-VPA response, or null when the ID does not exist or came back without a name. */
+export function nameFromLookup(body) {
+  if (!body || body.success !== true) return null;
+  const name = String(body.customer_name ?? '').replace(/\s+/g, ' ').trim();
+  return name || null;
+}

@@ -58,6 +58,28 @@ export async function paymentMatchesKeyMode(paymentId: string): Promise<'match' 
   }
 }
 
+// Whether the keys this server runs with are Razorpay's live or test pair, by their prefix. The finance module only trusts live answers.
+export const razorpayKeyMode = (): 'live' | 'test' => (process.env.RAZORPAY_KEY_ID?.startsWith('rzp_live_') ? 'live' : 'test');
+
+export type VpaLookup = { ok: true; body: { vpa?: string; success?: boolean; customer_name?: string } } | { ok: false; status: number; description: string };
+
+// Razorpay's validate-VPA call (POST /v1/payments/validate/vpa): whether a UPI ID exists and, if it does, the name it is registered to.
+// It is enabled per account by Razorpay support (TVC's was on 2026-11-16; before that it answered 400 "URL not found"), and a call may be
+// billed, so callers ask only about IDs they do not already hold. Never throws: a failure comes back as { ok: false } for the caller to report.
+export async function validateVpa(vpa: string): Promise<VpaLookup> {
+  try {
+    const res = await fetch(`${API_BASE}/payments/validate/vpa`, {
+      method: 'POST',
+      headers: { Authorization: authHeader(), 'content-type': 'application/json' },
+      body: JSON.stringify({ vpa }),
+    });
+    if (!res.ok) return { ok: false, status: res.status, description: await razorpayErrorDescription(res) };
+    return { ok: true, body: (await res.json()) as { vpa?: string; success?: boolean; customer_name?: string } };
+  } catch (err) {
+    return { ok: false, status: 0, description: err instanceof Error ? err.message : 'The request failed' };
+  }
+}
+
 export interface RazorpayPaymentLink {
   id: string;
   reference_id: string | null;
