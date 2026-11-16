@@ -2,7 +2,7 @@
 // The shared admin table's pure pieces (the engine's filtering and sorting are in data-table-engine.test.mjs). Every row here is invented.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildItems, chipCounts, cleanLayout, moveColumn, parseColumnFilter, matchColumn, passesWords, readFavorites, withFavorite } from './data-table.mjs';
+import { buildItems, cellFilterText, chipCounts, cleanLayout, columnGroup, moveColumn, parseColumnFilter, matchColumn, passesWords, readFavorites, withFavorite } from './data-table.mjs';
 
 const rows = [
   { id: 1, name: 'Green Valley Nursery', kind: 'Vendor', files: 2, paid: 1825000, last: '2026-11-09' },
@@ -77,4 +77,36 @@ test('a column moves one place among the movable ones, and a fixed column keeps 
   assert.deepEqual(moveColumn(start, 'c', 1, ids, ['act']), start, 'cannot pass the fixed column');
   assert.deepEqual(moveColumn(start, 'act', -1, ids, ['act']), start, 'a fixed column does not move');
   assert.deepEqual(moveColumn({ order: ['act', 'a', 'b', 'c'], hidden: [] }, 'a', 1, ['act', 'a', 'b', 'c'], ['act']).order, ['act', 'b', 'a', 'c'], 'a fixed column at the start stays at the start');
+});
+
+test('"filter to this value" and "filter out this value" give text the column can read, and it picks the right rows', () => {
+  const pass = (type, text, value) => matchColumn(type, parseColumnFilter(type, text), value);
+  for (const [type, cellValue, other] of [['text', 'Green Valley', 'Ravi T'], ['text', '=odd', 'x'], ['text', '!bang', 'x'], ['amount', 1825000, 780000], ['amount', 250050, 0], ['count', 2, 1], ['date', '2026-11-09', '2026-11-01']]) {
+    const to = cellFilterText(type, cellValue);
+    assert.ok(!parseColumnFilter(type, to)?.error, `${type} ${cellValue}: ${to} can be read`);
+    assert.ok(pass(type, to, cellValue), `${type} ${cellValue}: filter to keeps it`);
+    assert.ok(!pass(type, to, other), `${type} ${cellValue}: filter to drops ${other}`);
+    const out = cellFilterText(type, cellValue, true);
+    if (type === 'date') assert.equal(out, null, 'dates cannot say "not this date"');
+    else {
+      assert.ok(!pass(type, out, cellValue), `${type} ${cellValue}: filter out drops it`);
+      assert.ok(pass(type, out, other), `${type} ${cellValue}: filter out keeps ${other}`);
+    }
+  }
+  assert.equal(cellFilterText('amount', 250050), '=2500.5', 'paise become rupees, without trailing zeros');
+  assert.equal(cellFilterText('text', 'Green Valley', true), '!=Green Valley');
+  assert.equal(cellFilterText('text', ''), '=', 'an empty text cell filters to the empty ones');
+  assert.equal(cellFilterText('text', null, true), '!=', 'and out to the filled ones');
+  assert.equal(cellFilterText('amount', null), null, 'an empty amount or date has nothing to filter on');
+  assert.equal(cellFilterText('date', ''), null);
+});
+
+test('group by a column: rows with no value fall in a "No ..." group that comes last', () => {
+  const g = columnGroup({ id: 'kind', label: 'Kind', value: (r) => r.kind });
+  assert.equal(g.id, 'col:kind');
+  assert.equal(g.label, 'Kind');
+  assert.deepEqual([{ kind: 'Vendor' }, { kind: '' }, { kind: null }, { kind: ' Employee ' }].map(g.key), ['Vendor', 'No kind', 'No kind', 'Employee']);
+  const items = buildItems([{ kind: '' }, { kind: 'Vendor' }, { kind: 'Employee' }, { kind: 'Vendor' }], g).items.filter((i) => i.kind === 'group');
+  assert.deepEqual(items.map((i) => [i.label, i.count]), [['Employee', 1], ['Vendor', 2], ['No kind', 1]]);
+  assert.equal(columnGroup({ id: 'x', value: (r) => r.x, groupValue: (r) => r.y }).key({ x: 'a', y: 'b' }), 'b', 'a column can group on a different value than it shows');
 });

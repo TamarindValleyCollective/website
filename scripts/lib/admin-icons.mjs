@@ -11,6 +11,8 @@ const SVG = 'http://www.w3.org/2000/svg';
 export const ICONS = {
   // a pencil: change this
   edit: [['path', { d: 'M12 20h9' }], ['path', { d: 'M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z' }]],
+  // a chevron pointing down: this opens a menu
+  chevron: [['path', { d: 'M7 10l5 5 5-5' }]],
   // three columns in a frame: choose the table's columns
   columns: [['rect', { x: '3', y: '3', width: '18', height: '18', rx: '2' }], ['path', { d: 'M9 3v18M15 3v18' }]],
 };

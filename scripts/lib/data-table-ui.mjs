@@ -13,14 +13,17 @@
 // bulk:    [{ id, label, run(rows) }]   shown when rows are ticked
 // detail:  (row) -> Node | null   a full-width row under that row (the Requests suggestions); built fresh for the table and for the card
 // rowKind: (row) -> 'cr' | 'tr' | ''   a credit or a transfer gets a coloured stripe down its row (and card); '' is the ordinary row
+// cell and header menus come with every table: right-click a cell (or long-press it) for Filter to / Filter out this value and Group by that column;
+//   each header has a ▾ (or right-click it) for Sort, Group by this column and Hide. A text column can be grouped unless it says `groupable: false`;
+//   `groupable: true` allows another type, and `groupValue(row)` groups on something other than what it shows.
 // layoutKey: 'tvc-…-columns:<account>'   turns on the Columns menu (show or hide a column, move it earlier or later, reset) and keeps the person's
 //   layout in this browser under that key. A column with `fixed: true` (or `sticky: true`) is always shown and does not move.
 // onUserFilter: () => void   called when the person changes a chip, the search, a column filter or the grouping (not by setRows or setChips)
 // column extras: sortable: false (no sort button), wrap: true (the cell may wrap, for long text), sticky: true (the last column stays
 //   in view while the table scrolls sideways, for a column of buttons)
-import { buildItems, chipCounts, moveColumn, readFavorites, withFavorite } from './data-table.mjs';
+import { buildItems, cellFilterText, chipCounts, columnGroup, moveColumn, readFavorites, withFavorite } from './data-table.mjs';
 import { createTableEngine } from './data-table-engine.mjs';
-import { h } from './finance-ui.mjs';
+import { h, rupees } from './finance-ui.mjs';
 import { iconButton } from './admin-icons.mjs';
 
 const tick = (checked, label, onChange) => {
@@ -37,7 +40,10 @@ export function createDataTable(opts) {
     rowClass = () => '', noun = ['row', 'rows'], favoritesKey = null, searchPlaceholder = 'Search every column', toolbarEnd = null, empty = {},
     defaultGroup = '', defaultSort = null, layoutKey = null, onChange = () => {}, onUserFilter = () => {}, detail = null, rowKind = () => '', cap = Infinity,
   } = opts;
-  const allowed = { chipIds: filters.map((f) => f.id), groupIds: groups.map((g) => g.id) };
+  // "Group by this column" for any plain text column, besides the groupings the page lists.
+  const groupable = (c) => c.groupable ?? ((c.type ?? 'text') === 'text' && c.filter !== 'none' && !c.sticky && !c.fixed);
+  const columnGroups = new Map(columns.filter(groupable).map((c) => [`col:${c.id}`, columnGroup(c)]));
+  const allowed = { chipIds: filters.map((f) => f.id), groupIds: [...groups.map((g) => g.id), ...columnGroups.keys()] };
   const state = { rows: [], chips: [], words: [], text: '', group: defaultGroup, sort: defaultSort ?? [null, 1], cols: {}, collapsed: new Set(), sel: new Set(), favs: [], popOpen: false };
   const colById = new Map(columns.map((c) => [c.id, c]));
   const engine = createTableEngine({ columns: columns.map((c) => ({ ...c, fixed: c.fixed ?? c.sticky })), filters, searchText });
@@ -66,6 +72,7 @@ export function createDataTable(opts) {
   const colsBtn = iconButton({ name: 'columns', label: 'Columns', tip: 'Choose columns', cls: 'dt-colsbtn', attrs: { 'aria-expanded': 'false', 'aria-controls': 'dt-colpop' } });
   const colsPop = h('div', { class: 'dt-colpop', attrs: { id: 'dt-colpop', hidden: '' } });
   const colsWrap = layoutKey ? h('div', { class: 'dt-cols' }, colsBtn, colsPop) : null;
+  const menu = h('div', { class: 'dt-menu', attrs: { role: 'menu', hidden: '' } });
   const errors = h('p', { class: 'dt-errors', attrs: { role: 'status', hidden: '' } });
   const headRow = h('tr', { class: 'dt-heads' });
   const filterRow = h('tr', { class: 'dt-filters' });
@@ -76,7 +83,7 @@ export function createDataTable(opts) {
   const foot = h('p', { class: 'dt-foot', attrs: { 'aria-live': 'polite' } });
   const bulkBar = h('div', { class: 'dt-bulk', attrs: { role: 'region', 'aria-label': 'Selected rows', hidden: '' } });
   root.classList.add('dt');
-  root.replaceChildren(h('div', { class: 'dt-tools' }, h('div', { class: 'dt-search' }, sbox, pop), colsWrap, toolbarEnd), errors, scroll, cards, emptyBox, foot, bulkBar);
+  root.replaceChildren(h('div', { class: 'dt-tools' }, h('div', { class: 'dt-search' }, sbox, pop), colsWrap, toolbarEnd), errors, scroll, cards, emptyBox, foot, bulkBar, menu);
 
   // ---- what is showing
   let shown = [];
@@ -87,7 +94,7 @@ export function createDataTable(opts) {
     errors.textContent = msgs.join(' ');
     errors.hidden = msgs.length === 0;
   }
-  const groupDef = () => groups.find((g) => g.id === state.group) ?? null;
+  const groupDef = () => groups.find((g) => g.id === state.group) ?? columnGroups.get(state.group) ?? null;
 
   // ---- search box chips
   function renderChips() {
@@ -150,11 +157,12 @@ export function createDataTable(opts) {
       ...(selectable ? [h('th', { class: 'dt-tick' }, tick(shown.length > 0 && shown.every((r) => state.sel.has(rowId(r))), 'Select all shown', (on) => { for (const r of shown) on ? state.sel.add(rowId(r)) : state.sel.delete(rowId(r)); renderBody(); renderHead(); renderBulk(); }))] : []),
       ...shownColumns().map((c) => {
         const on = state.sort[0] === c.id;
-        if (c.sortable === false) return h('th', { class: `${c.align === 'end' ? 'dt-end' : ''}${c.sticky ? ' dt-sticky' : ''}`.trim(), text: c.label });
-        const th = h('th', { class: `${c.align === 'end' ? 'dt-end' : ''}${c.sticky ? ' dt-sticky' : ''}`.trim(), attrs: { 'aria-sort': on ? (state.sort[1] > 0 ? 'ascending' : 'descending') : 'none' } },
+        const cls = `${c.align === 'end' ? 'dt-end' : ''}${c.sticky ? ' dt-sticky' : ''}`.trim();
+        if (c.sortable === false) return withHeaderMenu(h('th', { class: cls, text: c.label }), c);
+        const th = h('th', { class: cls, attrs: { 'aria-sort': on ? (state.sort[1] > 0 ? 'ascending' : 'descending') : 'none' } },
           h('button', { class: 'dt-sort', attrs: { type: 'button' }, on: { click: () => { state.sort = [c.id, on ? -state.sort[1] : 1]; render(); } } }, c.label, h('span', { class: 'dt-arrow', attrs: { 'aria-hidden': 'true' }, text: on ? (state.sort[1] > 0 ? '▲' : '▼') : '⇕' })));
         if (on) th.classList.add('dt-sorted');
-        return th;
+        return withHeaderMenu(th, c);
       }),
     );
   }
@@ -207,12 +215,13 @@ export function createDataTable(opts) {
       if (selectable) tr.append(h('td', { class: 'dt-tick' }, tick(sel, 'Select row', (on) => { on ? state.sel.add(id) : state.sel.delete(id); renderBody(); renderHead(); renderBulk(); })));
       for (const c of shownCols) {
         const out = c.render ? c.render(r) : c.value(r);
-        const td = h('td', { class: `${c.align === 'end' ? 'dt-end' : ''}${c.wrap ? ' dt-wrap' : ''}${c.sticky ? ' dt-sticky' : ''}`.trim() });
+        const td = h('td', { class: `${c.align === 'end' ? 'dt-end' : ''}${c.wrap ? ' dt-wrap' : ''}${c.sticky ? ' dt-sticky' : ''}`.trim(), attrs: { 'data-col': c.id } });
         if (out instanceof Node) td.append(out);
         else td.textContent = out == null || out === '' ? '–' : String(out);
         tr.append(td);
       }
       if (onOpen) tr.addEventListener('click', (e) => { if (!e.target.closest('a,button,input,select,textarea,label')) onOpen(r); });
+      rowOf.set(tr, r);
       trs.push(tr);
       const more = detail?.(r) ?? null;
       if (more) {
@@ -259,6 +268,105 @@ export function createDataTable(opts) {
       h('button', { class: 'button button--outline', attrs: { type: 'button' }, text: 'Clear', on: { click: () => api.clearSelection() } }),
     );
   }
+
+  // ---- the cell and header menus: one floating menu, opened at a cell (right-click or long-press) or from a header's ▾
+  const rowOf = new WeakMap();
+  let menuFrom = null;
+  function closeMenu(refocus = false) {
+    if (menu.hidden) return;
+    menu.hidden = true;
+    menu.replaceChildren();
+    for (const b of root.querySelectorAll('.dt-hmenu[aria-expanded="true"]')) b.setAttribute('aria-expanded', 'false');
+    if (refocus && menuFrom?.isConnected) menuFrom.focus();
+    menuFrom = null;
+  }
+  function openMenu(items, x, y, from = null) {
+    closeMenu();
+    const list = items.filter(Boolean);
+    if (!list.length) return;
+    menuFrom = from;
+    from?.setAttribute('aria-expanded', 'true');
+    menu.replaceChildren(...list.map((it) => h('button', { class: 'dt-menuitem', attrs: { type: 'button', role: 'menuitem', tabindex: '-1' }, text: it.label, on: { click: () => { closeMenu(); it.run(); } } })));
+    menu.hidden = false;
+    menu.style.left = `${Math.max(4, Math.min(x, window.innerWidth - menu.offsetWidth - 8))}px`;
+    menu.style.top = `${Math.max(4, Math.min(y, window.innerHeight - menu.offsetHeight - 8))}px`;
+    menu.firstChild.focus({ preventScroll: true });
+  }
+  menu.addEventListener('keydown', (e) => {
+    const items = [...menu.querySelectorAll('.dt-menuitem')];
+    const i = items.indexOf(document.activeElement);
+    if (e.key === 'ArrowDown') items[(i + 1) % items.length].focus();
+    else if (e.key === 'ArrowUp') items[(i - 1 + items.length) % items.length].focus();
+    else if (e.key === 'Home') items[0].focus();
+    else if (e.key === 'End') items.at(-1).focus();
+    else if (e.key === 'Escape') closeMenu(true);
+    else if (e.key === 'Tab') closeMenu();
+    else return;
+    if (e.key !== 'Tab') e.preventDefault();
+  });
+  // Captured, so the menu is closed before whatever was clicked (or right-clicked) acts; a click on the ▾ that opened it is that button's own business.
+  document.addEventListener('click', (e) => { const path = e.composedPath(); if (!menu.hidden && !path.includes(menu) && !(menuFrom && path.includes(menuFrom))) closeMenu(); }, true);
+  document.addEventListener('contextmenu', (e) => { if (!menu.hidden && !e.composedPath().includes(menu)) closeMenu(); }, true);
+  window.addEventListener('scroll', () => closeMenu(), true);
+  window.addEventListener('resize', () => closeMenu());
+
+  const groupItem = (c) => {
+    const id = `col:${c.id}`;
+    if (!columnGroups.has(id)) return null;
+    return state.group === id
+      ? { label: 'Remove grouping', run: () => { onUserFilter(); state.group = ''; render(); } }
+      : { label: `Group by ${c.label}`, run: () => { onUserFilter(); state.group = id; render(); } };
+  };
+  const headerItems = (c) => [
+    c.sortable !== false ? { label: 'Sort ascending', run: () => { state.sort = [c.id, 1]; render(); } } : null,
+    c.sortable !== false ? { label: 'Sort descending', run: () => { state.sort = [c.id, -1]; render(); } } : null,
+    groupItem(c),
+    layoutKey && !engine.fixedIds.includes(c.id) && engine.visibleColumnIds().length > 1 ? { label: 'Hide column', run: () => { const lay = engine.layout(); setLayout({ ...lay, hidden: [...lay.hidden, c.id] }); } } : null,
+  ].filter(Boolean);
+  function withHeaderMenu(th, c) {
+    if (!headerItems(c).length) return th;
+    const btn = iconButton({ name: 'chevron', label: `${c.label} column menu`, tip: 'Column menu', cls: 'dt-hmenu', attrs: { 'aria-haspopup': 'menu', 'aria-expanded': 'false' } });
+    btn.addEventListener('click', () => {
+      if (menuFrom === btn && !menu.hidden) return closeMenu(true);
+      const b = btn.getBoundingClientRect();
+      openMenu(headerItems(c), b.left, b.bottom + 4, btn);
+    });
+    th.append(btn);
+    th.addEventListener('contextmenu', (e) => { e.preventDefault(); openMenu(headerItems(c), e.clientX, e.clientY, btn); });
+    return th;
+  }
+  // A cell: filter to or out of its value, or group by its column. Left to the browser over a link, a button, a field or selected text.
+  function cellItems(c, r) {
+    if (c.filter === 'none' || c.type === 'none') return [];
+    const type = c.type ?? 'text';
+    const raw = (c.filterValue ?? c.value)(r);
+    const text = type === 'amount' && raw != null && raw !== '' ? rupees(raw) : String(raw ?? '').trim();
+    const quoted = text ? `“${text.length > 28 ? `${text.slice(0, 27)}…` : text}”` : 'empty';
+    const apply = (typed) => { onUserFilter(); state.cols[c.id] = typed; buildFilterRow(); render(); };
+    const to = cellFilterText(type, raw);
+    const out = cellFilterText(type, raw, true);
+    return [to ? { label: `Filter to ${quoted}`, run: () => apply(to) } : null, out ? { label: `Filter out ${quoted}`, run: () => apply(out) } : null, groupItem(c)].filter(Boolean);
+  }
+  body.addEventListener('contextmenu', (e) => {
+    const td = e.target.closest('td[data-col]');
+    // (A long press is our own event, not trusted: the finger has just selected a word, and that must not count.)
+    if (!td || e.target.closest('a, button, input, select, textarea, label') || (e.isTrusted && String(window.getSelection()).trim())) return;
+    const r = rowOf.get(td.parentElement);
+    const c = colById.get(td.dataset.col);
+    const items = r && c ? cellItems(c, r) : [];
+    if (!items.length) return;
+    e.preventDefault();
+    openMenu(items, e.clientX, e.clientY);
+  });
+  // iOS never sends a right-click, so a long press (a finger held still) opens the same menu.
+  let press = null;
+  body.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'touch') return;
+    const { clientX: x, clientY: y, target } = e;
+    clearTimeout(press);
+    press = setTimeout(() => { press = null; target.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: x, clientY: y })); }, 550);
+  });
+  for (const t of ['pointerup', 'pointercancel', 'pointermove']) body.addEventListener(t, () => { clearTimeout(press); press = null; });
 
   // ---- the Columns menu: show or hide a column, move it earlier or later, put the default back
   let colsOpen = false;

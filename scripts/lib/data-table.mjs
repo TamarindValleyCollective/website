@@ -132,3 +132,33 @@ export function moveColumn(layout, id, delta, ids, fixed = []) {
   [movable[i], movable[j]] = [movable[j], movable[i]];
   return { ...layout, order: placeMovable(ids, fixed, movable) };
 }
+
+// ---- cell and header menus: what "filter to this value" and "group by this column" mean in the table's own terms
+const rupeesText = (paise) => String(Math.round(Number(paise)) / 100);
+
+/**
+ * The text to type under a column's filter box so that only rows with this cell's value pass (or, with `not`, every other row).
+ * Null when the column's syntax cannot say it: an empty amount or date, or "not this date" (dates take only `=` and a full date).
+ */
+export function cellFilterText(type, value, not = false) {
+  const op = not ? '!=' : '=';
+  if (type === 'amount') return value == null || value === '' ? null : `${op}${rupeesText(value)}`;
+  if (type === 'count') return `${op}${Number(value ?? 0)}`;
+  if (type === 'date') return not || value == null || value === '' ? null : `=${value}`;
+  return `${op}${String(value ?? '').trim()}`;
+}
+
+/** A grouping by the values of one column: rows with no value fall in a "No ..." group, which comes last. `groupValue` lets a column group on something other than what it shows. */
+export function columnGroup(c) {
+  const label = c.label ?? c.id;
+  const none = `No ${String(label).toLowerCase()}`;
+  const get = c.groupValue ?? c.value;
+  return {
+    id: `col:${c.id}`,
+    label,
+    key: (r) => {
+      const v = get(r);
+      return v == null || String(v).trim() === '' ? none : String(v).trim();
+    },
+  };
+}
