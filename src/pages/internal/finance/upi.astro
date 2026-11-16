@@ -485,6 +485,19 @@ import '../../../styles/money.css';
       s.title = 'The name registered for this UPI ID, from Razorpay';
       return s;
     }
+    if (u.vpaState === 'new' && canEdit) {
+      // One ID at a time: the same call as the toolbar button, for just this row.
+      const cell = el('span', 'name-new');
+      const ask = el('button', 'button button--outline button--small', 'Look up');
+      ask.type = 'button';
+      ask.setAttribute('aria-label', 'Look up the registered name for this UPI ID');
+      ask.addEventListener('click', (e) => {
+        e.stopPropagation();
+        void runLookUp([u.counterparty], ask);
+      });
+      cell.append(el('span', 'dim', nameText(u)), ask);
+      return cell;
+    }
     return u.vpaState ? el('span', 'dim', nameText(u)) : (u.counterparty ?? '');
   }
   const lookUpButton = el('button', 'button button--outline button--small', '');
@@ -500,11 +513,15 @@ import '../../../styles/money.css';
       lookUpButton.textContent = `Look up ${k} UPI ${k === 1 ? 'name' : 'names'}${n > VPA_LOOKUP_LIMIT ? ` (of ${n})` : ''}`;
     }
   }
-  lookUpButton.addEventListener('click', async () => {
-    lookUpButton.disabled = true;
-    lookUpButton.textContent = 'Looking up…';
+  lookUpButton.addEventListener('click', () => void runLookUp(toLookUp(), lookUpButton));
+  // Asks for the UPI IDs in `texts` (the server skips any already looked up and stops at the first failure), then reloads. `trigger` is the
+  // button that was pressed, disabled while it runs.
+  async function runLookUp(texts: (string | null)[], trigger: HTMLButtonElement) {
+    trigger.disabled = true;
+    const label = trigger.textContent;
+    trigger.textContent = 'Looking up…';
     try {
-      const { status, data: res } = await staffFetch('/api/finance-admin/vpa-names', { method: 'POST', body: { texts: toLookUp() } });
+      const { status, data: res } = await staffFetch('/api/finance-admin/vpa-names', { method: 'POST', body: { texts } });
       if (status !== 200) showToast(res?.error ?? 'Could not look up the names.');
       else {
         const parts = [res.named ? `${res.named} named` : '', res.noName ? `${res.noName} with no name on file` : '', res.notFound ? `${res.notFound} not found` : ''].filter(Boolean);
@@ -514,10 +531,11 @@ import '../../../styles/money.css';
     } catch (err) {
       if (!fail(err)) showToast('Could not look up the names.');
     } finally {
-      lookUpButton.disabled = false;
+      trigger.disabled = false;
+      if (trigger.isConnected) trigger.textContent = label; // a row button is rebuilt by the reload; the toolbar one is relabelled below
       renderLookUp();
     }
-  });
+  }
 
   const monthOf = (u: Upi) => u.paidAt.slice(0, 7);
   const needsDelegate = (u: Upi) => u.delegateHow === 'ambiguous' || u.delegateHow === 'none';
@@ -756,6 +774,13 @@ import '../../../styles/money.css';
 
   .finance-upi .dt .dim {
     color: var(--tvc-ink-soft);
+  }
+
+  /* A UPI ID not looked up yet: the words, and a small button to ask for just this one. */
+  .finance-upi .dt .name-new {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
   }
 
   .finance-upi .dt .peek {
