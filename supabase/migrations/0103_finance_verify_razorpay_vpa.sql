@@ -1,6 +1,6 @@
 -- Finance module: a UPI ID can be verified by Razorpay's UPI ID lookup (docs/finance/FINANCE.md, "UPI ID names").
--- NOT YET APPLIED to TVC ERP. Apply, then check: a verified row may carry verification_method = 'razorpay_vpa', and any other value
--- is still refused.
+-- Applied to TVC ERP on 2026-11-16 (recorded as finance_verify_razorpay_vpa). Checked afterwards: the constraint definition lists
+-- 'razorpay_vpa' with the existing values and is validated against the existing rows.
 --
 -- fin_party_accounts.verification_method says how a verifier checked a payee's details (0082, 0094). This adds one more answer,
 -- 'razorpay_vpa': the registered name Razorpay gave for the UPI ID (kept in fin_vpa_names, 0102) is recorded as the name the bank showed

@@ -555,7 +555,7 @@ Razorpay's validate-VPA call says whose ID it is, so the suggestion can be the p
 - **Account setup:** Razorpay support enabled `/v1/payments/validate/vpa` on the live account on 2026-11-16 (before that it answered 400
   "URL not found"). The account's per-call charge is still unconfirmed; check the Razorpay dashboard before looking up in volume.
 - **Not done:** a lookup is not offered from the Parties or UPI pages, only from the ledger (the verify sheet does ask Razorpay once when no
-  answer is kept); migration `0103` is **not yet applied**; no auto-verify rule (a director decision); bank accounts are not checked this way
+  answer is kept); migration `0103` was **applied 2026-11-16**; no auto-verify rule (a director decision); bank accounts are not checked this way
   (Razorpay's bank-account validation is a RazorpayX product and is not set up).
 
 ## The table (the Ledger's list view, session 05 follow-up)
