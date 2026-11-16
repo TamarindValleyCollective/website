@@ -246,9 +246,47 @@ test('looking up from the UPI page names the ledger lines too: one lookup, two p
   seedUpi();
   razorpay.answers['fresh.id@paytm'] = { vpa: 'fresh.id@paytm', success: true, customer_name: 'FRESH PERSON' };
   const op = sign('user');
-  const texts = (await upiRows(op)).lines.filter((l) => l.vpaState === 'new').map((l) => l.counterparty);
-  assert.deepEqual(texts, ['fresh.id@paytm']);
-  const res = await lookup(op, texts);
+  // This person may not see UPI IDs, so the page sends row ids and the server reads each row's "Paid to" itself.
+  const ids = (await upiRows(op)).lines.filter((l) => l.vpaState === 'new').map((l) => l.id);
+  assert.deepEqual(ids, ['u-new']);
+  const res = await api(op, '/vpa-names', { method: 'POST', body: { upiRowIds: ids } });
   assert.deepEqual(await res.json(), { asked: 1, named: 1, noName: 0, notFound: 0, stoppedBecause: null });
+  assert.deepEqual(razorpay.asked, ['fresh.id@paytm'], 'Razorpay was asked about the real ID');
   assert.equal(byId(await upiRows(op))['u-new'].vpaName, 'FRESH PERSON');
+});
+
+test('"Paid to" masks the UPI ID in it for someone who may not see payee UPI IDs, and keeps the app’s wording', async () => {
+  reset();
+  seedUpi();
+  const admin = byId(await upiRows(sign('admin')));
+  assert.equal(admin['u-named'].counterparty, `${VPA_A} on PhonePe`, 'in full for a holder of verify-payee or export');
+  const viewer = await upiRows(sign('user'));
+  const rows = byId(viewer);
+  assert.equal(rows['u-named'].counterparty, 'q••••@ybl on PhonePe');
+  assert.equal(rows['u-plain'].counterparty, 'Green Nursery', 'a plain name is untouched');
+  assert.ok(!JSON.stringify(viewer.lines).includes('q000111222'), 'the full ID is nowhere in what a viewer receives');
+  assert.ok(!JSON.stringify(viewer.lines).includes('test.person'), 'for any row');
+  // What the server works out still uses the real text: the lookup state and the name are intact.
+  assert.equal(rows['u-named'].vpaName, 'TEST VENDOR WORKS');
+  assert.equal(rows['u-new'].vpaState, 'new');
+});
+
+test('payments of one UPI ID share a group number the page can count by, and the number says nothing about the ID', async () => {
+  reset();
+  db.fin_upi_lines.push(upiRow('a1', 'one.id@ybl on PhonePe'), upiRow('a2', 'ONE.ID@ybl'), upiRow('b1', 'other.id@paytm'), upiRow('p1', 'Green Nursery'));
+  const rows = byId(await upiRows(sign('user')));
+  assert.equal(rows.a1.vpaGroup, rows.a2.vpaGroup, 'the same ID, however it is written');
+  assert.notEqual(rows.a1.vpaGroup, rows.b1.vpaGroup);
+  assert.equal(rows.p1.vpaGroup, null, 'a plain name has none');
+  assert.ok([rows.a1.vpaGroup, rows.b1.vpaGroup].every((g) => Number.isInteger(g) && g >= 1 && g <= 2), 'small counting numbers, not a hash of the ID');
+});
+
+test('a lookup by row id skips a gateway’s ID without a call, and refuses a body that names nothing', async () => {
+  reset();
+  db.fin_upi_lines.push(upiRow('g1', 'razorpay.shop@icici on PhonePe'), upiRow('r1', 'fresh.id@paytm'));
+  const op = sign('user');
+  assert.equal((await api(op, '/vpa-names', { method: 'POST', body: { upiRowIds: ['g1', 'r1'] } })).status, 200);
+  assert.deepEqual(razorpay.asked, ['fresh.id@paytm']);
+  assert.equal((await api(op, '/vpa-names', { method: 'POST', body: {} })).status, 400);
+  assert.equal((await api(op, '/vpa-names', { method: 'POST', body: { upiRowIds: ['bad id!'] } })).status, 400);
 });

@@ -232,7 +232,7 @@ test('the party column follows the UPI ID: on file, matches, differs, and not lo
   await api(op, '/parties', { method: 'POST', body: { name: 'Test Vendor Works', kind: 'vendor', payee: { method: 'upi', upi: VPA } } });
   assert.equal((await partyOf(op, 'r1')).state, 'onfile', 'the ID is on a party but has not been looked up');
   kept(VPA, 'TEST VENDOR WORKS');
-  assert.deepEqual(await partyOf(op, 'r1'), { state: 'matches', partyId: db.fin_parties[0].id, partyName: 'Test Vendor Works', registeredName: 'TEST VENDOR WORKS' });
+  assert.deepEqual(await partyOf(op, 'r1'), { state: 'matches', partyId: db.fin_parties[0].id, partyName: 'Test Vendor Works', partyKind: 'vendor', accountStatus: 'unverified', verifiedName: null, registeredName: 'TEST VENDOR WORKS' });
   db.fin_vpa_names.length = 0;
   kept(VPA, 'SOMEONE ELSE ENTIRELY');
   const differs = await partyOf(op, 'r1');

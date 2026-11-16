@@ -113,6 +113,19 @@ import '../../../styles/money.css';
       </form>
     </dialog>
 
+    <dialog id="party-detail" class="sheet delegate-sheet" aria-labelledby="party-detail-title">
+      <div class="delegate-form">
+        <h2 id="party-detail-title"></h2>
+        <p class="sheet-text" id="party-detail-sub"></p>
+        <p class="note" id="party-detail-diff" hidden></p>
+        <dl class="detail-list" id="party-detail-list"></dl>
+        <div class="sheet-actions">
+          <a class="button button--outline" href="/internal/finance/parties/">Open in Parties</a>
+          <button type="button" class="button" id="party-detail-close">Close</button>
+        </div>
+      </div>
+    </dialog>
+
     <dialog id="party-dialog" class="sheet delegate-sheet party-sheet" aria-labelledby="party-title">
       <form id="party-form" class="delegate-form" novalidate>
         <h2 id="party-title">Add to Parties</h2>
@@ -132,7 +145,9 @@ import '../../../styles/money.css';
   import { StaffAuthError, clearStepUp, clearToken, closeOnBackdrop, decodeTokenEmail, getToken, setToken, showToast, staffFetch } from '../../../../scripts/lib/staff-client.mjs';
   import { clearState, showFailure, showLoading } from '../../../../scripts/lib/staff-states.mjs';
   import { createDataTable } from '../../../../scripts/lib/data-table-ui.mjs';
-  import { VPA_LOOKUP_LIMIT, vpasToLookUp } from '../../../../scripts/lib/finance-vpa.mjs';
+  import { VPA_LOOKUP_LIMIT } from '../../../../scripts/lib/finance-vpa.mjs';
+  import { icon } from '../../../../scripts/lib/admin-icons.mjs';
+  import { niceName } from '../../../../scripts/lib/finance-party-suggestions.mjs';
   import { amountKind, kindClass, moneyNode } from '../../../../scripts/lib/finance-ui.mjs';
 
   declare const google: any;
@@ -155,8 +170,8 @@ import '../../../styles/money.css';
   const STATE = { matched: { text: 'In the ledger', kind: 'ok' }, waiting: { text: 'Waiting for statement', kind: 'warn' }, unmatched: { text: 'Not in the statement', kind: 'crit' } } as const;
 
   // Whether the person behind a payment is in the Parties register (the server works it out: scripts/lib/finance-upi-parties.mjs).
-  type PartyState = { state: 'matches' | 'onfile' | 'differs' | 'attach' | 'missing' | 'gateway' | 'lookup' | 'noname' | 'unnamed'; partyId?: string; partyName?: string; registeredName?: string; name?: string; kind?: string; by?: string };
-  type Upi = { operatorId?: string | null; id: string; paidAt: string; time: string | null; app: 'bhim' | 'paytm'; counterparty: string | null; upiId: string | null; vpaName: string | null; vpaState: 'named' | 'asked' | 'new' | null; party: PartyState; remark: string | null; amountPaise: number; direction: 'debit' | 'credit'; isCircle: boolean; upiRef: string; note: string | null; purpose: string | null; bankLineId: string | null; account: string | null; delegateId: string | null; delegate: string | null; delegateHow: 'assigned' | 'auto' | 'ambiguous' | 'none' | null; state: 'matched' | 'waiting' | 'unmatched' };
+  type PartyState = { state: 'matches' | 'onfile' | 'differs' | 'attach' | 'missing' | 'gateway' | 'lookup' | 'noname' | 'unnamed'; partyId?: string; partyName?: string; partyKind?: string | null; accountStatus?: string | null; verifiedName?: string | null; registeredName?: string; name?: string; kind?: string; by?: string };
+  type Upi = { operatorId?: string | null; id: string; paidAt: string; time: string | null; app: 'bhim' | 'paytm'; counterparty: string | null; upiId: string | null; vpaName: string | null; vpaState: 'named' | 'asked' | 'new' | null; vpaGroup: number | null; party: PartyState; remark: string | null; amountPaise: number; direction: 'debit' | 'credit'; isCircle: boolean; upiRef: string; note: string | null; purpose: string | null; bankLineId: string | null; account: string | null; delegateId: string | null; delegate: string | null; delegateHow: 'assigned' | 'auto' | 'ambiguous' | 'none' | null; state: 'matched' | 'waiting' | 'unmatched' };
   type Delegate = { id: string; identifier: string; displayName: string | null; activeFrom: string; activeTo: string | null; capPaise: number | null; operatorId?: string | null };
   type Operator = { id: string; name: string };
   let all: Upi[] = [];
@@ -491,54 +506,68 @@ import '../../../styles/money.css';
     return td;
   }
 
-  // ---- Name and UPI ID columns, and the lookup that fills them (docs/finance/FINANCE.md, "UPI ID names"). The answers are kept per UPI ID, so
-  // the same lookup also names the ledger lines these payments are joined to.
-  const nameText = (u: Upi) => (u.party.state === 'gateway' ? 'Payment gateway' : null) ?? u.vpaName ?? (u.vpaState === 'new' ? 'Not looked up yet' : u.vpaState === 'asked' ? 'No name on file' : (u.counterparty ?? ''));
+  // ---- Name, Party and the actions that fill them in (docs/finance/FINANCE.md, "UPI ID names"). The server decides each row's state; this only shows it.
+  // The Party cell says one thing: a party exists, so its name, as a link to its details; none, so just an Add button; the name matches a party but the ID
+  // is not on it yet, so the party's name and Add ID. Nothing says in words what a button already says. A name that differs from what Razorpay says is the
+  // same link in amber with a mark. Row actions are the shell's soft buttons: green when they change the register, neutral when they only read.
+  function action(label: string, iconName: string, tone: 'change' | 'read', aria: string, onClick: (b: HTMLButtonElement) => void): HTMLButtonElement {
+    const b = el('button', `button ${tone === 'change' ? 'button--soft' : 'button--soft-neutral'}`);
+    b.type = 'button';
+    b.append(icon(iconName, 12), document.createTextNode(label));
+    b.setAttribute('aria-label', aria);
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      onClick(b);
+    });
+    return b;
+  }
+
+  // Razorpay gives names in capitals; they are shown in readable case here (the popup quotes Razorpay exactly).
+  const nameText = (u: Upi) => (u.party.state === 'gateway' ? 'Payment gateway' : null) ?? (u.vpaName ? niceName(u.vpaName) : null) ?? (u.party.state === 'lookup' ? 'Not looked up yet' : u.vpaState === 'asked' ? 'No name on file' : (u.counterparty ?? ''));
   function nameCell(u: Upi): Node | string {
     // A gateway's registered name (Razorpay...) is not the payee's, so it is not shown as the name.
-    if (u.party.state === 'gateway') return el('span', 'dim', nameText(u));
+    if (u.party.state === 'gateway') {
+      const g = el('span', 'dim', 'Payment gateway');
+      g.title = 'This UPI ID belongs to a payment gateway, which serves many merchants, so it says nothing about who was paid.';
+      return g;
+    }
     if (u.vpaName) {
-      const s = el('span', undefined, u.vpaName);
+      const s = el('span', undefined, niceName(u.vpaName));
       s.title = 'The name registered for this UPI ID, from Razorpay';
       return s;
     }
-    if (u.vpaState === 'new' && canEdit) {
-      // One ID at a time: the same call as the toolbar button, for just this row.
+    if (u.party.state === 'lookup') {
       const cell = el('span', 'name-new');
-      const ask = el('button', 'button button--outline button--small', 'Look up');
-      ask.type = 'button';
-      ask.setAttribute('aria-label', 'Look up the registered name for this UPI ID');
-      ask.addEventListener('click', (e) => {
-        e.stopPropagation();
-        void runLookUp([u.counterparty], ask);
-      });
-      cell.append(el('span', 'dim', nameText(u)), ask);
+      cell.append(el('span', 'dim', 'Not looked up yet'));
+      // One ID at a time: the same call as the toolbar button, for just this row (the server reads the row's own "Paid to"; the page never needs the ID).
+      if (canEdit) cell.append(action('Look up', 'search', 'read', `Look up the registered name for ${u.counterparty ?? 'this UPI ID'}`, (b) => void runLookUp([u.id], b)));
       return cell;
     }
-    return u.vpaState ? el('span', 'dim', nameText(u)) : (u.counterparty ?? '');
+    return u.vpaState === 'asked' ? el('span', 'dim', 'No name on file') : (u.counterparty ?? '');
   }
   const lookUpButton = el('button', 'button button--outline button--small', '');
   lookUpButton.type = 'button';
   lookUpButton.hidden = true;
-  // A billed call, so it is a button and never automatic: rows whose "Paid to" is a UPI ID not looked up yet, at most VPA_LOOKUP_LIMIT IDs a click.
-  const toLookUp = () => all.filter((u) => u.vpaState === 'new').map((u) => u.counterparty);
+  // A billed call, so it is a button and never automatic: the payments whose "Paid to" is a UPI ID not looked up yet, at most VPA_LOOKUP_LIMIT IDs a click
+  // (the server counts IDs, not payments). A gateway's ID is never worth a lookup, and the server marks it so.
+  const toLookUp = () => all.filter((u) => u.party.state === 'lookup');
   function renderLookUp() {
-    const n = canEdit ? vpasToLookUp(toLookUp(), new Set(), Infinity).length : 0;
+    const n = canEdit ? new Set(toLookUp().map((u) => u.vpaGroup ?? u.id)).size : 0;
     lookUpButton.hidden = n === 0;
     if (n) {
       const k = Math.min(n, VPA_LOOKUP_LIMIT);
       lookUpButton.textContent = `Look up ${k} UPI ${k === 1 ? 'name' : 'names'}${n > VPA_LOOKUP_LIMIT ? ` (of ${n})` : ''}`;
     }
   }
-  lookUpButton.addEventListener('click', () => void runLookUp(toLookUp(), lookUpButton));
-  // Asks for the UPI IDs in `texts` (the server skips any already looked up and stops at the first failure), then reloads. `trigger` is the
-  // button that was pressed, disabled while it runs.
-  async function runLookUp(texts: (string | null)[], trigger: HTMLButtonElement) {
+  lookUpButton.addEventListener('click', () => void runLookUp(toLookUp().map((u) => u.id), lookUpButton));
+  // Asks about the UPI IDs of these payments (the server skips any already looked up, stops at the first failure, and caps one request), then reloads.
+  // `trigger` is the button that was pressed, disabled while it runs.
+  async function runLookUp(upiRowIds: string[], trigger: HTMLButtonElement) {
     trigger.disabled = true;
     const label = trigger.textContent;
     trigger.textContent = 'Looking up…';
     try {
-      const { status, data: res } = await staffFetch('/api/finance-admin/vpa-names', { method: 'POST', body: { texts } });
+      const { status, data: res } = await staffFetch('/api/finance-admin/vpa-names', { method: 'POST', body: { upiRowIds } });
       if (status !== 200) showToast(res?.error ?? 'Could not look up the names.');
       else {
         const parts = [res.named ? `${res.named} named` : '', res.noName ? `${res.noName} with no name on file` : '', res.notFound ? `${res.notFound} not found` : ''].filter(Boolean);
@@ -554,51 +583,77 @@ import '../../../styles/money.css';
     }
   }
 
-  // ---- Party column and the reviewed add (docs/finance/FINANCE.md, "UPI ID names"). The server decides each row's state; this only shows it.
-  const PARTY_TEXT: Record<PartyState['state'], string> = { matches: 'In Parties', onfile: 'In Parties, name not checked', differs: 'Name differs', attach: 'ID not on file', missing: 'Not in Parties', gateway: 'Payment gateway', lookup: 'Not looked up yet', noname: 'No name on file', unnamed: 'No name' };
+  const PARTY_TEXT: Record<PartyState['state'], string> = { matches: 'In Parties', onfile: 'In Parties', differs: 'Name differs', attach: 'ID not on file', missing: 'Not in Parties', gateway: 'Payment gateway', lookup: 'Not looked up yet', noname: 'No name on file', unnamed: 'No name' };
+  // The words for filtering, grouping and search; the cell itself shows only a link or a button.
   const partyText = (u: Upi) => PARTY_TEXT[u.party.state];
   function partyCell(u: Upi): Node | string {
     const p = u.party;
     const cell = el('span', 'party-cell');
-    if (p.state === 'matches') return p.partyName ?? '';
-    if (p.state === 'onfile') cell.append(p.partyName ?? '', el('span', 'dim', ' (name not checked)'));
-    else if (p.state === 'differs') {
-      cell.append(el('span', 'pill pill--warn', 'Name differs'), el('span', 'dim', ` ${p.partyName} · Razorpay: ${p.registeredName}`));
-      cell.title = `The party is "${p.partyName}", but Razorpay says this UPI ID is registered to "${p.registeredName}". Check which is right; the party can be renamed on the Parties page.`;
-    } else if (p.state === 'attach') {
-      cell.append(el('span', 'pill pill--warn', 'ID not on file'), el('span', 'dim', ` ${p.partyName}`));
-      cell.title = `The registered name matches ${p.partyName}, but this UPI ID is not on that party yet. "Add to Parties" attaches it.`;
-    } else if (p.state === 'missing') cell.append(el('span', 'pill pill--crit', 'Not in Parties'));
-    else if (p.state === 'gateway') {
-      // The UPI ID is a payment gateway's: it says nothing about who was paid, so no name is suggested and the payee is added by hand.
-      cell.append(el('span', 'pill', 'Payment gateway'), el('span', 'dim', ' name it yourself'));
-      cell.title = 'This UPI ID belongs to a payment gateway, which serves many merchants, so it says nothing about who was paid. Add the payee by name; the gateway’s ID is not attached to anyone.';
-    } else cell.append(el('span', 'dim', PARTY_TEXT[p.state]));
-    if (canEdit && (p.state === 'missing' || p.state === 'attach' || p.state === 'gateway')) {
-      // Just this person: the same review list as the toolbar button, with one entry.
-      const one = el('button', 'button button--outline button--small', p.state === 'attach' ? 'Add ID' : 'Add');
-      one.type = 'button';
-      one.setAttribute('aria-label', p.state === 'missing' ? `Add ${p.name} to Parties` : p.state === 'gateway' ? 'Add the payee of this payment to Parties' : `Add this UPI ID to ${p.partyName}`);
-      one.addEventListener('click', (e) => {
+    const link = (differs: boolean) => {
+      const b = el('button', `link-button plink${differs ? ' differs' : ''}`, p.partyName ?? '');
+      b.type = 'button';
+      b.setAttribute('aria-haspopup', 'dialog');
+      b.addEventListener('click', (e) => {
         e.stopPropagation();
-        openReview(pendingAdds().filter((x) => x.rowId === u.id || pendingKey(u) === x.key));
+        openPartyDetail(u, b);
       });
-      cell.append(one);
-    }
-    return cell;
+      return b;
+    };
+    if (p.state === 'matches' || p.state === 'onfile') cell.append(link(false));
+    else if (p.state === 'differs') {
+      const mark = el('span', 'mark', '≠');
+      mark.setAttribute('role', 'img');
+      mark.setAttribute('aria-label', 'Razorpay says a different name');
+      mark.title = `Razorpay says this UPI ID is registered to "${p.registeredName}"`;
+      cell.append(link(true), mark);
+    } else if (canEdit && p.state === 'attach') cell.append(link(false), action('Add ID', 'plus', 'change', `Add this UPI ID to ${p.partyName}`, () => openReview(pendingAdds().filter((x) => x.key === pendingKey(u)))));
+    else if (p.state === 'attach') cell.append(link(false));
+    else if (canEdit && (p.state === 'missing' || p.state === 'gateway')) cell.append(action('Add', 'plus', 'change', p.state === 'gateway' ? 'Add the payee of this payment to Parties' : `Add ${p.name} to Parties`, () => openReview(pendingAdds().filter((x) => x.key === pendingKey(u)))));
+    return cell.childNodes.length ? cell : '';
   }
-  // A gateway's ID serves many merchants, so each of its payments is its own person; everyone else is one entry per name or party.
-  const pendingKey = (u: Upi) => (u.party.state === 'gateway' ? `gateway:${u.id}` : `${u.party.state}:${(u.party.name ?? u.party.partyId ?? '').toLowerCase()}`);
+
+  // A party's details, behind its name: who it is, the UPI ID it holds and whether that is verified, what Razorpay says, and where to go next.
+  const detailDialog = $<HTMLDialogElement>('party-detail');
+  closeOnBackdrop(detailDialog);
+  let detailOpener: HTMLElement | null = null;
+  detailDialog.addEventListener('close', () => detailOpener?.focus());
+  $('party-detail-close').addEventListener('click', () => detailDialog.close());
+  const KIND_WORDS: Record<string, string> = { vendor: 'Vendor', customer: 'Customer', member: 'Member', employee: 'Employee', government: 'Government', bank: 'Bank', director: 'Director', other: 'Other' };
+  function openPartyDetail(u: Upi, trigger: HTMLElement) {
+    const p = u.party;
+    detailOpener = trigger;
+    const payments = all.filter((x) => p.partyId && x.party.partyId === p.partyId).length;
+    $('party-detail-title').textContent = p.partyName ?? '';
+    $('party-detail-sub').textContent = `${KIND_WORDS[p.partyKind ?? ''] ?? 'Party'} · ${plural(payments, 'UPI payment')} here`;
+    const diff = $('party-detail-diff');
+    diff.hidden = p.state !== 'differs';
+    diff.textContent = p.state === 'differs' ? `Razorpay says this UPI ID is registered to “${p.registeredName}”, not “${p.partyName}”. Check which is right; the party can be renamed on the Parties page.` : '';
+    const idStatus = p.accountStatus === 'verified' ? 'Verified' : p.accountStatus === 'unverified' ? 'Added, waiting for someone else to verify' : '';
+    const rows: [string, string, string][] = [['UPI ID', u.upiId ? u.upiId : 'Not on this party', idStatus]];
+    rows.push(['Razorpay says', p.registeredName ?? 'Not looked up yet', p.state === 'matches' && p.registeredName ? 'The registered name fits this party.' : '']);
+    if (p.verifiedName) rows.push(['Name the bank showed', p.verifiedName, 'Recorded when the UPI ID was verified.']);
+    $('party-detail-list').replaceChildren(
+      ...rows.flatMap(([k, v, sub]) => {
+        const dd = el('dd', undefined, v);
+        if (sub) dd.append(el('br'), el('span', 'dim', sub));
+        return [el('dt', undefined, k), dd];
+      }),
+    );
+    detailDialog.showModal();
+  }
+
+  // One entry per person, not per payment, and per UPI ID (two IDs are two entries even for one name): people who are not in Parties (to add) and IDs that
+  // belong to a party already there (to attach). A gateway's ID serves many merchants, so each of its payments is its own entry.
+  const pendingKey = (u: Upi) => (u.party.state === 'gateway' ? `gateway:${u.id}` : `${u.party.state}:${u.vpaGroup !== null ? `id${u.vpaGroup}` : (u.party.name ?? u.party.partyId ?? '').toLowerCase()}`);
   const toolbarTools = el('span', 'upi-tools');
   const addPartiesButton = el('button', 'button button--outline button--small', '');
   addPartiesButton.type = 'button';
   addPartiesButton.hidden = true;
   toolbarTools.append(lookUpButton, addPartiesButton);
 
-  // One entry per person, not per payment: people who are not in Parties (to add) and IDs that belong to a party already there (to attach).
   // `gateway`: the payee behind a payment gateway is unknown, so the name starts empty, must be typed, and no UPI ID is attached. `hasId`: there is a
-  // UPI ID the reviewer may choose to attach (a person nobody matches, not a gateway).
-  type Pending = { key: string; action: 'add' | 'attach'; rowId: string; name: string; kind: string; partyName?: string; payments: number; gateway: boolean; hasId: boolean };
+  // UPI ID the reviewer may choose to attach (a person nobody matches, not a gateway). `idShown`: that ID as this viewer may see it (masked or full).
+  type Pending = { key: string; action: 'add' | 'attach'; rowId: string; name: string; kind: string; partyName?: string; payments: number; gateway: boolean; hasId: boolean; idShown: string | null };
   function pendingAdds(): Pending[] {
     const out = new Map<string, Pending>();
     for (const u of all) {
@@ -607,7 +662,7 @@ import '../../../styles/money.css';
       const key = pendingKey(u);
       const hit = out.get(key);
       if (hit) hit.payments++;
-      else out.set(key, { key, action: p.state === 'attach' ? 'attach' : 'add', rowId: u.id, name: p.state === 'gateway' ? '' : (p.name ?? p.registeredName ?? ''), kind: p.kind ?? 'vendor', partyName: p.partyName, payments: 1, gateway: p.state === 'gateway', hasId: p.state === 'missing' && Boolean(p.registeredName) });
+      else out.set(key, { key, action: p.state === 'attach' ? 'attach' : 'add', rowId: u.id, name: p.state === 'gateway' ? '' : (p.name ?? p.registeredName ?? ''), kind: p.kind ?? 'vendor', partyName: p.partyName, payments: 1, gateway: p.state === 'gateway', hasId: p.state === 'missing' && Boolean(p.registeredName), idShown: u.upiId });
     }
     return [...out.values()];
   }
@@ -620,7 +675,14 @@ import '../../../styles/money.css';
   const partyDialog = $<HTMLDialogElement>('party-dialog');
   closeOnBackdrop(partyDialog);
   $('party-cancel').addEventListener('click', () => partyDialog.close());
+  const saveButton = $<HTMLButtonElement>('party-save');
   let reviewing: { item: Pending; tick: HTMLInputElement; name: HTMLInputElement; kind: HTMLSelectElement; attach: HTMLInputElement | null }[] = [];
+  // The confirm button says how many will be added and cannot be pressed with none selected.
+  function syncSave() {
+    const n = reviewing.filter((r) => r.tick.checked).length;
+    saveButton.disabled = n === 0;
+    saveButton.textContent = n ? `Add ${n}` : 'Add';
+  }
   addPartiesButton.addEventListener('click', () => openReview(pendingAdds()));
   // The review list for these people (everyone waiting, or the one a row's button names): select, edit the name and kind, confirm.
   function openReview(items: Pending[]) {
@@ -628,19 +690,28 @@ import '../../../styles/money.css';
     const toAdd = items.filter((i) => i.action === 'add' && !i.gateway).length;
     const toAttach = items.filter((i) => i.action === 'attach').length;
     const byGateway = items.filter((i) => i.gateway).length;
-    $('party-lead').textContent = `${toAdd ? `${plural(toAdd, 'person', 'people')} not in Parties will be added as unverified, with their UPI ID where there is one. ` : ''}${toAttach ? `${plural(toAttach, 'UPI ID')} will be added to a party already in Parties. ` : ''}${byGateway ? `${plural(byGateway, 'payment')} went through a payment gateway: type who it was for (no name is taken from the gateway, and its ID is not attached to anyone). ` : ''}Edit a name or kind, or deselect anyone you do not want. Someone else verifies each UPI ID afterwards.`;
+    $('party-lead').textContent = [
+      toAdd ? `${plural(toAdd, 'person', 'people')} to add, unverified, with their UPI ID where there is one.` : '',
+      toAttach ? `${plural(toAttach, 'UPI ID')} to add to a party already in Parties.` : '',
+      byGateway ? `${plural(byGateway, 'payment')} through a payment gateway: type who it was for. The gateway's name and ID are not used.` : '',
+      'Deselect anyone you do not want. Someone else verifies each UPI ID.',
+    ].filter(Boolean).join(' ');
     reviewing = items.map((item) => {
       const tick = el('input');
       tick.type = 'checkbox';
       tick.checked = !item.gateway; // a gateway's payee has no name yet: it is selected once one is typed
       tick.setAttribute('aria-label', item.gateway ? 'Add the payee of this payment' : item.action === 'add' ? `Add ${item.name}` : `Add the UPI ID to ${item.partyName}`);
+      tick.addEventListener('change', syncSave);
       const name = el('input');
       name.value = item.name;
       name.maxLength = 120;
       name.setAttribute('aria-label', item.gateway ? 'Who this payment was for' : 'Name');
       if (item.gateway) {
         name.placeholder = 'Who was this payment for?';
-        name.addEventListener('input', () => (tick.checked = name.value.trim().length >= 2));
+        name.addEventListener('input', () => {
+          tick.checked = name.value.trim().length >= 2;
+          syncSave();
+        });
       }
       const kind = el('select');
       for (const [value, label] of PARTY_KINDS_SHOWN) kind.append(Object.assign(el('option', undefined, label), { value }));
@@ -658,17 +729,19 @@ import '../../../styles/money.css';
     $('party-list').replaceChildren(
       ...reviewing.map((r) => {
         const row = el('div', 'party-row');
-        const what = el('span', 'dim', r.item.gateway ? 'one payment, via a gateway' : `${plural(r.item.payments, 'payment')}`);
-        if (r.item.action === 'add') row.append(r.tick, r.name, r.kind, what);
-        else row.append(r.tick, el('span', undefined, `Add the UPI ID of ${r.item.name} to ${r.item.partyName}`), what);
+        const meta = el('span', 'dim party-meta', r.item.gateway ? 'One payment, through a payment gateway' : plural(r.item.payments, 'payment'));
+        if (r.item.action === 'add') row.append(r.tick, r.name, r.kind);
+        else row.append(r.tick, el('span', 'party-what', `Add ${r.item.idShown ? `UPI ID ${r.item.idShown}` : 'the UPI ID'} to ${r.item.partyName}`));
+        row.append(meta);
         if (r.attach) {
           const label = el('label', 'party-attach');
-          label.append(r.attach, el('span', undefined, 'Attach their UPI ID'));
+          label.append(r.attach, el('span', undefined, `Attach their UPI ID${r.item.idShown ? ` (${r.item.idShown})` : ''}`));
           row.append(label);
         }
         return row;
       }),
     );
+    syncSave();
     $('party-error').hidden = true;
     partyDialog.showModal();
   }
@@ -686,8 +759,7 @@ import '../../../styles/money.css';
       err.hidden = false;
       return;
     }
-    const save = $<HTMLButtonElement>('party-save');
-    save.disabled = true;
+    saveButton.disabled = true;
     try {
       const items = chosen.map((r) => ({ rowId: r.item.rowId, ...(r.item.action === 'add' ? { name: r.name.value, kind: r.kind.value, ...(r.attach && !r.attach.checked ? { attachId: false } : {}) } : {}) }));
       const { status, data: res } = await staffFetch('/api/finance-admin/upi-lines/add-parties', { method: 'POST', body: { items } });
@@ -701,7 +773,7 @@ import '../../../styles/money.css';
       err.textContent = e instanceof Error && e.message !== 'failed' ? e.message : 'Could not add them. Nothing was changed.';
       err.hidden = false;
     } finally {
-      save.disabled = false;
+      syncSave();
     }
   });
 
@@ -784,6 +856,15 @@ import '../../../styles/money.css';
       c.append(top, el('div', 'sub', `${day(u.paidAt)}${u.time ? ` ${u.time}` : ''} · ${APP[u.app]} · ${paidByText(u)}`), el('span', `pill pill--${STATE[u.state].kind}`, STATE[u.state].text));
       const note = u.note ?? u.purpose ?? u.remark;
       if (note) c.append(el('div', 'sub', note));
+      // The same next step as the table row, so a phone can do it too: the party's name as a link, or Add; Look up for an ID not looked up yet.
+      const next = el('div', 'upi-card-next');
+      const pc = partyCell(u);
+      if (typeof pc !== 'string') next.append(pc);
+      if (u.party.state === 'lookup') {
+        const n = nameCell(u);
+        if (typeof n !== 'string') next.append(n);
+      }
+      if (next.childNodes.length) c.append(next);
       return c;
     },
   });
@@ -971,32 +1052,136 @@ import '../../../styles/money.css';
 
   .finance-upi .party-row {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
     gap: 0.5rem;
     padding: 0.5rem;
     border: 1px solid var(--tvc-line);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     background: var(--tvc-white);
   }
 
-  .finance-upi .party-row > span:nth-child(2) {
-    grid-column: 2 / 4;
+  /* Line one is the tick, the name (all the width it can have) and the kind; the lines under it are quiet text, indented to the name. */
+  .finance-upi .party-row > .party-what,
+  .finance-upi .party-row > .party-meta,
+  .finance-upi .party-row > .party-attach {
+    grid-column: 2 / -1;
   }
 
-  .finance-upi .party-attach {
-    grid-column: 2 / -1;
+  .finance-upi .party-row .party-meta {
+    color: var(--tvc-ink-soft);
+    font-size: var(--text-sm);
+  }
+
+  .finance-upi .party-row input:not([type='checkbox']) {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .finance-upi .party-row select {
+    min-width: 8rem;
+  }
+
+  .finance-upi .party-row .party-attach {
     display: flex;
+    flex-direction: row;
     align-items: center;
     gap: 0.5rem;
     color: var(--tvc-ink-soft);
+    font-size: var(--text-sm);
+    font-weight: 400;
+  }
+
+  /* The review list is wider than the other sheets (the later .delegate-sheet rule would otherwise set its width), and on a phone the kind drops under the name. */
+  .finance-upi .delegate-sheet.party-sheet {
+    width: min(640px, calc(100vw - 32px));
+  }
+
+  @media (max-width: 560px) {
+    .finance-upi .party-row {
+      grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    .finance-upi .party-row > select {
+      grid-column: 2;
+    }
   }
 
   /* A UPI ID not looked up yet: the words, and a small button to ask for just this one. */
-  .finance-upi .dt .name-new {
+  .finance-upi .dt .name-new,
+  .finance-upi .dt .party-cell {
     display: inline-flex;
     align-items: center;
+    flex-wrap: nowrap;
     gap: 0.5rem;
+    white-space: nowrap;
+  }
+
+  .finance-upi .upi-card-next {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+  }
+
+  /* On a phone card there is no row to keep one height, so these may wrap. */
+  .finance-upi .upi-card-next .name-new,
+  .finance-upi .upi-card-next .party-cell {
+    flex-wrap: wrap;
+    white-space: normal;
+  }
+
+  /* A party's name is a link to its details; one whose name differs from what Razorpay says is the same link in amber, with a mark (never colour alone). */
+  .finance-upi .dt .plink {
+    padding: 0;
+    color: var(--tvc-ink);
+    font-weight: 500;
+    text-underline-offset: 3px;
+    text-decoration-color: var(--tvc-line-strong);
+  }
+
+  .finance-upi .dt .plink:hover {
+    text-decoration-color: currentcolor;
+  }
+
+  .finance-upi .dt .plink.differs {
+    color: var(--tvc-orange-text);
+    font-weight: 650;
+    text-decoration-color: var(--tvc-orange-text);
+  }
+
+  .finance-upi .dt .mark {
+    color: var(--tvc-orange-text);
+    font-weight: 700;
+  }
+
+  /* The details behind a party's name: a label and a value per line. */
+  .finance-upi .detail-list {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 0.5rem 1rem;
+    margin: 0;
+  }
+
+  .finance-upi .detail-list dt {
+    color: var(--tvc-ink-soft);
+  }
+
+  .finance-upi .detail-list dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
+  @media (max-width: 560px) {
+    .finance-upi .detail-list {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 0.125rem;
+    }
+
+    .finance-upi .detail-list dd {
+      margin-bottom: 0.5rem;
+    }
   }
 
   .finance-upi .dt .peek {

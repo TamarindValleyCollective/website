@@ -17,7 +17,7 @@ import { loadDelegateLinks, loadDelegates } from './finance-delegates';
 import { loadOperators } from './finance-upi-operators';
 import { readVpaAnswers } from './finance-vpa';
 import { payeeFieldVisibility } from '../../../scripts/lib/finance-access.mjs';
-import { isGatewayName, vpaFieldsFor, vpaIn } from '../../../scripts/lib/finance-vpa.mjs';
+import { isGatewayName, maskVpasIn, vpaFieldsFor, vpaIn } from '../../../scripts/lib/finance-vpa.mjs';
 import { attribute, delegateLabel } from '../../../scripts/lib/finance-delegates.mjs';
 import { pairReversals } from '../../../scripts/lib/finance-reversals.mjs';
 import { CIRCLE_CAP_PAISE, bankWithoutUpiRow, circleMonths, matchState } from '../../../scripts/lib/finance-upi-circle.mjs';
@@ -43,8 +43,8 @@ const withOperator = (path: string) => all(path.replace('select=', 'select=opera
 async function loadPartyContext() {
   const [parties, accounts, answers] = await Promise.all([
     all('/fin_parties?select=id,name,kind&active=eq.true&merged_into=is.null&order=id.asc').catch(() => [] as Json[]),
-    all('/fin_party_accounts?select=party_id,fingerprint,verified_name&method=eq.upi&status=neq.superseded&order=id.asc')
-      .catch(() => all('/fin_party_accounts?select=party_id,fingerprint&method=eq.upi&status=neq.superseded&order=id.asc'))
+    all('/fin_party_accounts?select=party_id,fingerprint,status,verified_name&method=eq.upi&status=neq.superseded&order=id.asc')
+      .catch(() => all('/fin_party_accounts?select=party_id,fingerprint,status&method=eq.upi&status=neq.superseded&order=id.asc'))
       .catch(() => [] as Json[]),
     readVpaAnswers().catch(() => ({ names: {} as Record<string, string>, known: new Set<string>() })),
   ]);
@@ -55,7 +55,7 @@ async function loadPartyContext() {
       return null;
     }
   };
-  const byFingerprint = new Map(accounts.map((a) => [a.fingerprint as string, { partyId: a.party_id as string, verifiedName: (a.verified_name as string | null) ?? null }]));
+  const byFingerprint = new Map(accounts.map((a) => [a.fingerprint as string, { partyId: a.party_id as string, verifiedName: (a.verified_name as string | null) ?? null, status: (a.status as string | null) ?? null }]));
   return { parties: parties as { id: string; name: string; kind?: string }[], byFingerprint, fingerprintOf, answers };
 }
 
@@ -83,11 +83,23 @@ export async function listUpiLines(req: Request): Promise<Response> {
     // the bank line it is joined to; a row with neither (its statement not imported yet) has no account yet.
     const accountName = new Map(accounts.map((a) => [a.id as string, a.label as string]));
     const bankAccount = new Map(bank.map((b) => [b.id as string, b.bank_account_id as string]));
+    // `vpaGroup`: a number per distinct UPI ID in this answer (1, 2, 3...), null for a row with none. It lets the page count and group the IDs (how many to look
+    // up, which payments are one person's) without ever being sent them: it says "the same ID" and nothing about what the ID is. It changes between loads.
+    const groupOfVpa = new Map<string, number>();
+    const vpaGroupOf = (text: string | null): number | null => {
+      const v = vpaIn(text);
+      if (!v) return null;
+      if (!groupOfVpa.has(v)) groupOfVpa.set(v, groupOfVpa.size + 1);
+      return groupOfVpa.get(v)!;
+    };
     const lines = upi.map((u) => ({
       id: u.id as string, paidAt: u.paid_at as string, time: (u.paid_time as string | null)?.slice(0, 5) ?? null, app: u.app as 'bhim' | 'paytm',
-      counterparty: u.counterparty as string | null, remark: u.remarks as string | null, amountPaise: Number(u.amount_paise), direction: u.direction as 'debit' | 'credit',
+      // "Paid to" is the app's own text and carries the UPI ID, so it follows the same masking rule as the UPI ID column: the ID in it is masked unless the
+      // viewer may see payee bank details. Everything the server works out (names, parties, lookups) uses the unmasked text and never sends it.
+      counterparty: (canSeeUpiIds ? u.counterparty : maskVpasIn(u.counterparty)) as string | null, remark: u.remarks as string | null, amountPaise: Number(u.amount_paise), direction: u.direction as 'debit' | 'credit',
       // The UPI ID in "Paid to" and the registered name Razorpay gave for it (src: scripts/lib/finance-vpa.mjs); derived, never stored on the row.
       ...(vpaFieldsFor(u.counterparty, vpaAnswers, canSeeUpiIds) as { upiId: string | null; vpaName: string | null; vpaState: 'named' | 'asked' | 'new' | null }),
+      vpaGroup: vpaGroupOf(u.counterparty as string | null),
       // Whether this person is in the Parties register, and what a reviewed add would do (scripts/lib/finance-upi-parties.mjs).
       party: partyStateFor({ counterparty: u.counterparty as string | null, direction: u.direction as string }, partyCtx) as Json,
       isCircle: Boolean(u.is_circle), operatorId: (u.operator_id as string | null) ?? null, upiRef: u.upi_ref as string, note: notes.get(`upi:${u.upi_ref}`) ?? null, purpose: purposeOf({ upiRef: u.upi_ref, upiLineId: u.id, bankLineId: u.bank_line_id }) as string | null, account: accountName.get((u.bank_account_id ?? bankAccount.get(u.bank_line_id)) as string) ?? null, bankLineId: u.bank_line_id as string | null,

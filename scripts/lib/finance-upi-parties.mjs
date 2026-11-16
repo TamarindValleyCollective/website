@@ -26,7 +26,7 @@ import { isGatewayName, isGatewayVpa, vpaIn } from './finance-vpa.mjs';
  * @param {{ counterparty?: string | null, direction?: string }} row  a UPI row ("Paid to" text and its direction)
  * @param {{
  *   parties: Array<{ id: string, name: string, kind?: string }>,
- *   byFingerprint: Map<string, { partyId: string, verifiedName: string | null }>,
+ *   byFingerprint: Map<string, { partyId: string, verifiedName: string | null, status?: string | null }>,
  *   fingerprintOf: (vpa: string) => string | null,
  *   answers: { names: Record<string, string>, known: Set<string> },
  * }} ctx  the live parties, the UPI accounts parties hold (by keyed fingerprint), and the saved lookups
@@ -43,13 +43,15 @@ export function partyStateFor(row, ctx) {
     const held = fp ? ctx.byFingerprint.get(fp) : null;
     const party = held ? partyById(held.partyId) : null;
     if (party) {
-      if (!registered) return { state: 'onfile', partyId: party.id, partyName: party.name };
+      // What the details popup shows about this party and the UPI ID it holds: its kind, whether the ID is verified, and the name the bank showed.
+      const about = { partyId: party.id, partyName: party.name, partyKind: party.kind ?? null, accountStatus: held?.status ?? null, verifiedName: held?.verifiedName ?? null };
+      if (!registered) return { state: 'onfile', ...about };
       const fits = namesResemble(party.name, registered) || Boolean(held?.verifiedName && namesResemble(held.verifiedName, registered));
-      return { state: fits ? 'matches' : 'differs', partyId: party.id, partyName: party.name, registeredName: registered };
+      return { state: fits ? 'matches' : 'differs', ...about, registeredName: registered };
     }
     if (registered) {
       const m = matchParty(registered, ctx.parties);
-      if (m) return { state: 'attach', partyId: m.partyId, partyName: partyById(m.partyId)?.name ?? '', registeredName: registered };
+      if (m) return { state: 'attach', partyId: m.partyId, partyName: partyById(m.partyId)?.name ?? '', partyKind: partyById(m.partyId)?.kind ?? null, registeredName: registered };
       return { state: 'missing', name: niceName(registered), kind, registeredName: registered };
     }
     return { state: ctx.answers.known.has(vpa) ? 'noname' : 'lookup' };
@@ -57,7 +59,7 @@ export function partyStateFor(row, ctx) {
   const appName = String(row.counterparty ?? '').replace(/\s+/g, ' ').trim();
   if (appName.length < 2) return { state: 'unnamed' };
   const m = matchParty(appName, ctx.parties);
-  if (m) return { state: 'matches', partyId: m.partyId, partyName: partyById(m.partyId)?.name ?? '', by: 'name' };
+  if (m) return { state: 'matches', partyId: m.partyId, partyName: partyById(m.partyId)?.name ?? '', partyKind: partyById(m.partyId)?.kind ?? null, by: 'name' };
   return { state: 'missing', name: niceName(appName), kind, by: 'name' };
 }
 

@@ -408,10 +408,18 @@ export async function lookupVpaNames(req: Request): Promise<Response> {
   const auth = await requireStaff(req, 'finance', 'allocate');
   if (!auth.ok) return fail(auth.error, auth.status);
   const body = await readBody(req);
-  if (!body || !Array.isArray(body.texts) || body.texts.length > 5000) return fail('Send the lines’ UPI texts to look up.', 400);
+  // Either `texts` (the ledger sends the text of its suggestions) or `upiRowIds` (the UPI page sends row ids, so it never needs the UPI IDs, which it may
+  // not be allowed to see: the server reads each row's "Paid to" itself).
+  const ids: string[] = Array.isArray(body?.upiRowIds) ? body!.upiRowIds.filter((i: unknown) => typeof i === 'string' && /^[\w-]{1,64}$/.test(i as string)).slice(0, 1000) : [];
+  if (!body || (!Array.isArray(body.texts) && !ids.length) || (Array.isArray(body.texts) && body.texts.length > 5000)) return fail('Say which payments to look up.', 400);
   try {
+    const texts: string[] = Array.isArray(body.texts) ? body.texts.filter((t: unknown) => typeof t === 'string') : [];
+    for (let i = 0; i < ids.length; i += 100) {
+      const found = await rows(`/fin_upi_lines?select=counterparty&ignored=eq.false&id=in.(${ids.slice(i, i + 100).join(',')})`);
+      for (const f of found) if (typeof f.counterparty === 'string') texts.push(f.counterparty);
+    }
     const { known } = await vpaAnswers();
-    const todo = vpasToLookUp(body.texts.filter((t: unknown) => typeof t === 'string'), known, VPA_LOOKUP_LIMIT);
+    const todo = vpasToLookUp(texts, known, VPA_LOOKUP_LIMIT);
     if (!todo.length) return jsonResponse({ asked: 0, named: 0, noName: 0, notFound: 0, stoppedBecause: null });
     const mode = razorpayKeyMode();
     await logFinanceAction({ actorId: auth.staff.id, entityId: await entityId(), action: 'finance.vpa_names_looked_up', target: 'vpa-lookup', detail: { count: todo.length, key_mode: mode } });

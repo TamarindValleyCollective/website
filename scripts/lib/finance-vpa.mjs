@@ -32,6 +32,16 @@ export function vpaIn(text) {
   return m ? `${m[1]}@${m[2]}`.toLowerCase() : null;
 }
 
+/**
+ * `text` with every UPI ID in it masked ("q000111222@ybl on PhonePe" -> "q••••@ybl on PhonePe"), for someone who may not see payee UPI IDs. The rest
+ * of the text is left as it is, so the app's wording survives. null and '' come back unchanged.
+ * @param {string | null | undefined} text
+ */
+export function maskVpasIn(text) {
+  if (text == null || text === '') return text;
+  return String(text).replace(new RegExp(VPA.source, 'gi'), (_m, user, handle) => maskUpiId(`${user}@${handle}`.toLowerCase()));
+}
+
 /** True when the whole string is one UPI ID (nothing else around it). */
 export function isVpa(text) {
   const s = String(text ?? '').trim();
@@ -48,7 +58,7 @@ export function vpasToLookUp(texts, known, limit = VPA_LOOKUP_LIMIT) {
   const seen = new Set();
   for (const t of texts) {
     const v = vpaIn(t);
-    if (!v || known.has(v) || seen.has(v)) continue;
+    if (!v || known.has(v) || seen.has(v) || isGatewayVpa(v)) continue; // a gateway's ID needs no (billed) lookup: it names nobody
     seen.add(v);
     out.push(v);
     if (out.length >= limit) break;

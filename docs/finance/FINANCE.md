@@ -543,20 +543,35 @@ Razorpay's validate-VPA call says whose ID it is, so the suggestion can be the p
   by default) is the registered name when looked up, else the name the app showed, else "Not looked up yet" / "No name on file" for a UPI ID.
   **UPI ID** (hidden until turned on in Columns) is the ID found in "Paid to"; it follows the masking rule for payee UPI IDs (`payeeFieldVisibility`):
   in full for holders of `verify-payee` or `export`, otherwise `p••••@bank`, while the name is shown to anyone who can view. Both are derived per
-  request by `vpaFieldsFor` and never stored: the UPI rows are locked after import. The existing "Paid to" column still shows the app's raw text,
-  ID included, to anyone who can view (unchanged). `GET /upi-lines` returns `upiId`, `vpaName`, `vpaState` (`named`/`asked`/`new`/null) per row
-  and `canSeeUpiIds`; before migration `0102` it answers with every ID as `new`.
+  request by `vpaFieldsFor` and never stored: the UPI rows are locked after import. **"Paid to" follows the same rule** (`maskVpasIn`): the UPI ID in
+  it is masked (`q••••@ybl on PhonePe`) unless the viewer holds `verify-payee` or `export`, and so is everything the page builds from it (search, the
+  cell menu, the phone card title). The server works out names, parties and lookups from the real text and never sends it. Because the page may
+  not hold the IDs, a row action sends **row ids** (`POST /vpa-names { upiRowIds }`, the server reads each row's "Paid to"), and each row carries
+  `vpaGroup`, a small number per distinct UPI ID in that response (1, 2, 3...), so the page can count IDs and group one person's payments without
+  being told the IDs. The registered name is shown in readable case (Razorpay sends capitals); the popup quotes Razorpay exactly. The ledger's own
+  text for a line (its suggestion, `counterparty`) is not masked yet. `GET /upi-lines` returns `upiId`, `vpaName`, `vpaState`
+  (`named`/`asked`/`new`/null), `vpaGroup` per row and `canSeeUpiIds`; before migration `0102` it answers with every ID as `new`.
+- **The Party cell says one thing** (no pills): a party exists, so its **name as a link** that opens a details popup (kind, the UPI ID it holds,
+  whether that is verified or waiting for a second admin, what Razorpay says, the name the bank showed, and **Open in Parties**); no party, so
+  **just an Add button**; the name matches a party but the ID is not on it, so the party's link and **Add ID**; a name that differs from what
+  Razorpay says is the same link in amber with a ≠ mark and the popup states both names; a payment gateway, only **Add**, since the Name column
+  already says "Payment gateway". Look up stays in the Name column. Row actions are the shell's **soft buttons** (`.button--soft` green for what
+  changes the register, `.button--soft-neutral` for Look up, which only asks Razorpay), 24px, words kept, icons from `admin-icons.mjs`. Cells do not
+  wrap, so every row keeps one height. A phone card shows the same link or button under the payment. Checked by rendering the page with mocked data
+  in headless Chrome, light, dark and phone width.
 - **The UPI table's Party column says whether each person is in Parties** (`scripts/lib/finance-upi-parties.mjs`, `partyStateFor`, tested in
   `finance-upi-parties.test.mjs` and `finance-vpa-verify-endpoint.test.mjs`). The match is by **UPI ID first** (a party holding that ID, compared by
-  the keyed fingerprint, never decrypted), the name only checking it. States: **In Parties** (ID on a party and Razorpay's name fits it, or a plain
+  the keyed fingerprint, never decrypted), the name only checking it. The states below are what the filter chips, Group by and search use; the cell
+  itself shows the link or the button (next bullet). States: **In Parties** (ID on a party and Razorpay's name fits it, or a plain
   app name matches one party), **In Parties, name not checked** (ID on a party, not looked up), **Name differs** (ID on a party but Razorpay's
   registered name does not fit the party's name or the name the bank showed when verified: shown with both names, to review and, if the party is
   wrong, rename on the Parties page), **ID not on file** (no party holds the ID but the registered name matches one), **Not in Parties**, **Not
   looked up yet**, **No name on file**. "Fits" is the same `namesResemble` the verify sheet uses (honorifics, company suffixes and brackets
   ignored; one name inside the other). Filter chips: Not in Parties, Name differs, ID not on file, In Parties; Group by Party.
 - **Reviewed add (`POST /upi-lines/add-parties`, `finance` / `allocate`).** The toolbar button **Add N to Parties** (one entry per person, not
-  per payment) opens a list: tick who to add, edit the name and kind (a debit's person is a vendor by default, a credit's a customer; never a
-  member). A row's own **Add** (nobody matches) or **Add ID** (the name matches a party) button opens the same list with just that person.
+  per payment, and per UPI ID: two IDs are two entries) opens a list: select who to add, edit the name and kind (a debit's person is a vendor by
+  default, a credit's a customer; never a member), and each line shows the masked ID it would attach. The confirm button says how many ("Add 3") and
+  is disabled at none; on a phone each row stacks. A row's own **Add** (nobody matches) or **Add ID** (the name matches a party) button opens the same list with just that person.
   Confirming adds each person to Parties with their UPI ID attached as **unverified** details (a second admin verifies it), and attaches
   an ID to the party whose name matches ("ID not on file"). The server works out each row's need from its own data and does only what that state
   allows, so a name typed on the page cannot add someone the lookup has not named; a party with a similar name already is skipped with the reason.

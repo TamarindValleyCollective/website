@@ -19,17 +19,17 @@ const ctx = (over = {}) => ({
   ...over,
 });
 const named = (name, extra = {}) => ({ answers: { names: { [VPA]: name }, known: new Set([VPA]) }, ...extra });
-const holding = (partyId, verifiedName = null) => new Map([[`fp:${VPA}`, { partyId, verifiedName }]]);
+const holding = (partyId, verifiedName = null, status = 'unverified') => new Map([[`fp:${VPA}`, { partyId, verifiedName, status }]]);
 const row = (counterparty, direction = 'debit') => ({ counterparty, direction });
 
 test('an ID a party holds, with a registered name that fits it, matches', () => {
   const s = partyStateFor(row(`${VPA} on PhonePe`), ctx({ byFingerprint: holding('P1'), ...named('TEST VENDOR WORKS') }));
-  assert.deepEqual(s, { state: 'matches', partyId: 'P1', partyName: 'Test Vendor Works', registeredName: 'TEST VENDOR WORKS' });
+  assert.deepEqual(s, { state: 'matches', partyId: 'P1', partyName: 'Test Vendor Works', partyKind: 'vendor', accountStatus: 'unverified', verifiedName: null, registeredName: 'TEST VENDOR WORKS' });
 });
 
 test('an ID a party holds whose registered name does not fit is flagged to review, with both names', () => {
   const s = partyStateFor(row(VPA), ctx({ byFingerprint: holding('P1'), ...named('SOMEONE ELSE ENTIRELY') }));
-  assert.deepEqual(s, { state: 'differs', partyId: 'P1', partyName: 'Test Vendor Works', registeredName: 'SOMEONE ELSE ENTIRELY' });
+  assert.deepEqual(s, { state: 'differs', partyId: 'P1', partyName: 'Test Vendor Works', partyKind: 'vendor', accountStatus: 'unverified', verifiedName: null, registeredName: 'SOMEONE ELSE ENTIRELY' });
 });
 
 test('the name the bank showed when the account was verified also counts as fitting', () => {
@@ -39,12 +39,13 @@ test('the name the bank showed when the account was verified also counts as fitt
 
 test('an ID a party holds that has not been looked up is on file, name unchecked', () => {
   const s = partyStateFor(row(VPA), ctx({ byFingerprint: holding('P2') }));
-  assert.deepEqual(s, { state: 'onfile', partyId: 'P2', partyName: 'Green Nursery' });
+  assert.deepEqual(s, { state: 'onfile', partyId: 'P2', partyName: 'Green Nursery', partyKind: 'vendor', accountStatus: 'unverified', verifiedName: null });
+  assert.equal(partyStateFor(row(VPA), ctx({ byFingerprint: holding('P2', null, 'verified') })).accountStatus, 'verified', 'the popup can say the ID is verified');
 });
 
 test('no party holds the ID but the registered name matches one: the ID can be attached to that party', () => {
   const s = partyStateFor(row(VPA), ctx(named('Test Vendor Works')));
-  assert.deepEqual(s, { state: 'attach', partyId: 'P1', partyName: 'Test Vendor Works', registeredName: 'Test Vendor Works' });
+  assert.deepEqual(s, { state: 'attach', partyId: 'P1', partyName: 'Test Vendor Works', partyKind: 'vendor', registeredName: 'Test Vendor Works' });
   assert.equal(addActionFor(s.state), 'attach');
 });
 
@@ -64,7 +65,7 @@ test('a UPI ID not looked up yet, or looked up with no name, cannot be added yet
 });
 
 test('a plain name from the app is matched to the register by name, else offered as new', () => {
-  assert.deepEqual(partyStateFor(row('GREEN NURSERY'), ctx()), { state: 'matches', partyId: 'P2', partyName: 'Green Nursery', by: 'name' });
+  assert.deepEqual(partyStateFor(row('GREEN NURSERY'), ctx()), { state: 'matches', partyId: 'P2', partyName: 'Green Nursery', partyKind: 'vendor', by: 'name' });
   assert.deepEqual(partyStateFor(row('Brand New Farm Shop'), ctx()), { state: 'missing', name: 'Brand New Farm Shop', kind: 'vendor', by: 'name' });
 });
 

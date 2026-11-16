@@ -2,7 +2,21 @@
 // Every UPI ID and name here is invented.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { VPA_LOOKUP_LIMIT, isGatewayName, isGatewayVpa, isVpa, nameFromLookup, vpaFieldsFor, vpaIn, vpasToLookUp } from './finance-vpa.mjs';
+import { VPA_LOOKUP_LIMIT, isGatewayName, isGatewayVpa, isVpa, maskVpasIn, nameFromLookup, vpaFieldsFor, vpaIn, vpasToLookUp } from './finance-vpa.mjs';
+
+test('every UPI ID in a text is masked and the app’s own wording is kept', () => {
+  assert.equal(maskVpasIn('q000111222@ybl on PhonePe'), 'q••••@ybl on PhonePe');
+  assert.equal(maskVpasIn('Paid Test.One@OKAXIS and two.id@ybl'), 'Paid t••••@okaxis and t••••@ybl');
+  assert.equal(maskVpasIn('Green Nursery'), 'Green Nursery', 'a plain name is untouched');
+  assert.equal(maskVpasIn('someone@example.com'), 'someone@example.com', 'an e-mail address is not a UPI ID');
+  assert.equal(maskVpasIn(null), null);
+  assert.equal(maskVpasIn(''), '');
+  assert.ok(!maskVpasIn('q000111222@ybl on PhonePe').includes('000111222'), 'nothing of the ID survives but its first letter and handle');
+});
+
+test('a gateway’s UPI ID is never worth a billed lookup', () => {
+  assert.deepEqual(vpasToLookUp(['razorpay.shop@icici on PhonePe', 'q000111222@ybl'], new Set()), ['q000111222@ybl']);
+});
 
 test('a payment gateway is told apart from a person, by the registered name or by the ID', () => {
   for (const name of ['RAZORPAY SOFTWARE PRIVATE LIMITED', 'Razorpay', 'PayU Payments Pvt Ltd', 'CASHFREE PAYMENTS INDIA', 'BillDesk', 'Paytm Payments Bank', 'Pine Labs']) assert.equal(isGatewayName(name), true, name);
