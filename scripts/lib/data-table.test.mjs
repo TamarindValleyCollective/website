@@ -18,11 +18,11 @@ test('search words all have to appear, ignoring case and punctuation', () => {
 
 test('the shared tables (UPI, Parties, Requests, Rules) match an exact amount the way the ledger does: whole paise, however the value arrives', () => {
   const m = (typed, value) => matchColumn('amount', parseColumnFilter('amount', typed), value);
-  assert.ok(m('2500', 250000), 'a number');
-  assert.ok(m('2500', '250000'), 'a string, as a JSON amount can arrive');
-  assert.ok(m('19.99', 19.99 * 100), 'a float that is not quite whole paise (1998.9999999999998)');
+  assert.ok(m('=2500', 250000), 'a number');
+  assert.ok(m('=2500', '250000'), 'a string, as a JSON amount can arrive');
+  assert.ok(m('=19.99', 19.99 * 100), 'a float that is not quite whole paise (1998.9999999999998)');
   assert.ok(!m('!=19.99', 19.99 * 100), 'and the same value is not "not equal"');
-  assert.ok(!m('2500', 250001), 'one paise out is still a different amount');
+  assert.ok(!m('=2500', 250001), 'one paise out is still a different amount');
 });
 
 test('a typed column condition is parsed once and matched per cell, by the column type', () => {
@@ -132,4 +132,28 @@ test('a column that is required stays shown but can still move, and some columns
   assert.deepEqual(clean('junk'), { order: ids, hidden: ['word', 'narr'] });
   assert.deepEqual(cleanLayout(null, ['a', 'b'], [], [], ['a', 'b']).hidden, [], 'hiding every column is still not allowed, even by default');
   assert.deepEqual(moveColumn({ order: ids, hidden: ['word'] }, 'party', -1, ids, ['sel']), { order: ['sel', 'date', 'party', 'cat', 'word', 'narr'], hidden: ['word'] });
+});
+
+test('plain digits in an amount filter match as you type; an operator stays exact', () => {
+  const m = (typed, value) => matchColumn('amount', parseColumnFilter('amount', typed), value);
+  assert.ok(m('1', 100) && m('1', 15000), 'one digit');
+  assert.ok(m('15', 1500) && m('15', 15000) && m('15', 351500), '15 finds 15, 150 and 3,515');
+  assert.ok(!m('15', 7000), 'and not 70');
+  assert.ok(m('1,500', 150000) && m('1500.00', 150000), 'commas and paise are fine');
+  assert.ok(!m('=15', 15000), 'an operator is exact: 150 is not 15');
+  assert.ok(m('>=15', 1500) && m('10..20', 1500));
+  assert.ok(!m('15', null), 'an empty cell matches no amount');
+});
+
+test('a - or + in an amount filter limits to money out or in, as the table shows it', () => {
+  const m = (typed, value, sign) => matchColumn('amount', parseColumnFilter('amount', typed), value, sign);
+  assert.ok(m('-219', 21900, -1), 'what the cell shows, "-219.00", finds it');
+  assert.ok(m('−219', 21900, -1), 'the typographic minus too');
+  assert.ok(!m('-219', 21900, 1), 'a credit of 219 is not a debit');
+  assert.ok(m('+219', 21900, 1) && !m('+219', 21900, -1));
+  assert.ok(m('-', 5000, -1) && !m('-', 5000, 1), 'a sign alone is "all debits"');
+  assert.ok(m('-=219', 21900, -1) && !m('-=219', 21950, -1), 'a sign with an operator stays exact');
+  assert.ok(m('->1000', 150000, -1) && !m('->1000', 50000, -1));
+  assert.ok(m('219', 21900, -1) && m('219', 21900, 1), 'no sign means either');
+  assert.ok(parseColumnFilter('amount', '-lots').error, 'what cannot be read is still an error');
 });

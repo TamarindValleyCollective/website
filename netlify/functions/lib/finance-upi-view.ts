@@ -36,7 +36,11 @@ async function all(path: string): Promise<Json[]> {
 }
 
 // operator_id exists once migration 0101 is applied; before that the rows load without it.
-const withOperator = (path: string) => all(path.replace('select=', 'select=operator_id,')).catch(() => all(path));
+// payee_upi_id exists once migration 0104 is applied.
+const withOperator = (path: string) =>
+  all(path.replace('select=', 'select=payee_upi_id,operator_id,'))
+    .catch(() => all(path.replace('select=', 'select=operator_id,')))
+    .catch(() => all(path));
 
 // The register and the saved UPI ID lookups, in the shape partyStateFor wants. The UPI IDs parties already hold are compared by their keyed
 // fingerprint, never decrypted. Before migration 0102 there are no lookups, and without the finance key no fingerprints: both just mean fewer matches.
@@ -128,7 +132,7 @@ export async function listUpiLines(req: Request): Promise<Response> {
       id: u.id as string, paidAt: u.paid_at as string, time: (u.paid_time as string | null)?.slice(0, 5) ?? null, app: u.app as 'bhim' | 'paytm',
       // "Paid to" is the app's own text and carries the UPI ID, so it follows the same masking rule as the UPI ID column: the ID in it is masked unless the
       // viewer may see payee bank details. Everything the server works out (names, parties, lookups) uses the unmasked text and never sends it.
-      counterparty: (canSeeUpiIds ? u.counterparty : maskVpasIn(u.counterparty)) as string | null, remark: u.remarks as string | null, amountPaise: Number(u.amount_paise), direction: u.direction as 'debit' | 'credit',
+      counterparty: (canSeeUpiIds ? u.counterparty : maskVpasIn(u.counterparty)) as string | null, payeeUpiId: (u.payee_upi_id ? (canSeeUpiIds ? u.payee_upi_id : maskVpasIn(u.payee_upi_id)) : null) as string | null, remark: u.remarks as string | null, amountPaise: Number(u.amount_paise), direction: u.direction as 'debit' | 'credit',
       // The UPI ID in "Paid to" and the registered name Razorpay gave for it (src: scripts/lib/finance-vpa.mjs); derived, never stored on the row.
       ...(vpaFieldsFor(u.counterparty, vpaAnswers, canSeeUpiIds) as { upiId: string | null; vpaName: string | null; vpaState: 'named' | 'asked' | 'new' | null }),
       vpaGroup: vpaGroupOf(u.counterparty as string | null),

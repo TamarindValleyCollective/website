@@ -31,6 +31,7 @@ import {
   todayIST,
 } from '../../../scripts/lib/finance-parties.mjs';
 import { fingerprintText } from '../../../scripts/lib/finance-party-import.mjs';
+import { LEGAL_ENTITY_NAME } from '../../../src/data/site-facts';
 import { postingStats, suggestChanges } from '../../../scripts/lib/finance-party-suggestions.mjs';
 import { rowsAll } from './finance-ledger';
 import { registeredNameOf } from './finance-vpa';
@@ -197,12 +198,12 @@ export async function listParties(req: Request): Promise<Response> {
     // Suggested changes are worked out over the whole directory, whatever the search text is.
     const suggestions = suggestChanges(
       everyone.map((p: Json) => ({ id: p.id, name: p.name, kind: p.kind, active: p.active, householdId: p.householdId, accounts: p.accounts.map((a: Json) => ({ verifiedName: a.verification?.name ?? null })), stats: p.stats })),
-      { kindLabels: KIND_WORDS },
+      { kindLabels: KIND_WORDS, selfNames: [LEGAL_ENTITY_NAME] },
     );
     const shown = everyone
       // The label, or a name a bank showed for one of the party's accounts ("milk" finds the label, a surname finds the bank's name).
       .filter((p: Json) => !q || p.name.toLowerCase().includes(q) || p.accounts.some((a: Json) => String(a.verification?.name ?? '').toLowerCase().includes(q)))
-      .map(({ stats: s, ...p }: Json) => ({ ...p, lastPaid: s?.lastPaid ?? null, paidPaise: s?.paidPaise ?? 0, lastReceived: s?.lastReceived ?? null, receivedPaise: s?.receivedPaise ?? 0, lines: s?.lines ?? 0, postings: s?.postings ?? 0 }));
+      .map(({ stats: s, ...p }: Json) => ({ ...p, lastPaid: s?.lastPaid ?? null, paidPaise: s?.paidPaise ?? 0, lastReceived: s?.lastReceived ?? null, receivedPaise: s?.receivedPaise ?? 0, lines: s?.lines ?? 0, postings: s?.postings ?? 0, usualCategory: s?.categoryName ?? null, usualDirection: s?.direction ?? null }));
     return jsonResponse({
       kinds: PARTY_KINDS,
       canEdit: capabilities.includes('allocate'),

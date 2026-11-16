@@ -179,7 +179,7 @@ for esbuild, and Node 22.18+ or newer, which imports the registry `.ts` directly
   sheet and its step-up), Mark inactive, Mark active; each is the existing `PATCH /parties/:id` per party (so each keeps its own rules and audit entry), run five at a time with the count shown as it goes, so changing a hundred parties takes seconds. The usual job, "turn all the Others into Vendors": filter to *Kind is Other*, tick the box in the header (every party shown), choose *Set kind*; Vendor is preselected, and parties linked to a household stay members. The bar of ticked rows sticks to the bottom of the table's own column (it must not span the whole window: it once slid under the left rail and hid *Set kind*). A dot shows each payee's state so
   "Needs review" is the one loud signal. Add party defaults to Vendor.
 - **Suggested changes** (`GET /parties` returns `suggestions`; rules in `scripts/lib/finance-party-suggestions.mjs`, pure and tested). Only
-  typed or booked evidence is used, never a screenshot: the name the bank showed when an account was verified (`verified_name`), the other
+  typed or booked evidence is used, never a screenshot (a party that is the company itself, in full or as the bank shortens it, gets no suggestion at all: `selfNames` is `LEGAL_ENTITY_NAME`): the name the bank showed when an account was verified (`verified_name`), the other
   parties' names, and what a party's posted payments were booked under. *Merge* (names match allowing one slip per eight letters, or one bank
   name fits both; never two members, never a member linked to a household away), *Rename* (our label is a spelling or a shortening of the
   verified bank name; never a member, never to a name another party has), *Kind* (only "Other", and only when at least two payments and 80% of
@@ -325,6 +325,13 @@ types the importer knows; each batch stores its `source`: `axis_statement`, `pay
   stored every row as a debit.
 - **Same table, one more column.** Rows go into `fin_upi_lines` with `app` (`bhim` | `paytm`, existing rows are `paytm`), the same
   unique reference (so a payment in both files is stored once) and the same join to bank lines. Raw PDFs are kept in R2 as `.pdf`.
+- **Enriching BHIM rows from the app's own screens** (2026-11-16, migration `0104`, applied). The PDF masks the payee and has no
+  purpose, so 30 rows were overwritten once from a hand-extracted sheet: `counterparty` (the full name), `remarks` (only where the
+  app showed a real purpose, not its placeholders such as "Pay") and the new `payee_upi_id` (shown as the **UPI ID** column on the
+  UPI page, searchable; most are still partly masked by the app). Paytm rows keep their ID in `counterparty`. The link-only trigger
+  was switched off inside one all-or-nothing transaction for the overwrite and checked back on. A later PDF import skips rows that
+  already exist, so it will not undo this, and it does not fill `payee_upi_id` (the PDF only has the masked ID). The sheet itself
+  holds real names and is not in the repo.
 - **Channel ("origin") of a bank line** (`scripts/lib/finance-origin.mjs`, derived at read time, not stored). A line has two
   independent facts: the **account** it hit and the **channel** it came through. `CHANNELS` is the registry (label, `kind`:
   `upi_app | bulk | gateway | card | bank`, `flows`: in/out); `RULES` are the narration readings, first match wins. Today: `bhim` /
@@ -660,6 +667,7 @@ Modelled on how ServiceNow lists work, because the sheet's convenience was selec
   - text columns: `word` contains; `=word` exactly; `!=word` is not; `^word` starts with; `!word` does not contain; `=` alone is empty;
     `!=` alone is not empty. Any case.
   - amount, in rupees: `2500`, `>2500`, `>=`, `<`, `<=`, `!=2500`, `1000..3000`.
+    (The shared tables, UPI/Parties/Requests/Rules, differ in one thing: plain digits there are a search, `15` finds 15, 150 and 3,515; `=2500` is the exact amount. A leading `-` or `+` limits to debits or credits where the table shows a sign (the UPI page): `-219` is what its cell reads. Their main search box also finds an amount. When a filter finds nothing, the header and the filter boxes stay, with "No … matches" and Clear filters below, so you can keep typing or delete a character.)
   - date: `2026-10` or `oct` (matches the ISO date or the day-and-month label), `>2026-10-15` (also `>=`, `<`, `<=`, `=`),
     `2026-10-01..2026-10-31`.
   - Category, party and wording match what a posted line was allocated to or, while it is unposted, what is suggested for it. So

@@ -2,7 +2,7 @@
 // Suggested changes on the Parties table. Every name here is invented.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { suggestChanges, sameName, nameWithin, niceName, postingStats } from './finance-party-suggestions.mjs';
+import { suggestChanges, isSelf, sameName, nameWithin, niceName, postingStats } from './finance-party-suggestions.mjs';
 
 const party = (id, name, extra = {}) => ({ id, name, kind: 'vendor', active: true, householdId: null, personId: null, accounts: [], stats: null, ...extra });
 const acct = (verifiedName) => ({ verifiedName });
@@ -100,4 +100,15 @@ test('posting stats count each party under its main party and take the dominant 
   assert.deepEqual([s.categoryName, s.categoryType], ['Repairs', 'opex']);
   assert.ok(Math.abs(s.categoryShare - 2 / 3) < 1e-9);
   assert.equal(postingStats([], lines, cats).size, 0);
+});
+
+test('the company itself, in full or as the bank shortens it, is never suggested a kind', () => {
+  const own = ['Test Farm Holdings Private Limited'];
+  assert.ok(isSelf('TEST FARM HOLDINGS PRIVATE', own));
+  assert.ok(isSelf('Test Farm Holdings Private Limited', own));
+  assert.ok(!isSelf('Test Farm', own), 'two words are too little to claim');
+  assert.ok(!isSelf('Test Farm Holdings Traders', own));
+  const us = party('s', 'TEST FARM HOLDINGS PRIVATE', { kind: 'other', stats: stats() });
+  assert.equal(byType(suggestChanges([us]), 'kind').length, 1, 'without selfNames it would be offered as a vendor');
+  assert.equal(suggestChanges([us], { selfNames: own }).length, 0);
 });

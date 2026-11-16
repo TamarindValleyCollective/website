@@ -186,7 +186,7 @@ import '../../../styles/money.css';
   // The ledger line a payment is joined to, as much as the popup behind the bank's icon shows (the server works it out; the narration is masked for some viewers).
   type LedgerSummary = { id: string; date: string; direction: 'debit' | 'credit'; amountPaise: number; narration: string; status: 'posted' | 'open'; parts: number; category: string | null; party: string | null };
   type Badge = { label: string; short: string | null; kind: string | null; logoUrl: string | null };
-  type Upi = { operatorId?: string | null; id: string; paidAt: string; time: string | null; app: 'bhim' | 'paytm'; counterparty: string | null; upiId: string | null; vpaName: string | null; vpaState: 'named' | 'asked' | 'new' | null; vpaGroup: number | null; party: PartyState; bankBadge: string | null; ledger: LedgerSummary | null; remark: string | null; amountPaise: number; direction: 'debit' | 'credit'; isCircle: boolean; upiRef: string; note: string | null; purpose: string | null; bankLineId: string | null; account: string | null; delegateId: string | null; delegate: string | null; delegateHow: 'assigned' | 'auto' | 'ambiguous' | 'none' | null; state: 'matched' | 'waiting' | 'unmatched' };
+  type Upi = { operatorId?: string | null; id: string; paidAt: string; time: string | null; app: 'bhim' | 'paytm'; counterparty: string | null; upiId: string | null; payeeUpiId: string | null; vpaName: string | null; vpaState: 'named' | 'asked' | 'new' | null; vpaGroup: number | null; party: PartyState; bankBadge: string | null; ledger: LedgerSummary | null; remark: string | null; amountPaise: number; direction: 'debit' | 'credit'; isCircle: boolean; upiRef: string; note: string | null; purpose: string | null; bankLineId: string | null; account: string | null; delegateId: string | null; delegate: string | null; delegateHow: 'assigned' | 'auto' | 'ambiguous' | 'none' | null; state: 'matched' | 'waiting' | 'unmatched' };
   type Delegate = { id: string; identifier: string; displayName: string | null; activeFrom: string; activeTo: string | null; capPaise: number | null; operatorId?: string | null };
   type Operator = { id: string; name: string };
   let all: Upi[] = [];
@@ -842,12 +842,12 @@ import '../../../styles/money.css';
     noun: ['payment', 'payments'],
     cap: 500,
     rowKind: (u: Upi) => kindClass(amountKind(u.direction)),
-    searchPlaceholder: 'Search who, remark, reference, account…',
+    searchPlaceholder: 'Search who, UPI ID, remark, reference, account…',
     favoritesKey: `tvc-upi-favorites:${decodeTokenEmail(getToken() ?? '')}`,
     layoutKey: `tvc-upi-columns:${decodeTokenEmail(getToken() ?? '')}`,
     defaultGroup: 'month',
     defaultSort: ['date', -1],
-    searchText: (u: Upi) => [u.counterparty, u.vpaName ?? '', u.party.partyName ?? '', u.upiId ?? '', u.remark, u.purpose ?? '', u.note, u.upiRef, u.account ?? '', u.delegate ?? ''].join(' '),
+    searchText: (u: Upi) => [u.counterparty, u.vpaName ?? '', u.party.partyName ?? '', u.upiId ?? '', u.payeeUpiId ?? '', u.remark, u.purpose ?? '', u.note, u.upiRef, u.account ?? '', u.delegate ?? ''].join(' '),
     toolbarEnd: toolbarTools,
     empty: { title: 'No UPI payments yet', text: 'Add the BHIM history or the Paytm export on the Import page.' },
     columns: [
@@ -859,10 +859,10 @@ import '../../../styles/money.css';
       // Party: whether this person is in the Parties register. Matched by the UPI ID first (a party holding it), the name only checking it; a
       // name that does not fit is flagged, and anyone nobody matches can be added from the toolbar (a reviewed add).
       { id: 'party', label: 'Party', value: (u: Upi) => partyText(u), render: (u: Upi) => partyCell(u) },
-      // UPI ID: the ID found in "Paid to", masked (p••••@bank) unless the person may see payee bank details. Hidden until turned on in Columns.
-      { id: 'upiId', label: 'UPI ID', hiddenByDefault: true, value: (u: Upi) => u.upiId ?? '', render: (u: Upi) => (u.upiId ? u.upiId : el('span', 'dim', 'None')) },
+      // UPI ID: the ID found in "Paid to" (BHIM rows keep the name there, so the ID stored with the row, migration 0102, stands in), masked (p••••@bank) unless the person may see payee bank details. Hidden until turned on in Columns.
+      { id: 'upiId', label: 'UPI ID', hiddenByDefault: true, value: (u: Upi) => u.upiId ?? u.payeeUpiId ?? '', render: (u: Upi) => { const id = u.upiId ?? u.payeeUpiId; return id ? id : el('span', 'dim', 'None'); } },
       // The sign and colour say debit or credit (the Debits and Credits chips still filter); a credit also gets a stripe down its row.
-      { id: 'amount', label: 'Amount', type: 'amount', align: 'end', value: (u: Upi) => u.amountPaise, render: (u: Upi) => moneyNode(u.amountPaise, amountKind(u.direction)) },
+      { id: 'amount', label: 'Amount', type: 'amount', align: 'end', value: (u: Upi) => u.amountPaise, signOf: (u: Upi) => (u.direction === 'credit' ? 1 : -1), render: (u: Upi) => moneyNode(u.amountPaise, amountKind(u.direction)) },
       { id: 'app', label: 'App', value: (u: Upi) => APP[u.app] },
       { id: 'paidBy', label: 'Paid by', value: (u: Upi) => paidByText(u), render: (u: Upi) => paidByCell(u) },
       { id: 'account', label: 'Account', value: (u: Upi) => u.account ?? '', render: (u: Upi) => (u.account ? u.account : el('span', 'dim', 'Not known yet')) },
