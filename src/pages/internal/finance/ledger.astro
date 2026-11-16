@@ -121,7 +121,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   import { StaffAuthError, askSheet, clearStepUp, clearToken, closeOnBackdrop, decodeTokenEmail, getToken, setToken, showToast, staffFetch } from '../../../../scripts/lib/staff-client.mjs';
   import { clearState, showFailure, showLoading } from '../../../../scripts/lib/staff-states.mjs';
   import { linkedPicker } from '../../../../scripts/lib/linked-picker.mjs';
-  import { categoryNodes, categoryPath, partyNodes, partyPath, partyStart, readCategoryPath } from '../../../../scripts/lib/finance-picker-nodes.mjs';
+  import { categoryNodes, categoryPath, partyNodes, partyPath, partyStart, readCategoryPath, suggestedPartyText } from '../../../../scripts/lib/finance-picker-nodes.mjs';
   import { amountKind, button, categoryOptions, combo, h, input, labelled, niceDate, niceMonth, parseRupees, partyOptions, kindClass, moneyText, pill, present, rupees, unitOptions } from '../../../../scripts/lib/finance-ui.mjs';
   import { GROUP_FIELDS, buildItems, defaultUnitFor, financialYearOf, groupLabel, matchOptions, kindLabel, kindsInOrder, optionCounts, optionKeys, optionLabel, passesChips, passesWords, readFavorites, withFavorite } from '../../../../scripts/lib/finance-search.mjs';
   import { originLabel, ORIGINS } from '../../../../scripts/lib/finance-origin.mjs';
@@ -1932,7 +1932,9 @@ import SignInGate from '../../../components/SignInGate.astro';
       const gp = ghostOf(l, 'partyId');
       const stranger = strangerOf(l);
       r.party.path = partyPath(partyById(d.partyId));
-      r.party.setPlaceholder(gp ? nameOf(lk.parties, gp) : stranger ? `New: ${stranger}` : null);
+      // A suggestion reads the way it will be recorded, kind first, like the party field itself once it is chosen.
+      const suggestedParty = suggestedPartyText({ party: gp ? partyById(gp) : null, newName: stranger, kind: kindFor(l) });
+      r.party.setPlaceholder(suggestedParty || null);
       r.party.classList.toggle('ghost', Boolean(gp || stranger));
       r.partyTick.hidden = !((gp || stranger) && active);
       const tickLabel = gp ? `Accept the suggested party for ${l.narration.slice(0, 40)}` : `Add ${stranger} to the register and use them`;
@@ -1947,7 +1949,7 @@ import SignInGate from '../../../components/SignInGate.astro';
         r.catPeek.textContent = d.categoryId ? `${nameOf(lk.categories, d.categoryId)}${dw.maintenance && dw.unit ? ` · ${unitLabels().get(dw.unit) ?? ''} · ${dw.year}` : dw.capital && dw.project ? ` · ${lk.projects.find((p) => p.id === dw.project)?.name ?? ''}` : ''}` : gc ? nameOf(lk.categories, gc) : 'Choose…';
         r.catPeek.classList.toggle('ghost', !d.categoryId);
         r.catPeek.setAttribute('aria-label', `Category for ${l.narration.slice(0, 40)}: ${r.catPeek.textContent}.${d.categoryId ? ' Yours, not posted yet.' : ''} Press to edit.`);
-        r.partyPeek.textContent = d.partyId ? nameOf(lk.parties, d.partyId) : gp ? nameOf(lk.parties, gp) : stranger ? `New: ${stranger}` : 'No one in particular';
+        r.partyPeek.textContent = d.partyId ? nameOf(lk.parties, d.partyId) : suggestedParty || 'No one in particular';
         r.partyPeek.classList.toggle('ghost', !d.partyId);
         r.partyPeek.setAttribute('aria-label', `Party for ${l.narration.slice(0, 40)}: ${r.partyPeek.textContent}.${d.partyId ? ' Yours, not posted yet.' : ''} Press to edit.`);
       }

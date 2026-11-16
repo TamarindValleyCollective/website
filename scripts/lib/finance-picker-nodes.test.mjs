@@ -2,7 +2,7 @@
 // The ledger's category and party trees. Every name here is invented.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { categoryNodes, categoryPath, partyNodes, partyPath, partyStart, readCategoryPath, unitNodes, yearsFor } from './finance-picker-nodes.mjs';
+import { categoryNodes, categoryPath, partyNodes, partyPath, partyStart, readCategoryPath, suggestedPartyText, unitNodes, yearsFor } from './finance-picker-nodes.mjs';
 import { labelsOf, levelAt, rowsAt } from './linked-picker-core.mjs';
 
 const CATS = [
@@ -99,4 +99,14 @@ test('a capital category that can be picked as it is or taken to a project says 
   assert.equal(nodes[0].selectable, true);
   assert.equal(nodes[0].pickSub, 'no project');
   assert.equal(nodes[0].enterLabel, 'Equipment · choose a project');
+});
+
+test('a suggested party reads the way it will be recorded: its kind, then its name, like the party field itself', () => {
+  assert.equal(suggestedPartyText({ party: PARTIES[2] }), 'Vendors › Test Fuels');
+  assert.equal(suggestedPartyText({ party: PARTIES[0] }), 'Members › Test Person One');
+  assert.equal(suggestedPartyText({ party: { name: 'Odd One', kind: 'mystery' } }), 'mystery › Odd One', 'an unknown kind is shown as it is, not hidden');
+  assert.equal(suggestedPartyText({ newName: 'Test Electricals', kind: 'vendor' }), 'Vendors › Test Electricals (new)', 'a payee not in the register yet says so');
+  assert.equal(suggestedPartyText({ newName: 'Test Customer Co', kind: 'customer' }), 'Customers › Test Customer Co (new)');
+  assert.equal(suggestedPartyText({ party: PARTIES[2], newName: 'Ignored' }), 'Vendors › Test Fuels', 'a party in the register wins over a new name');
+  assert.equal(suggestedPartyText({}), '', 'no suggestion, no text');
 });
