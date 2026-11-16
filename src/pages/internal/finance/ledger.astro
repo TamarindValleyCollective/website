@@ -387,6 +387,9 @@ import SignInGate from '../../../components/SignInGate.astro';
   }
   const editable = (l: Line) => Boolean(data?.canAllocate) && l.state === 'unallocated' && !l.review;
   const nameOf = (list: { id: string; name: string }[], id: string | null) => list.find((x) => x.id === id)?.name ?? '';
+  // A party as it reads everywhere in the lines, posted, drafted or suggested: its kind, then its name (Vendors › Test Fuels), the way the party field
+  // shows it once chosen. The searches and the Filter to / Group by items still use the plain name.
+  const partyShown = (id: string | null | undefined) => (id ? suggestedPartyText({ party: partyById(id) }) || nameOf(data?.lookups.parties ?? [], id) : '');
   const ghostOf = (l: Line, f: Field): string => {
     const s = l.suggestion;
     if (!s || draftOf(l.id)[f]) return '';
@@ -2140,7 +2143,7 @@ import SignInGate from '../../../components/SignInGate.astro';
         r.catPeek.textContent = d.categoryId ? `${nameOf(lk.categories, d.categoryId)}${dw.maintenance && dw.unit ? ` · ${unitLabels().get(dw.unit) ?? ''} · ${dw.year}` : dw.capital && dw.project ? ` · ${lk.projects.find((p) => p.id === dw.project)?.name ?? ''}` : ''}` : gc ? nameOf(lk.categories, gc) : 'Choose…';
         r.catPeek.classList.toggle('ghost', !d.categoryId);
         r.catPeek.setAttribute('aria-label', `Category for ${l.narration.slice(0, 40)}: ${r.catPeek.textContent}.${d.categoryId ? ' Yours, not posted yet.' : ''} Press to edit.`);
-        r.partyPeek.textContent = d.partyId ? nameOf(lk.parties, d.partyId) : suggestedParty || 'No one in particular';
+        r.partyPeek.textContent = d.partyId ? partyShown(d.partyId) : suggestedParty || 'No one in particular';
         r.partyPeek.classList.toggle('ghost', !d.partyId);
         r.partyPeek.setAttribute('aria-label', `Party for ${l.narration.slice(0, 40)}: ${r.partyPeek.textContent}.${d.partyId ? ' Yours, not posted yet.' : ''} Press to edit.`);
       }
@@ -2149,7 +2152,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       const a = l.allocation;
       const forWhom = [a?.householdLabel ? `Unit ${a.householdLabel}` : '', a?.maintenanceYear ?? ''].filter(Boolean).join(' · ');
       r.catText.replaceChildren(document.createTextNode(a ? `${nameOf(lk.categories, a.categoryId)}${a.count > 1 ? ` +${a.count - 1} more` : ''}` : ''), ...(forWhom ? [h('span', { class: 'detail detail--unit', text: forWhom })] : []));
-      r.partyText.replaceChildren(a?.partyId ? document.createTextNode(nameOf(lk.parties, a.partyId)) : l.missingParty ? h('span', { class: 'noparty', text: 'No party', attrs: { title: 'Double-click to choose a party' } }) : document.createTextNode(''));
+      r.partyText.replaceChildren(a?.partyId ? document.createTextNode(partyShown(a.partyId)) : l.missingParty ? h('span', { class: 'noparty', text: 'No party', attrs: { title: 'Double-click to choose a party' } }) : document.createTextNode(''));
       r.natureText.textContent = a?.nature ?? '';
     }
     // The What it was for column: what was typed or restored, or what was posted; failing both, the suggestion in grey.
@@ -2169,7 +2172,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     } else r.pillSlot.replaceChildren(pillNode);
     // On a phone a line at rest is two lines: the narration and amount, then date, category and party in one grey line.
     const catWords = can ? (d.categoryId ? nameOf(lk.categories, d.categoryId) : ghostOf(l, 'categoryId') ? nameOf(lk.categories, ghostOf(l, 'categoryId')) : '') : l.allocation ? nameOf(lk.categories, l.allocation.categoryId) : '';
-    const partyWords = can ? (d.partyId ? nameOf(lk.parties, d.partyId) : '') : l.allocation?.partyId ? nameOf(lk.parties, l.allocation.partyId) : '';
+    const partyWords = can ? (d.partyId ? partyShown(d.partyId) : '') : l.allocation?.partyId ? partyShown(l.allocation.partyId) : '';
     r.meta.textContent = (can && (d.categoryId || d.partyId) ? 'Yours: ' : '') + ([catWords, partyWords].filter(Boolean).join(' · ') || 'Nothing chosen yet') + (noUpi ? ' · No UPI record' : '');
   }
   const syncRow = (l: Line) => {
