@@ -71,7 +71,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
 
   type Account = { id: string; method: 'bank' | 'upi'; shown: string; status: 'unverified' | 'verified'; shared: boolean; validFrom: string | null; retiredOn: string | null; payableNow: boolean; review: string[]; verification: { at: string | null; by: string | null; method: string | null; methodLabel: string; note: string | null; name?: string | null } | null; evidence?: { payment: number; name_check: number; other: number } };
-  type Party = { id: string; name: string; kind: string; active: boolean; householdId: string | null; formerSince: string | null; accounts: Account[]; earlierAccounts: number; needsReview: boolean; mergedCount: number; lastPaid: string | null; paidPaise: number; lastReceived: string | null; receivedPaise: number; lines: number; postings: number };
+  type Party = { id: string; name: string; kind: string; active: boolean; householdId: string | null; formerSince: string | null; accounts: Account[]; earlierAccounts: number; needsReview: boolean; mergedCount: number; lastPaid: string | null; paidPaise: number; lastReceived: string | null; receivedPaise: number; lines: number; postings: number; usualCategory: string | null; usualDirection: 'debit' | 'credit' | null };
   type Suggestion = { id: string; type: 'merge' | 'rename' | 'kind'; partyId: string; targetId?: string; to?: string; what: string; why: string };
   type Data = { kinds: string[]; canEdit: boolean; canVerify: boolean; me: { id: string; ready: boolean; hasPasskey: boolean; stepUpValid: boolean } | null; parties: Party[]; suggestions: Suggestion[]; needsReviewCount: number };
 
@@ -258,6 +258,12 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
         render: (p: Party) => h('span', { class: 'name-cell' }, h('button', { class: 'party-main', attrs: { type: 'button' }, on: { click: () => openDetail(p.id) } }, h('span', { class: 'title', text: p.name })), h('span', { class: 'party-flag' }, p.active ? null : pill('Inactive'), p.formerSince ? pill('Former member') : null, p.needsReview ? pill('Needs review', 'crit') : null, duplicateIds.has(p.id) ? pill('Possible duplicate', 'warn') : null)),
       },
       { id: 'kind', label: 'Kind', value: (p: Party) => KIND_LABELS[p.kind] ?? p.kind, render: (p: Party) => (data?.canEdit ? kindSelect(p) : h('span', { class: 'detail kind-text', text: KIND_LABELS[p.kind] ?? p.kind })) },
+      // What the books say this party is for, so a kind can be chosen without opening each one: the category most of their posted
+      // payments (or receipts, whichever there are more of) were booked under, and how many that is.
+      {
+        id: 'usual', label: 'Usually booked under', value: (p: Party) => p.usualCategory ?? '', sortValue: (p: Party) => p.usualCategory ?? '~',
+        render: (p: Party) => (p.usualCategory ? h('span', {}, document.createTextNode(p.usualCategory), h('span', { class: 'detail', text: ` · ${p.postings} ${p.usualDirection === 'credit' ? (p.postings === 1 ? 'receipt' : 'receipts') : (p.postings === 1 ? 'payment' : 'payments')}` })) : h('span', { class: 'dim', text: 'Nothing booked yet' })),
+      },
       { id: 'accounts', label: 'Accounts', value: (p: Party) => accountSummary(p), sortValue: (p: Party) => liveAccounts(p).length },
       {
         id: 'status', label: 'Status', value: (p: Party) => STATE_TEXT[stateOf(p)],
@@ -286,6 +292,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
     groups: [
       { id: 'kind', label: 'Kind', key: (p: Party) => KIND_LABELS[p.kind] ?? p.kind, order: KIND_ORDER },
       { id: 'status', label: 'Status', key: (p: Party) => STATE_TEXT[stateOf(p)], order: ['Needs review', 'Not verified yet', 'Verified', 'No payment details'] },
+      { id: 'usual', label: 'Usually booked under', key: (p: Party) => p.usualCategory ?? 'Nothing booked yet' },
       { id: 'letter', label: 'First letter', key: (p: Party) => (p.name.trim()[0] ?? '#').toUpperCase() },
     ],
     card: (p: Party) =>
