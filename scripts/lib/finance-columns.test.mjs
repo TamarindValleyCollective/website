@@ -44,6 +44,9 @@ test('text conditions are described the way ServiceNow shows them', () => {
 test('amounts: a number, an operator or a range, in rupees', () => {
   assert.equal(matchAmount(parseAmount('2500'), 250000), true);
   assert.equal(matchAmount(parseAmount('2500'), 250001), false);
+  assert.equal(matchAmount(parseAmount('2500'), '250000'), true, 'a string amount');
+  assert.equal(matchAmount(parseAmount('19.99'), 19.99 * 100), true, 'a float that is not quite whole paise');
+  assert.equal(matchAmount(parseAmount('!=19.99'), 19.99 * 100), false);
   assert.equal(matchAmount(parseAmount('>1,000'), 250000), true);
   assert.equal(matchAmount(parseAmount('>2500'), 250000), false);
   assert.equal(matchAmount(parseAmount('>=2500'), 250000), true);
