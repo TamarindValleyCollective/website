@@ -85,8 +85,16 @@ const KIND_FROM = (s) => {
  * The suggestions for a list of parties, most useful first: merges, then renames, then kinds. Each is
  * { id, type: 'merge'|'rename'|'kind', partyId, targetId?, to?, what, why }. A party that is the source of a merge gets nothing else.
  */
-export function suggestChanges(parties, { kindLabels = {} } = {}) {
-  const live = parties.filter((p) => p.active !== false);
+// A party named as the company itself, or as the bank's shortened form of it ("... PRIVATE" for "... Private Limited"), is us, not
+// a payee, so it is never suggested a kind, a rename or a merge. selfNames are the company's own names; three words at least.
+const words = (name) => String(name ?? '').toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').split(/\s+/).filter(Boolean);
+export function isSelf(name, selfNames) {
+  const w = words(name);
+  return w.length >= 3 && selfNames.some((own) => { const o = words(own); return w.length <= o.length && w.every((x, i) => x === o[i]); });
+}
+
+export function suggestChanges(parties, { kindLabels = {}, selfNames = [] } = {}) {
+  const live = parties.filter((p) => p.active !== false && !isSelf(p.name, selfNames));
   const out = [];
   const absorbed = new Set();
 
