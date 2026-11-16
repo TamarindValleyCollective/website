@@ -109,6 +109,14 @@ export function withFavorite(list, fav, allowed) {
 
 // ---- column layout: which columns show and in what order. Plain data { order, hidden }; a column marked `fixed` (a column of buttons,
 // say) is always shown and keeps the place it has by default, and only the others move around it.
+/** @typedef {{ order: string[], hidden: string[] }} ColumnLayout */
+
+/**
+ * @param {string[]} ids
+ * @param {string[]} fixed
+ * @param {string[]} movable
+ * @returns {string[]}
+ */
 const placeMovable = (ids, fixed, movable) => {
   let k = 0;
   return ids.map((id) => (fixed.includes(id) ? id : movable[k++]));
@@ -118,6 +126,13 @@ const placeMovable = (ids, fixed, movable) => {
  * A saved layout made safe for the columns the table has today: unknown and repeated ids dropped, new columns follow in their default order.
  * `fixed` columns stay shown and where they are; `required` ones can move but never hide (the Ledger edits its category and party in their cells);
  * `defaultHidden` columns start hidden, both when nothing is saved and when a column is new since the layout was saved. Hiding every column is not allowed.
+ *
+ * @param {any} raw
+ * @param {string[]} ids
+ * @param {string[]} [fixed]
+ * @param {string[]} [required]
+ * @param {string[]} [defaultHidden]
+ * @returns {ColumnLayout}
  */
 export function cleanLayout(raw, ids, fixed = [], required = [], defaultHidden = []) {
   const once = (list) => (Array.isArray(list) ? list.filter((id, i) => ids.includes(id) && !fixed.includes(id) && list.indexOf(id) === i) : []);
@@ -131,6 +146,14 @@ export function cleanLayout(raw, ids, fixed = [], required = [], defaultHidden =
 }
 
 /** Moves a column `delta` places among the movable ones (a fixed column never moves, and nothing passes it). `ids` is the default order. */
+/**
+ * @param {ColumnLayout} layout
+ * @param {string} id
+ * @param {number} delta
+ * @param {string[]} ids
+ * @param {string[]} [fixed]
+ * @returns {ColumnLayout}
+ */
 export function moveColumn(layout, id, delta, ids, fixed = []) {
   const movable = layout.order.filter((x) => !fixed.includes(x));
   const i = movable.indexOf(id);

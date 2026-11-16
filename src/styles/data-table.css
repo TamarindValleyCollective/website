@@ -433,6 +433,12 @@
   margin-top: 12px;
 }
 
+/* The keyboard's cell cursor (scripts/lib/cell-nav.mjs). */
+.dt td[data-col]:focus-visible {
+  outline: 2px solid var(--tvc-green);
+  outline-offset: -2px;
+}
+
 .dt .dt-cards {
   display: none;
 }

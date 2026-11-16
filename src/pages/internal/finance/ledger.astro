@@ -76,7 +76,7 @@ import SignInGate from '../../../components/SignInGate.astro';
           <li><strong>The bank's narration</strong> is the evidence, not an answer. Hover a line to read it, open the line to see it under the fields, click the date for the full line, or show the <em>Bank narration</em> column from the Columns button.</li>
         </ul>
         <p>Members come from the member records: everyone in a unit already has a party, and a person added to a unit gets one automatically, so a member is never added here by typing a name. Someone who leaves becomes a <strong>former member</strong>. Their old payments stay under their name and unit.</p>
-        <p><strong>Keyboard:</strong> <code>Ctrl+Enter</code> on a line accepts its suggestions and moves to the next · <code>Alt+Up</code> / <code>Alt+Down</code> go to the same cell on the line above or below · <code>Tab</code> walks every line · <code>Shift</code>-click a tick box for a range · <code>Ctrl+Z</code> undoes the last bulk change (for two minutes).</p>
+        <p><strong>Keyboard:</strong> <code>Ctrl+Enter</code> on a line accepts its suggestions and moves to the next · <code>Alt+Up</code> / <code>Alt+Down</code> go to the same cell on the line above or below · <code>Tab</code> walks every line · in the table, once <code>Tab</code> reaches a cell, the arrow keys, <code>Home</code>, <code>End</code> and <code>Page Up</code> / <code>Page Down</code> move between cells, the <code>Menu</code> key or <code>Shift+F10</code> opens <em>Filter to</em>, <em>Filter out</em> and <em>Group by</em> for it, and <code>Enter</code> opens it · <code>Shift</code>-click a tick box for a range · <code>Ctrl+Z</code> undoes the last bulk change (for two minutes).</p>
         <p>The box above looks in every column. Under a heading you can be exact:</p>
         <ul>
           <li><strong>Words</strong> (narration, category, party, what it was for): <code>fuel</code> contains · <code>=Fuel</code> exactly · <code>!=Bank charges</code> is not · <code>^UPI</code> starts with · <code>!tax</code> does not contain · <code>=</code> is empty · <code>!=</code> is not empty</li>
@@ -124,6 +124,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   import { originLabel, ORIGINS } from '../../../../scripts/lib/finance-origin.mjs';
   import { iconButton } from '../../../../scripts/lib/admin-icons.mjs';
   import { createColumnsMenu } from '../../../../scripts/lib/admin-columns-menu.mjs';
+  import { cellHintText, isMenuKey, moveCursor } from '../../../../scripts/lib/cell-nav.mjs';
   import { cleanLayout } from '../../../../scripts/lib/data-table.mjs';
   import { createFloatingMenu, leaveToBrowser, onLongPress, valueFilterItems } from '../../../../scripts/lib/admin-menu.mjs';
   import { compareRows, describeCondition, matchAmount, matchDate, matchText, parseAmount, parseDate, parseText } from '../../../../scripts/lib/finance-columns.mjs';
@@ -465,7 +466,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   const phone = window.matchMedia('(max-width: 1240px)'); // below this the page is a list of cards (the table needs about 1,000px beside the shell)
   let painting = false;
   let repaint = false; // a measurement changed a row's height while painting: place the rows again
-  let pendingFocus: { index: number; field: Field | 'start' | 'end' } | null = null;
+  let pendingFocus: { index: number; field: Field | 'start' | 'end' | { cell: string } } | null = null;
   const mounted = new Map<string, HTMLElement>();
   const mountedGroups = new Map<string, HTMLElement>();
   const virtualizer = new Virtualizer<HTMLElement, HTMLElement>({
@@ -1512,23 +1513,120 @@ import SignInGate from '../../../components/SignInGate.astro';
     narration: { column: 'narration', filter: { id: 'narration', type: 'text', raw: (l) => l.narration } },
     status: { column: 'status', groups: HEAD_GROUPS.status },
   };
+  // `e` is the mouse event, or null for the keyboard (the menu then opens under the cell and Escape gives the cell its focus back).
+  function openCellMenu(cellEl: HTMLElement, rowEl: HTMLElement, e: MouseEvent | null): boolean {
+    const kind = [...cellEl.classList].map((c) => /^gcell--(.+)$/.exec(c)?.[1]).find((k) => k && CELLS[k]);
+    const line = byId.get(rowEl.dataset.id ?? '');
+    const def = kind ? CELLS[kind] : undefined;
+    if (!def || !line || !columnShown(def.column)) return false;
+    const items = [
+      ...(def.filter ? valueFilterItems({ type: def.filter.type, raw: def.filter.raw(line), apply: (typed: string) => { colFilters[def.filter!.id] = typed; renderFilterRow(); applyView(true); } }) : []),
+      ...(def.groups ?? []).map(groupToggle),
+    ].map((it) => ({
+      label: it.label,
+      // The lines are drawn again: a menu opened with the keyboard keeps the cell cursor where it was.
+      run: () => {
+        const keep = cellEl.isConnected && document.activeElement === cellEl;
+        it.run();
+        if (keep) refocusCursor();
+      },
+    }));
+    if (!items.length) return false;
+    if (e) menus.open(items, e.clientX, e.clientY);
+    else {
+      const box = cellEl.getBoundingClientRect();
+      menus.open(items, box.left + 8, box.bottom, cellEl);
+    }
+    return true;
+  }
   $('grid').addEventListener('contextmenu', (e: MouseEvent) => {
     if (phone.matches) return; // the cards of a phone have no cells to point at
     const target = e.target as HTMLElement;
     const cellEl = target.closest<HTMLElement>('.lrow .gcell');
     const rowEl = target.closest<HTMLElement>('.lrow');
     if (!cellEl || !rowEl || leaveToBrowser(e, '.peek, .datebtn, .narr')) return;
-    const kind = [...cellEl.classList].map((c) => /^gcell--(.+)$/.exec(c)?.[1]).find((k) => k && CELLS[k]);
-    const line = byId.get(rowEl.dataset.id ?? '');
-    const def = kind ? CELLS[kind] : undefined;
-    if (!def || !line || !columnShown(def.column)) return;
-    const items = [
-      ...(def.filter ? valueFilterItems({ type: def.filter.type, raw: def.filter.raw(line), apply: (typed: string) => { colFilters[def.filter!.id] = typed; renderFilterRow(); applyView(true); } }) : []),
-      ...(def.groups ?? []).map(groupToggle),
-    ];
-    if (!items.length) return;
+    // The Menu key sends a contextmenu event too, with no mouse button: that one belongs to the focused cell.
+    if (openCellMenu(cellEl, rowEl, e.button !== 2 && cellEl.contains(document.activeElement) ? null : e)) e.preventDefault();
+  });
+
+  // ---- keyboard: the cursor cell is the table's one Tab stop (scripts/lib/cell-nav.mjs). Arrow keys move it, the Menu key or Shift+F10 opens its menu, and Enter
+  // does what clicking the cell does. The lines are a virtual list, so a move to one that is not on the page yet scrolls to it first.
+  const cursor: { id: string | null; col: string | null } = { id: null, col: null };
+  $('announce').after(h('span', { class: 'sr-only', text: cellHintText('opens the line or its field'), attrs: { id: 'cell-hint' } }));
+  const navCols = () => layout.order.filter((id) => id !== 'select' && columnShown(id));
+  const cellIn = (rowEl: HTMLElement | undefined, col: string | null) => (rowEl && col ? rowEl.querySelector<HTMLElement>(`.gcell[data-col="${col}"]`) : null);
+  const shownCell = (el: HTMLElement | null) => (el && el.offsetParent !== null ? el : null);
+  function park(cellEl: HTMLElement, remember = true) {
+    for (const t of spacer.querySelectorAll<HTMLElement>('.gcell[tabindex="0"]')) {
+      t.tabIndex = -1;
+      t.removeAttribute('aria-describedby');
+    }
+    cellEl.tabIndex = 0;
+    cellEl.setAttribute('aria-describedby', 'cell-hint');
+    if (remember) {
+      cursor.id = cellEl.closest<HTMLElement>('.lrow')?.dataset.id ?? null;
+      cursor.col = cellEl.dataset.col ?? null;
+    }
+  }
+  // After the rows are placed, exactly one cell is the Tab stop: the cursor's own if it is on the page, otherwise the first line's (without moving the cursor).
+  function ensureCursor() {
+    if (phone.matches) return;
+    const mine = shownCell(cellIn(mounted.get(cursor.id ?? ''), cursor.col));
+    if (mine) {
+      if (mine.tabIndex !== 0) park(mine, false);
+      return;
+    }
+    const first = shownCell(cellIn(spacer.querySelector<HTMLElement>('.lrow') ?? undefined, navCols()[0] ?? null));
+    if (first && first.tabIndex !== 0) park(first, false);
+  }
+  function focusCell(index: number, col: string) {
+    const l = lines[index];
+    if (!l) return;
+    const target = shownCell(cellIn(mounted.get(l.id), col));
+    if (target) {
+      park(target);
+      target.focus();
+      return;
+    }
+    pendingFocus = { index, field: { cell: col } };
+    virtualizer.scrollToIndex(itemIndexOfLine.get(l.id) ?? index, { align: 'auto' });
+    paint();
+  }
+  // The line the cursor was on may be gone after a search or a filter: then the first line, same column.
+  function refocusCursor() {
+    const i = lines.findIndex((l) => l.id === cursor.id);
+    focusCell(i >= 0 ? i : 0, cursor.col ?? navCols()[0]);
+  }
+  $('grid').addEventListener('focusin', (e) => {
+    const t = e.target as HTMLElement;
+    if (!phone.matches && t.matches('.lrow .gcell[data-col]')) park(t);
+  });
+  $('grid').addEventListener('keydown', (e: KeyboardEvent) => {
+    if (phone.matches || e.altKey || e.metaKey) return;
+    const target = e.target as HTMLElement;
+    const cellEl = target.closest<HTMLElement>('.lrow .gcell[data-col]');
+    const rowEl = cellEl?.closest<HTMLElement>('.lrow');
+    if (!cellEl || !rowEl) return;
+    if (isMenuKey(e)) {
+      // From the cell, or from the button that is the cell's text (the date, category, party and narration buttons).
+      if ((target === cellEl || target.matches('.peek, .datebtn, .narr')) && openCellMenu(cellEl, rowEl, null)) e.preventDefault();
+      return;
+    }
+    if (target !== cellEl) return;
+    if (e.key === 'Enter' && !e.ctrlKey && !e.shiftKey) {
+      const button = cellEl.querySelector<HTMLElement>('button.datebtn, button.peek, button.narr');
+      const field = cellEl.querySelector<HTMLElement>('input:not([type="checkbox"]), select');
+      const open = rowEl.classList.contains('is-active') && field ? field : button ?? field;
+      if (!open) return;
+      e.preventDefault();
+      if (open === field) open.focus();
+      else open.click();
+      return;
+    }
+    const next = moveCursor({ row: lines.findIndex((l) => l.id === rowEl.dataset.id), col: cellEl.dataset.col! }, e.key, { ctrl: e.ctrlKey }, { rows: lines.length, cols: navCols() });
+    if (!next) return;
     e.preventDefault();
-    menus.open(items, e.clientX, e.clientY);
+    focusCell(next.row, next.col);
   });
   onLongPress($('grid'), { accept: () => !phone.matches });
   // Select all: every line that can be filled in here and is showing (not those inside a closed group). Pressing it again clears them.
@@ -1578,7 +1676,7 @@ import SignInGate from '../../../components/SignInGate.astro';
             menus.open(headerMenuItems(id), r.left, r.bottom + 4, btn);
           });
           cellEl.append(btn);
-          cellEl.addEventListener('contextmenu', (e) => {
+          cellEl.addEventListener('contextmenu', (e: MouseEvent) => {
             e.preventDefault();
             menus.open(headerMenuItems(id), e.clientX, e.clientY, btn);
           });
@@ -1733,7 +1831,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   const COLUMN_OF_CELL: Record<string, string> = { select: 'select', date: 'date', origin: 'origin', amount: 'amount', party: 'party', category: 'category', wording: 'nature', status: 'status', narration: 'narration' };
   const cell = (cls: string, label: string, ...kids: (Node | null)[]) => {
     const column = COLUMN_OF_CELL[cls.split(' ')[0]];
-    return h('span', { class: `gcell gcell--${cls}`, attrs: { role: 'cell', 'data-label': label, ...(column ? { 'data-col': column } : {}) } }, ...kids);
+    return h('span', { class: `gcell gcell--${cls}`, attrs: { role: 'cell', 'data-label': label, ...(column ? { 'data-col': column } : {}), ...(column && column !== 'select' ? { tabindex: '-1' } : {}) } }, ...kids);
   };
   const shortDate = (iso: string) => {
     const d = new Date(`${iso.slice(0, 10)}T00:00:00`);
@@ -2432,7 +2530,18 @@ import SignInGate from '../../../components/SignInGate.astro';
       // Keep the page's order the same as the table's, so Tab and a screen reader go down the lines in order (never while focus is inside).
       if (!spacer.contains(document.activeElement) && inOrder.some((el, i) => spacer.children[i] !== el)) spacer.append(...inOrder);
       $('grid').setAttribute('aria-rowcount', String(items.length + 2));
-      if (pendingFocus) {
+      if (pendingFocus && typeof pendingFocus.field === 'object') {
+        // The keyboard's cell cursor moved to a line that was not on the page yet.
+        const el = mounted.get(lines[pendingFocus.index]?.id ?? '');
+        if (el) {
+          const target = el.querySelector<HTMLElement>(`.gcell[data-col="${pendingFocus.field.cell}"]`);
+          if (target) {
+            park(target);
+            target.focus();
+          }
+          pendingFocus = null;
+        }
+      } else if (pendingFocus) {
         const l = lines[pendingFocus.index];
         const el = l && mounted.get(l.id);
         if (el) {
@@ -2448,6 +2557,7 @@ import SignInGate from '../../../components/SignInGate.astro';
           pendingFocus = null;
         }
       }
+      ensureCursor();
     } finally {
       painting = false;
     }
@@ -3406,6 +3516,13 @@ import SignInGate from '../../../components/SignInGate.astro';
     .ledger .ghead .hmenu {
       opacity: 1;
     }
+  }
+
+  /* The keyboard's cell cursor (scripts/lib/cell-nav.mjs). */
+  .ledger .lrow .gcell[data-col]:focus-visible {
+    outline: 2px solid var(--tvc-green);
+    outline-offset: -2px;
+    border-radius: var(--radius-sm);
   }
 
   .ledger .sorthead:focus-visible {

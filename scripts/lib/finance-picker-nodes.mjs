@@ -13,6 +13,9 @@ const KIND_ORDER = Object.keys(KIND_LABELS);
  * How a suggested party reads in a cell before anyone has accepted it: the way it will be recorded, kind first ("Vendors › Test Fuels"), like the
  * chosen party in the field. `party` is one from the register; with none, `newName` is a payee the register does not have yet, and `kind` is the
  * kind it would be added as. Nothing suggested gives ''.
+ *
+ * @param {{ party?: { name: string, kind: string } | null | undefined, newName?: string, kind?: string }} [options]
+ * @returns {string}
  */
 export function suggestedPartyText({ party = null, newName = '', kind = 'vendor' } = {}) {
   if (party) return `${KIND_LABELS[party.kind] ?? party.kind} › ${party.name}`;

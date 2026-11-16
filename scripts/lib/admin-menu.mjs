@@ -9,28 +9,47 @@
 import { h, rupees } from './finance-ui.mjs';
 import { cellFilterText } from './data-table.mjs';
 
+/** @typedef {{ label: string, run: () => void }} MenuItem */
+
+/**
+ * @returns {{ open: (items: Array<MenuItem | null | false | undefined>, x: number, y: number, fromEl?: Element | null) => void, close: (refocus?: boolean) => void, isOpen: () => boolean, from: () => Element | null, element: HTMLElement }}
+ */
 export function createFloatingMenu() {
   const menu = h('div', { class: 'admin-menu', attrs: { role: 'menu', hidden: '' } });
   // On the body, not inside the table: a fixed menu inside a transformed or clipped ancestor would be placed and cut off relative to that.
   document.body.append(menu);
+  /** @type {Element | null} */
   let from = null;
 
+  /** @param {boolean} [refocus] */
   function close(refocus = false) {
     if (menu.hidden) return;
     menu.hidden = true;
     menu.replaceChildren();
-    from?.setAttribute?.('aria-expanded', 'false');
+    if (from?.getAttribute?.('aria-haspopup')) from.setAttribute('aria-expanded', 'false');
     if (refocus && from?.isConnected) from.focus();
     from = null;
   }
 
+  /**
+   * @param {Array<MenuItem | null | false | undefined>} items
+   * @param {number} x
+   * @param {number} y
+   * @param {Element | null} [fromEl]
+   */
   function open(items, x, y, fromEl = null) {
     close();
     const list = items.filter(Boolean);
     if (!list.length) return;
     from = fromEl;
-    from?.setAttribute?.('aria-expanded', 'true');
-    menu.replaceChildren(...list.map((it) => h('button', { class: 'admin-menuitem', attrs: { type: 'button', role: 'menuitem', tabindex: '-1' }, text: it.label, on: { click: () => { close(); it.run(); } } })));
+    if (from?.getAttribute?.('aria-haspopup')) from.setAttribute('aria-expanded', 'true');
+    menu.replaceChildren(...list.map((it) => h('button', { class: 'admin-menuitem', attrs: { type: 'button', role: 'menuitem', tabindex: '-1' }, text: it.label, on: { click: () => {
+      // A menu opened from a cell (not from a ▾ button) hands focus back to that cell before the item runs, so the table that redraws keeps its cursor there.
+      const back = from && !from.getAttribute('aria-haspopup') && from.isConnected ? from : null;
+      close();
+      back?.focus({ preventScroll: true });
+      it.run();
+    } } })));
     menu.hidden = false;
     menu.style.left = `${Math.max(4, Math.min(x, window.innerWidth - menu.offsetWidth - 8))}px`;
     menu.style.top = `${Math.max(4, Math.min(y, window.innerHeight - menu.offsetHeight - 8))}px`;
@@ -64,6 +83,9 @@ export function createFloatingMenu() {
 /**
  * iOS never sends a right-click, so a finger held still on `el` for `ms` sends the same `contextmenu` event. Touch only; any movement or
  * lifting the finger cancels it. `accept()` can say no (the Ledger's phone cards have no cell menu).
+ *
+ * @param {Element} el
+ * @param {{ ms?: number, accept?: () => boolean }} [options]
  */
 export function onLongPress(el, { ms = 550, accept = () => true } = {}) {
   let timer = null;
@@ -81,6 +103,9 @@ export function onLongPress(el, { ms = 550, accept = () => true } = {}) {
  * "Filter to this value" and "filter out this value" for a cell, as menu items. `type` is the column's ('text', 'amount', 'count', 'date'), `raw`
  * what the cell holds (paise for an amount), and `apply(text)` receives the condition to put in that column's filter box (cellFilterText).
  * A cell the filter language cannot describe (an empty amount or date; "not this date") simply has no item for it.
+ *
+ * @param {{ type?: string, raw: unknown, apply: (text: string) => void }} options
+ * @returns {MenuItem[]}
  */
 export function valueFilterItems({ type = 'text', raw, apply }) {
   const text = type === 'amount' && raw != null && raw !== '' ? rupees(raw) : String(raw ?? '').trim();
@@ -94,6 +119,10 @@ export function valueFilterItems({ type = 'text', raw, apply }) {
  * True over something the browser's own menu is for: a link, a button, a field, or text the person has selected. `ignore` is a selector for
  * buttons that are really the cell's text (the Ledger's date and category buttons), which do not count. A long press is our own event, so a
  * word the finger has just selected does not count either.
+ *
+ * @param {MouseEvent | KeyboardEvent} e
+ * @param {string} [ignore]
+ * @returns {boolean}
  */
 export function leaveToBrowser(e, ignore = '') {
   const hit = e.target.closest('a, button, input, select, textarea, label');

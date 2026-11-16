@@ -15,6 +15,9 @@ import { moveColumn } from './data-table.mjs';
 
 let serial = 0;
 
+/**
+ * @param {{ labels: Record<string, string>, defaultOrder: string[], fixed?: string[], required?: string[], getLayout: () => { order: string[], hidden: string[] }, onChange: (next: { order: string[], hidden: string[] } | null) => void }} options
+ */
 export function createColumnsMenu({ labels, defaultOrder, fixed = [], required = [], getLayout, onChange }) {
   const uid = `admin-colpop-${++serial}`;
   let open = false;

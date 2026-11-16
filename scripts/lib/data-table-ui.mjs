@@ -19,6 +19,8 @@
 // layoutKey: 'tvc-…-columns:<account>'   turns on the Columns menu (show or hide a column, move it earlier or later, reset) and keeps the person's
 //   layout in this browser under that key. A column with `fixed: true` (or `sticky: true`) is always shown and does not move.
 // onUserFilter: () => void   called when the person changes a chip, the search, a column filter or the grouping (not by setRows or setChips)
+// keyboard: the table has one Tab stop (its cursor cell); the arrow keys, Home, End and Page Up / Down move it, the Menu key or Shift+F10 opens the cell's menu,
+//   and Enter (or Space) opens the row when the page gives `onOpen`. See scripts/lib/cell-nav.mjs.
 // column extras: sortable: false (no sort button), wrap: true (the cell may wrap, for long text), sticky: true (the last column stays
 //   in view while the table scrolls sideways, for a column of buttons)
 import { buildItems, chipCounts, columnGroup, readFavorites, withFavorite } from './data-table.mjs';
@@ -26,6 +28,7 @@ import { createTableEngine } from './data-table-engine.mjs';
 import { h } from './finance-ui.mjs';
 import { iconButton } from './admin-icons.mjs';
 import { createColumnsMenu } from './admin-columns-menu.mjs';
+import { cellHintText, isMenuKey, moveCursor } from './cell-nav.mjs';
 import { createFloatingMenu, leaveToBrowser, onLongPress, valueFilterItems } from './admin-menu.mjs';
 
 const tick = (checked, label, onChange) => {
@@ -35,6 +38,8 @@ const tick = (checked, label, onChange) => {
   box.addEventListener('click', (e) => e.stopPropagation());
   return box;
 };
+
+let hintSerial = 0;
 
 export function createDataTable(opts) {
   const {
@@ -48,6 +53,7 @@ export function createDataTable(opts) {
   const allowed = { chipIds: filters.map((f) => f.id), groupIds: [...groups.map((g) => g.id), ...columnGroups.keys()] };
   const state = { rows: [], chips: [], words: [], text: '', group: defaultGroup, sort: defaultSort ?? [null, 1], cols: {}, collapsed: new Set(), sel: new Set(), favs: [], popOpen: false };
   const colById = new Map(columns.map((c) => [c.id, c]));
+  const navigable = (c) => c.filter !== 'none' && c.type !== 'none';
   const engine = createTableEngine({ columns: columns.map((c) => ({ ...c, fixed: c.fixed ?? c.sticky })), filters, searchText });
   const shownColumns = () => engine.visibleColumnIds().map((id) => colById.get(id));
   const columnsMenu = layoutKey
@@ -193,6 +199,7 @@ export function createDataTable(opts) {
   function renderBody() {
     // `cap`: a very long list is cut after that many rows (the foot says so); filters narrow it.
     const { items } = buildItems(shown.slice(0, cap), groupDef(), state.collapsed);
+    const hadFocus = Boolean(document.activeElement?.matches?.('td[data-col]') && body.contains(document.activeElement));
     const shownCols = shownColumns();
     const width = shownCols.length + (selectable ? 1 : 0);
     const trs = [];
@@ -213,11 +220,11 @@ export function createDataTable(opts) {
       const id = rowId(r);
       const sel = state.sel.has(id);
       const kind = rowKind(r);
-      const tr = h('tr', { class: `dt-row ${rowClass(r)}${sel ? ' dt-selected' : ''}${onOpen ? ' dt-clickable' : ''}${kind ? ` dt-${kind}` : ''}` });
+      const tr = h('tr', { attrs: { 'data-row': String(id) }, class: `dt-row ${rowClass(r)}${sel ? ' dt-selected' : ''}${onOpen ? ' dt-clickable' : ''}${kind ? ` dt-${kind}` : ''}` });
       if (selectable) tr.append(h('td', { class: 'dt-tick' }, tick(sel, 'Select row', (on) => { on ? state.sel.add(id) : state.sel.delete(id); renderBody(); renderHead(); renderBulk(); })));
       for (const c of shownCols) {
         const out = c.render ? c.render(r) : c.value(r);
-        const td = h('td', { class: `${c.align === 'end' ? 'dt-end' : ''}${c.wrap ? ' dt-wrap' : ''}${c.sticky ? ' dt-sticky' : ''}`.trim(), attrs: { 'data-col': c.id } });
+        const td = h('td', { class: `${c.align === 'end' ? 'dt-end' : ''}${c.wrap ? ' dt-wrap' : ''}${c.sticky ? ' dt-sticky' : ''}`.trim(), attrs: { 'data-col': c.id, ...(navigable(c) ? { tabindex: '-1' } : {}) } });
         if (out instanceof Node) td.append(out);
         else td.textContent = out == null || out === '' ? '–' : String(out);
         tr.append(td);
@@ -242,6 +249,7 @@ export function createDataTable(opts) {
       }
     }
     body.replaceChildren(...trs);
+    restoreCursor(hadFocus);
     cards.replaceChildren(...cardNodes);
     const none = shown.length === 0;
     emptyBox.hidden = !none;
@@ -305,17 +313,79 @@ export function createDataTable(opts) {
     const apply = (typed) => { onUserFilter(); state.cols[c.id] = typed; buildFilterRow(); render(); };
     return [...valueFilterItems({ type: c.type ?? 'text', raw: (c.filterValue ?? c.value)(r), apply }), groupItem(c)].filter(Boolean);
   }
-  body.addEventListener('contextmenu', (e) => {
-    const td = e.target.closest('td[data-col]');
-    if (!td || leaveToBrowser(e)) return;
+  // `e` is the mouse event, or null for the keyboard (the menu then opens under the cell and Escape gives the cell its focus back).
+  function openCellMenu(td, e) {
     const r = rowOf.get(td.parentElement);
     const c = colById.get(td.dataset.col);
     const items = r && c ? cellItems(c, r) : [];
-    if (!items.length) return;
-    e.preventDefault();
-    menus.open(items, e.clientX, e.clientY);
+    if (!items.length) return false;
+    if (e) menus.open(items, e.clientX, e.clientY);
+    else {
+      const b = td.getBoundingClientRect();
+      menus.open(items, b.left + 8, b.bottom, td);
+    }
+    return true;
+  }
+  body.addEventListener('contextmenu', (e) => {
+    const td = e.target.closest('td[data-col]');
+    if (!td || leaveToBrowser(e)) return;
+    // The Menu key sends a contextmenu event too, with no mouse button: that one belongs to the focused cell.
+    if (openCellMenu(td, e.button !== 2 && document.activeElement === td ? null : e)) e.preventDefault();
   });
   onLongPress(body);
+
+  // ---- keyboard: the cursor cell is the table's one Tab stop (a roving tabindex)
+  const hint = h('span', { class: 'sr-only', text: cellHintText(onOpen ? 'opens the row' : ''), attrs: { id: `dt-cell-hint-${++hintSerial}` } });
+  root.append(hint);
+  const bodyRows = () => [...body.querySelectorAll('tr.dt-row')];
+  const navCols = () => shownColumns().filter(navigable).map((c) => c.id);
+  const cellOf = (tr, col) => tr?.querySelector(`td[data-col="${CSS.escape(col)}"]`) ?? null;
+  function park(td) {
+    for (const t of body.querySelectorAll('td[tabindex="0"]')) {
+      t.tabIndex = -1;
+      t.removeAttribute('aria-describedby');
+    }
+    if (!td) return;
+    td.tabIndex = 0;
+    td.setAttribute('aria-describedby', hint.id);
+    state.cursor = { id: td.parentElement.dataset.row, col: td.dataset.col };
+  }
+  // After the rows are drawn again: the cursor stays on its row and column if they are still there, and keeps focus if it had it.
+  function restoreCursor(refocus) {
+    const rows = bodyRows();
+    const cols = navCols();
+    const tr = rows.find((r) => r.dataset.row === state.cursor?.id) ?? rows[0];
+    const td = cellOf(tr, cols.includes(state.cursor?.col) ? state.cursor.col : cols[0]);
+    park(td);
+    if (refocus) td?.focus({ preventScroll: true });
+  }
+  body.addEventListener('focusin', (e) => {
+    const td = e.target.closest?.('td[data-col]');
+    if (td && e.target === td) park(td);
+  });
+  body.addEventListener('keydown', (e) => {
+    const td = e.target;
+    if (!td.matches?.('td[data-col]') || e.altKey || e.metaKey) return;
+    if (isMenuKey(e)) {
+      if (openCellMenu(td, null)) e.preventDefault();
+      return;
+    }
+    const r = rowOf.get(td.parentElement);
+    if ((e.key === 'Enter' || e.key === ' ') && onOpen && r && !e.ctrlKey && !e.shiftKey) {
+      e.preventDefault();
+      onOpen(r);
+      return;
+    }
+    const rows = bodyRows();
+    const next = moveCursor({ row: rows.indexOf(td.parentElement), col: td.dataset.col }, e.key, { ctrl: e.ctrlKey }, { rows: rows.length, cols: navCols() });
+    if (!next) return;
+    e.preventDefault();
+    const target = cellOf(rows[next.row], next.col);
+    if (target) {
+      park(target);
+      target.focus();
+    }
+  });
 
   // ---- a new column layout (from the Columns menu or a header's Hide column)
   function setLayout(next) {

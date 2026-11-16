@@ -17,6 +17,11 @@ export const ICONS = {
   columns: [['rect', { x: '3', y: '3', width: '18', height: '18', rx: '2' }], ['path', { d: 'M9 3v18M15 3v18' }]],
 };
 
+/**
+ * @param {string} name
+ * @param {number} [size]
+ * @returns {SVGSVGElement}
+ */
 export function icon(name, size = 18) {
   const svg = document.createElementNS(SVG, 'svg');
   for (const [k, v] of Object.entries({ viewBox: '0 0 24 24', width: String(size), height: String(size), fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true', focusable: 'false' })) svg.setAttribute(k, v);
@@ -28,7 +33,11 @@ export function icon(name, size = 18) {
   return svg;
 }
 
-/** `label` is what a screen reader says (be specific: "Change Fuel"); `tip` is the short tooltip (defaults to the label). */
+/**
+ * `label` is what a screen reader says (be specific: "Change Fuel"); `tip` is the short tooltip (defaults to the label).
+ * @param {{ name: string, label: string, tip?: string, onClick?: ((e: MouseEvent) => void) | null, cls?: string, attrs?: Record<string, string> }} options
+ * @returns {HTMLButtonElement}
+ */
 export function iconButton({ name, label, tip = label, onClick = null, cls = '', attrs = {} }) {
   const b = document.createElement('button');
   b.type = 'button';
