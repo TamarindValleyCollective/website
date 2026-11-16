@@ -325,6 +325,13 @@ types the importer knows; each batch stores its `source`: `axis_statement`, `pay
   stored every row as a debit.
 - **Same table, one more column.** Rows go into `fin_upi_lines` with `app` (`bhim` | `paytm`, existing rows are `paytm`), the same
   unique reference (so a payment in both files is stored once) and the same join to bank lines. Raw PDFs are kept in R2 as `.pdf`.
+- **Enriching BHIM rows from the app's own screens** (2026-11-16, migration `0102`, applied). The PDF masks the payee and has no
+  purpose, so 30 rows were overwritten once from a hand-extracted sheet: `counterparty` (the full name), `remarks` (only where the
+  app showed a real purpose, not its placeholders such as "Pay") and the new `payee_upi_id` (shown as the **UPI ID** column on the
+  UPI page, searchable; most are still partly masked by the app). Paytm rows keep their ID in `counterparty`. The link-only trigger
+  was switched off inside one all-or-nothing transaction for the overwrite and checked back on. A later PDF import skips rows that
+  already exist, so it will not undo this, and it does not fill `payee_upi_id` (the PDF only has the masked ID). The sheet itself
+  holds real names and is not in the repo.
 - **Channel ("origin") of a bank line** (`scripts/lib/finance-origin.mjs`, derived at read time, not stored). A line has two
   independent facts: the **account** it hit and the **channel** it came through. `CHANNELS` is the registry (label, `kind`:
   `upi_app | bulk | gateway | card | bank`, `flows`: in/out); `RULES` are the narration readings, first match wins. Today: `bhim` /
