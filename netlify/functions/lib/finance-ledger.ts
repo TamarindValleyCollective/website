@@ -10,7 +10,8 @@ import { noteKeyOf } from '../../../scripts/lib/finance-notes.mjs';
 import { pairReversals } from '../../../scripts/lib/finance-reversals.mjs';
 import { loadNotes } from './finance-notes';
 import { loadPurposes } from './finance-requests';
-import { VPA_LOOKUP_LIMIT, nameFromLookup, vpasToLookUp } from '../../../scripts/lib/finance-vpa.mjs';
+import { VPA_LOOKUP_LIMIT, vpasToLookUp } from '../../../scripts/lib/finance-vpa.mjs';
+import { keepVpaAnswer, vpaFailureText } from './finance-vpa';
 import { razorpayKeyMode, validateVpa } from './razorpay';
 import { requireStaff } from './staff-access';
 import { rest } from './staff-mfa-store';
@@ -425,19 +426,14 @@ export async function lookupVpaNames(req: Request): Promise<Response> {
     for (const vpa of todo) {
       const got = await validateVpa(vpa);
       if (!got.ok) {
-        tally.stoppedBecause = got.status === 400 && /not found/i.test(got.description) ? 'Razorpay says its UPI ID lookup is not available on this account.' : got.description;
+        tally.stoppedBecause = vpaFailureText(got);
         break;
       }
       tally.asked++;
-      const name = nameFromLookup(got.body);
+      const name = await keepVpaAnswer(vpa, got.body, auth.staff.id);
       if (name) tally.named++;
       else if (got.body.success === true) tally.noName++;
       else tally.notFound++;
-      await rest('/fin_vpa_names?on_conflict=vpa', {
-        method: 'POST',
-        headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
-        body: JSON.stringify({ vpa, success: got.body.success === true, name, key_mode: mode, checked_by: auth.staff.id, checked_at: new Date().toISOString() }),
-      });
     }
     return jsonResponse(tally);
   } catch (err) {
@@ -454,7 +450,7 @@ const postedSummary = (allocs: Json[]) => {
 // `vpaToLookUp`: the new party is still only a UPI ID that Razorpay has not been asked about, so the page can offer to look it up.
 const compactSuggestion = (x: Json, sc: SuggestionContext) =>
   x.categoryId || x.partyId || x.nature || x.newParty
-    ? { categoryId: x.categoryId, partyId: x.partyId, nature: x.nature, confidence: x.confidence, newPartyName: x.newParty?.name ?? null, vpaToLookUp: vpasToLookUp([x.newParty?.name], sc.vpaKnown).length > 0 }
+    ? { categoryId: x.categoryId, partyId: x.partyId, nature: x.nature, confidence: x.confidence, newPartyName: x.newParty?.name ?? null, newPartyVpa: x.newParty?.vpa ?? null, vpaToLookUp: vpasToLookUp([x.newParty?.name], sc.vpaKnown).length > 0 }
     : null;
 
 const reviewRef = () =>

@@ -372,7 +372,10 @@ one answers `success: false`.
   businesses exempted from the UPI Collect deprecation (28 February 2026), so if it ever stops answering, ask support again.
 - **Cost:** not confirmed. Razorpay's own pages disagree on whether a validation is charged. It is therefore never automatic: an admin
   presses **Look up N UPI names** on the ledger, at most 25 IDs a time, and each ID is asked about once (answers kept in `fin_vpa_names`).
-- **Test mode:** answers from a test key are stored but never used.
+- **Test mode:** answers from a test key are stored but never used, and a test key never verifies anyone.
+- **Verifying a payee:** a UPI payment detail can be verified with the stored answer (or one call, if none is kept) as the method
+  `razorpay_vpa` on the Parties page; the registered name is recorded as the name the bank showed. A second admin does it, never whoever
+  added the details.
 - Details and tests: `docs/finance/FINANCE.md`, "UPI ID names".
 
 ## What the Razorpay MCP server can do

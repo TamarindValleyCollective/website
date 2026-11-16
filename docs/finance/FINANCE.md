@@ -542,11 +542,21 @@ Razorpay's validate-VPA call says whose ID it is, so the suggestion can be the p
   party, "The UPI ID is registered to "X", which matches Y in the register"); otherwise the name, in readable case, is the new party to add.
   With no name on file (the ID has no linked bank account, or does not exist) the line reads as before. Nothing is created or posted until a
   person accepts.
-- **Audit:** `finance.vpa_names_looked_up` with a count and the key mode, never an ID or a name.
+- **Accepting a looked-up name attaches the UPI ID as evidence-backed, unverified details.** The new party is created with the ID as an
+  **unverified** UPI payment detail (the suggestion carries `newPartyVpa`, only when a lookup supplied the name). Nothing is auto-verified:
+  a different admin with `verify-payee` (the person who adds details cannot verify them, `canVerifyAccount`) opens the verify sheet, where a
+  UPI account now offers a method **"Razorpay UPI ID lookup (registered name)"** (`razorpay_vpa`, migration `0103`; bank accounts do not).
+  One click: the server takes the registered name from the saved answer, or asks Razorpay once, and records it as the name the bank showed
+  (`verified_name`). The name is Razorpay's, never typed or sent by the page; with no registered name, no live key or a failed call it is
+  refused with the reason and the details stay unverified. Needs the MFA step-up like every verification. Code: `lib/finance-vpa.ts`
+  (`registeredNameOf`), `verifyPayeeAccount`, `verifyMethodsFor` in `finance-parties.mjs`; tests: `finance-vpa-verify-endpoint.test.mjs`.
+- **Audit:** `finance.vpa_names_looked_up` with a count and the key mode, never an ID or a name; verifying logs `finance.payee_verified` with
+  the method `razorpay_vpa` and no ID or name.
 - **Account setup:** Razorpay support enabled `/v1/payments/validate/vpa` on the live account on 2026-11-16 (before that it answered 400
   "URL not found"). The account's per-call charge is still unconfirmed; check the Razorpay dashboard before looking up in volume.
-- **Not done:** the registered name is not yet stored on the party's payment details as a verified name, and a lookup is not offered from the
-  Parties or UPI pages, only from the ledger.
+- **Not done:** a lookup is not offered from the Parties or UPI pages, only from the ledger (the verify sheet does ask Razorpay once when no
+  answer is kept); migration `0103` is **not yet applied**; no auto-verify rule (a director decision); bank accounts are not checked this way
+  (Razorpay's bank-account validation is a RazorpayX product and is not set up).
 
 ## The table (the Ledger's list view, session 05 follow-up)
 

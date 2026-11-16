@@ -134,7 +134,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   declare const google: any;
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
 
-  type Suggestion = { categoryId: string | null; partyId: string | null; nature: string; confidence: string; newPartyName: string | null; vpaToLookUp?: boolean };
+  type Suggestion = { categoryId: string | null; partyId: string | null; nature: string; confidence: string; newPartyName: string | null; newPartyVpa?: string | null; vpaToLookUp?: boolean };
   type Line = {
     id: string; date: string; narration: string; direction: 'debit' | 'credit'; amountPaise: number; account: string; remark: string | null; counterparty: string | null; origin?: string; sources?: string[]; reversal?: { role: 'original' | 'reversal'; otherId: string; otherDate: string | null } | null; noteKey?: string; note?: string | null; purpose?: string | null; upiRef?: string | null;
     allocatedPaise: number; state: 'unallocated' | 'partly_allocated' | 'allocated'; review: boolean; missingParty: boolean; filled?: boolean; needsWording?: boolean; suggestion: Suggestion | null;
@@ -1922,14 +1922,14 @@ import SignInGate from '../../../components/SignInGate.astro';
       blank: 'No one in particular',
       ariaLabel: `Party for ${who}`,
       rootLabel: 'All kinds',
-      addNew: { label: 'Add as a new party', onAdd: (typed) => openAddParty(typed || strangerOf(l), kindFor(l), (id) => afterPartyAdded(l, id)), blockedAt: (path) => (path[0] === 'member' || path[0] === 'unit' ? NO_MEMBER_ADD : null) },
+      addNew: { label: 'Add as a new party', onAdd: (typed) => openAddParty(typed || strangerOf(l), kindFor(l), (id) => afterPartyAdded(l, id), !typed || typed === strangerOf(l) ? l.suggestion?.newPartyVpa ?? null : null), blockedAt: (path) => (path[0] === 'member' || path[0] === 'unit' ? NO_MEMBER_ADD : null) },
     }) as ComboEl;
     party.addEventListener('change', () => edit(l, 'partyId', party.value)); // the party is the last part of the path (kind, then the party)
     const partyTick = tick(`Accept the suggested party for ${who}`, async () => {
       const gp = ghostOf(l, 'partyId');
       if (gp) return edit(l, 'partyId', gp);
       const stranger = strangerOf(l);
-      const id = stranger ? await createParty(stranger, kindFor(l)) : null;
+      const id = stranger ? await createParty(stranger, kindFor(l), l.suggestion?.newPartyVpa ?? null) : null;
       if (id) afterPartyAdded(l, id);
     });
     const partyText = h('span', { class: 'lcell-text' });
@@ -2383,11 +2383,13 @@ import SignInGate from '../../../components/SignInGate.astro';
   // ---- adding a party that is not in the register, from the cell or the suggestion
   const PARTY_KINDS: Record<string, string> = { vendor: 'Vendor', customer: 'Customer', member: 'Member', employee: 'Employee', bank: 'Bank', government: 'Government', director: 'Director', other: 'Other' };
   const kindFor = (l: Line) => (l.direction === 'credit' ? 'customer' : 'vendor');
-  async function createParty(name: string, kind: string): Promise<string | null> {
+  // `vpa`: the UPI ID Razorpay named this person from. It is attached to the new party as unverified payment details, with the lookup as the
+  // evidence, so a different admin confirms it with one click on the Parties page (the person who adds details cannot verify them).
+  async function createParty(name: string, kind: string, vpa: string | null = null): Promise<string | null> {
     const typed = name.trim().replace(/\s+/g, ' ');
     const twin = data!.lookups.parties.find((x) => x.name.toLowerCase() === typed.toLowerCase());
     if (twin) return twin.id;
-    const { status, data: out } = await call('/api/finance-admin/parties', 'POST', { name: typed, kind });
+    const { status, data: out } = await call('/api/finance-admin/parties', 'POST', { name: typed, kind, ...(vpa ? { payee: { method: 'upi', upi: vpa } } : {}) });
     if (status !== 201) {
       showToast(out?.error ?? 'Could not add that party.');
       return null;
@@ -2395,10 +2397,10 @@ import SignInGate from '../../../components/SignInGate.astro';
     const lk = data!.lookups;
     lk.parties.push({ id: out.party.id, name: out.party.name, kind: out.party.kind });
     lk.parties.sort((a, b) => a.name.localeCompare(b.name));
-    showToast(`${out.party.name} added to the register. Add their bank details on the Parties page.`);
+    showToast(vpa ? `${out.party.name} added with their UPI ID, to be confirmed on the Parties page by someone else.` : `${out.party.name} added to the register. Add their bank details on the Parties page.`);
     return out.party.id as string;
   }
-  function openAddParty(name: string, kind: string, onAdded: (id: string) => void) {
+  function openAddParty(name: string, kind: string, onAdded: (id: string) => void, vpa: string | null = null) {
     const dlg = $<HTMLDialogElement>('party-sheet');
     const nameInput = input('newPartyName', { placeholder: 'Name as it should appear in the register' }) as HTMLInputElement;
     nameInput.value = name;
@@ -2421,7 +2423,7 @@ import SignInGate from '../../../components/SignInGate.astro';
         msg.textContent = 'Enter the name.';
         return;
       }
-      const id = await createParty(nameInput.value, kindSel.value);
+      const id = await createParty(nameInput.value, kindSel.value, vpa);
       if (!id) return;
       dlg.close();
       onAdded(id);

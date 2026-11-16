@@ -123,6 +123,16 @@ test('an admin who allocates looks up the IDs, the names are kept, and the ledge
   assert.equal(await suggestedName(op), 'Test Vendor Works');
 });
 
+test('a named suggestion carries the UPI ID it came from, so accepting it can attach the ID; an unnamed one does not', async () => {
+  reset();
+  razorpay.answers[VPA_A] = { vpa: VPA_A, success: true, customer_name: 'TEST VENDOR WORKS' };
+  const op = sign('user');
+  const vpaOf = async () => (await (await api(op, '/ledger?filter=all')).json()).lines.find((l) => l.id === L_VPA).suggestion.newPartyVpa;
+  assert.equal(await vpaOf(), null, 'before a lookup there is no name to attach it to');
+  await lookup(op, [VPA_A]);
+  assert.equal(await vpaOf(), VPA_A);
+});
+
 test('a line is flagged for lookup until its ID has been asked about, even when the answer was no name', async () => {
   reset();
   const op = sign('user');

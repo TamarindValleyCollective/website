@@ -267,6 +267,9 @@ export const VERIFY_METHODS = [
   // database refuses the verification without it (migration 0094).
   { id: 'bank_name_check', label: "Bank's payee-name check (screenshot)", evidence: 'name_check' },
   { id: 'payment_made', label: 'Payment made (transfer screenshot)', evidence: 'payment' },
+  // Razorpay's validate-VPA lookup, for a UPI ID only. No file and nothing typed: the server asks Razorpay (or uses the answer already kept,
+  // finance-vpa.ts) and records the registered name it gave as the name the bank showed. It needs live Razorpay keys.
+  { id: 'razorpay_vpa', label: 'Razorpay UPI ID lookup (registered name)', only: 'upi', lookup: true },
   { id: 'cancelled_cheque', label: 'Cancelled cheque or bank letter' },
   { id: 'test_transfer', label: 'Small test transfer that arrived' },
   { id: 'invoice', label: 'Invoice or bill from the payee' },
@@ -276,8 +279,8 @@ export const VERIFY_METHODS = [
 export function validateVerification(body) {
   const method = VERIFY_METHODS.find((m) => m.id === body?.method);
   if (!method) return { error: 'Say how you checked these details.' };
-  // The name the bank showed for the account ("Name as per Payee Bank"). Kept on the account next to the party's label.
-  const name = typeof body?.name === 'string' ? body.name.trim().replace(/\s+/g, ' ') : '';
+  // A lookup method takes no name from the person: the server fills it from Razorpay's answer (a typed one is ignored, never trusted).
+  const name = !method.lookup && typeof body?.name === 'string' ? body.name.trim().replace(/\s+/g, ' ') : '';
   if (name && (name.length < 2 || name.length > 120)) return { error: 'The bank name should be 2 to 120 characters.' };
   if (name && !auditDetailIsSafe(name)) return { error: "Don't type an account number, UPI id or IFSC code as the name." };
   if (method.id === 'bank_name_check' && !name) return { error: 'Type the name the bank showed.' };
@@ -285,8 +288,11 @@ export function validateVerification(body) {
   if (note.length > 200) return { error: 'Keep the note under 200 characters.' };
   if (note && !auditDetailIsSafe(note)) return { error: "Don't type an account number, UPI id or IFSC code in the note." };
   if (method.id === 'other' && note.length < 3) return { error: 'Say what you did to check them.' };
-  return { method: method.id, note: note || null, name: name || null, evidence: method.evidence ?? null };
+  return { method: method.id, note: note || null, name: name || null, evidence: method.evidence ?? null, ...(method.lookup ? { lookup: true, only: method.only } : {}) };
 }
+
+/** The ways of checking that apply to one kind of details: the Razorpay lookup is for a UPI ID, the others for either. */
+export const verifyMethodsFor = (accountMethod) => VERIFY_METHODS.filter((m) => !m.only || m.only === accountMethod);
 
 // Whether the name a bank shows for an account is the payee the party label is about. Labels are typed to tell people apart
 // ("KRISHNAIAH G (Milk)") and banks print the registered name ("Mr. KRISHNAIAH G"), so what is compared is the words left

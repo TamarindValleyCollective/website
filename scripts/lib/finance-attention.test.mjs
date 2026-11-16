@@ -3,15 +3,22 @@
 // the "Needs you" summary on the Overview. Invented values only.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { VERIFY_METHODS, validateVerification, verificationForResponse } from './finance-parties.mjs';
+import { VERIFY_METHODS, validateVerification, verificationForResponse, verifyMethodsFor } from './finance-parties.mjs';
 import { attentionOf } from './finance-attention.mjs';
 
 // ---- how it was checked
 test('a verification names how the details were checked, from a short fixed list', () => {
-  assert.deepEqual(VERIFY_METHODS.map((m) => m.id), ['bank_name_check', 'payment_made', 'cancelled_cheque', 'test_transfer', 'invoice', 'other']);
+  assert.deepEqual(VERIFY_METHODS.map((m) => m.id), ['bank_name_check', 'payment_made', 'razorpay_vpa', 'cancelled_cheque', 'test_transfer', 'invoice', 'other']);
   assert.deepEqual(validateVerification({ method: 'cancelled_cheque' }), { method: 'cancelled_cheque', note: null, name: null, evidence: null });
   assert.ok(validateVerification({}).error);
   assert.ok(validateVerification({ method: 'ask-the-vendor' }).error);
+});
+
+test('the Razorpay lookup is for a UPI ID only, needs no file, and ignores any name typed with it', () => {
+  assert.ok(verifyMethodsFor('upi').some((m) => m.id === 'razorpay_vpa'));
+  assert.ok(!verifyMethodsFor('bank').some((m) => m.id === 'razorpay_vpa'), 'not offered for a bank account');
+  assert.equal(verifyMethodsFor('bank').length, VERIFY_METHODS.length - 1);
+  assert.deepEqual(validateVerification({ method: 'razorpay_vpa', name: 'Typed Instead' }), { method: 'razorpay_vpa', note: null, name: null, evidence: null, lookup: true, only: 'upi' });
 });
 
 test('"Other" needs a note saying what was done; the other methods may have one', () => {

@@ -356,7 +356,8 @@ export function suggest({ line, upi, rules, parties, categories, history, reques
   // When the line names only a UPI ID and Razorpay has said whose it is, the person's name is offered, not the ID.
   const stranger = vpaName ? niceName(vpaName) : upi?.counterparty ? cleanName(upi.counterparty) : parsed.counterparty;
   if (!out.partyId && stranger && ['upi', 'neft', 'imps', 'card'].includes(parsed.mode)) {
-    out.newParty = { name: stranger, kind: line.direction === 'credit' ? 'customer' : 'vendor' };
+    // `vpa`: the UPI ID the name came from, only when a lookup supplied the name, so accepting it can attach that ID to the new party.
+    out.newParty = { name: stranger, kind: line.direction === 'credit' ? 'customer' : 'vendor', ...(vpaName ? { vpa } : {}) };
     reasons.push(vpaName ? `The UPI ID is registered to "${stranger}", who is not in the register yet` : `"${stranger}" is not in the register yet`);
   }
   return out;

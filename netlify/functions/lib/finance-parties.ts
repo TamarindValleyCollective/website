@@ -33,6 +33,7 @@ import {
 import { fingerprintText } from '../../../scripts/lib/finance-party-import.mjs';
 import { postingStats, suggestChanges } from '../../../scripts/lib/finance-party-suggestions.mjs';
 import { rowsAll } from './finance-ledger';
+import { registeredNameOf } from './finance-vpa';
 import { VOUCHER_MAX_BYTES, sniffVoucher } from '../../../scripts/lib/finance-requests.mjs';
 
 type Json = Record<string, any>;
@@ -399,8 +400,16 @@ export async function verifyPayeeAccount(req: Request, accountId: string): Promi
     const verdict = canVerifyAccount(account, staff.id);
     if (!verdict.ok) return fail(verdict.error ?? 'Not allowed.', 403);
     // How it was checked is recorded with who and when (the database refuses a verification without it).
-    const how = validateVerification((await readBody(req)) ?? {});
+    const how = validateVerification((await readBody(req)) ?? {}) as { error?: string; method?: string; note?: string | null; name?: string | null; evidence?: 'payment' | 'name_check' | null; lookup?: boolean };
     if (how.error || !how.method) return fail(how.error ?? 'Say how you checked these details.');
+    // The Razorpay lookup is for a UPI ID, and the name it records is Razorpay's answer, never one typed or sent by the page.
+    let bankName: string | null = how.name ?? null;
+    if (how.lookup) {
+      if (stored.method !== 'upi' || typeof stored.upi !== 'string') return fail('The Razorpay lookup is for a UPI ID only.');
+      const found = await registeredNameOf(stored.upi.trim().toLowerCase(), staff.id);
+      bankName = found.name ? found.name.slice(0, 120) : null;
+      if (!bankName || bankName.length < 2) return fail(found.error ?? 'Razorpay gave no name for this UPI ID.', 409);
+    }
     // A screenshot method needs its file attached to THIS account first (the database refuses it too).
     if (how.evidence) {
       const attached = await rows(`/fin_party_account_files?account_id=eq.${accountId}&kind=eq.${how.evidence}&select=id&limit=1`).catch(() => null);
@@ -409,7 +418,7 @@ export async function verifyPayeeAccount(req: Request, accountId: string): Promi
     }
     await rest(`/fin_party_accounts?id=eq.${accountId}&status=eq.unverified`, {
       method: 'PATCH',
-      body: JSON.stringify({ status: 'verified', verified_by: staff.id, verified_at: new Date().toISOString(), verification_method: how.method, verification_note: how.note, ...(how.name ? { verified_name: how.name } : {}) }),
+      body: JSON.stringify({ status: 'verified', verified_by: staff.id, verified_at: new Date().toISOString(), verification_method: how.method, verification_note: how.note, ...(bankName ? { verified_name: bankName } : {}) }),
     });
     // The method goes in the audit log; the free-text note stays on the row.
     await audit(staff.id, account.entity_id, 'finance.payee_verified', account.id, { partyId: account.party_id, method: how.method });

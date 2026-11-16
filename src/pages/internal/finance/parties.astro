@@ -64,7 +64,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
   import { StaffAuthError, clearStepUp, clearToken, closeOnBackdrop, decodeTokenEmail, getStepUp, getToken, setToken, showToast, staffFetch } from '../../../../scripts/lib/staff-client.mjs';
   import { initStepUpLock } from '../../../../scripts/lib/staff-stepup-ui.mjs';
   import { markDiff, groupFromRight } from '../../../../scripts/lib/finance-diff.mjs';
-  import { VERIFY_METHODS, namesResemble } from '../../../../scripts/lib/finance-parties.mjs';
+  import { VERIFY_METHODS, namesResemble, verifyMethodsFor } from '../../../../scripts/lib/finance-parties.mjs';
   import { clearState, showFailure, showLoading } from '../../../../scripts/lib/staff-states.mjs';
 
   declare const google: any;
@@ -1040,7 +1040,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
       void showBranch(d.ifsc, branchNote);
     }
 
-    const radios = VERIFY_METHODS.map((m: { id: string; label: string }) => {
+    const radios = verifyMethodsFor(d.method).map((m: { id: string; label: string }) => {
       const radio = h('input', { attrs: { type: 'radio', name: 'how', value: m.id } }) as HTMLInputElement;
       return { radio, node: h('label', { class: 'radio' }, radio, h('span', { text: m.label })) };
     });
