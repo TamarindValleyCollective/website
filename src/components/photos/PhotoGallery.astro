@@ -63,7 +63,7 @@ const photosJson = photos.map((p) => ({
 // `</script>` inside a caption would otherwise terminate this tag early.
 const photosJsonSafe = JSON.stringify(photosJson).replace(/<\/script/gi, '<\\/script');
 
-// UI chrome only - the client <script> below reads these back via
+// UI chrome only - the client script block below reads these back via
 // data-attributes on #photo-gallery (same pattern as WeatherWidget/
 // SiteSearch), since it can't call t() directly. Photo captions themselves
 // are handled above via captionFor(), and species/place names elsewhere on

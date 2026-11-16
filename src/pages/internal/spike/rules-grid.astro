@@ -1,0 +1,13 @@
+---
+// SPIKE (not for merge): Rules as a React island. Invented data, no sign-in, no real finance data.
+import StaffLayout from '../../../layouts/StaffLayout.astro';
+import RulesGrid from '../../../components/spike/RulesGrid.tsx';
+---
+
+<StaffLayout title="Spike: rules grid" description="Spike." current="finance" currentPage="finance-rules">
+  <section class="section wrapper">
+    <h1>Rules (React island spike)</h1>
+    <p class="hint">Invented data. Open the column menu (the ⋮ on a header, or "Show/Hide columns" in the toolbar) to reorder and hide columns; the layout is remembered in this browser.</p>
+    <RulesGrid client:only="react" />
+  </section>
+</StaffLayout>

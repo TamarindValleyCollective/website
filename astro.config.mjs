@@ -1,6 +1,7 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
 import sitemap from '@astrojs/sitemap';
+import react from '@astrojs/react';
 import rehypeExternalLinks from 'rehype-external-links';
 
 // https://astro.build/config
@@ -36,6 +37,7 @@ export default defineConfig({
     routing: { prefixDefaultLocale: false },
   },
   integrations: [
+    react(),
     sitemap({
       // Excludes the noindex'd pages (see BaseLayout's `noindex` prop) -
       // listing a URL in the sitemap while also telling crawlers not to

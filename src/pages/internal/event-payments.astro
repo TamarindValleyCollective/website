@@ -622,7 +622,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
 
   /* Everything below targets #bookings-body's contents, which renderBookings(),
      openBookingDetail(), and openRefundForm() build with innerHTML/createElement
-     in the <script> below — Astro's scoped CSS only tags elements present in this file's
+     in the script block below — Astro's scoped CSS only tags elements present in this file's
      static template, so a plain selector here would silently never match a
      row, badge, button, or refund form. :global() opts each one out of that
      scoping, and the #bookings-body id keeps the reach limited to this table

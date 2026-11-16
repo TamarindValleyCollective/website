@@ -1,6 +1,6 @@
 ---
 // Data fetching and rendering for this page happens entirely client-side (see
-// the <script> below), fetching live from the iNaturalist API on every page
+// the script block below), fetching live from the iNaturalist API on every page
 // load. This is deliberate — Astro's experimental Live Content Collections
 // would do something that sounds similar but actually runs server-side per
 // request (needs `output: 'server'` + a Vercel function), which would break
@@ -9,7 +9,7 @@
 // UI chrome (labels, buttons, empty/error states) is translated per `lang`
 // below. Species/taxon names themselves come live from the iNaturalist API
 // in English only and are left as-is — those are proper/scientific names,
-// not UI text. Strings the client <script> needs at runtime are passed down
+// not UI text. Strings the client script needs at runtime are passed down
 // via data-* attributes (see data-strings below), same pattern as
 // WeatherWidget/SiteSearch, since the script can't call t() directly.
 import { type Locale } from '../../i18n/utils';
@@ -241,7 +241,7 @@ const stringsJsonSafe = JSON.stringify(strings).replace(/<\/script/gi, '<\\/scri
     margin-bottom: 36px;
   }
 
-  /* .stat* and everything below through .obs-card* is built by the <script>
+  /* .stat* and everything below through .obs-card* is built by the script
      via createElement/innerHTML, not present in this component's server-
      rendered markup — Astro only scopes elements it renders itself, so these
      selectors must be :global() or they silently never match anything. */

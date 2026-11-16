@@ -14,7 +14,7 @@ interface Props {
 const { lang = DEFAULT_LOCALE } = Astro.props;
 const t = useTranslations(lang);
 const suggestions = [t('chat.suggestion1'), t('chat.suggestion2'), t('chat.suggestion3')];
-// Astro doesn't evaluate {} expressions inside <script> tag bodies (their
+// Astro doesn't evaluate {} expressions inside script-tag bodies (their
 // contents are treated as raw JS/text to bundle, not as markup) - a bare
 // {JSON.stringify(suggestions)} here would render as that literal source
 // string instead of the JSON it looks like. set:html is required, same as
