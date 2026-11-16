@@ -177,8 +177,46 @@
   align-self: flex-start;
 }
 
+/* An icon-only button (scripts/lib/admin-icons.mjs): for a familiar, repeated action. It always has an aria-label and a tooltip. */
+.dt .icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--tvc-line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--tvc-white);
+  color: var(--tvc-ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+.dt .icon-btn:hover {
+  background: var(--tvc-cream);
+}
+
+.dt .icon-btn:focus-visible {
+  outline: 2px solid var(--tvc-green);
+  outline-offset: 2px;
+}
+
+.dt .icon-btn[aria-expanded='true'] {
+  background: var(--tvc-green-tint);
+  border-color: var(--tvc-green);
+}
+
+/* The Columns button is as tall as the search box beside it. */
 .dt .dt-colsbtn {
-  min-height: 40px;
+  width: 44px;
+  height: 44px;
+}
+
+@media (pointer: coarse) {
+  .dt .icon-btn {
+    width: 44px;
+    height: 44px;
+  }
 }
 
 .dt .dt-colpop {

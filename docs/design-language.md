@@ -76,6 +76,12 @@ disagree `global.css` wins. In any `.astro` or `.css` file:
   describes its columns, chip filters and groupings and hands over rows; it does not restyle the table. Parties, UPI, both Requests pages and Rules (rules and categories) use it; the Ledger keeps its own
   virtualised build (it moves over only if the two start to drift apart). Columns can be `sortable: false`, `wrap: true` or `sticky: true` (a column of buttons stays in view), and a page can give a row a full-width `detail` row. A filter can name a `group`: chips of one group are alternatives (BHIM or Paytm), groups combine. A page that passes a `layoutKey` gets a **Columns** menu: show or hide a column, move it earlier or later (buttons, so it works from the keyboard and on a phone), or reset to the default; the layout is kept per admin in this browser and applies to the wide table only (phone cards are the page's own). A `sticky` or `fixed` column (a column of buttons) is always shown and does not move; a column that is hidden drops its filter, and if it was the sort column the sort goes back to the page's default. The Dashboard and Budget are not tables and stay out of it.
 
+- **Icon buttons.** An icon replaces the words only for a familiar action repeated down a table or in a toolbar: change (pencil), choose columns, search, close. A
+  primary or consequential action keeps its words: Post, Save, Accept suggestions, Add rule, Turn on or off, Approve, Reject, anything that deletes or cannot be undone. An
+  icon-only button always has an `aria-label` (specific: "Change Fuel") and a tooltip (`title`), is at least 36px square (44px on a touch screen), and one icon
+  means one thing everywhere. Make them with `iconButton` in `scripts/lib/admin-icons.mjs`; the icons share the sidebar's stroke style (24x24, `currentColor`, round caps).
+  A row that needs more than one icon-only action groups the extras under a ⋯ menu with words. A new icon goes into `admin-icons.mjs` with a comment saying what it means; do not draw one inline in a page.
+
 `npm run lint:css` checks this (Stylelint); the `Design language` GitHub Action runs it on every
 PR. Raw hex colors are errors (CI fails); radius literals are warnings for now. Admin font sizes outside the scale are errors. A color that genuinely isn't a TVC color (a third-party brand, a data
 color) gets a `/* stylelint-disable-next-line color-no-hex -- reason */` comment above it. Update this section in the same change if the rules change.

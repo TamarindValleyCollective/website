@@ -21,6 +21,7 @@
 import { buildItems, chipCounts, moveColumn, readFavorites, withFavorite } from './data-table.mjs';
 import { createTableEngine } from './data-table-engine.mjs';
 import { h } from './finance-ui.mjs';
+import { iconButton } from './admin-icons.mjs';
 
 const tick = (checked, label, onChange) => {
   const box = h('input', { attrs: { type: 'checkbox', 'aria-label': label } });
@@ -62,7 +63,7 @@ export function createDataTable(opts) {
   const caret = h('button', { class: 'dt-caret', attrs: { type: 'button', 'aria-expanded': 'false', 'aria-label': 'Filters, group by and favorites', title: 'Filters, group by and favorites' }, text: '▾' });
   const pop = h('div', { class: 'dt-pop', attrs: { hidden: '' } });
   const sbox = h('div', { class: 'dt-sbox' }, chipBox, input, caret);
-  const colsBtn = h('button', { class: 'button button--outline button--small dt-colsbtn', attrs: { type: 'button', 'aria-expanded': 'false', 'aria-controls': 'dt-colpop' }, text: 'Columns' });
+  const colsBtn = iconButton({ name: 'columns', label: 'Columns', tip: 'Choose columns', cls: 'dt-colsbtn', attrs: { 'aria-expanded': 'false', 'aria-controls': 'dt-colpop' } });
   const colsPop = h('div', { class: 'dt-colpop', attrs: { id: 'dt-colpop', hidden: '' } });
   const colsWrap = layoutKey ? h('div', { class: 'dt-cols' }, colsBtn, colsPop) : null;
   const errors = h('p', { class: 'dt-errors', attrs: { role: 'status', hidden: '' } });
@@ -296,7 +297,8 @@ export function createDataTable(opts) {
   colsBtn.addEventListener('click', () => { colsOpen = !colsOpen; renderCols(); });
   // composedPath, not contains(e.target): a click on a button this menu has just re-drawn has a target that is no longer in the page.
   document.addEventListener('click', (e) => { if (colsOpen && colsWrap && !e.composedPath().includes(colsWrap)) { colsOpen = false; renderCols(); } });
-  colsPop.addEventListener('keydown', (e) => { if (e.key === 'Escape') { colsOpen = false; renderCols(); colsBtn.focus(); } });
+  // On the whole control, not just the menu: focus is on the button when it has just been opened from the keyboard.
+  colsWrap?.addEventListener('keydown', (e) => { if (e.key === 'Escape' && colsOpen) { colsOpen = false; renderCols(); colsBtn.focus(); } });
 
   function clearAll() {
     onUserFilter();
