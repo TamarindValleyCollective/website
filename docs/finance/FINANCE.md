@@ -1109,7 +1109,7 @@ First slice, on branch `finance-09-payroll`. See `sessions/09-payroll.md` for th
   row, so their number is never reused). `GET /payroll` also lists people on payroll whose Party was deactivated (`partyInactive`), and a run cannot include, or generate
   a file for, such a person. Adding the Party stays a separate step for someone else; bank details are the next slice. "Add a person to payroll" (a director, directly) remains for
   the people already on payroll, and to carry over their old numbers once.
-- **Bank details on a request** (migration `0108_finance_people_bank_details.sql`, **not applied**; `finance-payroll-people.ts`, `scripts/lib/ifsc-banks.mjs`): the employee gives their bank details to
+- **Bank details on a request** (migration `0108_finance_people_bank_details.sql`, **applied 2026-11-17**; `finance-payroll-people.ts`, `scripts/lib/ifsc-banks.mjs`): the employee gives their bank details to
   the farm manager, so he enters them on a joining request (optional) or raises a third kind of request, `bank_change` (the person, the first salary month the new account is for, the new details).
   The number is typed twice and an IFSC is required (an account without one cannot be paid); the page names the bank from the IFSC's first four letters as a typing aid only (no branch, nothing
   checked). A photo of the passbook or a cancelled cheque is required before a director can approve (`POST /payroll/requests/:id/proof`, the person who raised it only; a second one replaces the

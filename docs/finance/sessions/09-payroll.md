@@ -221,8 +221,7 @@ the passbook or cheque, and the page's shared bank block (number twice, IFSC wit
 encrypted at once and held only while the request is open; approving attaches them as an unverified account entered by the farm manager, so someone else verifies; the old account keeps being paid
 until the new one starts. Verified: the unit and endpoint tests (all 1,575 in `scripts/lib` pass; the endpoint tests also check that no account number or IFSC appears in any response or audit
 entry), and the migration plus a test block on the real database in a rolled-back transaction (ten constraint cases: an open change per person, details only while open, a proof only with details,
-a leave or a join carrying the wrong fields). The page was driven headless against a mocked API. **Migration 0108 is not applied**, and until it is the people-request routes fail on the real
-database (they write its new columns). Not done: the bank's registered name beside the number (no validation method yet; an empty "name from bank" is the hook), the branch from the IFSC (needs an
+a leave or a join carrying the wrong fields). The page was driven headless against a mocked API. **Migration 0108 was applied to TVC ERP on 2026-11-17 (as `finance_people_bank_details`) and checked afterwards: the five new columns, the widened kind check, the six new constraints and the open-change index are there, row security is on, the anon role has no access, and the table is empty.** Not done: the bank's registered name beside the number (no validation method yet; an empty "name from bank" is the hook), the branch from the IFSC (needs an
 external lookup), and a look at the real flow by the farm manager.
 
 Decided 2026-11-17 (the owner): the portal accepts today or a future payment date and rejects a past one. So the generator refuses

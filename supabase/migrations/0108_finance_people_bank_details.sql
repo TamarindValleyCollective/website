@@ -1,4 +1,5 @@
--- Finance session 09a: bank details on a people-change request (docs/finance/sessions/09-payroll.md, "Plan for the next slices"). NOT APPLIED.
+-- Finance session 09a: bank details on a people-change request (docs/finance/sessions/09-payroll.md, "Plan for the next slices").
+-- Applied to TVC ERP on 2026-11-17 (as finance_people_bank_details). Do not edit it now; a change is a new migration.
 --
 -- The employee gives their bank details to the farm manager, so he enters them on the joining request, and can raise a request to change them
 -- (a third kind, 'bank_change'). The details are encrypted with the same key as a payee account, with only the last four digits readable, and
