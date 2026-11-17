@@ -1084,3 +1084,19 @@ salary flag are set with `PATCH /categories/:id {head, isSalary}`, the route cat
   whole flow: read-only, start, type, a bad amount, save, a server error on a row, approve, discard, leaving with changes, an empty year, a reader, a head picker.
 - **Not built yet:** monthly phasing (the table and API keep it; the editor has no screen for it), the import of the existing plan, a diff between two
   versions, and the editor in a browser with a real sign-in or on a phone.
+
+## Payroll (session 09a, migration `0105_finance_payroll.sql`, **not applied**)
+
+First slice, on branch `finance-09-payroll`. See `sessions/09-payroll.md` for the decisions and the file layout.
+
+- **Generator** (`scripts/lib/finance-payroll-file.mjs`, pure): builds the salary bulk file and an `.xlsx` from a run and the decrypted
+  payee details. Refuses a file for a bad payment mode (N or I only), a missing debit account, a net with paise, a bad account
+  number or IFSC, a repeated name, a past payment date. An account starting with 0, or longer than 15 digits, is written as text and
+  flagged. Month text in columns G, I and L is derived from the month, never typed. Two people may share one account.
+- **Guard** (`payrollBlockers`): an account that is not verified, not yet valid, retired or replaced blocks the file; an account that
+  differs from the previous run's is listed as changed even when verified.
+- **Tables**: `fin_employees`, `fin_payment_batches` (kind `salary`; holds the file hash and R2 key, never an account number),
+  `fin_payroll_runs` (draft, confirmed, file generated, approved, settled, cancelled), `fin_payroll_lines` (snapshot of the payee
+  account used, net in whole rupees, optional agreed pay, days worked and advance for 09b, the bank reference). The preparer can
+  never be the approver (a check constraint on both the run and the batch). A line is frozen once the file is generated.
+- **Not built yet**: screens, the endpoint and the R2 write, the debit account setting, history import, settlement matching.

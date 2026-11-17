@@ -90,4 +90,25 @@ creates allocations with the right period.
 > Read `docs/finance/README.md`, `DESIGN.md`, `sessions/09-payroll.md`, and the notes from sessions 04 and 05. Build session 09 test-first with the tdd skill, starting from the pure payroll arithmetic. Real salary figures and the real template stay outside the repo.
 
 ## Done
-_Fill in at the end of the session._
+**First slice of 09a, 2026-11-17 (branch `finance-09-payroll`, nothing pushed).**
+
+Built:
+- `scripts/lib/finance-payroll-file.mjs` (+ test, 20 passing): the bank bulk file in the layout above (columns A to L, no header),
+  the payment-date validation, a one-sheet `.xlsx` writer (numbers as numbers, everything else text), and the guard that blocks
+  generation when a payee account is not verified, not yet valid, retired or replaced and lists accounts that changed since the
+  last run.
+- Migration `0105_finance_payroll.sql`: `fin_employees`, `fin_payment_batches`, `fin_payroll_runs`, `fin_payroll_lines` with the
+  status chain, maker-is-not-checker as a check constraint, whole-rupee nets, one live run per month, and a trigger that freezes a
+  line once the file is generated.
+
+Verified: the unit tests; the migration run on the real database inside a transaction that was rolled back (whole-rupee check,
+duplicate person, second run for a month, preparer cannot approve, edit and delete refused after the file, RLS on), and
+afterwards the tables did not exist. **Migration 0105 is not applied.**
+
+Not built yet: the run screens (farm manager enters, confirms; preparer generates), the endpoint that decrypts payee details and
+writes the file to R2, the debit account setting (server-side), the history import, settlement matching and returns, the
+`FINANCE.md`/`ARCHITECTURE.md` text for functions that do not exist yet.
+
+Open: whether the portal's "processing date" is the upload day. Until confirmed, a payment date other than today is a warning in
+the generator, not a refusal. The guard treats a changed but verified account as allowed and shows it loudly; say if a changed
+account should always need a fresh verification.
