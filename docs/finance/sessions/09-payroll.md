@@ -107,8 +107,8 @@ Agreed after the first run screens were reviewed. Order of work, each its own co
   generator keeps writing the layout above.
 - **Inconsistencies in the old files are not blockers and are removed by the generator, going forward:** the month typed in several places and disagreeing (a file
   named for one month holding another month's sheet name or references, at least four times); month names in the reference varying (`March` and `Mar`, and `Sep-Emp`
-  in 2023); three versions of Oct 2024 and a "Copy" of Sep 2025; a Sep 2026 file that is really the Oct batch (identical, same references); one month
-  (Aug 2026) with no file; one file (Jun 2026) whose amounts are formulas with no stored values.
+  in 2023); three versions of Oct 2024 and a "Copy" of Sep 2025. (As first read on 2026-11-17 the 2026 files also had a Sep file that was really the Oct batch, no Aug file and a Jun file with no
+  amounts; the owner corrected those the same day, and the Jun to Oct 2026 files now each carry their own month's sheet name, references, narration and payment date.)
 
 **What the files and the ledger say about what was actually uploaded (read 2026-11-17; the files and amounts stay outside the repo).** Each file's total was matched
 to a bank debit of exactly that amount.
@@ -131,9 +131,8 @@ to a bank debit of exactly that amount.
 **Ledger validation before the history import (2026-11-17; the files and amounts stay outside the repo).** Every bank debit that carries a "Salaries" entry in the ledger (38 of them, since Sep 2023) was
 compared with the 40 files, amount by amount. Result:
 - **Totals agree everywhere:** on all 38 debits the entries add up to the bank amount exactly.
-- **28 of the 38 are batches** (8 to 10 entries). **25 match a file entry for entry**; **none** has a file with the same total but different entries.
-- **3 batches have no file:** the debits of 1 Jul, 2 Sep and 3 Oct 2026 (the June, August and September 2026 salaries). The file named June 2026 has an empty amount column (a template; the real file is
-  missing); there is no August file; the file named September is the October batch.
+- **28 of the 38 are batches** (8 to 10 entries). **All 28 match a file entry for entry**, and none has a file with the same total but different entries. On the first read 3 had no file (the debits of 1 Jul, 2 Sep
+  and 3 Oct 2026, the June, August and September 2026 salaries); the owner replaced those files the same day and they now match, so **no batch in the ledger lacks its file.**
 - **10 are single-person payments** with no file (Aug 2024, Mar 2025, 5 in Jun 2025, Aug 2025, Nov 2025, Mar 2026): paid outside the bulk file, most as round amounts (advances or one-offs). **Five of them (5 and 8
   Jun 2025) repeat five amounts that are also inside the 2 Jun 2025 batch, paid by individual NEFT 3 to 6 days later, with no credit of those amounts coming back in the following 12 days.** Possible double
   payments or a re-sent return; for the owner to check against the bank.
