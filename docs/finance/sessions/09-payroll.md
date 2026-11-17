@@ -50,6 +50,58 @@ bulk-payment file, and split the single bank debit automatically.
   defaults to `N`, and the generator accepts `N` or `I` only. Not confirmed: whether the transfer method chosen at upload
   overrides column A; the export must not assume either way (the preparer still checks it in the portal as today).
 
+## Plan for the next slices of 09a (2026-11-17, with the owner; nothing here is built yet)
+Agreed after the first run screens were reviewed. Order of work, each its own commit and test-first:
+
+1. **Automatic employee numbers.** Today the number is typed by hand and only sorts the list, and the reference in column I uses the
+   row's position in that month's file, so one person's number can change month to month. Instead: the number is assigned on
+   adding a person to payroll (next number, never reused, shown read-only), and column I uses it. *Open question for the owner:* in the
+   files uploaded to the bank today, is the last part of the reference a permanent employee number or the row count? If permanent,
+   seed the existing people with their current numbers when the history is imported.
+2. **People-change requests** (a table and three request kinds, in the style of the payment requests the farm manager already
+   uses). The farm manager decides who joins and leaves, so each change starts with him; a director signs it off, because a joiner
+   or a changed account is money going out. Adding the person as a Party stays a separate step done by someone else, and adding
+   them to payroll stays a separate step done by a director.
+   - **Joining:** the farm manager raises it (name, role, start month, agreed monthly pay, the account and IFSC the employee gave
+     him). An admin creates the Party (kind employee) and the details attach to it. A director approves and the person goes
+     on payroll from the start month. The agreed pay is what the 09b calculation will read.
+   - **Leaving:** the farm manager picks a person on payroll, the last month to pay and an optional reason. A director approves;
+     the person drops out of the new-month form after that month (a final month with a hand-entered amount is still possible).
+     History and past runs are untouched. The payroll page then prompts that the Party can be deactivated.
+   - **Change of bank details:** the farm manager enters the new account and the month it starts from. The old account stays in
+     use until the new one is verified, so salary never goes to an unchecked account. A different person verifies it, never the
+     requester; a director for a change, an admin may verify a new joiner. The existing "account changed since the last run" warning
+     still shows for the first month. Every change is written to the audit log and alerts the directors.
+   - Today deactivating a Party does nothing to payroll, and nothing turns an employee off. Until this is built, treat both as gaps. As
+     a safety net, even without a request: payroll shows "inactive in Parties but still on payroll" with the names, and a line for a
+     deactivated Party blocks the file until it is removed or the Party is reactivated.
+3. **Bank details entered by the farm manager.** The employee gives the details to him, so he may enter them at joining and request a
+   change. He sees only the last four digits afterwards, never the full number. To catch typos the account number is asked twice and
+   the IFSC shows its bank and branch at once. A new or changed account needs a photo of the passbook or a cancelled cheque (the
+   proof the details are the employee's own), stored privately with the payee evidence. Entering the details does not make
+   them the account that is paid: only a check by someone else does.
+4. **Name from the bank, when a method exists.** If bank-account validation is automated, show the bank's registered name beside
+   the masked number when the farm manager adds an account, compare it with the Party's name (a mismatch is flagged for the checker,
+   not blocked), and run the same check on every line just before the file is made (a failed or unavailable check blocks the
+   file; this is the live check `payrollBlockers` is waiting for). Do not build it until the owner reports a working method and
+   provider; leave a "name from bank" field, empty, on the new-account step and one hook in `payrollBlockers`. Known limits: it is a
+   paid per-check service, some providers send a test credit, not every bank returns a name.
+5. **Evidence of the bank's confirmation.** After "I uploaded it to the bank" the preparer may attach a screenshot of the batch
+   as the bank shows it (it lists each line with its status). It is the only proof from a system TVC does not control, and it reuses
+   the private evidence storage. Later it could be read to tick lines against the run, which gives settlement matching a head start.
+   The screenshot holds real names and account numbers: private storage only, never the repo.
+6. **File drop instead of keying.** The farm manager may drop his usual monthly sheet (Excel or CSV) instead of typing amounts;
+   the page previews it matched to people by number or name, flags the unmatched, and one confirm creates the draft. Same pattern as
+   the statement import. Needs the layout of his sheet, shown with invented names, before it is built.
+
+**Polish from the first review (small):** disable "Make the bank file" with a reason when someone's account cannot be paid; the
+Finance menu has both "Payroll" and the older "Salaries" and both pages are headed "Salaries", so rename one pair to tell them apart;
+two console errors on the pages (a 404 not traced yet, and a blocked sign-in script in the headless check).
+
+**Still unverified:** the real downloaded `.xlsx` has not been confirmed to open in Excel. The structure tests clean as a zip, and a file
+was opened in Excel on 2026-11-17; the result is not recorded here yet. The first "corrupt file" report came from the preview's stub
+download, not from the generator.
+
 ## Read first
 `DESIGN.md` (Payroll, fin_employees and related tables, Access); the sessions 04 and 05 notes; the payroll
 workbook layout as described in `FINANCE.md`.
