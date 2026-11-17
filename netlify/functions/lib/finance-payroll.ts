@@ -16,7 +16,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { requireStaff } from './staff-access';
 import { stepUpIsValid } from './staff-admin-guard';
 import { decryptFinanceText } from './staff-mfa-crypto';
-import { rest } from './staff-mfa-store';
+import { mfaSummary, rest } from './staff-mfa-store';
 import { logFinanceAction } from './finance-audit';
 import { getFinancePayroll, putFinancePayroll } from './finance-storage';
 import { todayIST } from '../../../scripts/lib/finance-parties.mjs';
@@ -184,8 +184,10 @@ export async function listPayroll(req: Request): Promise<Response> {
     // People whose party is of kind 'employee' but who are not employees yet: the director adds them here, not on Parties.
     const known = new Set(employees.map((e) => e.party_id));
     const candidates = (await rows("/fin_parties?kind=eq.employee&active=eq.true&merged_into=is.null&select=id,name&order=name.asc")).filter((p) => !known.has(p.id));
+    // The unlock lock in the toolbar needs to know whether second factors are set up (the farm manager's confirm needs none).
+    const mfa = access.canPrepare || access.canApprove ? await mfaSummary(access.staff.id) : null;
     return json({
-      me: { id: access.staff.id, canEnter: access.canEnter, canPrepare: access.canPrepare, canApprove: access.canApprove, stepUpValid: stepUpIsValid(req, access.staff.id) },
+      me: { id: access.staff.id, canEnter: access.canEnter, canPrepare: access.canPrepare, canApprove: access.canApprove, ready: mfa?.ready ?? false, hasPasskey: mfa?.passkey ?? false, stepUpValid: stepUpIsValid(req, access.staff.id) },
       today: todayIST(),
       runs: runs.map((r) => ({
         id: r.id, month: String(r.month).slice(0, 7), status: r.status, paymentDate: r.payment_date, count: totals.get(r.id)?.count ?? 0, totalPaise: totals.get(r.id)?.total ?? 0,
@@ -371,7 +373,7 @@ export async function runAction(req: Request, id: string): Promise<Response> {
       if (!res.ok || ((await res.json()) as Json[]).length !== 1) return fail('Could not approve: the file is no longer waiting for approval.', 409);
       if (!(await moveRun(id, 'file_generated', { status: 'approved', approved_by: access.staff.id, approved_at: now }))) return fail('The run changed while you were looking at it. Reload.', 409);
     } else if (b.action === 'generate') {
-      return await generate(req, run, access, entity, paymentDate, today);
+      return await generate(run, access, entity, paymentDate, today);
     }
     return json({ ok: true, status: verdict.to });
   } catch (err) {
@@ -379,7 +381,7 @@ export async function runAction(req: Request, id: string): Promise<Response> {
   }
 }
 
-async function generate(req: Request, run: Json, access: Access, entity: string, paymentDate: string, today: string): Promise<Response> {
+async function generate(run: Json, access: Access, entity: string, paymentDate: string, today: string): Promise<Response> {
   const debitAccount = process.env.FINANCE_PAYROLL_DEBIT_ACCOUNT ?? '';
   if (!debitAccount) return fail('The company debit account is not configured yet (FINANCE_PAYROLL_DEBIT_ACCOUNT).', 500);
   const lines = await runLines(run.id);

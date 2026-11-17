@@ -1,0 +1,12 @@
+---
+// Finance requests (internal), session 09a: the farm manager's page for the month's salaries, built for a phone (see
+// src/components/PayrollRuns.astro). Holding `finance-requests` opens only this and the requests page; the server shows payroll
+// to the farm manager, and to the two directors who prepare and approve the file, and to no one else.
+import StaffLayout from '../../../layouts/StaffLayout.astro';
+import PayrollRuns from '../../../components/PayrollRuns.astro';
+---
+
+<StaffLayout title="Salaries" description="Monthly salaries." current="finance-requests" currentPage="finance-salaries">
+  <button slot="toolbar" type="button" id="lock" class="lock-pill" hidden></button>
+  <PayrollRuns />
+</StaffLayout>

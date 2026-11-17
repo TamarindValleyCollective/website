@@ -1,0 +1,641 @@
+---
+// Payroll runs (docs/finance/sessions/09-payroll.md, 09a), the body of two pages that differ only in their shell: the farm manager's
+// (/internal/finance-requests/payroll/, built for a phone) and the directors' (/internal/finance/payroll/). One screen, because the
+// work is one thing seen by three people: the farm manager enters and confirms each person's net pay for the month; a director
+// generates the bank file; a second director approves. What each person can press is decided by the server's `me` (canEnter,
+// canPrepare, canApprove), and the server re-checks every action.
+//
+// Backed by netlify/functions/finance-admin.mts (/payroll, lib/finance-payroll.ts). Bank account numbers never reach this page: a
+// person's account is shown as its last four digits. Everything the server returns is placed with textContent only, never as HTML.
+import SignInGate from './SignInGate.astro';
+import StepUpSheet from './StepUpSheet.astro';
+---
+
+<section class="finance finance-payroll section wrapper">
+  <h1>Salaries</h1>
+  <p id="intro" class="hint">Sign in to see the salary runs.</p>
+
+  <SignInGate forbiddenWhat="the salary runs" />
+
+  <div id="status" aria-live="polite" class="hint" hidden></div>
+
+  <div id="content" hidden>
+    <div id="list-view">
+      <div class="pr-actions">
+        <button type="button" id="new-run" class="button button--primary" hidden>Start a month's salaries</button>
+        <button type="button" id="add-person" class="button" hidden>Add a person to payroll</button>
+      </div>
+
+      <form id="person-form" class="pr-card" hidden novalidate>
+        <h2>Add a person to payroll</h2>
+        <p class="hint">Only people already added as an employee on the Parties page are listed.</p>
+        <label class="pr-field"><span>Who</span><select id="p-party"></select></label>
+        <label class="pr-field"><span>Roll number (optional)</span><input id="p-roll" autocomplete="off" maxlength="20" /></label>
+        <p id="person-error" class="pr-error" role="alert" hidden></p>
+        <div class="pr-actions">
+          <button type="submit" class="button button--primary">Add</button>
+          <button type="button" id="person-cancel" class="button">Cancel</button>
+        </div>
+      </form>
+
+      <form id="new-form" class="pr-card" hidden novalidate>
+        <h2>Start a month's salaries</h2>
+        <p class="hint">Enter what each person is to be paid, in whole rupees. Leave a person blank to leave them out of this month.</p>
+        <label class="pr-field"><span>Salary month</span><input id="n-month" type="month" required /></label>
+        <div id="n-people" class="pr-people"></div>
+        <p id="new-error" class="pr-error" role="alert" hidden></p>
+        <div class="pr-actions">
+          <button type="submit" class="button button--primary">Save as a draft</button>
+          <button type="button" id="new-cancel" class="button">Cancel</button>
+        </div>
+      </form>
+
+      <div id="runs"></div>
+    </div>
+
+    <div id="run-view" hidden>
+      <button type="button" id="back" class="pr-link">← All months</button>
+      <div id="run"></div>
+    </div>
+  </div>
+  <StepUpSheet />
+</section>
+
+<script>
+  import { StaffAuthError, clearStepUp, clearToken, decodeTokenEmail, getStepUp, getToken, setToken, showToast, staffFetch } from '../../scripts/lib/staff-client.mjs';
+  import { initStepUpLock } from '../../scripts/lib/staff-stepup-ui.mjs';
+  import { clearState, showFailure, showLoading } from '../../scripts/lib/staff-states.mjs';
+
+  declare const google: any;
+  const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
+  const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+  const gate = $('gate');
+  const gateError = $('gate-error');
+  const forbidden = $('forbidden');
+  const statusEl = $('status');
+  const content = $('content');
+  const intro = $('intro');
+
+  type Me = { id: string; canEnter: boolean; canPrepare: boolean; canApprove: boolean; ready: boolean; hasPasskey: boolean; stepUpValid: boolean };
+  type RunRow = { id: string; month: string; status: string; paymentDate: string; count: number; totalPaise: number; next: string | null };
+  type Person = { id: string; name: string; rollNo: string | null; active: boolean };
+  type Line = { id: string; employeeId: string; name: string; netPaise: number; last4: string | null; changed: boolean; problem: string | null; reference: string | null; returned: boolean; agreedPayPaise: number | null; daysWorked: number | null; advanceDeductedPaise: number | null };
+  type Detail = {
+    run: { id: string; month: string; status: string; paymentMode: string; paymentDate: string; cancelledReason: string | null; preparedByMe: boolean; batch: { status: string; totalPaise: number; lineCount: number } | null; stale: boolean; next: string | null };
+    lines: Line[];
+    totalPaise: number;
+    changed: number;
+    problems: number;
+  };
+  let data: { me: Me; today: string; runs: RunRow[]; employees: Person[]; candidates: { id: string; name: string }[] } | null = null;
+  let openId: string | null = null;
+
+  const rupees = (paise: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(paise / 100);
+  const monthName = (m: string) => new Date(`${m}-01T00:00:00Z`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  const dayName = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+  const STATUS: Record<string, { text: string; kind: string }> = {
+    draft: { text: 'Draft', kind: 'dim' },
+    confirmed: { text: 'Confirmed', kind: 'warn' },
+    file_generated: { text: 'File made', kind: 'warn' },
+    approved: { text: 'Approved at the bank', kind: 'ok' },
+    settled: { text: 'Paid', kind: 'ok' },
+    cancelled: { text: 'Cancelled', kind: 'dim' },
+  };
+
+  function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string): HTMLElementTagNameMap[K] {
+    const e = document.createElement(tag);
+    if (className) e.className = className;
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+  const btn = (text: string, onClick: () => void, cls = 'button') => {
+    const b = el('button', cls, text);
+    b.type = 'button';
+    b.addEventListener('click', onClick);
+    return b;
+  };
+  const pill = (status: string, label?: string) => el('span', `pill pill--${(STATUS[status] ?? { kind: 'dim' }).kind}`, label ?? (STATUS[status] ?? { text: status }).text);
+
+  function showGate(message?: string) {
+    gate.hidden = false;
+    forbidden.hidden = true;
+    content.hidden = true;
+    clearState(statusEl);
+    intro.hidden = false;
+    intro.textContent = 'Sign in to see the salary runs.';
+    gateError.hidden = !message;
+    if (message) gateError.textContent = message;
+    renderSignInButton();
+  }
+  function showForbidden() {
+    gate.hidden = true;
+    content.hidden = true;
+    clearState(statusEl);
+    forbidden.hidden = false;
+    $('forbidden-email').textContent = decodeTokenEmail(getToken() ?? '');
+  }
+  function fail(err: unknown) {
+    if (err instanceof StaffAuthError) {
+      if (err.kind === 'unauthorized') showGate('Your session expired. Sign in again.');
+      else showForbidden();
+      return true;
+    }
+    return false;
+  }
+
+  const lock = initStepUpLock({ getMe: () => data?.me ?? null, onChange: () => {} });
+
+  // One call for every change. A 403 asking for the step-up opens the unlock sheet instead of failing quietly.
+  async function call(path: string, method: string, body: unknown, done: string): Promise<boolean> {
+    try {
+      const { status, data: out } = await staffFetch(path, { method, body });
+      if (status === 403 && out?.code === 'STEP_UP_REQUIRED') {
+        showToast(data?.me?.ready ? 'Unlock first.' : 'Set up two second factors first (see Security).');
+        lock.open();
+        return false;
+      }
+      if (status === 409 && Array.isArray(out?.blockers)) {
+        showToast(`The file cannot be made yet. ${out.blockers.join(' ')}`);
+        return false;
+      }
+      if (status >= 400) {
+        showToast(out?.error ?? 'Could not do that.');
+        return false;
+      }
+      showToast(done);
+      return true;
+    } catch (err) {
+      if (!fail(err)) showToast('Could not do that.');
+      return false;
+    }
+  }
+
+  // ---- the list
+  function renderRuns() {
+    const box = $('runs');
+    box.replaceChildren();
+    if (!data) return;
+    if (!data.runs.length) {
+      box.append(el('p', 'hint', data.me.canEnter ? 'No month has been started yet.' : 'No salary run has been started yet.'));
+      return;
+    }
+    for (const r of data.runs) {
+      const card = el('button', 'pr-run');
+      card.type = 'button';
+      const top = el('span', 'pr-run-top');
+      top.append(el('strong', undefined, monthName(r.month)), pill(r.status));
+      card.append(top, el('span', 'pr-run-sub', `${r.count} ${r.count === 1 ? 'person' : 'people'} · ${rupees(r.totalPaise)} · pay on ${dayName(r.paymentDate)}`));
+      if (r.next) card.append(el('span', 'pr-run-next', r.next));
+      card.addEventListener('click', () => openRun(r.id));
+      box.append(card);
+    }
+  }
+
+  // ---- start a month
+  function previousMonth() {
+    const d = new Date(`${data?.today ?? new Date().toISOString().slice(0, 10)}T00:00:00Z`);
+    d.setUTCMonth(d.getUTCMonth() - 1, 1);
+    return d.toISOString().slice(0, 7);
+  }
+  $('new-run').addEventListener('click', () => {
+    if (!data) return;
+    $<HTMLInputElement>('n-month').value = previousMonth();
+    const people = $('n-people');
+    people.replaceChildren();
+    for (const p of data.employees.filter((e) => e.active)) {
+      const row = el('label', 'pr-person');
+      row.append(el('span', undefined, p.rollNo ? `${p.rollNo}. ${p.name}` : p.name));
+      const input = el('input');
+      input.inputMode = 'numeric';
+      input.autocomplete = 'off';
+      input.placeholder = '₹';
+      input.dataset.employee = p.id;
+      input.setAttribute('aria-label', `Net pay for ${p.name}, in rupees`);
+      row.append(input);
+      people.append(row);
+    }
+    if (!people.children.length) people.append(el('p', 'hint', 'No one is on payroll yet. A director adds people first.'));
+    $('new-error').hidden = true;
+    $('new-form').hidden = false;
+    $('new-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+  $('new-cancel').addEventListener('click', () => ($('new-form').hidden = true));
+
+  function readAmounts(root: HTMLElement): { lines: { employeeId: string; netRupees: number }[] } | { error: string } {
+    const lines: { employeeId: string; netRupees: number }[] = [];
+    for (const input of root.querySelectorAll<HTMLInputElement>('input[data-employee]')) {
+      const raw = input.value.replace(/[₹,\s]/g, '');
+      if (!raw) continue;
+      if (!/^\d+$/.test(raw) || Number(raw) <= 0) return { error: 'Each amount must be a whole number of rupees, with no paise.' };
+      lines.push({ employeeId: input.dataset.employee as string, netRupees: Number(raw) });
+    }
+    if (!lines.length) return { error: 'Enter at least one amount.' };
+    return { lines };
+  }
+
+  $('new-form').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const err = $('new-error');
+    err.hidden = true;
+    const amounts = readAmounts($('n-people'));
+    if ('error' in amounts) return void ((err.textContent = amounts.error), (err.hidden = false));
+    const { status, data: out } = await staffFetch('/api/finance-admin/payroll/runs', { method: 'POST', body: { month: $<HTMLInputElement>('n-month').value, lines: amounts.lines } }).catch((e) => {
+      fail(e);
+      return { status: 0, data: null as any };
+    });
+    if (status !== 201) {
+      if (status) {
+        err.textContent = out?.error ?? 'Could not save it.';
+        err.hidden = false;
+      }
+      return;
+    }
+    showToast('Saved as a draft.');
+    $('new-form').hidden = true;
+    await load(out.id);
+  });
+
+  // ---- add a person
+  $('add-person').addEventListener('click', () => {
+    if (!data) return;
+    const sel = $<HTMLSelectElement>('p-party');
+    sel.replaceChildren(...data.candidates.map((c) => Object.assign(document.createElement('option'), { value: c.id, textContent: c.name })));
+    $('person-error').hidden = !!data.candidates.length;
+    $('person-error').textContent = data.candidates.length ? '' : 'Everyone with an employee party is already on payroll. Add the person on the Parties page first.';
+    $<HTMLInputElement>('p-roll').value = '';
+    $('person-form').hidden = false;
+  });
+  $('person-cancel').addEventListener('click', () => ($('person-form').hidden = true));
+  $('person-form').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const partyId = $<HTMLSelectElement>('p-party').value;
+    if (!partyId) return;
+    const ok = await call('/api/finance-admin/payroll/employees', 'POST', { partyId, rollNo: $<HTMLInputElement>('p-roll').value }, 'Added to payroll.');
+    if (ok) {
+      $('person-form').hidden = true;
+      await load();
+    }
+  });
+
+  // ---- one run
+  async function openRun(id: string) {
+    openId = id;
+    history.replaceState(null, '', `#${id}`);
+    $('list-view').hidden = true;
+    $('run-view').hidden = false;
+    showLoading(statusEl);
+    try {
+      const { status, data: detail } = await staffFetch(`/api/finance-admin/payroll/runs/${id}`);
+      if (status !== 200) throw new Error('load failed');
+      clearState(statusEl);
+      renderRun(detail as Detail);
+    } catch (err) {
+      if (fail(err)) return;
+      showFailure(statusEl, { title: "Couldn't load this month", text: 'Nothing was changed. Try again.', onRetry: () => openRun(id) });
+    }
+  }
+  $('back').addEventListener('click', () => {
+    openId = null;
+    history.replaceState(null, '', location.pathname);
+    $('run-view').hidden = true;
+    $('list-view').hidden = false;
+    load();
+  });
+
+  const reloadRun = async () => {
+    await load(openId ?? undefined);
+  };
+
+  function renderRun(d: Detail) {
+    const me = data!.me;
+    const box = $('run');
+    box.replaceChildren();
+    const r = d.run;
+    const head = el('div', 'pr-head');
+    head.append(el('h2', undefined, monthName(r.month)), pill(r.status));
+    box.append(head, el('p', 'hint', `Pay on ${dayName(r.paymentDate)} · ${r.paymentMode === 'I' ? 'mode I' : 'NEFT'}`));
+    if (r.next) box.append(el('p', 'pr-next', r.next));
+    if (r.cancelledReason) box.append(el('p', 'hint', `Cancelled: ${r.cancelledReason}`));
+    if (r.stale) box.append(el('p', 'pr-warn', `The payment date (${dayName(r.paymentDate)}) has passed, so the bank will reject this file. Regenerate it with a new date.`));
+    if (d.changed) box.append(el('p', 'pr-warn', `${d.changed} ${d.changed === 1 ? 'person has' : 'people have'} a different bank account from the last run. Check each one marked "account changed" before going on.`));
+    if (d.problems) box.append(el('p', 'pr-warn', `${d.problems} ${d.problems === 1 ? 'person has' : 'people have'} a bank account that cannot be paid (not verified, retired or missing). The file cannot be made until it is fixed on the Parties page.`));
+
+    const editable = r.status === 'draft' && me.canEnter;
+    const list = el('div', 'pr-lines');
+    for (const l of d.lines) {
+      const row = el('div', `pr-line${l.problem ? ' pr-line--bad' : ''}`);
+      const who = el('div', 'pr-who');
+      who.append(el('strong', undefined, l.name));
+      const sub = el('span', 'pr-sub', l.last4 ? `Account ending ${l.last4}` : 'No bank account on file');
+      who.append(sub);
+      if (l.changed) who.append(el('span', 'pill pill--warn', 'account changed'));
+      if (l.problem) who.append(el('span', 'pill pill--crit', 'account cannot be paid'));
+      if (l.reference) who.append(el('span', 'pr-sub', l.reference));
+      row.append(who);
+      if (editable) {
+        const input = el('input');
+        input.inputMode = 'numeric';
+        input.autocomplete = 'off';
+        input.value = String(l.netPaise / 100);
+        input.dataset.employee = l.employeeId;
+        input.setAttribute('aria-label', `Net pay for ${l.name}, in rupees`);
+        row.append(input);
+      } else {
+        row.append(el('span', 'amt pr-amt', rupees(l.netPaise)));
+      }
+      list.append(row);
+    }
+    box.append(list);
+    const total = el('div', 'pr-total');
+    total.append(el('span', undefined, `${d.lines.length} ${d.lines.length === 1 ? 'person' : 'people'}`), el('strong', 'amt', rupees(d.totalPaise)));
+    box.append(total);
+
+    const acts = el('div', 'pr-actions');
+    const act = (action: string, extra: Record<string, unknown> = {}, done = 'Done.') => async () => {
+      if (await call(`/api/finance-admin/payroll/runs/${r.id}/action`, 'POST', { action, ...extra }, done)) await reloadRun();
+    };
+    if (r.status === 'draft' && me.canEnter) {
+      acts.append(
+        btn('Save changes', async () => {
+          const amounts = readAmounts(list);
+          if ('error' in amounts) return void showToast(amounts.error);
+          if (await call(`/api/finance-admin/payroll/runs/${r.id}`, 'PUT', { lines: amounts.lines }, 'Saved.')) await reloadRun();
+        }),
+        btn('Confirm these amounts', act('confirm', {}, 'Confirmed.'), 'button button--primary'),
+      );
+    }
+    if (r.status === 'confirmed') {
+      if (me.canEnter) acts.append(btn('Change the amounts', act('reopen', {}, 'Reopened.')));
+      if (me.canPrepare) {
+        const date = el('input');
+        date.type = 'date';
+        date.min = data!.today;
+        date.value = r.paymentDate < data!.today ? data!.today : r.paymentDate;
+        date.setAttribute('aria-label', 'Payment date');
+        acts.append(
+          date,
+          btn('Make the bank file', async () => {
+            if (await call(`/api/finance-admin/payroll/runs/${r.id}/action`, 'POST', { action: 'generate', paymentDate: date.value }, 'File made.')) await reloadRun();
+          }, 'button button--primary'),
+        );
+      }
+    }
+    if (r.status === 'file_generated') {
+      if (me.canPrepare) {
+        acts.append(btn('Download the file', async () => {
+          try {
+            const res = await fetch(`/api/finance-admin/payroll/runs/${r.id}/file`, { headers: { authorization: `Bearer ${getToken() ?? ''}`, ...(getStepUp() ? { 'x-stepup-token': getStepUp() as string } : {}) } });
+            if (res.status === 403) return void (showToast('Unlock first.'), lock.open());
+            if (!res.ok) return void showToast('Could not download the file.');
+            const url = URL.createObjectURL(await res.blob());
+            const a = el('a');
+            a.href = url;
+            a.download = `salary-${r.month}.xlsx`;
+            a.click();
+            URL.revokeObjectURL(url);
+          } catch {
+            showToast('Could not download the file.');
+          }
+        }));
+        if (r.batch?.status === 'file_generated') acts.append(btn('I uploaded it to the bank', act('mark_uploaded', {}, 'Marked as uploaded.'), 'button button--primary'));
+        acts.append(btn('Make a new file', async () => {
+          if (confirm('Make a new bank file? The old file will no longer be valid.')) await act('regenerate', {}, 'Ready for a new file.')();
+        }));
+      }
+      if (me.canApprove && !r.preparedByMe && r.batch?.status === 'uploaded') acts.append(btn('Approve (after approving in the bank)', act('approve', {}, 'Approved.'), 'button button--primary'));
+      if (me.canApprove && r.preparedByMe) acts.append(el('p', 'hint', 'You made this file, so another director approves it.'));
+    }
+    if (['draft', 'confirmed', 'file_generated'].includes(r.status) && (me.canEnter || me.canPrepare)) {
+      acts.append(btn('Cancel this month', async () => {
+        const reason = prompt('Why is this month being cancelled?');
+        if (reason) await act('cancel', { reason }, 'Cancelled.')();
+      }, 'button pr-danger'));
+    }
+    box.append(acts);
+    lock.render();
+  }
+
+  // ---- loading
+  async function load(open?: string) {
+    gate.hidden = true;
+    forbidden.hidden = true;
+    showLoading(statusEl);
+    try {
+      const { status, data: out } = await staffFetch('/api/finance-admin/payroll');
+      if (status !== 200) throw new Error('load failed');
+      clearState(statusEl);
+      data = out;
+      intro.hidden = false;
+      intro.textContent = data!.me.canEnter ? 'Enter what each person is to be paid, then confirm. A director makes the bank file.' : 'Months of salaries: from the farm manager\'s amounts to the bank file and its approval.';
+      $('new-run').hidden = !data!.me.canEnter;
+      $('add-person').hidden = !data!.me.canPrepare;
+      renderRuns();
+      content.hidden = false;
+      const want = open ?? (location.hash.length > 1 ? location.hash.slice(1) : undefined);
+      if (want && /^[0-9a-f-]{36}$/.test(want)) await openRun(want);
+      else {
+        $('run-view').hidden = true;
+        $('list-view').hidden = false;
+      }
+      lock.render();
+    } catch (err) {
+      if (fail(err)) return;
+      content.hidden = true;
+      intro.hidden = true;
+      showFailure(statusEl, { title: "Couldn't load the salary runs", text: "The server didn't answer. Nothing was changed. Check your connection and try again; if it keeps failing, tell a super admin.", onRetry: () => load() });
+    }
+  }
+
+  function handleCredentialResponse(response: { credential: string }) {
+    setToken(response.credential);
+    load();
+  }
+  function renderSignInButton() {
+    if (typeof google === 'undefined') return;
+    google.accounts.id.initialize({ client_id: CLIENT_ID, callback: handleCredentialResponse });
+    google.accounts.id.renderButton(document.getElementById('g_id_signin'), { theme: (window as any).tvcGsiTheme?.() ?? 'outline', size: 'large' });
+  }
+  $('use-different-account').addEventListener('click', () => {
+    clearToken();
+    clearStepUp();
+    if (typeof google !== 'undefined') google.accounts.id.disableAutoSelect();
+    showGate();
+  });
+
+  if (getToken()) load();
+  else showGate();
+</script>
+<script is:inline src="https://accounts.google.com/gsi/client"></script>
+
+<style is:global>
+  .finance-payroll.section.wrapper {
+    padding-top: 32px;
+    padding-bottom: 48px;
+    max-width: 48rem;
+  }
+
+  .finance-payroll .pr-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    margin: 14px 0;
+  }
+
+  .finance-payroll .pr-card {
+    margin-top: 14px;
+    padding: 18px;
+    background: var(--tvc-white);
+    border-radius: var(--radius);
+    box-shadow: 0 0 0 1px var(--tvc-line) inset;
+  }
+
+  .finance-payroll .pr-field {
+    display: block;
+    margin-top: 14px;
+  }
+
+  .finance-payroll .pr-field > span {
+    display: block;
+    margin-bottom: 4px;
+    font-size: var(--text-sm);
+    font-weight: 600;
+  }
+
+  .finance-payroll input,
+  .finance-payroll select {
+    width: 100%;
+    min-height: 44px;
+    padding: 8px 10px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: var(--radius-sm, 6px);
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+    font: inherit;
+  }
+
+  .finance-payroll .pr-error {
+    margin: 10px 0 0;
+    color: var(--tvc-red-text, var(--tvc-ink));
+    font-size: var(--text-sm);
+  }
+
+  .finance-payroll .pr-people {
+    margin-top: 14px;
+  }
+
+  .finance-payroll .pr-person,
+  .finance-payroll .pr-line {
+    display: grid;
+    grid-template-columns: 1fr 9rem;
+    gap: 12px;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--tvc-line);
+  }
+
+  .finance-payroll .pr-line--bad {
+    background: var(--tvc-cream, transparent);
+  }
+
+  .finance-payroll .pr-who {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    align-items: flex-start;
+  }
+
+  .finance-payroll .pr-sub {
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  .finance-payroll .pr-amt {
+    text-align: right;
+  }
+
+  .finance-payroll .pr-total {
+    display: flex;
+    justify-content: space-between;
+    padding: 14px 0;
+    font-size: var(--text-lg, 1.125rem);
+  }
+
+  .finance-payroll .pr-run {
+    all: unset;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    box-sizing: border-box;
+    width: 100%;
+    margin-top: 10px;
+    padding: 14px 16px;
+    cursor: pointer;
+    background: var(--tvc-white);
+    border-radius: var(--radius);
+    box-shadow: 0 0 0 1px var(--tvc-line) inset;
+  }
+
+  .finance-payroll .pr-run:focus-visible {
+    outline: 2px solid var(--tvc-ink);
+    outline-offset: 2px;
+  }
+
+  .finance-payroll .pr-run-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .finance-payroll .pr-run-sub,
+  .finance-payroll .pr-run-next {
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  .finance-payroll .pr-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 10px;
+  }
+
+  .finance-payroll .pr-head h2 {
+    margin: 0;
+  }
+
+  .finance-payroll .pr-next {
+    font-weight: 600;
+  }
+
+  .finance-payroll .pr-warn {
+    margin: 10px 0;
+    padding: 10px 12px;
+    border-radius: var(--radius-sm, 6px);
+    box-shadow: 0 0 0 1px var(--tvc-orange-text) inset;
+    font-size: var(--text-sm);
+  }
+
+  .finance-payroll .pr-link {
+    all: unset;
+    cursor: pointer;
+    font-size: var(--text-sm);
+    text-decoration: underline;
+  }
+
+  .finance-payroll .pr-danger {
+    color: var(--tvc-ink-soft);
+  }
+
+  .finance-payroll .pr-actions input[type='date'] {
+    width: auto;
+  }
+
+  @media (max-width: 520px) {
+    .finance-payroll .pr-person,
+    .finance-payroll .pr-line {
+      grid-template-columns: 1fr 7rem;
+    }
+  }
+</style>

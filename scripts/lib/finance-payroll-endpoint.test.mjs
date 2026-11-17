@@ -131,7 +131,6 @@ globalThis.fetch = async (url, init = {}) => {
 };
 
 const enc = (account) => crypto.encryptFinanceText(JSON.stringify({ method: 'bank', account, ifsc: 'TEST0000001' }));
-let n = 0;
 // who: 'farm' | 'prep' | 'second' | 'viewer' | 'auditor'
 const ROLES = {
   farm: [['finance-requests', 'user']],
