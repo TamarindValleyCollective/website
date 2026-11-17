@@ -135,7 +135,10 @@ compared with the 40 files, amount by amount. Result:
   and 3 Oct 2026, the June, August and September 2026 salaries); the owner replaced those files the same day and they now match, so **no batch in the ledger lacks its file.**
 - **10 are single-person payments** with no file (Aug 2024, Mar 2025, 5 in Jun 2025, Aug 2025, Nov 2025, Mar 2026): paid outside the bulk file, most as round amounts (advances or one-offs). **Five of them (5 and 8
   Jun 2025) repeat five amounts that are also inside the 2 Jun 2025 batch, paid by individual NEFT 3 to 6 days later, with no credit of those amounts coming back in the following 12 days.** Possible double
-  payments or a re-sent return; for the owner to check against the bank.
+  payments or a re-sent return; for the owner to check against the bank. **Owner (2026-11-17): there have been several one-off advance payments, and payments made individually instead of in bulk on a
+  couple of occasions.** So these are advances (and a few individual payments), which belong to the pay arithmetic in 09b (an advance and its monthly deduction), not to a run type: the history import
+  leaves these ten entries untouched in the ledger, lists them in the dry run as "advances, not in a bulk file", and keeps them out of every month's file total. Still open: whether the five in June 2025
+  were paid again on top of the batch or instead of it for people the batch did not reach.
 - **10 file batches exist at the bank but have no salary entry at all in the ledger:** six before the tracker (Sep to Dec 2023, Feb and Mar 2024 files) and four inside it (the Dec 2024, Jul 2025, Mar 2026 and
   Oct 2026 batches). These are what the import fills in. One earlier bank batch (5 Sep 2023, the Aug 2023 salary) has no file in the folder; the folder starts with the Sep 2023 file.
 - **No January 2024 batch exists** at the bank, and no file: that month was paid another way or not at all.
