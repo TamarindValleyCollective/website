@@ -214,7 +214,7 @@ bank-confirmation screenshot, the file drop, the history import and the 2023-25 
 `finance-payroll-evidence.ts` and an "The bank's confirmation" block on a run's page (the preparer attaches a screenshot or PDF once the file is marked uploaded; the farm manager and
 both directors see it). Reuses the voucher storage, type sniffing and viewing from payment requests rather than a second system. Verified: the unit and endpoint tests (all 1,565 in
 `scripts/lib` pass), and the migration plus a test block on the real database in a rolled-back transaction (a voucher with no owner refused, one owned by a batch accepted, a bad kind
-refused, and afterwards the column was gone). **Migration 0107 is not applied.** Not done: reading the lines off the screenshot to tick them against the run (settlement matching).
+refused, and afterwards the column was gone). **Migration 0107 was applied to TVC ERP on 2026-11-17 (as `finance_batch_evidence`) and checked afterwards: the `batch_id` column, the widened owner check and the index are there, row security is on, the anon role has no access, and no vouchers exist.** Not done: reading the lines off the screenshot to tick them against the run (settlement matching).
 
 **Bank details on a request, 2026-11-17 (same branch; the second slice of the people-change flow):** migration `0108`, a `bank_change` request kind, bank details on a joining request, the photo of
 the passbook or cheque, and the page's shared bank block (number twice, IFSC with its bank named, photo). Decisions as agreed: the farm manager enters what the employee gave him; the details are

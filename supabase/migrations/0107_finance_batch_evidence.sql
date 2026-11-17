@@ -1,5 +1,5 @@
 -- Finance session 09a: evidence of the bank's confirmation for a salary batch (docs/finance/sessions/09-payroll.md, "Plan for the next slices").
--- NOT APPLIED.
+-- Applied to TVC ERP on 2026-11-17 (as finance_batch_evidence). Do not edit it now; a change is a new migration.
 --
 -- After the preparer uploads the bank file, the bank's portal shows the batch with each line and its status. A screenshot of that page is the
 -- only proof from a system TVC does not control, and today it is also what the farm manager is sent to confirm. It is kept as a voucher of

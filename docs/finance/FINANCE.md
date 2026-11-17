@@ -1120,7 +1120,7 @@ First slice, on branch `finance-09-payroll`. See `sessions/09-payroll.md` for th
   A joining request attaches them to the Party the director picks. A `bank_change` is dated: the old account stays payable and is retired on the 1st after the salary month, and the new one starts
   then; if it is still unverified that day, the file is blocked for that person. Declining or withdrawing discards the details and deletes the photo. If attaching fails after the claim, the
   approval says so and the details are entered on the Parties page: the request no longer holds them. Verification is the existing step (a `verify-payee` holder, the unlock, not the person who entered it).
-- **The bank's confirmation** (migration `0107_finance_batch_evidence.sql`, **not applied**; `lib/finance-payroll-evidence.ts`): after the file is marked uploaded, the preparer (a `finance`
+- **The bank's confirmation** (migration `0107_finance_batch_evidence.sql`, **applied 2026-11-17**; `lib/finance-payroll-evidence.ts`): after the file is marked uploaded, the preparer (a `finance`
   `export` director) attaches a screenshot or PDF of the bank portal's page for the batch (`POST /payroll/runs/:id/evidence`, a form upload; at most six per batch, 4 MB each,
   the type read from the file's first bytes). It is a `fin_vouchers` row of kind `payment_screenshot` with a new `batch_id`, in the private bucket under `finance/vouchers/`, audited first.
   The farm manager and both directors list and view it (`GET /payroll/runs/:id/evidence`, `GET /payroll/evidence/:id`, inline and never cached); nothing is linked. Before the upload
