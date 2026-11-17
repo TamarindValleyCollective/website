@@ -27,6 +27,7 @@ import { saveOperator } from './lib/finance-upi-operators';
 import { getChannelBreakdown, getChannelLines, getChannels } from './lib/finance-channels';
 import { getDashboard } from './lib/finance-dashboard';
 import { BUDGET_ID, approveDraft, discardDraft, getBudget, saveLines, startDraft } from './lib/finance-budget';
+import { PAYROLL_ID, addEmployee, createRun, downloadFile, getRun, listPayroll, runAction, updateRun } from './lib/finance-payroll';
 import { setPaymentNote } from './lib/finance-notes';
 import { heldCoverage, reconciliationOf, runImport } from './lib/finance-import';
 import { supabaseImportStore } from './lib/finance-import-store';
@@ -272,6 +273,16 @@ const dispatch = async (req: Request): Promise<Response> => {
     return reviewRecord(req, request[1]);
   }
   // Ledger and review (session 05)
+  if (route === '/payroll' && req.method === 'GET') return listPayroll(req);
+  if (route === '/payroll/employees' && req.method === 'POST') return addEmployee(req);
+  if (route === '/payroll/runs' && req.method === 'POST') return createRun(req);
+  const payrollRun = /^\/payroll\/runs\/([^/]+)(\/action|\/file)?$/.exec(route);
+  if (payrollRun && PAYROLL_ID.test(payrollRun[1])) {
+    if (!payrollRun[2] && req.method === 'GET') return getRun(req, payrollRun[1]);
+    if (!payrollRun[2] && req.method === 'PUT') return updateRun(req, payrollRun[1]);
+    if (payrollRun[2] === '/action' && req.method === 'POST') return runAction(req, payrollRun[1]);
+    if (payrollRun[2] === '/file' && req.method === 'GET') return downloadFile(req, payrollRun[1]);
+  }
   if (route === '/upi-lines' && req.method === 'GET') return listUpiLines(req);
   if (route === '/upi-lines/add-parties' && req.method === 'POST') return addUpiParties(req);
   if (route === '/channels' && req.method === 'GET') return getChannels(req);
@@ -342,6 +353,8 @@ export const config = {
     '/api/finance-admin/delegates/*',
     '/api/finance-admin/upi-operators',
     '/api/finance-admin/upi-operators/*',
+    '/api/finance-admin/payroll',
+    '/api/finance-admin/payroll/*',
     '/api/finance-admin/requests',
     '/api/finance-admin/requests/*',
     '/api/finance-admin/vendors',

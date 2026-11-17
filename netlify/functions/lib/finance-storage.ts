@@ -52,3 +52,29 @@ export async function deleteFinanceVoucher(key: string): Promise<void> {
   const res = await client.fetch(voucherUrl(base, key), { method: 'DELETE' });
   if (!res.ok && res.status !== 404) throw new Error(`R2 delete failed: ${res.status}`);
 }
+
+// Payroll bank files: finance/payroll/<batch uuid>.xlsx, the same private bucket. Read back only through an authenticated function
+// (GET /payroll/runs/:id/file), behind the step-up, because the file holds every account number.
+const PAYROLL_KEY = /^finance\/payroll\/[0-9a-f-]{36}\.xlsx$/;
+const payrollUrl = (base: string, key: string) => {
+  if (!PAYROLL_KEY.test(key)) throw new Error('Invalid storage key');
+  return `${base}/${key}`;
+};
+
+export async function putFinancePayroll(key: string, bytes: Uint8Array): Promise<void> {
+  const { client, base } = r2Config();
+  const res = await client.fetch(payrollUrl(base, key), {
+    method: 'PUT',
+    headers: { 'content-type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
+    body: bytes as BodyInit,
+  });
+  if (!res.ok) throw new Error(`R2 put failed: ${res.status}`);
+}
+
+export async function getFinancePayroll(key: string): Promise<Uint8Array | null> {
+  const { client, base } = r2Config();
+  const res = await client.fetch(payrollUrl(base, key));
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`R2 get failed: ${res.status}`);
+  return new Uint8Array(await res.arrayBuffer());
+}
