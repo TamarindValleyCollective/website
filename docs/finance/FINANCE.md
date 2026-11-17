@@ -1091,7 +1091,7 @@ First slice, on branch `finance-09-payroll`. See `sessions/09-payroll.md` for th
 
 - **Generator** (`scripts/lib/finance-payroll-file.mjs`, pure): builds the salary bulk file and an `.xlsx` from a run and the decrypted
   payee details. Refuses a file for a bad payment mode (N or I only), a missing debit account, a net with paise, a bad account
-  number or IFSC, a repeated name, a past payment date. An account starting with 0, or longer than 15 digits, is written as text and
+  number or IFSC, a repeated name, a past payment date (today or a future date is fine; a file not uploaded by its date goes stale and is regenerated, see `fileIsStale`). An account starting with 0, or longer than 15 digits, is written as text and
   flagged. Month text in columns G, I and L is derived from the month, never typed. Two people may share one account.
 - **Guard** (`payrollBlockers`): an account that is not verified, not yet valid, retired or replaced blocks the file; an account that
   differs from the previous run's is listed as changed even when verified.

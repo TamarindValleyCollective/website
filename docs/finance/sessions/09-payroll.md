@@ -109,6 +109,8 @@ Not built yet: the run screens (farm manager enters, confirms; preparer generate
 writes the file to R2, the debit account setting (server-side), the history import, settlement matching and returns, the
 `FINANCE.md`/`ARCHITECTURE.md` text for functions that do not exist yet.
 
-Open: whether the portal's "processing date" is the upload day. Until confirmed, a payment date other than today is a warning in
-the generator, not a refusal. The guard treats a changed but verified account as allowed and shows it loudly; say if a changed
-account should always need a fresh verification.
+Decided 2026-11-17 (the owner): the portal accepts today or a future payment date and rejects a past one. So the generator refuses
+only a past date, with no warning for a future one, and a file not uploaded by its payment date goes stale: regenerate it with a
+new date (the run goes back from file generated to confirmed, the old batch is cancelled before upload, and the payee accounts are
+snapshotted again). Still open: the guard lets a changed but verified account through and shows it loudly; say if it should
+always need a fresh verification.

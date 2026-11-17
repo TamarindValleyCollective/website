@@ -7,6 +7,7 @@ import {
   monthLabel,
   defaultPaymentDate,
   validatePaymentDate,
+  fileIsStale,
   buildSalaryRows,
   salaryFileBytes,
   payrollBlockers,
@@ -20,7 +21,7 @@ const person = (over = {}) => ({
   netPaise: 1_500_000,
   ...over,
 });
-const run = (over = {}) => ({ month: '2026-10', paymentDate: '2026-11-01', debitAccount: '900000000009', lines: [person(), person({ name: 'Test Person Two', accountNumber: '100000000002', netPaise: 2_000_000 })], ...over });
+const run = (over = {}) => ({ month: '2026-10', paymentDate: '2026-11-01', today: '2026-11-01', debitAccount: '900000000009', lines: [person(), person({ name: 'Test Person Two', accountNumber: '100000000002', netPaise: 2_000_000 })], ...over });
 
 test('month label and the default payment date (the 1st of the following month, December rolls the year)', () => {
   assert.equal(monthLabel('2026-10'), 'Oct 2026');
@@ -97,16 +98,23 @@ test('the total is the sum of the rows, in paise', () => {
   assert.equal(buildSalaryRows(run()).totalPaise, 3_500_000);
 });
 
-test('payment date: a real date, not in the past; a date other than today is warned about, never silently changed', () => {
-  assert.equal(validatePaymentDate('2026-11-01', '2026-11-01').error, undefined);
+test('payment date: a real date; today or a future date is accepted; a past date is refused', () => {
+  assert.deepEqual(validatePaymentDate('2026-11-01', '2026-11-01'), {});
+  assert.deepEqual(validatePaymentDate('2026-11-03', '2026-11-01'), {});
   assert.match(validatePaymentDate('2026-10-31', '2026-11-01').error, /past/i);
   assert.match(validatePaymentDate('2026-02-30', '2026-01-01').error, /real date/i);
   assert.match(validatePaymentDate('01-11-2026', '2026-11-01').error, /real date/i);
-  assert.match(validatePaymentDate('2026-11-03', '2026-11-01').warning, /today/i);
-  const r = buildSalaryRows(run({ paymentDate: '2026-11-03', today: '2026-11-01' }));
-  assert.deepEqual(r.errors, []);
-  assert.match(r.warnings.join(' '), /today/i);
-  assert.equal(r.rows[0][2], '03-11-2026');
+  const future = buildSalaryRows(run({ paymentDate: '2026-11-03', today: '2026-11-01' }));
+  assert.deepEqual(future.errors, []);
+  assert.deepEqual(future.warnings, []);
+  assert.equal(future.rows[0][2], '03-11-2026');
+  assert.match(buildSalaryRows(run({ paymentDate: '2026-10-31', today: '2026-11-01' })).errors.join(' '), /past/i);
+});
+
+test('a generated file goes stale once its payment date is behind today, and is then regenerated', () => {
+  assert.equal(fileIsStale('2026-11-01', '2026-11-01'), false);
+  assert.equal(fileIsStale('2026-11-01', '2026-11-02'), true);
+  assert.equal(fileIsStale('2026-11-05', '2026-11-02'), false);
 });
 
 test('the file is an xlsx that reads back with the same cells; C stays text, B and E stay numbers', () => {

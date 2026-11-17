@@ -14,6 +14,10 @@
 --     fingerprint) so a later account change cannot rewrite what was paid; the net in whole rupees; and the bank reference
 --     (<YYYY>-<Mon>-Employee-<nnn>) that ties the line to the file.
 --
+-- Regenerating: the portal rejects a past payment date, so a file not uploaded by its date is dead. The run goes back from
+-- file_generated to confirmed (its batch is set to cancelled, which only the function does, and only before upload), the date is
+-- changed, and the file is generated again; lines may be re-snapshotted then because the guard allows it in 'confirmed'.
+--
 -- Rules enforced here, not only in the screens: the preparer cannot approve (maker is not checker); the net is whole rupees; a
 -- person appears once per run; a reference appears once per run; money is bigint paise.
 --

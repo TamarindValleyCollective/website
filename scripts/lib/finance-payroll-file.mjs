@@ -8,7 +8,7 @@
 //   I "<YYYY>-<Mon>-Employee-<nnn>"  J IFSC  K a constant ("10")  L "Salary for <Mon YYYY>"
 // G, I and L come from the month, never typed: the month used to be typed in three places and they disagreed.
 import { strToU8, zipSync } from 'fflate';
-import { accountPayableOn } from './finance-parties.mjs';
+import { accountPayableOn, todayIST } from './finance-parties.mjs';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const PAYMENT_MODES = ['N', 'I'];
@@ -41,15 +41,16 @@ const isRealDate = (s) => {
 };
 const ddmmyyyy = (s) => `${s.slice(8, 10)}-${s.slice(5, 7)}-${s.slice(0, 4)}`;
 
-// A payment date that differs from the processing date makes the portal reject the whole batch. Whether "processing date" means
-// the day it is uploaded is not confirmed, so a date other than today is a warning the preparer sees, not a refusal; a date in
-// the past is always refused.
+// The portal rejects a past payment date and accepts today or a future one (confirmed by the owner, 2026-11-17). So a file
+// generated for a date that then passes without being uploaded can no longer be used: it has to be regenerated, with a new date.
 export function validatePaymentDate(date, today) {
   if (!isRealDate(date)) return { error: 'Enter the payment date as a real date.' };
-  if (date < today) return { error: 'The payment date is in the past.' };
-  if (date !== today) return { warning: `The payment date is not today (${ddmmyyyy(date)}). The portal may reject a batch whose payment date differs from the day it is processed.` };
+  if (date < today) return { error: 'The payment date is in the past; the bank will reject it.' };
   return {};
 }
+
+// A generated file that has not been uploaded is stale once its payment date is behind today.
+export const fileIsStale = (paymentDate, today) => paymentDate < today;
 
 const tidy = (s) => (typeof s === 'string' ? s.replace(/\s+/g, ' ').trim() : '');
 
@@ -75,10 +76,9 @@ export function buildSalaryRows(run) {
   const debit = typeof run.debitAccount === 'string' ? run.debitAccount.trim() : '';
   if (!/^\d{9,18}$/.test(debit)) errors.push('The debit account is missing or not a plain account number.');
   const paymentDate = run.paymentDate ?? defaultPaymentDate(run.month);
-  const today = run.today ?? paymentDate;
+  const today = run.today ?? todayIST();
   const pd = validatePaymentDate(paymentDate, today);
   if (pd.error) errors.push(pd.error);
-  if (pd.warning) warnings.push(pd.warning);
   const lines = Array.isArray(run.lines) ? run.lines : [];
   if (lines.length === 0) errors.push('The run has no lines.');
 
