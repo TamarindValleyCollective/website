@@ -4,7 +4,7 @@
 -- 09a records and pays a month's salary; 09b (attendance, rates, advances) comes later, so the optional columns on a line
 -- (agreed pay, days worked, advance deducted) exist now only so nothing has to be re-entered then.
 --
---   * fin_employees: a party who is paid a salary, with a roll number. A party of kind 'employee'.
+--   * fin_employees: a party who is paid a salary, with an employee number assigned automatically. A party of kind 'employee'.
 --   * fin_payment_batches: the generated bank file for one run (kind 'salary'; 'vendor' is reserved for session 08's bulk file). Holds
 --     the file's hash and private-R2 key, never the file or any account number. Status moves forward only.
 --   * fin_payroll_runs: one month. draft -> confirmed (the farm manager, who entered it) -> file_generated (the preparer) ->
@@ -12,7 +12,7 @@
 --     before it is approved.
 --   * fin_payroll_lines: one person in one run. Holds a SNAPSHOT of the payee account paid (the account row, its last four and its
 --     fingerprint) so a later account change cannot rewrite what was paid; the net in whole rupees; and the bank reference
---     (<YYYY>-<Mon>-Employee-<nnn>) that ties the line to the file.
+--     (<YYYY>-<Mon>-Employee-<nnn>, with Bonus- before Employee for a bonus run) that ties the line to the file.
 --
 -- Regenerating: the portal rejects a past payment date, so a file not uploaded by its date is dead. The run goes back from
 -- file_generated to confirmed (its batch is set to cancelled, which only the function does, and only before upload), the date is
@@ -28,13 +28,28 @@ create table fin_employees (
   id uuid primary key default gen_random_uuid(),
   entity_id uuid not null references fin_entities (id),
   party_id uuid not null references fin_parties (id),
-  roll_no text check (roll_no is null or length(roll_no) between 1 and 20),
+  -- The employee number: assigned on insert as the next number up (below), never reused (a person who leaves stays here, inactive), and it
+  -- is the 'nnn' in the file's reference column. A number may be given explicitly only to carry over an old one.
+  roll_no text not null check (roll_no ~ '^[1-9][0-9]{0,5}$'),
   active boolean not null default true,
   created_by uuid references staff_users (id),
   created_at timestamptz not null default now(),
   unique (entity_id, party_id)
 );
-create unique index fin_employees_roll_idx on fin_employees (entity_id, roll_no) where roll_no is not null;
+create unique index fin_employees_roll_idx on fin_employees (entity_id, roll_no);
+create function fin_employees_assign_roll() returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if new.roll_no is null then
+    perform pg_advisory_xact_lock(hashtext('fin_employees_roll:' || new.entity_id::text));
+    select (coalesce(max(roll_no::int), 0) + 1)::text into new.roll_no from public.fin_employees where entity_id = new.entity_id;
+  end if;
+  return new;
+end;
+$$;
+create trigger fin_employees_assign_roll before insert on fin_employees for each row execute function fin_employees_assign_roll();
 
 create table fin_payment_batches (
   id uuid primary key default gen_random_uuid(),
@@ -115,7 +130,7 @@ create table fin_payroll_lines (
   party_account_id uuid references fin_party_accounts (id),
   account_last4 text check (account_last4 is null or length(account_last4) = 4),
   account_fingerprint text,
-  -- <YYYY>-<Mon>-Employee-<nnn>; assigned when the file is generated and written to column I.
+  -- <YYYY>-<Mon>-Employee-<nnn> (<YYYY>-<Mon>-Bonus-Employee-<nnn> for a bonus run), nnn being the person's employee number; assigned when the file is generated and written to column I.
   reference text,
   -- The allocation created when the bank debit is matched (one per person, source 'payroll').
   allocation_id uuid references fin_allocations (id),
@@ -124,7 +139,7 @@ create table fin_payroll_lines (
   created_at timestamptz not null default now(),
   unique (run_id, employee_id),
   check ((party_account_id is null) = (account_fingerprint is null and account_last4 is null)),
-  check (reference is null or reference ~ '^[0-9]{4}-[A-Z][a-z]{2}-Employee-[0-9]{3}$')
+  check (reference is null or reference ~ '^[0-9]{4}-[A-Z][a-z]{2}-(Bonus-)?Employee-[0-9]{3,6}$')
 );
 create unique index fin_payroll_lines_reference_idx on fin_payroll_lines (run_id, reference) where reference is not null;
 create index fin_payroll_lines_employee_idx on fin_payroll_lines (employee_id);
@@ -174,3 +189,4 @@ alter table fin_payroll_runs enable row level security;
 alter table fin_payroll_lines enable row level security;
 revoke all on fin_employees, fin_payment_batches, fin_payroll_runs, fin_payroll_lines from anon, authenticated;
 revoke all on function fin_payroll_lines_guard() from public, anon, authenticated;
+revoke all on function fin_employees_assign_roll() from public, anon, authenticated;

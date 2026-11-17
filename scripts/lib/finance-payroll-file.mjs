@@ -71,7 +71,7 @@ export function lineReference(month, runType, n) {
   return `${year}-${MONTHS[index]}-${runType === 'bonus' ? 'Bonus-' : ''}Employee-${String(n).padStart(3, '0')}`;
 }
 
-// run: { month, paymentDate?, paymentMode?='N', constant?='10', debitAccount, today?, lines: [{ name, accountNumber, ifsc, email?, netPaise }] }
+// run: { month, runType?='salary', label?, paymentDate?, paymentMode?='N', constant?='10', debitAccount, today?, lines: [{ rollNo, name, accountNumber, ifsc, email?, netPaise }] }
 // -> { rows, totalPaise, errors, warnings }. `rows` is empty when there are errors.
 export function buildSalaryRows(run) {
   const errors = [];
@@ -105,10 +105,15 @@ export function buildSalaryRows(run) {
 
   const wording = errors.length ? { narration: '', summary: '' } : runWording(run.month, runType, bonusName);
   const seen = new Set();
+  const rolls = new Set();
   let totalPaise = 0;
   const rows = [];
   lines.forEach((l, i) => {
     const at = `Row ${i + 1}`;
+    const roll = typeof l.rollNo === 'string' || typeof l.rollNo === 'number' ? Number(l.rollNo) : NaN;
+    if (!Number.isInteger(roll) || roll < 1) errors.push(`${at}: the person has no employee number.`);
+    else if (rolls.has(roll)) errors.push(`${at}: another row has the same employee number (${roll}).`);
+    rolls.add(roll);
     const name = tidy(l.name);
     if (name.length < 2 || name.length > 100) errors.push(`${at}: the beneficiary name is missing or too long.`);
     if (seen.has(name.toLowerCase())) errors.push(`${at}: another row has the same name (${name}).`);
@@ -131,7 +136,7 @@ export function buildSalaryRows(run) {
       tidy(l.email),
       wording.narration,
       Number(debit),
-      lineReference(run.month, runType, i + 1),
+      lineReference(run.month, runType, roll),
       ifsc,
       constant,
       wording.summary,

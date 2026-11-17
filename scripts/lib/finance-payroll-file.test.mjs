@@ -14,6 +14,7 @@ import {
 } from './finance-payroll-file.mjs';
 
 const person = (over = {}) => ({
+  rollNo: '1',
   name: 'Test Person One',
   accountNumber: '1000000001',
   ifsc: 'TEST0000001',
@@ -21,7 +22,7 @@ const person = (over = {}) => ({
   netPaise: 1_500_000,
   ...over,
 });
-const run = (over = {}) => ({ month: '2026-10', paymentDate: '2026-11-01', today: '2026-11-01', debitAccount: '9000000009', lines: [person(), person({ name: 'Test Person Two', accountNumber: '1000000002', netPaise: 2_000_000 })], ...over });
+const run = (over = {}) => ({ month: '2026-10', paymentDate: '2026-11-01', today: '2026-11-01', debitAccount: '9000000009', lines: [person(), person({ rollNo: '2', name: 'Test Person Two', accountNumber: '1000000002', netPaise: 2_000_000 })], ...over });
 
 test('month label and the default payment date (the 1st of the following month, December rolls the year)', () => {
   assert.equal(monthLabel('2026-10'), 'Oct 2026');
@@ -88,7 +89,7 @@ test('the IFSC is upper-cased, the email may be blank, whitespace in names is ti
 
 test('an empty run, or a duplicate person, is refused; two people on one account are allowed', () => {
   assert.match(buildSalaryRows(run({ lines: [] })).errors.join(' '), /no lines/i);
-  const shared = buildSalaryRows(run({ lines: [person(), person({ name: 'Test Person Two' })] }));
+  const shared = buildSalaryRows(run({ lines: [person(), person({ rollNo: '2', name: 'Test Person Two' })] }));
   assert.deepEqual(shared.errors, []);
   const dup = buildSalaryRows(run({ lines: [person(), person()] }));
   assert.match(dup.errors.join(' '), /same name/i);
@@ -182,4 +183,19 @@ test('a bonus run is worded and referenced as the files uploaded since 2023 are'
   assert.deepEqual([rows[0][6], rows[0][8], rows[0][11]], ['Oct 2026 Diwali Bonus', '2026-Oct-Bonus-Employee-001', 'Diwali Bonus for Oct 2026']);
   assert.match(buildSalaryRows(run({ runType: 'bonus' })).errors.join(' '), /needs a name/);
   assert.match(buildSalaryRows(run({ runType: 'gift' })).errors.join(' '), /salary or bonus/);
+});
+
+test('the reference carries the person\'s own employee number, not the row, so a gap or a reordering changes nothing', async () => {
+  const { buildSalaryRows } = await import('./finance-payroll-file.mjs');
+  const { rows, errors } = buildSalaryRows(run({ lines: [person({ rollNo: '12', name: 'Test Person Twelve', accountNumber: '1000000012' }), person({ rollNo: '3', name: 'Test Person Three', accountNumber: '1000000003' })] }));
+  assert.deepEqual(errors, []);
+  assert.deepEqual(rows.map((r) => r[8]), ['2026-Oct-Employee-012', '2026-Oct-Employee-003']);
+});
+
+test('a person with no employee number, or two with the same one, stops the file', async () => {
+  const { buildSalaryRows } = await import('./finance-payroll-file.mjs');
+  assert.match(buildSalaryRows(run({ lines: [person({ rollNo: null })] })).errors.join(' '), /no employee number/);
+  assert.match(buildSalaryRows(run({ lines: [person({ rollNo: '0' })] })).errors.join(' '), /no employee number/);
+  const dup = buildSalaryRows(run({ lines: [person({ rollNo: '4' }), person({ rollNo: '4', name: 'Test Person Two', accountNumber: '1000000002' })] }));
+  assert.match(dup.errors.join(' '), /same employee number \(4\)/);
 });

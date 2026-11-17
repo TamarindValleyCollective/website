@@ -221,19 +221,20 @@ export async function addEmployee(req: Request): Promise<Response> {
   if (!access.canPrepare) return fail('Only a director can add a person to payroll.', 403);
   const b = await body(req);
   if (!b || typeof b.partyId !== 'string' || !ID.test(b.partyId)) return fail('Choose the person from the list.');
+  // Normally absent: the database gives the next number up. Given only to carry over a number an employee already has.
   const rollNo = typeof b.rollNo === 'string' && b.rollNo.trim() ? b.rollNo.trim() : null;
-  if (rollNo && rollNo.length > 20) return fail('The roll number is too long.');
+  if (rollNo && !/^[1-9][0-9]{0,5}$/.test(rollNo)) return fail('The employee number must be a whole number.');
   try {
     const [party] = await rows(`/fin_parties?id=eq.${b.partyId}&select=id,kind,active,merged_into`);
     if (!party || !party.active || party.merged_into || party.kind !== 'employee') return fail('Choose a person whose party is of kind employee.');
     const entity = await entityId();
     await logFinanceAction({ actorId: access.staff.id, entityId: entity, action: 'finance.payroll_employee_added', target: party.id });
     const res = await rest('/fin_employees', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ entity_id: entity, party_id: party.id, roll_no: rollNo, created_by: access.staff.id }) });
-    if (res.status === 409) return fail('That person, or that roll number, is already on payroll.', 409);
+    if (res.status === 409) return fail('That person, or that employee number, is already on payroll.', 409);
     const [created] = (await res.json()) as Json[];
-    return json({ id: created.id }, 201);
+    return json({ id: created.id, rollNo: created.roll_no }, 201);
   } catch (err) {
-    if (err instanceof Error && /duplicate key|23505|409/.test(err.message)) return fail('That person, or that roll number, is already on payroll.', 409);
+    if (err instanceof Error && /duplicate key|23505|409/.test(err.message)) return fail('That person, or that employee number, is already on payroll.', 409);
     return serverError(err, 'add employee');
   }
 }
@@ -393,7 +394,7 @@ async function generate(run: Json, access: Access, entity: string, paymentDate: 
   // Decrypted here and nowhere else; the numbers go into the file and are not kept or logged.
   const people = lines.map((l) => {
     const d = JSON.parse(decryptFinanceText((accounts.get(l.partyId) as Json).details_enc));
-    return { name: l.name, accountNumber: String(d.account ?? ''), ifsc: String(d.ifsc ?? ''), email: '', netPaise: Number(l.net_paise) };
+    return { rollNo: l.rollNo, name: l.name, accountNumber: String(d.account ?? ''), ifsc: String(d.ifsc ?? ''), email: '', netPaise: Number(l.net_paise) };
   });
   let file;
   try {
@@ -408,9 +409,9 @@ async function generate(run: Json, access: Access, entity: string, paymentDate: 
   await putFinancePayroll(key, file.bytes);
   await rest('/fin_payment_batches', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ id: batchId, entity_id: entity, kind: 'salary', payment_mode: run.payment_mode, payment_date: paymentDate, total_paise: file.totalPaise, line_count: lines.length, file_hash: hash, r2_key: key, prepared_by: access.staff.id }) });
   // The snapshot of what is being paid, and the reference that ties each line to column I of the file.
-  for (const [i, l] of lines.entries()) {
+  for (const l of lines) {
     const a = accounts.get(l.partyId) as Json;
-    await rest(`/fin_payroll_lines?id=eq.${l.id}`, { method: 'PATCH', body: JSON.stringify({ party_account_id: a.id, account_last4: a.last4, account_fingerprint: a.fingerprint, reference: lineReference(String(run.month).slice(0, 7), run.run_type, i + 1) }) });
+    await rest(`/fin_payroll_lines?id=eq.${l.id}`, { method: 'PATCH', body: JSON.stringify({ party_account_id: a.id, account_last4: a.last4, account_fingerprint: a.fingerprint, reference: lineReference(String(run.month).slice(0, 7), run.run_type, Number(l.rollNo)) }) });
   }
   if (paymentDate !== run.payment_date) await rest(`/fin_payroll_runs?id=eq.${run.id}&status=eq.confirmed`, { method: 'PATCH', body: JSON.stringify({ payment_date: paymentDate }) });
   if (!(await moveRun(run.id, 'confirmed', { status: 'file_generated', prepared_by: access.staff.id, batch_id: batchId }))) return fail('The run changed while the file was being made. Reload.', 409);

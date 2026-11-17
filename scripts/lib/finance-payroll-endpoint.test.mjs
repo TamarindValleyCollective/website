@@ -103,6 +103,8 @@ globalThis.fetch = async (url, init = {}) => {
     const b = JSON.parse(init.body);
     const made = (Array.isArray(b) ? b : [b]).map((r, i) => ({ id: r.id ?? uid(5 + list.length + i), created_at: new Date().toISOString(), ...(DEFAULTS[table] ?? {}), ...r }));
     for (const r of made) {
+      if (table === 'fin_employees' && r.roll_no == null) r.roll_no = String(Math.max(0, ...list.filter((x) => x.entity_id === r.entity_id).map((x) => Number(x.roll_no))) + 1);
+      if (table === 'fin_employees' && list.some((x) => x.entity_id === r.entity_id && x.roll_no === r.roll_no)) return json({ code: '23505' }, 409);
       if (table === 'fin_payroll_runs' && list.some((x) => x.month === r.month && x.run_type === r.run_type && (x.label ?? '') === (r.label ?? '') && x.status !== 'cancelled')) return json({ code: '23505' }, 409);
       list.push(r);
     }
@@ -396,8 +398,22 @@ test('adding a person to payroll is a director\'s act, and only for a party of k
   db.fin_parties.push({ id: uid(5), name: 'Test Person Three', kind: 'employee', active: true, merged_into: null });
   assert.equal((await send('farm', 'POST', '/payroll/employees', { partyId: uid(5) })).status, 403);
   assert.equal((await send('prep', 'POST', '/payroll/employees', { partyId: uid(8) })).status, 400);
-  assert.equal((await send('prep', 'POST', '/payroll/employees', { partyId: uid(5), rollNo: '3' })).status, 201);
+  const added = await send('prep', 'POST', '/payroll/employees', { partyId: uid(5) });
+  assert.equal(added.status, 201);
+  assert.equal((await added.json()).rollNo, '3', 'the next number up is assigned');
   const list = await (await send('prep', 'GET', '/payroll')).json();
   assert.equal(list.employees.length, 3);
   assert.deepEqual(list.candidates, []);
+});
+
+test('employee numbers are given once and never reused: the next is above the highest, an old number can be carried over, a taken one cannot', async () => {
+  fresh();
+  db.fin_employees.find((e) => e.roll_no === '2').active = false;
+  db.fin_parties.push({ id: uid(5), name: 'Test Person Three', kind: 'employee', active: true, merged_into: null });
+  db.fin_parties.push({ id: uid(8), name: 'Test Person Four', kind: 'employee', active: true, merged_into: null });
+  db.fin_parties.push({ id: uid(9), name: 'Test Person Five', kind: 'employee', active: true, merged_into: null });
+  assert.equal((await send('prep', 'POST', '/payroll/employees', { partyId: uid(5), rollNo: '12' })).status, 201, 'a number carried over from an old file');
+  assert.equal((await (await send('prep', 'POST', '/payroll/employees', { partyId: uid(8) })).json()).rollNo, '13', 'the next is above the highest');
+  assert.equal((await send('prep', 'POST', '/payroll/employees', { partyId: uid(9), rollNo: '12' })).status, 409, 'a taken number is refused');
+  assert.equal((await send('prep', 'POST', '/payroll/employees', { partyId: uid(9), rollNo: 'x1' })).status, 400);
 });

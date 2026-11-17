@@ -1093,6 +1093,13 @@ First slice, on branch `finance-09-payroll`. See `sessions/09-payroll.md` for th
   payee details. Refuses a file for a bad payment mode (N or I only), a missing debit account, a net with paise, a bad account
   number or IFSC, a repeated name, a past payment date (today or a future date is fine; a file not uploaded by its date goes stale and is regenerated, see `fileIsStale`). An account starting with 0, or longer than 15 digits, is written as text and
   flagged. Month text in columns G, I and L is derived from the month, never typed. Two people may share one account.
+- **Run types** (`run_type`, `label` on `fin_payroll_runs`): a month holds one `salary` run and any number of named `bonus` runs (e.g. "Diwali Bonus"); the unique
+  index is per month, type and name. A bonus is worded "<Mon YYYY> <name>" / "<name> for <Mon YYYY>", its reference is `YYYY-Mon-Bonus-Employee-NNN`, and it defaults to
+  paying today (no due date). One function, `lineReference`, builds the reference for the file and for the line snapshot.
+- **Employee numbers** (`fin_employees.roll_no`): assigned by a database trigger on insert as the next number up for the entity (under an advisory lock), never reused (a leaver stays
+  as an inactive row), numeric only, unique. It is shown, not typed. A number can be given explicitly only to carry over an existing one (the API accepts `rollNo`, the page does
+  not send it). It is the `NNN` in the file's reference (column I), so a person keeps one number across months; the generator refuses a person with no number or two with the same
+  one. Tested on the real database in a rolled-back transaction (next number, a leaver's number not reused, duplicate and bad-format numbers refused, a bonus reference accepted).
 - **Guard** (`payrollBlockers`): an account that is not verified, not yet valid, retired or replaced blocks the file; an account that
   differs from the previous run's is listed as changed even when verified.
 - **Tables**: `fin_employees`, `fin_payment_batches` (kind `salary`; holds the file hash and R2 key, never an account number),
@@ -1106,7 +1113,7 @@ First slice, on branch `finance-09-payroll`. See `sessions/09-payroll.md` for th
   `export` director generates, downloads, records the upload and regenerates; a `finance` `approve-payroll` director approves, never the one who prepared
   (also a database check). A plain `finance` view, `request` or auditor grant opens nothing. Generate, approve and download need the MFA step-up. Each change writes
   `fin_audit_log` first (ids and counts only). Generating decrypts the accounts in memory, builds the file, stores it in R2 (`finance/payroll/<batch>.xlsx`),
-  inserts the batch, snapshots each line (account row, last four, fingerprint, `YYYY-Mon-Employee-NNN` reference) and moves the run. The debit account (column H)
+  inserts the batch, snapshots each line (account row, last four, fingerprint, `YYYY-Mon-Employee-NNN` reference, NNN being the person's employee number) and moves the run. The debit account (column H)
   is the Netlify setting `FINANCE_PAYROLL_DEBIT_ACCOUNT`; without it generating refuses. Column F (e-mail) is written blank: parties have no e-mail yet.
 - **Pages**: `/internal/finance/payroll/` (directors) and `/internal/finance-requests/payroll/` (the farm manager, phone-first), one component
   (`src/components/PayrollRuns.astro`). Months list; start a month (an amount per person, whole rupees); a month's page shows each person with the account as last

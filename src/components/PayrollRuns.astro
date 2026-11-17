@@ -30,7 +30,6 @@ import StepUpSheet from './StepUpSheet.astro';
         <h2>Add a person to payroll</h2>
         <p class="hint">Only people already added as an employee on the Parties page are listed.</p>
         <label class="pr-field"><span>Who</span><select id="p-party"></select></label>
-        <label class="pr-field"><span>Roll number (optional)</span><input id="p-roll" autocomplete="off" maxlength="20" /></label>
         <p id="person-error" class="pr-error" role="alert" hidden></p>
         <div class="pr-actions">
           <button type="submit" class="button button--primary">Add</button>
@@ -267,7 +266,6 @@ import StepUpSheet from './StepUpSheet.astro';
     sel.replaceChildren(...data.candidates.map((c) => Object.assign(document.createElement('option'), { value: c.id, textContent: c.name })));
     $('person-error').hidden = !!data.candidates.length;
     $('person-error').textContent = data.candidates.length ? '' : 'Everyone with an employee party is already on payroll. Add the person on the Parties page first.';
-    $<HTMLInputElement>('p-roll').value = '';
     $('person-form').hidden = false;
   });
   $('person-cancel').addEventListener('click', () => ($('person-form').hidden = true));
@@ -275,7 +273,7 @@ import StepUpSheet from './StepUpSheet.astro';
     ev.preventDefault();
     const partyId = $<HTMLSelectElement>('p-party').value;
     if (!partyId) return;
-    const ok = await call('/api/finance-admin/payroll/employees', 'POST', { partyId, rollNo: $<HTMLInputElement>('p-roll').value }, 'Added to payroll.');
+    const ok = await call('/api/finance-admin/payroll/employees', 'POST', { partyId }, 'Added to payroll.');
     if (ok) {
       $('person-form').hidden = true;
       await load();
