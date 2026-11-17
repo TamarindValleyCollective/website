@@ -21,12 +21,41 @@ import StepUpSheet from './StepUpSheet.astro';
 
   <div id="content" hidden>
     <div id="list-view">
-      <div class="pr-actions">
-        <button type="button" id="new-run" class="button button--primary" hidden>Start a month's salaries</button>
-        <button type="button" id="join-btn" class="button" hidden>A new person is joining</button>
-        <button type="button" id="leave-btn" class="button" hidden>Someone is leaving</button>
-        <button type="button" id="add-person" class="button" hidden>Add a person to payroll</button>
+      <div class="segmented pr-tabs" role="group" aria-label="Salaries">
+        <button type="button" class="tap-target is-active" id="tab-months" aria-pressed="true">Monthly salaries</button>
+        <button type="button" class="tap-target" id="tab-people" aria-pressed="false">People<span id="people-count" class="chip-count" hidden></span></button>
       </div>
+
+      <div id="months-pane">
+        <div class="pr-actions">
+          <button type="button" id="new-run" class="button button--primary" hidden>Start a month's salaries</button>
+        </div>
+        <button type="button" id="people-nudge" class="pr-link" hidden></button>
+
+      <form id="new-form" class="pr-card" hidden novalidate>
+        <h2>Start a month's salaries</h2>
+        <p class="hint">Enter what each person is to be paid, in whole rupees. Leave a person blank to leave them out of this month.</p>
+        <label class="pr-field"><span>Salary month</span><input id="n-month" type="month" required /></label>
+        <label class="pr-field"><span>Kind</span><select id="n-type"><option value="salary">Salary</option><option value="bonus">Bonus (a named extra payment)</option></select></label>
+        <label class="pr-field" id="n-label-wrap" hidden><span>Name of the bonus</span><input id="n-label" type="text" maxlength="40" placeholder="Diwali Bonus" /></label>
+        <div id="n-people" class="pr-people"></div>
+        <p id="new-error" class="pr-error" role="alert" hidden></p>
+        <div class="pr-actions">
+          <button type="submit" class="button button--primary">Save as a draft</button>
+          <button type="button" id="new-cancel" class="button">Cancel</button>
+        </div>
+      </form>
+
+        <div id="runs"></div>
+      </div>
+
+      <div id="people-pane" hidden>
+        <p class="hint">Who is on payroll, and the changes that are waiting. Joining and leaving go to a director to approve.</p>
+        <div class="pr-actions">
+          <button type="button" id="join-btn" class="button button--outline" hidden>A new person is joining</button>
+          <button type="button" id="leave-btn" class="button button--outline" hidden>Someone is leaving</button>
+          <button type="button" id="add-person" class="button button--outline" hidden>Add a person to payroll</button>
+        </div>
 
       <form id="person-form" class="pr-card" hidden novalidate>
         <h2>Add a person to payroll</h2>
@@ -66,23 +95,9 @@ import StepUpSheet from './StepUpSheet.astro';
         </div>
       </form>
 
-      <form id="new-form" class="pr-card" hidden novalidate>
-        <h2>Start a month's salaries</h2>
-        <p class="hint">Enter what each person is to be paid, in whole rupees. Leave a person blank to leave them out of this month.</p>
-        <label class="pr-field"><span>Salary month</span><input id="n-month" type="month" required /></label>
-        <label class="pr-field"><span>Kind</span><select id="n-type"><option value="salary">Salary</option><option value="bonus">Bonus (a named extra payment)</option></select></label>
-        <label class="pr-field" id="n-label-wrap" hidden><span>Name of the bonus</span><input id="n-label" type="text" maxlength="40" placeholder="Diwali Bonus" /></label>
-        <div id="n-people" class="pr-people"></div>
-        <p id="new-error" class="pr-error" role="alert" hidden></p>
-        <div class="pr-actions">
-          <button type="submit" class="button button--primary">Save as a draft</button>
-          <button type="button" id="new-cancel" class="button">Cancel</button>
-        </div>
-      </form>
-
-      <div id="people-box" hidden></div>
-
-      <div id="runs"></div>
+        <div id="people-box" hidden></div>
+        <div id="staff-list"></div>
+      </div>
     </div>
 
     <div id="run-view" hidden>
@@ -301,18 +316,40 @@ import StepUpSheet from './StepUpSheet.astro';
     await load(out.id);
   });
 
+  // ---- the two halves of the page: the month's work, and who is on payroll
+  function showTab(name: 'months' | 'people') {
+    $('months-pane').hidden = name !== 'months';
+    $('people-pane').hidden = name !== 'people';
+    for (const [id, on] of [['tab-months', name === 'months'], ['tab-people', name === 'people']] as const) {
+      $(id).classList.toggle('is-active', on);
+      $(id).setAttribute('aria-pressed', String(on));
+    }
+  }
+  $('tab-months').addEventListener('click', () => showTab('months'));
+  $('tab-people').addEventListener('click', () => showTab('people'));
+  $('people-nudge').addEventListener('click', () => showTab('people'));
+
   // ---- changes of people: the farm manager raises them, a director signs them off
   const monthShort = (m: string | null) => (m ? new Date(`${m}-01T00:00:00Z`).toLocaleDateString('en-IN', { month: 'short', year: 'numeric', timeZone: 'UTC' }) : '');
   function renderPeople() {
     const box = $('people-box');
     box.replaceChildren();
     const me = data?.me;
+    renderStaffList();
     if (!data || !me) return void (box.hidden = true);
     const open = requests.filter((r) => r.status === 'requested');
     const lately = requests.filter((r) => r.status !== 'requested').slice(0, 5);
+    // The People tab says when something waits there, and the monthly view points to it, so the rarely used actions can stay out of sight.
+    const waiting = open.length + data.partyInactive.length;
+    const count = $('people-count');
+    count.hidden = !waiting;
+    count.textContent = String(waiting);
+    const nudge = $('people-nudge');
+    nudge.hidden = !open.length;
+    nudge.textContent = open.length ? `${open.length} ${open.length === 1 ? 'change of people is' : 'changes of people are'} waiting. Open People →` : '';
     if (!open.length && !lately.length && !data.partyInactive.length) return void (box.hidden = true);
     box.hidden = false;
-    box.append(el('h2', undefined, 'Changes of people'));
+    box.append(el('h3', 'pr-section-title', 'Changes of people'));
     if (data.partyInactive.length) {
       box.append(el('p', 'pr-warn', `${data.partyInactive.map((p) => p.name).join(', ')} ${data.partyInactive.length === 1 ? 'is' : 'are'} inactive on the Parties page but still on payroll. Their salary file is blocked until a leaving request is approved or the party is reactivated.`));
     }
@@ -351,13 +388,34 @@ import StepUpSheet from './StepUpSheet.astro';
           acts.append(btn('Decline', () => {
             const note = prompt('Why? (optional)');
             if (note !== null) void decide('reject', { note }, 'Declined.')();
-          }));
+          }, 'button button--outline'));
         }
-        if (r.mine || me.canPrepare) acts.append(btn('Withdraw', decide('cancel', {}, 'Withdrawn.'), 'button pr-danger'));
+        if (r.mine || me.canPrepare) acts.append(btn('Withdraw', decide('cancel', {}, 'Withdrawn.'), 'button button--outline pr-danger'));
         card.append(acts);
       }
       box.append(card);
     }
+  }
+  // Who is on payroll: the number, the name and any limits on their months.
+  function renderStaffList() {
+    const box = $('staff-list');
+    box.replaceChildren();
+    if (!data) return;
+    box.append(el('h3', 'pr-section-title', 'On payroll'));
+    if (!data.employees.length) return void box.append(el('p', 'hint', 'No one is on payroll yet. A director adds the first people with "Add a person to payroll".'));
+    const inactive = new Set(data.partyInactive.map((p) => p.id));
+    const list = el('div', 'pr-card');
+    for (const e of data.employees) {
+      const row = el('div', 'pr-line');
+      const who = el('div', 'pr-who');
+      who.append(el('strong', undefined, e.rollNo ? `${e.rollNo}. ${e.name}` : e.name));
+      const notes = [e.startMonth && e.startMonth > (data.today ?? '').slice(0, 7) ? `starts ${monthShort(e.startMonth)}` : null, e.lastMonth ? `last month paid: ${monthShort(e.lastMonth)}` : null, !e.active ? 'not on payroll' : null].filter(Boolean);
+      if (notes.length) who.append(el('span', 'pr-sub', notes.join(' · ')));
+      row.append(who);
+      if (inactive.has(e.id)) row.append(pill('cancelled', 'Inactive in Parties'));
+      list.append(row);
+    }
+    box.append(list);
   }
   function openJoin() {
     $<HTMLInputElement>('j-name').value = '';
@@ -569,7 +627,7 @@ import StepUpSheet from './StepUpSheet.astro';
       acts.append(btn('Cancel this month', async () => {
         const reason = prompt('Why is this month being cancelled?');
         if (reason) await act('cancel', { reason }, 'Cancelled.')();
-      }, 'button pr-danger'));
+      }, 'button button--outline pr-danger'));
     }
     box.append(acts);
     lock.render();
@@ -647,6 +705,26 @@ import StepUpSheet from './StepUpSheet.astro';
     margin: 14px 0;
   }
 
+  .finance-payroll .pr-section-title {
+    margin: 22px 0 0;
+    font-size: 1rem;
+    font-weight: 700;
+  }
+  .finance-payroll .pr-tabs {
+    margin-top: 14px;
+  }
+  .finance-payroll .pr-tabs .chip-count {
+    margin-left: 6px;
+    padding: 0 7px;
+    border-radius: 999px;
+    background: var(--tvc-green-tint);
+    color: var(--tvc-green-dark);
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+  .finance-payroll #people-pane > .hint {
+    margin-top: 12px;
+  }
   .finance-payroll .pr-card {
     margin-top: 14px;
     padding: 18px;
