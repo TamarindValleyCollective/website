@@ -170,3 +170,16 @@ test('guard: a changed account that is unverified both blocks and is listed as c
 test('guard: a first run for a person (no previous account) is not a change', () => {
   assert.deepEqual(payrollBlockers([gline({ previousFingerprint: null })], '2026-11-01').changed, []);
 });
+
+test('a bonus run is worded and referenced as the files uploaded since 2023 are', async () => {
+  const { buildSalaryRows, lineReference, runWording } = await import('./finance-payroll-file.mjs');
+  assert.deepEqual(runWording('2026-10', 'bonus', 'Diwali Bonus'), { narration: 'Oct 2026 Diwali Bonus', summary: 'Diwali Bonus for Oct 2026' });
+  assert.deepEqual(runWording('2026-10'), { narration: 'Oct 2026 Salary', summary: 'Salary for Oct 2026' });
+  assert.equal(lineReference('2026-10', 'salary', 1), '2026-Oct-Employee-001');
+  assert.equal(lineReference('2026-10', 'bonus', 12), '2026-Oct-Bonus-Employee-012');
+  const { rows, errors } = buildSalaryRows(run({ runType: 'bonus', label: 'Diwali Bonus', paymentDate: '2026-11-01' }));
+  assert.deepEqual(errors, []);
+  assert.deepEqual([rows[0][6], rows[0][8], rows[0][11]], ['Oct 2026 Diwali Bonus', '2026-Oct-Bonus-Employee-001', 'Diwali Bonus for Oct 2026']);
+  assert.match(buildSalaryRows(run({ runType: 'bonus' })).errors.join(' '), /needs a name/);
+  assert.match(buildSalaryRows(run({ runType: 'gift' })).errors.join(' '), /salary or bonus/);
+});

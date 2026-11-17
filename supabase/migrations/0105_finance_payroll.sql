@@ -71,6 +71,9 @@ create table fin_payroll_runs (
   entity_id uuid not null references fin_entities (id),
   -- First day of the salary month.
   month date not null check (extract(day from month) = 1),
+  -- A month holds one salary run and any number of differently named bonus runs (e.g. 'Diwali Bonus'; the Oct 2025 files had both).
+  run_type text not null default 'salary' check (run_type in ('salary', 'bonus')),
+  label text check (label is null or length(label) between 2 and 40),
   status text not null default 'draft' check (status in ('draft', 'confirmed', 'file_generated', 'approved', 'settled', 'cancelled')),
   payment_mode text not null default 'N' check (payment_mode in ('N', 'I')),
   -- Defaults to the 1st of the following month; kept on the run so the file and the validation agree.
@@ -87,6 +90,7 @@ create table fin_payroll_runs (
   cancelled_reason text check (cancelled_reason is null or length(cancelled_reason) between 3 and 200),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
+  check ((run_type = 'bonus') = (label is not null)),
   check (approved_by is null or approved_by <> prepared_by),
   check (status not in ('confirmed', 'file_generated', 'approved', 'settled') or (confirmed_by is not null and confirmed_at is not null)),
   check (status not in ('file_generated', 'approved', 'settled') or (prepared_by is not null and batch_id is not null)),
@@ -94,8 +98,8 @@ create table fin_payroll_runs (
   check ((status = 'settled') = (settled_at is not null)),
   check ((status = 'cancelled') = (cancelled_reason is not null))
 );
--- One live run per month; a cancelled run does not block a fresh one.
-create unique index fin_payroll_runs_month_idx on fin_payroll_runs (entity_id, month) where status <> 'cancelled';
+-- One live run per month per type and name; a cancelled run does not block a fresh one.
+create unique index fin_payroll_runs_month_idx on fin_payroll_runs (entity_id, month, run_type, coalesce(label, '')) where status <> 'cancelled';
 
 create table fin_payroll_lines (
   id uuid primary key default gen_random_uuid(),

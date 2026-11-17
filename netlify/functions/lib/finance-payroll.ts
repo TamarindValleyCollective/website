@@ -22,7 +22,7 @@ import { getFinancePayroll, putFinancePayroll } from './finance-storage';
 import { todayIST } from '../../../scripts/lib/finance-parties.mjs';
 import { accountPayableOn } from '../../../scripts/lib/finance-parties.mjs';
 import { confirmationRows, decideAction, runSummary, validateRunInput } from '../../../scripts/lib/finance-payroll.mjs';
-import { payrollBlockers, salaryFileBytes, validatePaymentDate } from '../../../scripts/lib/finance-payroll-file.mjs';
+import { lineReference, payrollBlockers, salaryFileBytes, validatePaymentDate } from '../../../scripts/lib/finance-payroll-file.mjs';
 
 type Json = Record<string, any>;
 const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -65,7 +65,7 @@ export async function payrollAccess(req: Request): Promise<{ ok: true; access: A
   return { ok: true, access: { staff: who.staff, canEnter: enter.ok, canPrepare: prepare.ok, canApprove: approve.ok } };
 }
 
-const RUN_COLUMNS = 'id,month,status,payment_mode,payment_date,entered_by,confirmed_by,confirmed_at,prepared_by,batch_id,approved_by,approved_at,settled_at,cancelled_reason,created_at';
+const RUN_COLUMNS = 'id,month,run_type,label,status,payment_mode,payment_date,entered_by,confirmed_by,confirmed_at,prepared_by,batch_id,approved_by,approved_at,settled_at,cancelled_reason,created_at';
 
 async function loadRun(id: string): Promise<Json | null> {
   const [run] = await rows(`/fin_payroll_runs?id=eq.${id}&select=${RUN_COLUMNS}`);
@@ -141,7 +141,7 @@ async function runView(run: Json, access: Access) {
   );
   return {
     run: {
-      id: run.id, month: String(run.month).slice(0, 7), status: run.status, paymentMode: run.payment_mode, paymentDate: run.payment_date,
+      id: run.id, month: String(run.month).slice(0, 7), runType: run.run_type, label: run.label, status: run.status, paymentMode: run.payment_mode, paymentDate: run.payment_date,
       confirmedAt: run.confirmed_at, approvedAt: run.approved_at, cancelledReason: run.cancelled_reason,
       preparedByMe: run.prepared_by === access.staff.id, batch: run.batch ? { status: run.batch.status, totalPaise: Number(run.batch.total_paise), lineCount: run.batch.line_count } : null,
       stale: run.status === 'file_generated' && run.batch?.status !== 'approved_at_bank' && String(run.payment_date) < today,
@@ -190,7 +190,7 @@ export async function listPayroll(req: Request): Promise<Response> {
       me: { id: access.staff.id, canEnter: access.canEnter, canPrepare: access.canPrepare, canApprove: access.canApprove, ready: mfa?.ready ?? false, hasPasskey: mfa?.passkey ?? false, stepUpValid: stepUpIsValid(req, access.staff.id) },
       today: todayIST(),
       runs: runs.map((r) => ({
-        id: r.id, month: String(r.month).slice(0, 7), status: r.status, paymentDate: r.payment_date, count: totals.get(r.id)?.count ?? 0, totalPaise: totals.get(r.id)?.total ?? 0,
+        id: r.id, month: String(r.month).slice(0, 7), runType: r.run_type, label: r.label, status: r.status, paymentDate: r.payment_date, count: totals.get(r.id)?.count ?? 0, totalPaise: totals.get(r.id)?.total ?? 0,
         ...runSummary({ status: r.status, batchStatus: batchStatus.get(r.batch_id) ?? null }),
       })),
       employees: employees.map((e) => ({ id: e.id, name: nameOf.get(e.party_id) ?? 'Unknown', rollNo: e.roll_no, active: e.active })),
@@ -269,10 +269,11 @@ export async function createRun(req: Request): Promise<Response> {
     const problem = await checkEmployees(v.lines);
     if (problem) return fail(problem);
     const entity = await entityId();
-    const existing = await rows(`/fin_payroll_runs?entity_id=eq.${entity}&month=eq.${v.month}&status=neq.cancelled&select=id`);
-    if (existing[0]) return fail('There is already a run for that month.', 409);
+    const sameLabel = v.runType === 'bonus' ? `label=eq.${encodeURIComponent(v.label)}` : 'label=is.null';
+    const existing = await rows(`/fin_payroll_runs?entity_id=eq.${entity}&month=eq.${v.month}&run_type=eq.${v.runType}&${sameLabel}&status=neq.cancelled&select=id`);
+    if (existing[0]) return fail(v.runType === 'bonus' ? 'There is already a run with that name for that month.' : 'There is already a run for that month.', 409);
     await logFinanceAction({ actorId: access.staff.id, entityId: entity, action: 'finance.payroll_run_created', detail: { month: v.month, lines: v.lines.length } });
-    const res = await rest('/fin_payroll_runs', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ entity_id: entity, month: v.month, payment_mode: v.paymentMode, payment_date: v.paymentDate, entered_by: access.staff.id }) });
+    const res = await rest('/fin_payroll_runs', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ entity_id: entity, month: v.month, run_type: v.runType, label: v.label, payment_mode: v.paymentMode, payment_date: v.paymentDate, entered_by: access.staff.id }) });
     if (res.status === 409) return fail('There is already a run for that month.', 409);
     const [created] = (await res.json()) as Json[];
     await writeLines(created.id, v.lines);
@@ -295,7 +296,7 @@ export async function updateRun(req: Request, id: string): Promise<Response> {
     const run = await loadRun(id);
     if (!run) return fail('Not found', 404);
     if (run.status !== 'draft') return fail('Only a draft run can be changed. Reopen it first.');
-    const checked = validateRunInput({ ...b, month: String(run.month).slice(0, 7) }, { today: todayIST() });
+    const checked = validateRunInput({ ...b, month: String(run.month).slice(0, 7), runType: run.run_type, label: run.label }, { today: todayIST() });
     if (checked.error || !checked.value) return fail(checked.error ?? 'Check the details.');
     const v = checked.value as Json;
     const problem = await checkEmployees(v.lines);
@@ -396,7 +397,7 @@ async function generate(run: Json, access: Access, entity: string, paymentDate: 
   });
   let file;
   try {
-    file = salaryFileBytes({ month: String(run.month).slice(0, 7), paymentDate, paymentMode: run.payment_mode, debitAccount, today, lines: people });
+    file = salaryFileBytes({ month: String(run.month).slice(0, 7), runType: run.run_type, label: run.label, paymentDate, paymentMode: run.payment_mode, debitAccount, today, lines: people });
   } catch (err) {
     return fail(err instanceof Error ? err.message : 'The file cannot be generated.', 409);
   }
@@ -407,11 +408,9 @@ async function generate(run: Json, access: Access, entity: string, paymentDate: 
   await putFinancePayroll(key, file.bytes);
   await rest('/fin_payment_batches', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ id: batchId, entity_id: entity, kind: 'salary', payment_mode: run.payment_mode, payment_date: paymentDate, total_paise: file.totalPaise, line_count: lines.length, file_hash: hash, r2_key: key, prepared_by: access.staff.id }) });
   // The snapshot of what is being paid, and the reference that ties each line to column I of the file.
-  const year = String(run.month).slice(0, 4);
-  const mon = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][Number(String(run.month).slice(5, 7)) - 1];
   for (const [i, l] of lines.entries()) {
     const a = accounts.get(l.partyId) as Json;
-    await rest(`/fin_payroll_lines?id=eq.${l.id}`, { method: 'PATCH', body: JSON.stringify({ party_account_id: a.id, account_last4: a.last4, account_fingerprint: a.fingerprint, reference: `${year}-${mon}-Employee-${String(i + 1).padStart(3, '0')}` }) });
+    await rest(`/fin_payroll_lines?id=eq.${l.id}`, { method: 'PATCH', body: JSON.stringify({ party_account_id: a.id, account_last4: a.last4, account_fingerprint: a.fingerprint, reference: lineReference(String(run.month).slice(0, 7), run.run_type, i + 1) }) });
   }
   if (paymentDate !== run.payment_date) await rest(`/fin_payroll_runs?id=eq.${run.id}&status=eq.confirmed`, { method: 'PATCH', body: JSON.stringify({ payment_date: paymentDate }) });
   if (!(await moveRun(run.id, 'confirmed', { status: 'file_generated', prepared_by: access.staff.id, batch_id: batchId }))) return fail('The run changed while the file was being made. Reload.', 409);
@@ -433,7 +432,7 @@ export async function downloadFile(req: Request, id: string): Promise<Response> 
     await logFinanceAction({ actorId: access.staff.id, entityId: await entityId(), action: 'finance.payroll_file_downloaded', target: id, detail: { batch: batch.id } });
     const bytes = await getFinancePayroll(batch.r2_key);
     if (!bytes) return fail('The file is missing from storage.', 404);
-    const name = `salary-${String(run.month).slice(0, 7)}.xlsx`;
+    const name = `${run.run_type}-${String(run.month).slice(0, 7)}${run.label ? '-' + String(run.label).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') : ''}.xlsx`;
     return new Response(bytes as BodyInit, { status: 200, headers: { 'content-type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'content-disposition': `attachment; filename="${name}"`, 'cache-control': 'no-store' } });
   } catch (err) {
     return serverError(err, 'download');

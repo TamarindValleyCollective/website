@@ -12,6 +12,8 @@ import { accountPayableOn, todayIST } from './finance-parties.mjs';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const PAYMENT_MODES = ['N', 'I'];
+// A month can hold a salary run and, besides it, named one-off runs of the same kind of file (a festival bonus, say).
+export const RUN_TYPES = ['salary', 'bonus'];
 const IFSC = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 
 function parseMonth(month) {
@@ -54,6 +56,21 @@ export const fileIsStale = (paymentDate, today) => paymentDate < today;
 
 const tidy = (s) => (typeof s === 'string' ? s.replace(/\s+/g, ' ').trim() : '');
 
+// The wording the bank file carries for a run, as the files uploaded since 2023 have it: salary is "<Mon YYYY> Salary" and
+// "Salary for <Mon YYYY>", a bonus run is "<Mon YYYY> <name>" and "<name> for <Mon YYYY>" (the name is typed once, e.g. "Diwali Bonus").
+export function runWording(month, runType = 'salary', name = '') {
+  const label = monthLabel(month);
+  return runType === 'bonus'
+    ? { narration: `${label} ${tidy(name)}`, summary: `${tidy(name)} for ${label}` }
+    : { narration: `${label} Salary`, summary: `Salary for ${label}` };
+}
+
+// Column I, the per-line reference that ties a line to the file: "2026-Oct-Employee-001", and "2026-Oct-Bonus-Employee-001" for a bonus run.
+export function lineReference(month, runType, n) {
+  const { year, index } = parseMonth(month);
+  return `${year}-${MONTHS[index]}-${runType === 'bonus' ? 'Bonus-' : ''}Employee-${String(n).padStart(3, '0')}`;
+}
+
 // run: { month, paymentDate?, paymentMode?='N', constant?='10', debitAccount, today?, lines: [{ name, accountNumber, ifsc, email?, netPaise }] }
 // -> { rows, totalPaise, errors, warnings }. `rows` is empty when there are errors.
 export function buildSalaryRows(run) {
@@ -69,6 +86,10 @@ export function buildSalaryRows(run) {
   } catch (e) {
     return { rows: [], totalPaise: 0, errors: [e.message], warnings };
   }
+  const runType = run.runType ?? 'salary';
+  const bonusName = tidy(run.label);
+  if (!RUN_TYPES.includes(runType)) errors.push('The run type must be salary or bonus.');
+  else if (runType === 'bonus' && (bonusName.length < 2 || bonusName.length > 40)) errors.push('A bonus run needs a name of 2 to 40 characters, such as Diwali Bonus.');
   const mode = run.paymentMode ?? 'N';
   if (!PAYMENT_MODES.includes(mode)) errors.push('The payment mode must be N or I.');
   const constant = String(run.constant ?? '10');
@@ -82,6 +103,7 @@ export function buildSalaryRows(run) {
   const lines = Array.isArray(run.lines) ? run.lines : [];
   if (lines.length === 0) errors.push('The run has no lines.');
 
+  const wording = errors.length ? { narration: '', summary: '' } : runWording(run.month, runType, bonusName);
   const seen = new Set();
   let totalPaise = 0;
   const rows = [];
@@ -107,12 +129,12 @@ export function buildSalaryRows(run) {
       name,
       asText ? account : Number(account),
       tidy(l.email),
-      `${label} Salary`,
+      wording.narration,
       Number(debit),
-      `${year}-${mon}-Employee-${String(i + 1).padStart(3, '0')}`,
+      lineReference(run.month, runType, i + 1),
       ifsc,
       constant,
-      `Salary for ${label}`,
+      wording.summary,
     ]);
     if (Number.isInteger(l.netPaise) && l.netPaise > 0) totalPaise += l.netPaise;
   });

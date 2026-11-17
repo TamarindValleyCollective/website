@@ -127,3 +127,15 @@ test('the run summary says what to do next for each state', () => {
   assert.match(runSummary({ status: 'approved' }).next, /debit|statement/i);
   assert.equal(runSummary({ status: 'settled' }).next, null);
 });
+
+test('a bonus run needs a name, defaults to paying today and carries no due date; a salary run is unchanged', () => {
+  assert.match(validateRunInput(input({ runType: 'bonus' }), { today }).error, /name/);
+  assert.match(validateRunInput(input({ runType: 'bonus', label: 'x' }), { today }).error, /name/);
+  assert.match(validateRunInput(input({ runType: 'gift' }), { today }).error, /salary or bonus/);
+  const { value } = validateRunInput(input({ runType: 'bonus', label: '  Diwali   Bonus ' }), { today: '2026-10-12' });
+  assert.equal(value.runType, 'bonus');
+  assert.equal(value.label, 'Diwali Bonus');
+  assert.equal(value.paymentDate, '2026-10-12');
+  const salary = validateRunInput(input({ label: 'ignored' }), { today: '2026-10-12' }).value;
+  assert.deepEqual([salary.runType, salary.label, salary.paymentDate], ['salary', null, '2026-11-01']);
+});

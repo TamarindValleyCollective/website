@@ -42,6 +42,8 @@ import StepUpSheet from './StepUpSheet.astro';
         <h2>Start a month's salaries</h2>
         <p class="hint">Enter what each person is to be paid, in whole rupees. Leave a person blank to leave them out of this month.</p>
         <label class="pr-field"><span>Salary month</span><input id="n-month" type="month" required /></label>
+        <label class="pr-field"><span>Kind</span><select id="n-type"><option value="salary">Salary</option><option value="bonus">Bonus (a named extra payment)</option></select></label>
+        <label class="pr-field" id="n-label-wrap" hidden><span>Name of the bonus</span><input id="n-label" type="text" maxlength="40" placeholder="Diwali Bonus" /></label>
         <div id="n-people" class="pr-people"></div>
         <p id="new-error" class="pr-error" role="alert" hidden></p>
         <div class="pr-actions">
@@ -77,11 +79,11 @@ import StepUpSheet from './StepUpSheet.astro';
   const intro = $('intro');
 
   type Me = { id: string; canEnter: boolean; canPrepare: boolean; canApprove: boolean; ready: boolean; hasPasskey: boolean; stepUpValid: boolean };
-  type RunRow = { id: string; month: string; status: string; paymentDate: string; count: number; totalPaise: number; next: string | null };
+  type RunRow = { id: string; month: string; runType: string; label: string | null; status: string; paymentDate: string; count: number; totalPaise: number; next: string | null };
   type Person = { id: string; name: string; rollNo: string | null; active: boolean };
   type Line = { id: string; employeeId: string; name: string; netPaise: number; last4: string | null; changed: boolean; problem: string | null; reference: string | null; returned: boolean; agreedPayPaise: number | null; daysWorked: number | null; advanceDeductedPaise: number | null };
   type Detail = {
-    run: { id: string; month: string; status: string; paymentMode: string; paymentDate: string; cancelledReason: string | null; preparedByMe: boolean; batch: { status: string; totalPaise: number; lineCount: number } | null; stale: boolean; next: string | null };
+    run: { id: string; month: string; runType: string; label: string | null; status: string; paymentMode: string; paymentDate: string; cancelledReason: string | null; preparedByMe: boolean; batch: { status: string; totalPaise: number; lineCount: number } | null; stale: boolean; next: string | null };
     lines: Line[];
     totalPaise: number;
     changed: number;
@@ -91,6 +93,7 @@ import StepUpSheet from './StepUpSheet.astro';
   let openId: string | null = null;
 
   const rupees = (paise: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(paise / 100);
+  const runTitle = (r: { month: string; label: string | null }) => `${monthName(r.month)}${r.label ? ` · ${r.label}` : ''}`;
   const monthName = (m: string) => new Date(`${m}-01T00:00:00Z`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' });
   const dayName = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
   const STATUS: Record<string, { text: string; kind: string }> = {
@@ -184,7 +187,7 @@ import StepUpSheet from './StepUpSheet.astro';
       const card = el('button', 'pr-run');
       card.type = 'button';
       const top = el('span', 'pr-run-top');
-      top.append(el('strong', undefined, monthName(r.month)), pill(r.status));
+      top.append(el('strong', undefined, runTitle(r)), pill(r.status));
       card.append(top, el('span', 'pr-run-sub', `${r.count} ${r.count === 1 ? 'person' : 'people'} · ${rupees(r.totalPaise)} · pay on ${dayName(r.paymentDate)}`));
       if (r.next) card.append(el('span', 'pr-run-next', r.next));
       card.addEventListener('click', () => openRun(r.id));
@@ -221,6 +224,7 @@ import StepUpSheet from './StepUpSheet.astro';
     $('new-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
   $('new-cancel').addEventListener('click', () => ($('new-form').hidden = true));
+  $('n-type').addEventListener('change', () => ($('n-label-wrap').hidden = $<HTMLSelectElement>('n-type').value !== 'bonus'));
 
   function readAmounts(root: HTMLElement): { lines: { employeeId: string; netRupees: number }[] } | { error: string } {
     const lines: { employeeId: string; netRupees: number }[] = [];
@@ -240,7 +244,7 @@ import StepUpSheet from './StepUpSheet.astro';
     err.hidden = true;
     const amounts = readAmounts($('n-people'));
     if ('error' in amounts) return void ((err.textContent = amounts.error), (err.hidden = false));
-    const { status, data: out } = await staffFetch('/api/finance-admin/payroll/runs', { method: 'POST', body: { month: $<HTMLInputElement>('n-month').value, lines: amounts.lines } }).catch((e) => {
+    const { status, data: out } = await staffFetch('/api/finance-admin/payroll/runs', { method: 'POST', body: { month: $<HTMLInputElement>('n-month').value, runType: $<HTMLSelectElement>('n-type').value, label: $<HTMLInputElement>('n-label').value, lines: amounts.lines } }).catch((e) => {
       fail(e);
       return { status: 0, data: null as any };
     });
@@ -313,7 +317,7 @@ import StepUpSheet from './StepUpSheet.astro';
     box.replaceChildren();
     const r = d.run;
     const head = el('div', 'pr-head');
-    head.append(el('h2', undefined, monthName(r.month)), pill(r.status));
+    head.append(el('h2', undefined, runTitle(r)), pill(r.status));
     box.append(head, el('p', 'hint', `Pay on ${dayName(r.paymentDate)} · ${r.paymentMode === 'I' ? 'mode I' : 'NEFT'}`));
     if (r.next) box.append(el('p', 'pr-next', r.next));
     if (r.cancelledReason) box.append(el('p', 'hint', `Cancelled: ${r.cancelledReason}`));

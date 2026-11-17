@@ -84,7 +84,7 @@ function dbRules(table, row, before) {
   }
 }
 // The column defaults the real tables have.
-const DEFAULTS = { fin_payroll_runs: { status: 'draft', confirmed_by: null, prepared_by: null, batch_id: null, approved_by: null }, fin_payment_batches: { status: 'file_generated' }, fin_employees: { active: true } };
+const DEFAULTS = { fin_payroll_runs: { run_type: 'salary', label: null, status: 'draft', confirmed_by: null, prepared_by: null, batch_id: null, approved_by: null }, fin_payment_batches: { status: 'file_generated' }, fin_employees: { active: true } };
 globalThis.fetch = async (url, init = {}) => {
   const u = new URL(url);
   const json = (b, status = 200) => new Response(JSON.stringify(b), { status, headers: { 'content-type': 'application/json' } });
@@ -103,7 +103,7 @@ globalThis.fetch = async (url, init = {}) => {
     const b = JSON.parse(init.body);
     const made = (Array.isArray(b) ? b : [b]).map((r, i) => ({ id: r.id ?? uid(5 + list.length + i), created_at: new Date().toISOString(), ...(DEFAULTS[table] ?? {}), ...r }));
     for (const r of made) {
-      if (table === 'fin_payroll_runs' && list.some((x) => x.month === r.month && x.status !== 'cancelled')) return json({ code: '23505' }, 409);
+      if (table === 'fin_payroll_runs' && list.some((x) => x.month === r.month && x.run_type === r.run_type && (x.label ?? '') === (r.label ?? '') && x.status !== 'cancelled')) return json({ code: '23505' }, 409);
       list.push(r);
     }
     db.order.push(`insert:${table}`);
@@ -189,6 +189,20 @@ test('only the farm manager and two directors may open payroll; a finance operat
   for (const who of ['farm', 'prep']) assert.equal((await send(who, 'GET', '/payroll')).status, 200, who);
   for (const who of ['viewer', 'auditor']) assert.equal((await send(who, 'GET', '/payroll')).status, 403, who);
   assert.equal((await send('viewer', 'POST', '/payroll/runs', { month, lines })).status, 403);
+});
+
+test('a month holds a salary run and a named bonus run; the same bonus name twice is refused, a different name is not', async () => {
+  fresh();
+  assert.equal((await newRun()).res.status, 201);
+  const bonus = { month, runType: 'bonus', label: 'Diwali Bonus', lines };
+  assert.equal((await send('farm', 'POST', '/payroll/runs', bonus)).status, 201);
+  const made = db.fin_payroll_runs.find((r) => r.run_type === 'bonus');
+  assert.equal(made.label, 'Diwali Bonus');
+  assert.equal(made.payment_date, new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10), 'a bonus defaults to paying today');
+  assert.equal((await send('farm', 'POST', '/payroll/runs', bonus)).status, 409);
+  assert.equal((await send('farm', 'POST', '/payroll/runs', { ...bonus, label: 'Pongal Bonus' })).status, 201);
+  assert.equal((await send('farm', 'POST', '/payroll/runs', { month, runType: 'bonus', lines })).status, 400, 'a bonus needs a name');
+  assert.equal(db.fin_payroll_runs.length, 3);
 });
 
 test('the farm manager starts a draft; the audit entry comes before the run; a second run for the month is refused', async () => {

@@ -5,7 +5,7 @@
 // States: draft -> confirmed (the farm manager) -> file_generated (a preparer) -> approved (a different director, who approves
 // in the bank's portal) -> settled (the bank debit is matched). A run can be cancelled before it is approved. A file that was not
 // used goes back to confirmed ("regenerate"): the portal rejects a past payment date, so a stale file is dead.
-import { defaultPaymentDate, validatePaymentDate } from './finance-payroll-file.mjs';
+import { RUN_TYPES, defaultPaymentDate, validatePaymentDate } from './finance-payroll-file.mjs';
 
 const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const MAX_RUPEES = 10_000_000;
@@ -15,10 +15,15 @@ const rupees = (v) => Number.isInteger(v) && v > 0 && v <= MAX_RUPEES;
 export function validateRunInput(body, { today }) {
   const month = typeof body?.month === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(body.month) ? body.month : null;
   if (!month) return { error: 'Choose the salary month.' };
+  const runType = body.runType ?? 'salary';
+  if (!RUN_TYPES.includes(runType)) return { error: 'The run type must be salary or bonus.' };
+  const label = typeof body.label === 'string' ? body.label.replace(/\s+/g, ' ').trim() : '';
+  if (runType === 'bonus' && (label.length < 2 || label.length > 40)) return { error: 'Give the bonus a name of 2 to 40 characters, such as Diwali Bonus.' };
   const paymentMode = body.paymentMode ?? 'N';
   if (!['N', 'I'].includes(paymentMode)) return { error: 'The payment mode must be N or I.' };
   // The salary is due on the 1st of the following month; a run made after that day defaults to today, since a past date is refused.
-  const due = defaultPaymentDate(month);
+  // A bonus has no fixed due date (the Diwali one was paid mid-month), so it defaults to today.
+  const due = runType === 'bonus' ? today : defaultPaymentDate(month);
   const paymentDate = body.paymentDate ?? (due < today ? today : due);
   const pd = validatePaymentDate(paymentDate, today);
   if (pd.error) return { error: pd.error };
@@ -47,7 +52,7 @@ export function validateRunInput(body, { today }) {
     }
     lines.push(out);
   }
-  return { value: { month: `${month}-01`, paymentDate, paymentMode, lines } };
+  return { value: { month: `${month}-01`, runType, label: runType === 'bonus' ? label : null, paymentDate, paymentMode, lines } };
 }
 
 const no = (error) => ({ ok: false, error });
