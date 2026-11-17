@@ -123,9 +123,10 @@ to a bank debit of exactly that amount.
   Dec 2024, Jul 2025, Mar 2026 and Oct 2026 batches). These are gaps for the history import or settlement matching to fill. The Oct 2026 one is the latest batch.
 - **Salary payments made outside the bulk file:** the ledger holds several single-person "Salaries" debits near month ends that appear in no file (Aug 2024, Mar 2025, Jun 2025 x5,
   Aug 2025, Nov 2025, Mar 2026): advances or one-offs paid another way. Payroll covers the bulk file only; these stay as they are, or become a later "off-cycle" run type.
-- **Period convention:** the allocations of a month's batch carry the *payment* month as their period (the Apr 2024 salary paid on 1 May 2024 sits in May), not the salary month.
-  The brief says settlement should set `period` = salary month; that differs from how the history was entered. **Open question for the owner:** cash basis (payment month,
-  as entered so far) or the salary month going forward?
+- **Period convention (decided 2026-11-17, the owner): the salary month.** Settling a batch gives each person's allocation `period` = the salary month (a batch
+  for Apr paid on 1 May sits in April), as this brief always said. The history already in the ledger was entered the other way, under the *payment* month, so the
+  history import must either re-period those allocations or leave them and flag the difference; decide that when the import is built. A bonus run takes the month
+  it is for, in the same way.
 
 **Polish from the first review (small):** disable "Make the bank file" with a reason when someone's account cannot be paid; the
 Finance menu has both "Payroll" and the older "Salaries" and both pages are headed "Salaries", so rename one pair to tell them apart;
