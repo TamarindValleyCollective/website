@@ -207,7 +207,7 @@ numbers: seed the current people with their 2023-25 numbers when the history is 
 either may withdraw while open). Verified: the unit and endpoint tests (all 1,563 in `scripts/lib` pass), and the migration plus a test block on the real database in a rolled-back
 transaction (a leave before the start month, a mid-month date, a second open leave, a join with no name, a leave with no person, a decision by the requester, an approval with no
 decider and an approved join with no employee were all refused; a valid approved join was accepted). Also in this slice: a person whose Party is inactive cannot be put on a run and
-blocks the file, and is listed on the page. **Migration 0106 is not applied.** Not in this slice: bank details entered by the farm manager and requests to change them, the
+blocks the file, and is listed on the page. **Migration 0106 was applied to TVC ERP on 2026-11-17 (as `finance_people_requests`) and checked afterwards: row security on, no access for the anon or signed-in roles, the two new employee columns present, and no rows.** Not in this slice: bank details entered by the farm manager and requests to change them, the
 bank-confirmation screenshot, the file drop, the history import and the 2023-25 number seed.
 
 Decided 2026-11-17 (the owner): the portal accepts today or a future payment date and rejects a past one. So the generator refuses

@@ -1,4 +1,5 @@
--- Finance session 09a: people-change requests (docs/finance/sessions/09-payroll.md, "Plan for the next slices"). NOT APPLIED.
+-- Finance session 09a: people-change requests (docs/finance/sessions/09-payroll.md, "Plan for the next slices").
+-- Applied to TVC ERP on 2026-11-17 (as finance_people_requests). Do not edit it now; a change is a new migration.
 --
 -- The farm manager decides who joins and who leaves, so each change starts as a request from him and a director signs it off. Adding the
 -- person as a Party stays a separate step done by someone else. Approving a joining request puts the person on payroll from the start

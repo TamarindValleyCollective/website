@@ -1100,7 +1100,7 @@ First slice, on branch `finance-09-payroll`. See `sessions/09-payroll.md` for th
   as an inactive row), numeric only, unique. It is shown, not typed. A number can be given explicitly only to carry over an existing one (the API accepts `rollNo`, the page does
   not send it). It is the `NNN` in the file's reference (column I), so a person keeps one number across months; the generator refuses a person with no number or two with the same
   one. Tested on the real database in a rolled-back transaction (next number, a leaver's number not reused, duplicate and bad-format numbers refused, a bonus reference accepted).
-- **People-change requests** (migration `0106_finance_people_requests.sql`, **not applied**; `lib/finance-payroll-people.ts`, rules in `scripts/lib/finance-payroll-people.mjs`):
+- **People-change requests** (migration `0106_finance_people_requests.sql`, **applied 2026-11-17**; `lib/finance-payroll-people.ts`, rules in `scripts/lib/finance-payroll-people.mjs`):
   the farm manager decides who joins and leaves, so each change starts as his request (`POST /payroll/requests`: `join` with name, start month, optional role and agreed
   monthly pay, or `leave` with the person, the last month to pay and an optional reason). A `finance` `export` director approves or declines (`POST /payroll/requests/:id/action`),
   never the person who raised it (a check constraint too); the person who raised it, or a director, may withdraw it while it is open. Approving needs the MFA step-up. Approving a
