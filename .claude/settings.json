@@ -4,5 +4,46 @@
   },
   "enabledPlugins": {
     "codex@openai-codex": true
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(git push*)",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/pre-push-checks.sh",
+            "timeout": 30,
+            "statusMessage": "Scanning diff for real data and new migrations..."
+          },
+          {
+            "type": "command",
+            "if": "Bash(gh pr create*)",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/pre-push-checks.sh",
+            "timeout": 30
+          },
+          {
+            "type": "command",
+            "if": "Bash(gh pr merge*)",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/pre-push-checks.sh",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/lint-css-on-edit.sh",
+            "timeout": 60,
+            "statusMessage": "Checking design tokens..."
+          }
+        ]
+      }
+    ]
   }
 }
