@@ -137,8 +137,9 @@ compared with the 40 files, amount by amount. Result:
   Jun 2025) repeat five amounts that are also inside the 2 Jun 2025 batch, paid by individual NEFT 3 to 6 days later, with no credit of those amounts coming back in the following 12 days.** Possible double
   payments or a re-sent return; for the owner to check against the bank. **Owner (2026-11-17): there have been several one-off advance payments, and payments made individually instead of in bulk on a
   couple of occasions.** So these are advances (and a few individual payments), which belong to the pay arithmetic in 09b (an advance and its monthly deduction), not to a run type: the history import
-  leaves these ten entries untouched in the ledger, lists them in the dry run as "advances, not in a bulk file", and keeps them out of every month's file total. Still open: whether the five in June 2025
-  were paid again on top of the batch or instead of it for people the batch did not reach.
+  leaves these ten entries untouched in the ledger, lists them in the dry run as "advances, not in a bulk file", and keeps them out of every month's file total. **The five in June 2025 are explained (owner, 2026-11-17): a bank merger changed the employees' accounts and the 2 Jun 2025 file still used the old details. The payments went through but never reached the employees,
+  the money sent to the wrong accounts was never recovered, and the five people were paid again individually on 5 and 8 Jun.** So those five entries in the 2 Jun batch are money lost, not salary received; this is the incident
+  the payee-account guard and the "account changed since the last run" warning exist for. How the ledger shows them (still as Salaries, or as a loss) is the owner's decision, open below.
 - **10 file batches exist at the bank but have no salary entry at all in the ledger:** six before the tracker (Sep to Dec 2023, Feb and Mar 2024 files) and four inside it (the Dec 2024, Jul 2025, Mar 2026 and
   Oct 2026 batches). These are what the import fills in. One earlier bank batch (5 Sep 2023, the Aug 2023 salary) has no file in the folder; the folder starts with the Sep 2023 file.
 - **No January 2024 batch exists** at the bank, and no file: that month was paid another way or not at all.
