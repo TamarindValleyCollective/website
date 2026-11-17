@@ -128,6 +128,22 @@ to a bank debit of exactly that amount.
   history import must either re-period those allocations or leave them and flag the difference; decide that when the import is built. A bonus run takes the month
   it is for, in the same way.
 
+**Ledger validation before the history import (2026-11-17; the files and amounts stay outside the repo).** Every bank debit that carries a "Salaries" entry in the ledger (38 of them, since Sep 2023) was
+compared with the 40 files, amount by amount. Result:
+- **Totals agree everywhere:** on all 38 debits the entries add up to the bank amount exactly.
+- **28 of the 38 are batches** (8 to 10 entries). **25 match a file entry for entry**; **none** has a file with the same total but different entries.
+- **3 batches have no file:** the debits of 1 Jul, 2 Sep and 3 Oct 2026 (the June, August and September 2026 salaries). The file named June 2026 has an empty amount column (a template; the real file is
+  missing); there is no August file; the file named September is the October batch.
+- **10 are single-person payments** with no file (Aug 2024, Mar 2025, 5 in Jun 2025, Aug 2025, Nov 2025, Mar 2026): paid outside the bulk file, most as round amounts (advances or one-offs). **Five of them (5 and 8
+  Jun 2025) repeat five amounts that are also inside the 2 Jun 2025 batch, paid by individual NEFT 3 to 6 days later, with no credit of those amounts coming back in the following 12 days.** Possible double
+  payments or a re-sent return; for the owner to check against the bank.
+- **10 file batches exist at the bank but have no salary entry at all in the ledger:** six before the tracker (Sep to Dec 2023, Feb and Mar 2024 files) and four inside it (the Dec 2024, Jul 2025, Mar 2026 and
+  Oct 2026 batches). These are what the import fills in. One earlier bank batch (5 Sep 2023, the Aug 2023 salary) has no file in the folder; the folder starts with the Sep 2023 file.
+- **No January 2024 batch exists** at the bank, and no file: that month was paid another way or not at all.
+- **People are not confirmed.** Many entries have no party (4 of 10 in most 2024 months, 7 of 10 in Feb and Mar 2025, 1 to 2 from mid-2025), so the check was on amounts. Amounts repeat within a month (three at the same
+  figure in some months), so naming each file row's person needs the name, and the import supplies the party on every entry.
+- **Periods:** these batches' entries sit in the payment month; the import re-periods them to the salary month (decided 2026-11-17).
+
 **Polish from the first review (small):** disable "Make the bank file" with a reason when someone's account cannot be paid; the
 Finance menu has both "Payroll" and the older "Salaries" and both pages are headed "Salaries", so rename one pair to tell them apart;
 two console errors on the pages (a 404 not traced yet, and a blocked sign-in script in the headless check).
