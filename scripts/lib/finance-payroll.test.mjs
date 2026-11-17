@@ -4,8 +4,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { validateRunInput, decideAction, confirmationRows, runSummary } from './finance-payroll.mjs';
 
-const E1 = '11111111-1111-4111-8111-111111111111';
-const E2 = '22222222-2222-4222-8222-222222222222';
+const E1 = '11111111-1111-4111-8111-11111111111a';
+const E2 = '22222222-2222-4222-8222-22222222222b';
 const today = '2026-11-17';
 const input = (over = {}) => ({ month: '2026-10', lines: [{ employeeId: E1, netRupees: 15000 }, { employeeId: E2, netRupees: 20500 }], ...over });
 
