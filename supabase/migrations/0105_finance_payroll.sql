@@ -1,5 +1,5 @@
 -- Finance session 09a: payroll runs and the salary bulk-payment batch (docs/finance/sessions/09-payroll.md).
--- NOT APPLIED. Say so in the PR and apply it before the code that reads these tables is merged.
+-- Applied to TVC ERP on 2026-11-17 (as finance_payroll). Do not edit it now; a change is a new migration.
 --
 -- 09a records and pays a month's salary; 09b (attendance, rates, advances) comes later, so the optional columns on a line
 -- (agreed pay, days worked, advance deducted) exist now only so nothing has to be re-entered then.

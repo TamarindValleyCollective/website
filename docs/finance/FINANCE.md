@@ -1085,7 +1085,7 @@ salary flag are set with `PATCH /categories/:id {head, isSalary}`, the route cat
 - **Not built yet:** monthly phasing (the table and API keep it; the editor has no screen for it), the import of the existing plan, a diff between two
   versions, and the editor in a browser with a real sign-in or on a phone.
 
-## Payroll (session 09a, migration `0105_finance_payroll.sql`, **not applied**)
+## Payroll (session 09a, migration `0105_finance_payroll.sql`, **applied 2026-11-17**)
 
 First slice, on branch `finance-09-payroll`. See `sessions/09-payroll.md` for the decisions and the file layout.
 

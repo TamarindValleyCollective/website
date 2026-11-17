@@ -96,7 +96,7 @@ Agreed after the first run screens were reviewed. Order of work, each its own co
 
 **Decisions after reading the history of uploaded files (2026-11-17, with the owner).**
 - **Run type (built, same branch):** a month holds one *salary* run plus any number of *bonus* runs, each with a name ("Diwali Bonus"), because Oct 2025 had a
-  salary file and a bonus file. `fin_payroll_runs.run_type`/`label` (migration `0105`, still unapplied, so edited in place); the unique index is per month, type
+  salary file and a bonus file. `fin_payroll_runs.run_type`/`label` (migration `0105`, edited in place before it was applied); the unique index is per month, type
   and name. A bonus is worded as the old files were ("<Mon YYYY> <name>", "<name> for <Mon YYYY>", reference `YYYY-Mon-Bonus-Employee-nnn`) and defaults to paying
   today. The reference is built in one function, `lineReference`, used by the file and by the line snapshot.
 - **Employee numbers are seeded from the 2023-25 set** (the same ten people carried `1, 3-10, 12` every month for about 18 months; two numbers belong to people
@@ -189,7 +189,7 @@ Built:
 
 Verified: the unit tests; the migration run on the real database inside a transaction that was rolled back (whole-rupee check,
 duplicate person, second run for a month, preparer cannot approve, edit and delete refused after the file, RLS on), and
-afterwards the tables did not exist. **Migration 0105 is not applied.**
+afterwards the tables did not exist. (Migration 0105 was applied later, 2026-11-17: see below.)
 
 **Run screens, 2026-11-17 (same branch):** `lib/finance-payroll.ts` and its routes, `scripts/lib/finance-payroll.mjs` (input rules, who may move a run, the
 confirmation rows), the shared page component and two pages (directors, farm manager), nav entries, and 16 endpoint tests. Details in `FINANCE.md`, "Payroll".
@@ -199,7 +199,7 @@ the people as employee parties and then on the Payroll page. Not built yet: the 
 **Run type and automatic employee numbers, 2026-11-17 (same branch):** `run_type`/`label` on runs (a month may hold a salary run and named bonus runs) and the employee number
 assigned by a trigger (next number up, never reused, shown not typed, carried over only through the API), used as the `NNN` of the file reference. Verified: the unit and endpoint
 tests, and the migration plus a test block run on the real database in one transaction that was rolled back (afterwards the tables and the function did not exist). That run found
-a real bug the mocked tests could not: the line-reference check rejected a bonus reference; fixed in the migration. **Migration 0105 is still not applied.** Still to do for the
+a real bug the mocked tests could not: the line-reference check rejected a bonus reference; fixed in the migration. **Migration 0105 was applied to TVC ERP on 2026-11-17 (as `finance_payroll`) and checked afterwards: four tables with row security on and no policies, no access for the anon or signed-in roles, both functions locked down with an empty search path, and no rows.** Still to do for the
 numbers: seed the current people with their 2023-25 numbers when the history is imported (a one-off with the owner's list, kept outside the repo).
 
 Decided 2026-11-17 (the owner): the portal accepts today or a future payment date and rejects a past one. So the generator refuses
