@@ -1099,4 +1099,5 @@ First slice, on branch `finance-09-payroll`. See `sessions/09-payroll.md` for th
   `fin_payroll_runs` (draft, confirmed, file generated, approved, settled, cancelled), `fin_payroll_lines` (snapshot of the payee
   account used, net in whole rupees, optional agreed pay, days worked and advance for 09b, the bank reference). The preparer can
   never be the approver (a check constraint on both the run and the batch). A line is frozen once the file is generated.
+- **Known gap**: verification is a point-in-time check, so a once-verified account that has since gone invalid still passes the guard. A live validation of every payee account before the file is generated is the intended fix; no way to do it exists yet (under investigation). It will be one more check in `payrollBlockers`.
 - **Not built yet**: screens, the endpoint and the R2 write, the debit account setting, history import, settlement matching.

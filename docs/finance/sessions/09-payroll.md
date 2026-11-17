@@ -112,5 +112,10 @@ writes the file to R2, the debit account setting (server-side), the history impo
 Decided 2026-11-17 (the owner): the portal accepts today or a future payment date and rejects a past one. So the generator refuses
 only a past date, with no warning for a future one, and a file not uploaded by its payment date goes stale: regenerate it with a
 new date (the run goes back from file generated to confirmed, the old batch is cancelled before upload, and the payee accounts are
-snapshotted again). Still open: the guard lets a changed but verified account through and shows it loudly; say if it should
-always need a fresh verification.
+snapshotted again).
+
+Decided 2026-11-17 (the owner): the real risk with a payee account is a detail that was verified once and is no longer valid. The
+right fix is to validate every payee account just before the file is generated, but there is no way to do that today (being
+investigated separately). Until there is, `payrollBlockers` lets a verified account through and lists any account that changed since
+the last run; that is a known gap, not a safeguard. When a live check exists it becomes one more check inside `payrollBlockers`, run
+on every line at generation, and a failed or unavailable check should block the file.
