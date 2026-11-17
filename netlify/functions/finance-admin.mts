@@ -27,6 +27,7 @@ import { saveOperator } from './lib/finance-upi-operators';
 import { getChannelBreakdown, getChannelLines, getChannels } from './lib/finance-channels';
 import { getDashboard } from './lib/finance-dashboard';
 import { BUDGET_ID, approveDraft, discardDraft, getBudget, saveLines, startDraft } from './lib/finance-budget';
+import { listPersonRequests, createPersonRequest, personRequestAction } from './lib/finance-payroll-people';
 import { PAYROLL_ID, addEmployee, createRun, downloadFile, getRun, listPayroll, runAction, updateRun } from './lib/finance-payroll';
 import { setPaymentNote } from './lib/finance-notes';
 import { heldCoverage, reconciliationOf, runImport } from './lib/finance-import';
@@ -275,6 +276,10 @@ const dispatch = async (req: Request): Promise<Response> => {
   // Ledger and review (session 05)
   if (route === '/payroll' && req.method === 'GET') return listPayroll(req);
   if (route === '/payroll/employees' && req.method === 'POST') return addEmployee(req);
+  if (route === '/payroll/requests' && req.method === 'GET') return listPersonRequests(req);
+  if (route === '/payroll/requests' && req.method === 'POST') return createPersonRequest(req);
+  const personRequest = /^\/payroll\/requests\/([^/]+)\/action$/.exec(route);
+  if (personRequest && PAYROLL_ID.test(personRequest[1]) && req.method === 'POST') return personRequestAction(req, personRequest[1]);
   if (route === '/payroll/runs' && req.method === 'POST') return createRun(req);
   const payrollRun = /^\/payroll\/runs\/([^/]+)(\/action|\/file)?$/.exec(route);
   if (payrollRun && PAYROLL_ID.test(payrollRun[1])) {

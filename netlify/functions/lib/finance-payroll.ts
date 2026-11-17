@@ -22,24 +22,25 @@ import { getFinancePayroll, putFinancePayroll } from './finance-storage';
 import { todayIST } from '../../../scripts/lib/finance-parties.mjs';
 import { accountPayableOn } from '../../../scripts/lib/finance-parties.mjs';
 import { confirmationRows, decideAction, runSummary, validateRunInput } from '../../../scripts/lib/finance-payroll.mjs';
+import { eligibleForMonth } from '../../../scripts/lib/finance-payroll-people.mjs';
 import { lineReference, payrollBlockers, salaryFileBytes, validatePaymentDate } from '../../../scripts/lib/finance-payroll-file.mjs';
 
-type Json = Record<string, any>;
+export type Json = Record<string, any>;
 const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 export const PAYROLL_ID = ID;
-const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
-const fail = (error: string, status = 400, code?: string) => json({ error, ...(code ? { code } : {}) }, status);
-const serverError = (err: unknown, what: string) => {
+export const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
+export const fail = (error: string, status = 400, code?: string) => json({ error, ...(code ? { code } : {}) }, status);
+export const serverError = (err: unknown, what: string) => {
   console.error(`[finance-payroll] ${what} failed`, err instanceof Error ? err.message : err);
   return json({ error: 'Server error' }, 500);
 };
-const rows = async (path: string): Promise<Json[]> => (await (await rest(path)).json()) as Json[];
-async function entityId(): Promise<string> {
+export const rows = async (path: string): Promise<Json[]> => (await (await rest(path)).json()) as Json[];
+export async function entityId(): Promise<string> {
   const e = await rows('/fin_entities?select=id&order=created_at.asc&limit=1');
   if (!e[0]) throw new Error('no entity');
   return e[0].id as string;
 }
-async function body(req: Request): Promise<Json | null> {
+export async function body(req: Request): Promise<Json | null> {
   try {
     const b = await req.json();
     return b && typeof b === 'object' ? (b as Json) : null;
@@ -48,7 +49,7 @@ async function body(req: Request): Promise<Json | null> {
   }
 }
 
-type Access = { staff: { id: string; name?: string | null; email: string }; canEnter: boolean; canPrepare: boolean; canApprove: boolean };
+export type Access = { staff: { id: string; name?: string | null; email: string }; canEnter: boolean; canPrepare: boolean; canApprove: boolean };
 
 // Any one of the three payroll roles opens the pages; which actions they may take is decided per action.
 export async function payrollAccess(req: Request): Promise<{ ok: true; access: Access } | { ok: false; response: Response }> {
@@ -111,11 +112,12 @@ async function runLines(runId: string): Promise<Json[]> {
   const lines = await rows(`/fin_payroll_lines?run_id=eq.${runId}&select=id,employee_id,net_paise,agreed_pay_paise,days_worked,advance_deducted_paise,party_account_id,account_last4,account_fingerprint,reference,returned_at`);
   if (!lines.length) return [];
   const emps = await rows(`/fin_employees?id=in.(${lines.map((l) => l.employee_id).join(',')})&select=id,party_id,roll_no`);
-  const parties = await rows(`/fin_parties?id=in.(${emps.map((e) => e.party_id).join(',')})&select=id,name,merged_into`);
+  const parties = await rows(`/fin_parties?id=in.(${emps.map((e) => e.party_id).join(',')})&select=id,name,merged_into,active`);
   const empById = new Map(emps.map((e) => [e.id, e]));
   const nameOf = new Map(parties.map((p) => [p.id, p.name]));
+  const activeOf = new Map(parties.map((p) => [p.id, p.active !== false]));
   return lines
-    .map((l) => ({ ...l, partyId: empById.get(l.employee_id)?.party_id, rollNo: empById.get(l.employee_id)?.roll_no ?? null, name: nameOf.get(empById.get(l.employee_id)?.party_id) ?? 'Unknown' }))
+    .map((l) => ({ ...l, partyActive: activeOf.get(empById.get(l.employee_id)?.party_id) ?? true, partyId: empById.get(l.employee_id)?.party_id, rollNo: empById.get(l.employee_id)?.roll_no ?? null, name: nameOf.get(empById.get(l.employee_id)?.party_id) ?? 'Unknown' }))
     .sort((a, b) => String(a.rollNo ?? '~').localeCompare(String(b.rollNo ?? '~'), 'en', { numeric: true }) || a.name.localeCompare(b.name));
 }
 
@@ -167,13 +169,14 @@ export async function listPayroll(req: Request): Promise<Response> {
   try {
     const [runs, employees, lines] = await Promise.all([
       rows(`/fin_payroll_runs?select=${RUN_COLUMNS}&order=month.desc,created_at.desc&limit=36`),
-      rows('/fin_employees?select=id,party_id,roll_no,active&order=roll_no.asc'),
+      rows('/fin_employees?select=id,party_id,roll_no,active,start_month,last_month&order=roll_no.asc'),
       rows('/fin_payroll_lines?select=run_id,net_paise&limit=5000'),
     ]);
     const batches = runs.some((r) => r.batch_id) ? await rows(`/fin_payment_batches?id=in.(${runs.filter((r) => r.batch_id).map((r) => r.batch_id).join(',')})&select=id,status`) : [];
     const batchStatus = new Map(batches.map((b) => [b.id, b.status]));
-    const parties = employees.length ? await rows(`/fin_parties?id=in.(${employees.map((e) => e.party_id).join(',')})&select=id,name`) : [];
+    const parties = employees.length ? await rows(`/fin_parties?id=in.(${employees.map((e) => e.party_id).join(',')})&select=id,name,active`) : [];
     const nameOf = new Map(parties.map((p) => [p.id, p.name]));
+    const inactiveParty = new Set(parties.filter((p) => p.active === false).map((p) => p.id));
     const totals = new Map<string, { count: number; total: number }>();
     for (const l of lines) {
       const t = totals.get(l.run_id) ?? { count: 0, total: 0 };
@@ -193,7 +196,9 @@ export async function listPayroll(req: Request): Promise<Response> {
         id: r.id, month: String(r.month).slice(0, 7), runType: r.run_type, label: r.label, status: r.status, paymentDate: r.payment_date, count: totals.get(r.id)?.count ?? 0, totalPaise: totals.get(r.id)?.total ?? 0,
         ...runSummary({ status: r.status, batchStatus: batchStatus.get(r.batch_id) ?? null }),
       })),
-      employees: employees.map((e) => ({ id: e.id, name: nameOf.get(e.party_id) ?? 'Unknown', rollNo: e.roll_no, active: e.active })),
+      employees: employees.map((e) => ({ id: e.id, name: nameOf.get(e.party_id) ?? 'Unknown', rollNo: e.roll_no, active: e.active, startMonth: e.start_month ? String(e.start_month).slice(0, 7) : null, lastMonth: e.last_month ? String(e.last_month).slice(0, 7) : null })),
+      // People who are on payroll but whose party has been deactivated: a director removes them, or reactivates the party.
+      partyInactive: employees.filter((e) => e.active && inactiveParty.has(e.party_id)).map((e) => ({ id: e.id, name: nameOf.get(e.party_id) ?? 'Unknown' })),
       candidates,
     });
   } catch (err) {
@@ -248,10 +253,14 @@ async function writeLines(runId: string, lines: Json[]) {
   });
 }
 
-async function checkEmployees(lines: Json[]): Promise<string | null> {
-  const emps = await rows(`/fin_employees?id=in.(${lines.map((l) => l.employeeId).join(',')})&select=id,active`);
+async function checkEmployees(lines: Json[], month: string): Promise<string | null> {
+  const emps = await rows(`/fin_employees?id=in.(${lines.map((l) => l.employeeId).join(',')})&select=id,party_id,active,start_month,last_month`);
   if (emps.length !== lines.length) return 'Choose each person from the list.';
   if (emps.some((e) => !e.active)) return 'One of these people is no longer on payroll.';
+  const m = String(month).slice(0, 7);
+  if (emps.some((e) => !eligibleForMonth({ startMonth: e.start_month, lastMonth: e.last_month }, m))) return 'One of these people is not on payroll for that month: they start later or have already left.';
+  const parties = await rows(`/fin_parties?id=in.(${emps.map((e) => e.party_id).join(',')})&select=id,active`);
+  if (parties.some((p) => p.active === false)) return 'One of these people is inactive in Parties. Reactivate them there, or remove them from payroll.';
   return null;
 }
 
@@ -267,7 +276,7 @@ export async function createRun(req: Request): Promise<Response> {
   if (checked.error || !checked.value) return fail(checked.error ?? 'Check the details.');
   const v = checked.value as Json;
   try {
-    const problem = await checkEmployees(v.lines);
+    const problem = await checkEmployees(v.lines, v.month);
     if (problem) return fail(problem);
     const entity = await entityId();
     const sameLabel = v.runType === 'bonus' ? `label=eq.${encodeURIComponent(v.label)}` : 'label=is.null';
@@ -300,7 +309,7 @@ export async function updateRun(req: Request, id: string): Promise<Response> {
     const checked = validateRunInput({ ...b, month: String(run.month).slice(0, 7), runType: run.run_type, label: run.label }, { today: todayIST() });
     if (checked.error || !checked.value) return fail(checked.error ?? 'Check the details.');
     const v = checked.value as Json;
-    const problem = await checkEmployees(v.lines);
+    const problem = await checkEmployees(v.lines, v.month);
     if (problem) return fail(problem);
     await logFinanceAction({ actorId: access.staff.id, entityId: await entityId(), action: 'finance.payroll_run_edited', target: id, detail: { lines: v.lines.length } });
     await rest(`/fin_payroll_runs?id=eq.${id}&status=eq.draft`, { method: 'PATCH', body: JSON.stringify({ payment_mode: v.paymentMode, payment_date: v.paymentDate, updated_at: new Date().toISOString() }) });
@@ -390,7 +399,8 @@ async function generate(run: Json, access: Access, entity: string, paymentDate: 
   const accounts = await liveAccounts([...new Set(lines.map((l) => l.partyId))]);
   const previous = await previousFingerprints(lines.map((l) => l.employee_id), run.month);
   const { blockers, changed } = payrollBlockers(lines.map((l) => ({ name: l.name, account: accounts.get(l.partyId) ?? null, previousFingerprint: previous.get(l.employee_id) ?? null })), today);
-  if (blockers.length) return json({ error: 'The file cannot be generated yet.', blockers, changed }, 409);
+  const inactive = lines.filter((l) => !l.partyActive).map((l) => `${l.name} is inactive in Parties. Remove them from payroll, or reactivate them there.`);
+  if (blockers.length || inactive.length) return json({ error: 'The file cannot be generated yet.', blockers: [...blockers, ...inactive], changed }, 409);
   // Decrypted here and nowhere else; the numbers go into the file and are not kept or logged.
   const people = lines.map((l) => {
     const d = JSON.parse(decryptFinanceText((accounts.get(l.partyId) as Json).details_enc));

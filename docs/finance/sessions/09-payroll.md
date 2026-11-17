@@ -202,6 +202,14 @@ tests, and the migration plus a test block run on the real database in one trans
 a real bug the mocked tests could not: the line-reference check rejected a bonus reference; fixed in the migration. **Migration 0105 was applied to TVC ERP on 2026-11-17 (as `finance_payroll`) and checked afterwards: four tables with row security on and no policies, no access for the anon or signed-in roles, both functions locked down with an empty search path, and no rows.** Still to do for the
 numbers: seed the current people with their 2023-25 numbers when the history is imported (a one-off with the owner's list, kept outside the repo).
 
+**Joining and leaving requests, 2026-11-17 (same branch; first slice of the people-change flow):** migration `0106` (`start_month`/`last_month` on employees, `fin_people_requests`), the pure rules
+(`finance-payroll-people.mjs`), the routes and the "Changes of people" section on both payroll pages (the farm manager raises, a director approves with the step-up or declines,
+either may withdraw while open). Verified: the unit and endpoint tests (all 1,563 in `scripts/lib` pass), and the migration plus a test block on the real database in a rolled-back
+transaction (a leave before the start month, a mid-month date, a second open leave, a join with no name, a leave with no person, a decision by the requester, an approval with no
+decider and an approved join with no employee were all refused; a valid approved join was accepted). Also in this slice: a person whose Party is inactive cannot be put on a run and
+blocks the file, and is listed on the page. **Migration 0106 is not applied.** Not in this slice: bank details entered by the farm manager and requests to change them, the
+bank-confirmation screenshot, the file drop, the history import and the 2023-25 number seed.
+
 Decided 2026-11-17 (the owner): the portal accepts today or a future payment date and rejects a past one. So the generator refuses
 only a past date, with no warning for a future one, and a file not uploaded by its payment date goes stale: regenerate it with a
 new date (the run goes back from file generated to confirmed, the old batch is cancelled before upload, and the payee accounts are

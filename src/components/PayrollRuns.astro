@@ -23,6 +23,8 @@ import StepUpSheet from './StepUpSheet.astro';
     <div id="list-view">
       <div class="pr-actions">
         <button type="button" id="new-run" class="button button--primary" hidden>Start a month's salaries</button>
+        <button type="button" id="join-btn" class="button" hidden>A new person is joining</button>
+        <button type="button" id="leave-btn" class="button" hidden>Someone is leaving</button>
         <button type="button" id="add-person" class="button" hidden>Add a person to payroll</button>
       </div>
 
@@ -34,6 +36,33 @@ import StepUpSheet from './StepUpSheet.astro';
         <div class="pr-actions">
           <button type="submit" class="button button--primary">Add</button>
           <button type="button" id="person-cancel" class="button">Cancel</button>
+        </div>
+      </form>
+
+      <form id="join-form" class="pr-card" hidden novalidate>
+        <h2>A new person is joining</h2>
+        <p class="hint">A director approves this. Someone else adds the person on the Parties page, with their bank details.</p>
+        <label class="pr-field"><span>Name</span><input id="j-name" autocomplete="off" maxlength="100" /></label>
+        <label class="pr-field"><span>Role (optional)</span><input id="j-role" autocomplete="off" maxlength="60" /></label>
+        <label class="pr-field"><span>First month paid</span><input id="j-start" type="month" required /></label>
+        <label class="pr-field"><span>Agreed monthly pay, in rupees (optional)</span><input id="j-pay" inputmode="numeric" autocomplete="off" placeholder="₹" /></label>
+        <p id="join-error" class="pr-error" role="alert" hidden></p>
+        <div class="pr-actions">
+          <button type="submit" class="button button--primary">Send for approval</button>
+          <button type="button" id="join-cancel" class="button">Cancel</button>
+        </div>
+      </form>
+
+      <form id="leave-form" class="pr-card" hidden novalidate>
+        <h2>Someone is leaving</h2>
+        <p class="hint">A director approves this. The person is still paid up to the last month you choose, and not after.</p>
+        <label class="pr-field"><span>Who</span><select id="l-who"></select></label>
+        <label class="pr-field"><span>Last month paid</span><input id="l-last" type="month" required /></label>
+        <label class="pr-field"><span>Reason (optional)</span><input id="l-reason" autocomplete="off" maxlength="200" /></label>
+        <p id="leave-error" class="pr-error" role="alert" hidden></p>
+        <div class="pr-actions">
+          <button type="submit" class="button button--primary">Send for approval</button>
+          <button type="button" id="leave-cancel" class="button">Cancel</button>
         </div>
       </form>
 
@@ -50,6 +79,8 @@ import StepUpSheet from './StepUpSheet.astro';
           <button type="button" id="new-cancel" class="button">Cancel</button>
         </div>
       </form>
+
+      <div id="people-box" hidden></div>
 
       <div id="runs"></div>
     </div>
@@ -79,7 +110,8 @@ import StepUpSheet from './StepUpSheet.astro';
 
   type Me = { id: string; canEnter: boolean; canPrepare: boolean; canApprove: boolean; ready: boolean; hasPasskey: boolean; stepUpValid: boolean };
   type RunRow = { id: string; month: string; runType: string; label: string | null; status: string; paymentDate: string; count: number; totalPaise: number; next: string | null };
-  type Person = { id: string; name: string; rollNo: string | null; active: boolean };
+  type Person = { id: string; name: string; rollNo: string | null; active: boolean; startMonth: string | null; lastMonth: string | null };
+  type PersonRequest = { id: string; kind: 'join' | 'leave'; status: string; name: string; rollNo: string | null; roleTitle: string | null; startMonth: string | null; agreedPayRupees: number | null; lastMonth: string | null; reason: string | null; decisionNote: string | null; mine: boolean; next: string | null };
   type Line = { id: string; employeeId: string; name: string; netPaise: number; last4: string | null; changed: boolean; problem: string | null; reference: string | null; returned: boolean; agreedPayPaise: number | null; daysWorked: number | null; advanceDeductedPaise: number | null };
   type Detail = {
     run: { id: string; month: string; runType: string; label: string | null; status: string; paymentMode: string; paymentDate: string; cancelledReason: string | null; preparedByMe: boolean; batch: { status: string; totalPaise: number; lineCount: number } | null; stale: boolean; next: string | null };
@@ -88,7 +120,8 @@ import StepUpSheet from './StepUpSheet.astro';
     changed: number;
     problems: number;
   };
-  let data: { me: Me; today: string; runs: RunRow[]; employees: Person[]; candidates: { id: string; name: string }[] } | null = null;
+  let data: { me: Me; today: string; runs: RunRow[]; employees: Person[]; partyInactive: { id: string; name: string }[]; candidates: { id: string; name: string }[] } | null = null;
+  let requests: PersonRequest[] = [];
   let openId: string | null = null;
 
   const rupees = (paise: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(paise / 100);
@@ -203,9 +236,19 @@ import StepUpSheet from './StepUpSheet.astro';
   $('new-run').addEventListener('click', () => {
     if (!data) return;
     $<HTMLInputElement>('n-month').value = previousMonth();
+    renderNewPeople();
+    $('new-error').hidden = true;
+    $('new-form').hidden = false;
+    $('new-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+  // Only the people on payroll for the chosen month: from their first month to their last, either end being open. What was typed stays.
+  function renderNewPeople() {
+    if (!data) return;
+    const month = $<HTMLInputElement>('n-month').value;
+    const typed = new Map([...$('n-people').querySelectorAll<HTMLInputElement>('input[data-employee]')].map((i) => [i.dataset.employee as string, i.value]));
     const people = $('n-people');
     people.replaceChildren();
-    for (const p of data.employees.filter((e) => e.active)) {
+    for (const p of data.employees.filter((e) => e.active && (!month || ((!e.startMonth || e.startMonth <= month) && (!e.lastMonth || e.lastMonth >= month))))) {
       const row = el('label', 'pr-person');
       row.append(el('span', undefined, p.rollNo ? `${p.rollNo}. ${p.name}` : p.name));
       const input = el('input');
@@ -213,15 +256,14 @@ import StepUpSheet from './StepUpSheet.astro';
       input.autocomplete = 'off';
       input.placeholder = '₹';
       input.dataset.employee = p.id;
+      input.value = typed.get(p.id) ?? '';
       input.setAttribute('aria-label', `Net pay for ${p.name}, in rupees`);
       row.append(input);
       people.append(row);
     }
-    if (!people.children.length) people.append(el('p', 'hint', 'No one is on payroll yet. A director adds people first.'));
-    $('new-error').hidden = true;
-    $('new-form').hidden = false;
-    $('new-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
-  });
+    if (!people.children.length) people.append(el('p', 'hint', month ? 'No one is on payroll for that month.' : 'No one is on payroll yet. A director adds people first.'));
+  }
+  $('n-month').addEventListener('change', renderNewPeople);
   $('new-cancel').addEventListener('click', () => ($('new-form').hidden = true));
   $('n-type').addEventListener('change', () => ($('n-label-wrap').hidden = $<HTMLSelectElement>('n-type').value !== 'bonus'));
 
@@ -257,6 +299,121 @@ import StepUpSheet from './StepUpSheet.astro';
     showToast('Saved as a draft.');
     $('new-form').hidden = true;
     await load(out.id);
+  });
+
+  // ---- changes of people: the farm manager raises them, a director signs them off
+  const monthShort = (m: string | null) => (m ? new Date(`${m}-01T00:00:00Z`).toLocaleDateString('en-IN', { month: 'short', year: 'numeric', timeZone: 'UTC' }) : '');
+  function renderPeople() {
+    const box = $('people-box');
+    box.replaceChildren();
+    const me = data?.me;
+    if (!data || !me) return void (box.hidden = true);
+    const open = requests.filter((r) => r.status === 'requested');
+    const lately = requests.filter((r) => r.status !== 'requested').slice(0, 5);
+    if (!open.length && !lately.length && !data.partyInactive.length) return void (box.hidden = true);
+    box.hidden = false;
+    box.append(el('h2', undefined, 'Changes of people'));
+    if (data.partyInactive.length) {
+      box.append(el('p', 'pr-warn', `${data.partyInactive.map((p) => p.name).join(', ')} ${data.partyInactive.length === 1 ? 'is' : 'are'} inactive on the Parties page but still on payroll. Their salary file is blocked until a leaving request is approved or the party is reactivated.`));
+    }
+    for (const r of [...open, ...lately]) {
+      const card = el('div', 'pr-card');
+      const top = el('div', 'pr-run-top');
+      top.append(el('strong', undefined, r.kind === 'join' ? `Joining: ${r.name}` : `Leaving: ${r.rollNo ? `${r.rollNo}. ` : ''}${r.name}`), pill(r.status === 'requested' ? 'draft' : r.status === 'approved' ? 'settled' : 'cancelled', r.status === 'requested' ? 'Waiting' : r.status === 'approved' ? 'Approved' : r.status === 'rejected' ? 'Declined' : 'Withdrawn'));
+      card.append(top);
+      const bits = r.kind === 'join'
+        ? [`from ${monthShort(r.startMonth)}`, r.roleTitle, r.agreedPayRupees ? `${rupees(r.agreedPayRupees * 100)} a month` : null]
+        : [`last month paid: ${monthShort(r.lastMonth)}`, r.reason];
+      card.append(el('p', 'pr-sub', bits.filter(Boolean).join(' · ')));
+      if (r.decisionNote) card.append(el('p', 'pr-sub', `Note: ${r.decisionNote}`));
+      if (r.status === 'requested') {
+        card.append(el('p', 'pr-sub', r.next ?? ''));
+        const acts = el('div', 'pr-actions');
+        const decide = (action: string, extra: Record<string, unknown> = {}, done = 'Done.') => async () => {
+          if (await call(`/api/finance-admin/payroll/requests/${r.id}/action`, 'POST', { action, ...extra }, done)) await load();
+        };
+        if (me.canPrepare && !r.mine) {
+          let pick: HTMLSelectElement | null = null;
+          if (r.kind === 'join') {
+            if (data.candidates.length) {
+              pick = el('select');
+              pick.setAttribute('aria-label', `Party for ${r.name}`);
+              pick.append(...data.candidates.map((c) => Object.assign(document.createElement('option'), { value: c.id, textContent: c.name })));
+              const guess = data.candidates.find((c) => c.name.trim().toLowerCase() === r.name.trim().toLowerCase());
+              if (guess) pick.value = guess.id;
+              acts.append(pick);
+            } else {
+              card.append(el('p', 'hint', 'Add them as an employee on the Parties page first, then approve.'));
+            }
+          }
+          const chosen = pick;
+          if (r.kind === 'leave' || chosen) acts.append(btn('Approve', () => decide('approve', chosen ? { partyId: chosen.value } : {}, r.kind === 'join' ? 'Added to payroll.' : 'Last month set.')(), 'button button--primary'));
+          acts.append(btn('Decline', () => {
+            const note = prompt('Why? (optional)');
+            if (note !== null) void decide('reject', { note }, 'Declined.')();
+          }));
+        }
+        if (r.mine || me.canPrepare) acts.append(btn('Withdraw', decide('cancel', {}, 'Withdrawn.'), 'button pr-danger'));
+        card.append(acts);
+      }
+      box.append(card);
+    }
+  }
+  function openJoin() {
+    $<HTMLInputElement>('j-name').value = '';
+    $<HTMLInputElement>('j-role').value = '';
+    $<HTMLInputElement>('j-pay').value = '';
+    $<HTMLInputElement>('j-start').value = new Date(`${data?.today ?? new Date().toISOString().slice(0, 10)}T00:00:00Z`).toISOString().slice(0, 7);
+    $('join-error').hidden = true;
+    $('join-form').hidden = false;
+    $('join-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  $('join-btn').addEventListener('click', openJoin);
+  $('join-cancel').addEventListener('click', () => ($('join-form').hidden = true));
+  $('join-form').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const payRaw = $<HTMLInputElement>('j-pay').value.replace(/[₹,\s]/g, '');
+    const body = { kind: 'join', name: $<HTMLInputElement>('j-name').value, role: $<HTMLInputElement>('j-role').value, startMonth: $<HTMLInputElement>('j-start').value, ...(payRaw ? { agreedPayRupees: Number(payRaw) } : {}) };
+    const { status, data: out } = await staffFetch('/api/finance-admin/payroll/requests', { method: 'POST', body }).catch((e) => (fail(e), { status: 0, data: null as any }));
+    if (status !== 201) {
+      if (status) {
+        $('join-error').textContent = out?.error ?? 'Could not send it.';
+        $('join-error').hidden = false;
+      }
+      return;
+    }
+    showToast('Sent for approval.');
+    $('join-form').hidden = true;
+    await load();
+  });
+  function openLeave() {
+    if (!data) return;
+    const sel = $<HTMLSelectElement>('l-who');
+    const staying = data.employees.filter((e) => e.active && !e.lastMonth);
+    sel.replaceChildren(...staying.map((e) => Object.assign(document.createElement('option'), { value: e.id, textContent: e.rollNo ? `${e.rollNo}. ${e.name}` : e.name })));
+    $<HTMLInputElement>('l-last').value = data.today.slice(0, 7);
+    $<HTMLInputElement>('l-reason').value = '';
+    $('leave-error').hidden = !!staying.length;
+    $('leave-error').textContent = staying.length ? '' : 'No one on payroll is without a last month already.';
+    $('leave-form').hidden = false;
+    $('leave-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  $('leave-btn').addEventListener('click', openLeave);
+  $('leave-cancel').addEventListener('click', () => ($('leave-form').hidden = true));
+  $('leave-form').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const body = { kind: 'leave', employeeId: $<HTMLSelectElement>('l-who').value, lastMonth: $<HTMLInputElement>('l-last').value, reason: $<HTMLInputElement>('l-reason').value };
+    const { status, data: out } = await staffFetch('/api/finance-admin/payroll/requests', { method: 'POST', body }).catch((e) => (fail(e), { status: 0, data: null as any }));
+    if (status !== 201) {
+      if (status) {
+        $('leave-error').textContent = out?.error ?? 'Could not send it.';
+        $('leave-error').hidden = false;
+      }
+      return;
+    }
+    showToast('Sent for approval.');
+    $('leave-form').hidden = true;
+    await load();
   });
 
   // ---- add a person
@@ -432,6 +589,11 @@ import StepUpSheet from './StepUpSheet.astro';
       intro.textContent = data!.me.canEnter ? 'Enter what each person is to be paid, then confirm. A director makes the bank file.' : 'Months of salaries: from the farm manager\'s amounts to the bank file and its approval.';
       $('new-run').hidden = !data!.me.canEnter;
       $('add-person').hidden = !data!.me.canPrepare;
+      $('join-btn').hidden = !data!.me.canEnter;
+      $('leave-btn').hidden = !data!.me.canEnter;
+      const asked = await staffFetch('/api/finance-admin/payroll/requests').catch(() => null);
+      requests = asked && asked.status === 200 ? (asked.data.requests as PersonRequest[]) : [];
+      renderPeople();
       renderRuns();
       content.hidden = false;
       const want = open ?? (location.hash.length > 1 ? location.hash.slice(1) : undefined);

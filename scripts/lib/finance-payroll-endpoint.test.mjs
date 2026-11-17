@@ -84,7 +84,7 @@ function dbRules(table, row, before) {
   }
 }
 // The column defaults the real tables have.
-const DEFAULTS = { fin_payroll_runs: { run_type: 'salary', label: null, status: 'draft', confirmed_by: null, prepared_by: null, batch_id: null, approved_by: null }, fin_payment_batches: { status: 'file_generated' }, fin_employees: { active: true } };
+const DEFAULTS = { fin_people_requests: { status: 'requested', decided_by: null, decided_at: null, decision_note: null, employee_id: null }, fin_payroll_runs: { run_type: 'salary', label: null, status: 'draft', confirmed_by: null, prepared_by: null, batch_id: null, approved_by: null }, fin_payment_batches: { status: 'file_generated' }, fin_employees: { active: true } };
 globalThis.fetch = async (url, init = {}) => {
   const u = new URL(url);
   const json = (b, status = 200) => new Response(JSON.stringify(b), { status, headers: { 'content-type': 'application/json' } });
@@ -150,7 +150,7 @@ function fresh() {
       { id: PA1, party_id: uid(6), method: 'bank', status: 'verified', valid_from: null, retired_on: null, fingerprint: 'fp1', last4: '0001', details_enc: enc(ACC1), created_at: '2026-01-01' },
       { id: PA2, party_id: uid(7), method: 'bank', status: 'verified', valid_from: null, retired_on: null, fingerprint: 'fp2', last4: '0002', details_enc: enc(ACC2), created_at: '2026-01-01' },
     ],
-    fin_payroll_runs: [], fin_payroll_lines: [], fin_payment_batches: [],
+    fin_payroll_runs: [], fin_payroll_lines: [], fin_payment_batches: [], fin_people_requests: [],
   };
   calls = [];
   globalThis.__files = new Map();
@@ -416,4 +416,99 @@ test('employee numbers are given once and never reused: the next is above the hi
   assert.equal((await (await send('prep', 'POST', '/payroll/employees', { partyId: uid(8) })).json()).rollNo, '13', 'the next is above the highest');
   assert.equal((await send('prep', 'POST', '/payroll/employees', { partyId: uid(9), rollNo: '12' })).status, 409, 'a taken number is refused');
   assert.equal((await send('prep', 'POST', '/payroll/employees', { partyId: uid(9), rollNo: 'x1' })).status, 400);
+});
+
+const ask = (over = {}) => send('farm', 'POST', '/payroll/requests', { kind: 'join', name: 'Test Person Three', startMonth: '2026-12', role: 'Helper', agreedPayRupees: 15000, ...over });
+const decide = (who, id, action, extra = {}, step = true) => send(who, 'POST', `/payroll/requests/${id}/action`, { action, ...extra }, { step });
+const addParty = (n, over = {}) => db.fin_parties.push({ id: uid(n), name: `Test Person ${n}`, kind: 'employee', active: true, merged_into: null, ...over });
+
+test('only the farm manager raises a change of people; the list is for the three payroll roles', async () => {
+  fresh();
+  assert.equal((await ask()).status, 201);
+  assert.equal((await send('prep', 'POST', '/payroll/requests', { kind: 'join', name: 'Test Person Four', startMonth: '2026-12' })).status, 403);
+  assert.equal((await send('viewer', 'GET', '/payroll/requests')).status, 403);
+  assert.equal((await ask({ name: 'test person three' })).status, 409, 'the same person twice while one is open');
+  assert.equal((await ask({ name: 'x' })).status, 400);
+  const list = await (await send('prep', 'GET', '/payroll/requests')).json();
+  assert.equal(list.requests.length, 1);
+  assert.deepEqual([list.requests[0].kind, list.requests[0].status, list.requests[0].mine, list.requests[0].agreedPayRupees], ['join', 'requested', false, 15000]);
+  assert.match(list.requests[0].next, /director/i);
+  assert.equal((await (await send('farm', 'GET', '/payroll/requests')).json()).requests[0].mine, true);
+});
+
+test('a director approves a joining request with the step-up and a party: the person goes on payroll with the next number and the start month', async () => {
+  fresh();
+  addParty(5);
+  const { id } = await (await ask()).json().then((b) => b);
+  assert.equal((await decide('farm', id, 'approve', { partyId: uid(5) })).status, 403, 'the farm manager cannot approve');
+  assert.equal((await decide('prep', id, 'approve', { partyId: uid(5) }, false)).status, 403, 'a director needs the step-up');
+  assert.equal((await decide('prep', id, 'approve', {})).status, 400, 'a party must be chosen');
+  db.fin_parties.push({ id: uid(8), name: 'Test Vendor', kind: 'vendor', active: true, merged_into: null });
+  assert.equal((await decide('prep', id, 'approve', { partyId: uid(8) })).status, 400, 'only an employee party');
+  assert.equal((await decide('prep', id, 'approve', { partyId: uid(6) })).status, 409, 'not someone already on payroll');
+  const res = await decide('prep', id, 'approve', { partyId: uid(5) });
+  assert.equal(res.status, 200);
+  assert.equal((await res.json()).rollNo, '3');
+  const emp = db.fin_employees.find((e) => e.party_id === uid(5));
+  assert.deepEqual([emp.roll_no, emp.start_month, emp.created_by], ['3', '2026-12-01', 'staff-prep']);
+  const r = db.fin_people_requests[0];
+  assert.deepEqual([r.status, r.decided_by, r.employee_id], ['approved', 'staff-prep', emp.id]);
+  assert.ok(db.order.indexOf('audit:finance.payroll_person_approve') < db.order.indexOf('insert:fin_employees'));
+  assert.equal((await decide('second', id, 'approve', { partyId: uid(5) })).status, 403, 'already approved');
+});
+
+test('a person who starts in December is on no earlier run and is on later ones', async () => {
+  fresh();
+  addParty(5);
+  const { id } = await (await ask()).json();
+  await decide('prep', id, 'approve', { partyId: uid(5) });
+  const emp = db.fin_employees.find((e) => e.party_id === uid(5));
+  const withNew = [...lines, { employeeId: emp.id, netRupees: 15000 }];
+  assert.equal((await send('farm', 'POST', '/payroll/runs', { month: '2026-11', lines: withNew })).status, 400);
+  assert.equal((await send('farm', 'POST', '/payroll/runs', { month: '2026-12', lines: withNew })).status, 201);
+  const list = await (await send('prep', 'GET', '/payroll')).json();
+  assert.equal(list.employees.find((e) => e.id === emp.id).startMonth, '2026-12');
+});
+
+test('a leaving request sets the last month to pay: the person is on that month and not after, and cannot be asked about twice', async () => {
+  fresh();
+  const leave = (over = {}) => send('farm', 'POST', '/payroll/requests', { kind: 'leave', employeeId: E1, lastMonth: '2026-11', reason: 'moved away', ...over });
+  assert.equal((await leave({ employeeId: uid(9) })).status, 400, 'not on payroll');
+  const { id } = await (await leave()).json();
+  assert.equal((await leave()).status, 409, 'one open request per person');
+  assert.equal((await decide('prep', id, 'approve', {}, false)).status, 403, 'needs the step-up');
+  assert.equal((await decide('prep', id, 'approve')).status, 200);
+  assert.equal(db.fin_employees.find((e) => e.id === E1).last_month, '2026-11-01');
+  assert.equal((await leave()).status, 409, 'already has a last month');
+  assert.equal((await send('farm', 'POST', '/payroll/runs', { month: '2026-11', lines })).status, 201, 'still paid for the last month');
+  assert.equal((await send('farm', 'POST', '/payroll/runs', { month: '2026-12', lines })).status, 400, 'not after it');
+  const list = await (await send('prep', 'GET', '/payroll')).json();
+  assert.equal(list.employees.find((e) => e.id === E1).lastMonth, '2026-11');
+});
+
+test('a request can be declined or withdrawn while open, and a decided one cannot be moved again', async () => {
+  fresh();
+  const a = (await (await ask()).json()).id;
+  const b = (await (await ask({ name: 'Test Person Four' })).json()).id;
+  assert.equal((await decide('prep', a, 'reject', { note: 'not this month' }, false)).status, 200, 'declining needs no step-up');
+  assert.deepEqual([db.fin_people_requests[0].status, db.fin_people_requests[0].decision_note], ['rejected', 'not this month']);
+  assert.equal((await decide('viewer', b, 'cancel', {}, false)).status, 403);
+  assert.equal((await decide('farm', b, 'cancel', {}, false)).status, 200, 'the requester withdraws');
+  assert.equal(db.fin_people_requests[1].status, 'cancelled');
+  assert.equal((await decide('prep', a, 'approve', {})).status, 403);
+  assert.equal(db.fin_employees.length, 2, 'nobody was added');
+});
+
+test('a person whose party is inactive cannot be put on a run, is listed, and blocks the bank file', async () => {
+  fresh();
+  const { id } = await newRun();
+  assert.equal((await act('farm', id, 'confirm', {}, false)).status, 200);
+  db.fin_parties.find((p) => p.id === uid(6)).active = false;
+  const list = await (await send('prep', 'GET', '/payroll')).json();
+  assert.deepEqual(list.partyInactive.map((p) => p.name), ['Test Person One']);
+  const blocked = await act('prep', id, 'generate', { paymentDate: nextMonth1 });
+  assert.equal(blocked.status, 409);
+  assert.match((await blocked.json()).blockers.join(' '), /Test Person One is inactive in Parties/);
+  assert.equal(db.fin_payroll_runs[0].status, 'confirmed');
+  assert.equal((await send('farm', 'POST', '/payroll/runs', { month: '2026-11', lines })).status, 400);
 });

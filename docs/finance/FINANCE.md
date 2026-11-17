@@ -1100,6 +1100,15 @@ First slice, on branch `finance-09-payroll`. See `sessions/09-payroll.md` for th
   as an inactive row), numeric only, unique. It is shown, not typed. A number can be given explicitly only to carry over an existing one (the API accepts `rollNo`, the page does
   not send it). It is the `NNN` in the file's reference (column I), so a person keeps one number across months; the generator refuses a person with no number or two with the same
   one. Tested on the real database in a rolled-back transaction (next number, a leaver's number not reused, duplicate and bad-format numbers refused, a bonus reference accepted).
+- **People-change requests** (migration `0106_finance_people_requests.sql`, **not applied**; `lib/finance-payroll-people.ts`, rules in `scripts/lib/finance-payroll-people.mjs`):
+  the farm manager decides who joins and leaves, so each change starts as his request (`POST /payroll/requests`: `join` with name, start month, optional role and agreed
+  monthly pay, or `leave` with the person, the last month to pay and an optional reason). A `finance` `export` director approves or declines (`POST /payroll/requests/:id/action`),
+  never the person who raised it (a check constraint too); the person who raised it, or a director, may withdraw it while it is open. Approving needs the MFA step-up. Approving a
+  join takes the Party the director picks (kind employee, active, not already on payroll) and puts the person on payroll from the start month, with the next employee
+  number; approving a leave sets `fin_employees.last_month`. A person is on a run for a month from `start_month` to `last_month` (either end may be open; a leaver keeps their
+  row, so their number is never reused). `GET /payroll` also lists people on payroll whose Party was deactivated (`partyInactive`), and a run cannot include, or generate
+  a file for, such a person. Adding the Party stays a separate step for someone else; bank details are the next slice. "Add a person to payroll" (a director, directly) remains for
+  the people already on payroll, and to carry over their old numbers once.
 - **Guard** (`payrollBlockers`): an account that is not verified, not yet valid, retired or replaced blocks the file; an account that
   differs from the previous run's is listed as changed even when verified.
 - **Tables**: `fin_employees`, `fin_payment_batches` (kind `salary`; holds the file hash and R2 key, never an account number),
@@ -1121,5 +1130,5 @@ First slice, on branch `finance-09-payroll`. See `sessions/09-payroll.md` for th
   mocked API in headless Chrome at 390 and 1100 px (screenshots not kept: they show invented names); not yet against real data.
 - **Tests**: `finance-payroll.test.mjs` (rules), `finance-payroll-file.test.mjs` (file and guard), `finance-payroll-endpoint.test.mjs` (the routes through the real function
   against an in-memory database: access, audit-before-write, step-up, preparer cannot approve, stale file regenerated, no account number in any response).
-- **Not built yet**: the history import, settlement matching (the bank debit creates one allocation per person) and returns, editing the optional agreed-pay / days /
+- **Not built yet**: bank details with a joining request and requests to change them, the history import, settlement matching (the bank debit creates one allocation per person) and returns, editing the optional agreed-pay / days /
   advance fields on the page (the server and tables accept them), adding a person who has no party yet.
