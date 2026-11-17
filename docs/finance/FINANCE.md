@@ -1100,4 +1100,19 @@ First slice, on branch `finance-09-payroll`. See `sessions/09-payroll.md` for th
   account used, net in whole rupees, optional agreed pay, days worked and advance for 09b, the bank reference). The preparer can
   never be the approver (a check constraint on both the run and the batch). A line is frozen once the file is generated.
 - **Known gap**: verification is a point-in-time check, so a once-verified account that has since gone invalid still passes the guard. A live validation of every payee account before the file is generated is the intended fix; no way to do it exists yet (under investigation). It will be one more check in `payrollBlockers`.
-- **Not built yet**: screens, the endpoint and the R2 write, the debit account setting, history import, settlement matching.
+- **Server** (`netlify/functions/lib/finance-payroll.ts`, routes on `finance-admin.mts`): `GET /payroll` (runs, people on payroll, who may add), `POST /payroll/employees`,
+  `POST /payroll/runs` (a draft), `GET`/`PUT /payroll/runs/:id`, `POST /payroll/runs/:id/action` (`confirm`, `reopen`, `generate`, `mark_uploaded`, `approve`,
+  `regenerate`, `cancel`) and `GET /payroll/runs/:id/file`. Who may: the farm manager (`finance-requests` `payroll-input`) enters and confirms; a `finance`
+  `export` director generates, downloads, records the upload and regenerates; a `finance` `approve-payroll` director approves, never the one who prepared
+  (also a database check). A plain `finance` view, `request` or auditor grant opens nothing. Generate, approve and download need the MFA step-up. Each change writes
+  `fin_audit_log` first (ids and counts only). Generating decrypts the accounts in memory, builds the file, stores it in R2 (`finance/payroll/<batch>.xlsx`),
+  inserts the batch, snapshots each line (account row, last four, fingerprint, `YYYY-Mon-Employee-NNN` reference) and moves the run. The debit account (column H)
+  is the Netlify setting `FINANCE_PAYROLL_DEBIT_ACCOUNT`; without it generating refuses. Column F (e-mail) is written blank: parties have no e-mail yet.
+- **Pages**: `/internal/finance/payroll/` (directors) and `/internal/finance-requests/payroll/` (the farm manager, phone-first), one component
+  (`src/components/PayrollRuns.astro`). Months list; start a month (an amount per person, whole rupees); a month's page shows each person with the account as last
+  four digits, "account changed" and "account cannot be paid" marks, the total and only the buttons the person's role allows. Verified with the real page and a
+  mocked API in headless Chrome at 390 and 1100 px (screenshots not kept: they show invented names); not yet against real data.
+- **Tests**: `finance-payroll.test.mjs` (rules), `finance-payroll-file.test.mjs` (file and guard), `finance-payroll-endpoint.test.mjs` (the routes through the real function
+  against an in-memory database: access, audit-before-write, step-up, preparer cannot approve, stale file regenerated, no account number in any response).
+- **Not built yet**: the history import, settlement matching (the bank debit creates one allocation per person) and returns, editing the optional agreed-pay / days /
+  advance fields on the page (the server and tables accept them), adding a person who has no party yet.

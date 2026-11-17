@@ -105,9 +105,10 @@ Verified: the unit tests; the migration run on the real database inside a transa
 duplicate person, second run for a month, preparer cannot approve, edit and delete refused after the file, RLS on), and
 afterwards the tables did not exist. **Migration 0105 is not applied.**
 
-Not built yet: the run screens (farm manager enters, confirms; preparer generates), the endpoint that decrypts payee details and
-writes the file to R2, the debit account setting (server-side), the history import, settlement matching and returns, the
-`FINANCE.md`/`ARCHITECTURE.md` text for functions that do not exist yet.
+**Run screens, 2026-11-17 (same branch):** `lib/finance-payroll.ts` and its routes, `scripts/lib/finance-payroll.mjs` (input rules, who may move a run, the
+confirmation rows), the shared page component and two pages (directors, farm manager), nav entries, and 16 endpoint tests. Details in `FINANCE.md`, "Payroll".
+Needs from Sharath before it can run for real: apply migration 0105, set `FINANCE_PAYROLL_DEBIT_ACCOUNT` in Netlify, grant the farm manager `finance-requests`, and add
+the people as employee parties and then on the Payroll page. Not built yet: the history import, settlement matching and returns.
 
 Decided 2026-11-17 (the owner): the portal accepts today or a future payment date and rejects a past one. So the generator refuses
 only a past date, with no warning for a future one, and a file not uploaded by its payment date goes stale: regenerate it with a
