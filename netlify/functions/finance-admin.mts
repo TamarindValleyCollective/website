@@ -27,6 +27,7 @@ import { saveOperator } from './lib/finance-upi-operators';
 import { getChannelBreakdown, getChannelLines, getChannels } from './lib/finance-channels';
 import { getDashboard } from './lib/finance-dashboard';
 import { BUDGET_ID, approveDraft, discardDraft, getBudget, saveLines, startDraft } from './lib/finance-budget';
+import { addBatchEvidence, getBatchEvidence, listBatchEvidence } from './lib/finance-payroll-evidence';
 import { listPersonRequests, createPersonRequest, personRequestAction } from './lib/finance-payroll-people';
 import { PAYROLL_ID, addEmployee, createRun, downloadFile, getRun, listPayroll, runAction, updateRun } from './lib/finance-payroll';
 import { setPaymentNote } from './lib/finance-notes';
@@ -288,6 +289,13 @@ const dispatch = async (req: Request): Promise<Response> => {
     if (payrollRun[2] === '/action' && req.method === 'POST') return runAction(req, payrollRun[1]);
     if (payrollRun[2] === '/file' && req.method === 'GET') return downloadFile(req, payrollRun[1]);
   }
+  const payrollEvidenceOf = /^\/payroll\/runs\/([^/]+)\/evidence$/.exec(route);
+  if (payrollEvidenceOf && PAYROLL_ID.test(payrollEvidenceOf[1])) {
+    if (req.method === 'POST') return addBatchEvidence(req, payrollEvidenceOf[1]);
+    if (req.method === 'GET') return listBatchEvidence(req, payrollEvidenceOf[1]);
+  }
+  const payrollEvidenceFile = /^\/payroll\/evidence\/([^/]+)$/.exec(route);
+  if (payrollEvidenceFile && req.method === 'GET') return getBatchEvidence(req, payrollEvidenceFile[1]);
   if (route === '/upi-lines' && req.method === 'GET') return listUpiLines(req);
   if (route === '/upi-lines/add-parties' && req.method === 'POST') return addUpiParties(req);
   if (route === '/channels' && req.method === 'GET') return getChannels(req);

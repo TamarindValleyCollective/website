@@ -30,7 +30,7 @@ await build({
   plugins: [
     stub(/google-id-token\.mjs$/, 'export async function verifyGoogleIdToken(t){ return { email: t, hd: t.split("@")[1] }; }'),
     stub(/finance-storage$/, `export async function putFinanceImport(){} export async function deleteFinanceImport(){}
-      export async function putFinanceVoucher(){} export async function getFinanceVoucher(){ return null; } export async function deleteFinanceVoucher(){}
+      export async function putFinanceVoucher(k, b){ globalThis.__files.set(k, b); } export async function getFinanceVoucher(k){ return globalThis.__files.get(k) ?? null; } export async function deleteFinanceVoucher(k){ globalThis.__files.delete(k); }
       export async function putFinancePayroll(k, b){ globalThis.__files.set(k, b); }
       export async function getFinancePayroll(k){ return globalThis.__files.get(k) ?? null; }`),
   ],
@@ -84,7 +84,7 @@ function dbRules(table, row, before) {
   }
 }
 // The column defaults the real tables have.
-const DEFAULTS = { fin_people_requests: { status: 'requested', decided_by: null, decided_at: null, decision_note: null, employee_id: null }, fin_payroll_runs: { run_type: 'salary', label: null, status: 'draft', confirmed_by: null, prepared_by: null, batch_id: null, approved_by: null }, fin_payment_batches: { status: 'file_generated' }, fin_employees: { active: true } };
+const DEFAULTS = { fin_vouchers: { page_count: 1 }, fin_people_requests: { status: 'requested', decided_by: null, decided_at: null, decision_note: null, employee_id: null }, fin_payroll_runs: { run_type: 'salary', label: null, status: 'draft', confirmed_by: null, prepared_by: null, batch_id: null, approved_by: null }, fin_payment_batches: { status: 'file_generated' }, fin_employees: { active: true } };
 globalThis.fetch = async (url, init = {}) => {
   const u = new URL(url);
   const json = (b, status = 200) => new Response(JSON.stringify(b), { status, headers: { 'content-type': 'application/json' } });
@@ -150,7 +150,7 @@ function fresh() {
       { id: PA1, party_id: uid(6), method: 'bank', status: 'verified', valid_from: null, retired_on: null, fingerprint: 'fp1', last4: '0001', details_enc: enc(ACC1), created_at: '2026-01-01' },
       { id: PA2, party_id: uid(7), method: 'bank', status: 'verified', valid_from: null, retired_on: null, fingerprint: 'fp2', last4: '0002', details_enc: enc(ACC2), created_at: '2026-01-01' },
     ],
-    fin_payroll_runs: [], fin_payroll_lines: [], fin_payment_batches: [], fin_people_requests: [],
+    fin_payroll_runs: [], fin_payroll_lines: [], fin_payment_batches: [], fin_people_requests: [], fin_vouchers: [],
   };
   calls = [];
   globalThis.__files = new Map();
@@ -511,4 +511,57 @@ test('a person whose party is inactive cannot be put on a run, is listed, and bl
   assert.match((await blocked.json()).blockers.join(' '), /Test Person One is inactive in Parties/);
   assert.equal(db.fin_payroll_runs[0].status, 'confirmed');
   assert.equal((await send('farm', 'POST', '/payroll/runs', { month: '2026-11', lines })).status, 400);
+});
+
+const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4]);
+const attach = (who, id, bytes = PNG, name = 'batch.png') => {
+  const form = new FormData();
+  form.set('file', new File([bytes], name));
+  return handler(new Request(`https://x.test/api/finance-admin/payroll/runs/${id}/evidence`, { method: 'POST', headers: { authorization: `Bearer ${as(who)}` }, body: form }));
+};
+const uploadedRun = async () => {
+  const { id } = await newRun();
+  await act('farm', id, 'confirm', {}, false);
+  await act('prep', id, 'generate', { paymentDate: nextMonth1 });
+  return id;
+};
+
+test('the bank\'s confirmation can be attached only after the file is marked uploaded, by the preparer, and read by the three payroll roles', async () => {
+  fresh();
+  const id = await uploadedRun();
+  assert.equal((await attach('prep', id)).status, 409, 'not before it has gone to the bank');
+  assert.equal((await act('prep', id, 'mark_uploaded', {}, false)).status, 200);
+  assert.equal((await attach('farm', id)).status, 403, 'the farm manager looks, he does not attach');
+  assert.equal((await attach('viewer', id)).status, 403);
+  const made = await attach('prep', id);
+  assert.equal(made.status, 201);
+  const fileId = (await made.json()).id;
+  const v = db.fin_vouchers[0];
+  assert.deepEqual([v.kind, v.batch_id, v.mime, v.created_by, v.request_id ?? null], ['payment_screenshot', db.fin_payment_batches[0].id, 'image/png', 'staff-prep', null]);
+  assert.ok(v.r2_key.startsWith('finance/vouchers/') && v.r2_key.endsWith('.png'));
+  assert.ok(db.order.indexOf('audit:finance.payroll_evidence_added') < db.order.indexOf('insert:fin_vouchers'));
+  for (const who of ['farm', 'prep', 'second']) {
+    const list = await (await send(who, 'GET', `/payroll/runs/${id}/evidence`)).json();
+    assert.deepEqual(list.files.map((f) => [f.id, f.mime]), [[fileId, 'image/png']], who);
+    const file = await send(who, 'GET', `/payroll/evidence/${fileId}`);
+    assert.equal(file.status, 200, who);
+    assert.deepEqual([file.headers.get('content-type'), file.headers.get('cache-control')], ['image/png', 'private, no-store']);
+    assert.deepEqual([...new Uint8Array(await file.arrayBuffer())], [...PNG]);
+  }
+  assert.equal((await send('viewer', 'GET', `/payroll/runs/${id}/evidence`)).status, 403);
+  assert.equal((await send('viewer', 'GET', `/payroll/evidence/${fileId}`)).status, 403);
+  assert.equal((await send('prep', 'GET', `/payroll/evidence/${uid(5)}`)).status, 404);
+});
+
+test('the evidence must be a screenshot or a PDF, is limited in number, and a run with no file has none', async () => {
+  fresh();
+  const id = await uploadedRun();
+  await act('prep', id, 'mark_uploaded', {}, false);
+  assert.equal((await attach('prep', id, new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]), 'x.exe')).status, 400);
+  for (let i = 0; i < 6; i++) assert.equal((await attach('prep', id)).status, 201);
+  assert.equal((await attach('prep', id)).status, 409, 'at most six');
+  fresh();
+  const { id: bare } = await newRun();
+  assert.deepEqual(await (await send('prep', 'GET', `/payroll/runs/${bare}/evidence`)).json(), { files: [] });
+  assert.equal((await attach('prep', bare)).status, 409, 'no bank file yet');
 });

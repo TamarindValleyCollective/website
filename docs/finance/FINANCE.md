@@ -1109,6 +1109,11 @@ First slice, on branch `finance-09-payroll`. See `sessions/09-payroll.md` for th
   row, so their number is never reused). `GET /payroll` also lists people on payroll whose Party was deactivated (`partyInactive`), and a run cannot include, or generate
   a file for, such a person. Adding the Party stays a separate step for someone else; bank details are the next slice. "Add a person to payroll" (a director, directly) remains for
   the people already on payroll, and to carry over their old numbers once.
+- **The bank's confirmation** (migration `0107_finance_batch_evidence.sql`, **not applied**; `lib/finance-payroll-evidence.ts`): after the file is marked uploaded, the preparer (a `finance`
+  `export` director) attaches a screenshot or PDF of the bank portal's page for the batch (`POST /payroll/runs/:id/evidence`, a form upload; at most six per batch, 4 MB each,
+  the type read from the file's first bytes). It is a `fin_vouchers` row of kind `payment_screenshot` with a new `batch_id`, in the private bucket under `finance/vouchers/`, audited first.
+  The farm manager and both directors list and view it (`GET /payroll/runs/:id/evidence`, `GET /payroll/evidence/:id`, inline and never cached); nothing is linked. Before the upload
+  is marked there is nothing to attach. It is optional: approval does not need it. It holds the real names and account numbers the bank shows, so it never goes in the repository.
 - **Guard** (`payrollBlockers`): an account that is not verified, not yet valid, retired or replaced blocks the file; an account that
   differs from the previous run's is listed as changed even when verified.
 - **Tables**: `fin_employees`, `fin_payment_batches` (kind `salary`; holds the file hash and R2 key, never an account number),

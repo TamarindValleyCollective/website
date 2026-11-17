@@ -210,6 +210,12 @@ decider and an approved join with no employee were all refused; a valid approved
 blocks the file, and is listed on the page. **Migration 0106 was applied to TVC ERP on 2026-11-17 (as `finance_people_requests`) and checked afterwards: row security on, no access for the anon or signed-in roles, the two new employee columns present, and no rows.** Not in this slice: bank details entered by the farm manager and requests to change them, the
 bank-confirmation screenshot, the file drop, the history import and the 2023-25 number seed.
 
+**The bank's confirmation, 2026-11-17 (same branch):** migration `0107` (a `batch_id` on `fin_vouchers`, and the owner check widened to allocation, request or batch), the routes in
+`finance-payroll-evidence.ts` and an "The bank's confirmation" block on a run's page (the preparer attaches a screenshot or PDF once the file is marked uploaded; the farm manager and
+both directors see it). Reuses the voucher storage, type sniffing and viewing from payment requests rather than a second system. Verified: the unit and endpoint tests (all 1,565 in
+`scripts/lib` pass), and the migration plus a test block on the real database in a rolled-back transaction (a voucher with no owner refused, one owned by a batch accepted, a bad kind
+refused, and afterwards the column was gone). **Migration 0107 is not applied.** Not done: reading the lines off the screenshot to tick them against the run (settlement matching).
+
 Decided 2026-11-17 (the owner): the portal accepts today or a future payment date and rejects a past one. So the generator refuses
 only a past date, with no warning for a future one, and a file not uploaded by its payment date goes stale: regenerate it with a
 new date (the run goes back from file generated to confirmed, the old batch is cancelled before upload, and the payee accounts are

@@ -630,7 +630,69 @@ import StepUpSheet from './StepUpSheet.astro';
       }, 'button button--outline pr-danger'));
     }
     box.append(acts);
+    renderEvidence(box, r);
     lock.render();
+  }
+
+  // The bank's confirmation: a screenshot of the portal's page for the uploaded batch. The preparer attaches it; all three payroll roles can see it.
+  // The files need the token, so each is fetched and shown from a local object URL, never linked.
+  function renderEvidence(box: HTMLElement, r: Detail['run']) {
+    if (!r.batch || !['file_generated', 'approved', 'settled'].includes(r.status) || r.batch.status === 'file_generated') return;
+    const me = data!.me;
+    const section = el('div', 'pr-evidence');
+    section.append(el('h3', 'pr-section-title', "The bank's confirmation"));
+    const note = el('p', 'hint', me.canPrepare ? 'Attach a screenshot of the batch as the bank shows it after you upload. It is the proof from the bank, and what the farm manager checks.' : 'The screenshot of the batch as the bank shows it.');
+    section.append(note);
+    const shots = el('div', 'pr-shots');
+    section.append(shots);
+    const authed = () => ({ authorization: `Bearer ${getToken() ?? ''}` });
+    async function show() {
+      shots.replaceChildren();
+      const res = await fetch(`/api/finance-admin/payroll/runs/${r.id}/evidence`, { headers: authed() }).catch(() => null);
+      const files: { id: string; mime: string }[] = res && res.ok ? ((await res.json()) as { files: { id: string; mime: string }[] }).files : [];
+      if (!files.length) shots.append(el('p', 'hint', 'Nothing attached yet.'));
+      for (const f of files) {
+        const file = await fetch(`/api/finance-admin/payroll/evidence/${f.id}`, { headers: authed() }).catch(() => null);
+        if (!file || !file.ok) continue;
+        const url = URL.createObjectURL(await file.blob());
+        if (f.mime === 'application/pdf') {
+          const a = el('a', 'pr-link', 'Open the PDF');
+          a.href = url;
+          a.target = '_blank';
+          a.rel = 'noopener';
+          shots.append(a);
+        } else {
+          const img = el('img', 'pr-shot');
+          img.src = url;
+          img.alt = "The bank's page for this batch";
+          shots.append(img);
+        }
+      }
+    }
+    if (me.canPrepare) {
+      const input = el('input');
+      input.type = 'file';
+      input.accept = 'image/*,application/pdf';
+      input.setAttribute('aria-label', "Attach the bank's confirmation");
+      input.addEventListener('change', async () => {
+        const file = input.files?.[0];
+        if (!file) return;
+        const form = new FormData();
+        form.set('file', file);
+        const res = await fetch(`/api/finance-admin/payroll/runs/${r.id}/evidence`, { method: 'POST', headers: authed(), body: form }).catch(() => null);
+        input.value = '';
+        if (res && res.status === 401) return void fail(new StaffAuthError('unauthorized'));
+        if (res && res.ok) {
+          showToast('Attached.');
+          await show();
+        } else {
+          showToast(((await res?.json().catch(() => ({}))) as { error?: string } | undefined)?.error ?? 'The file could not be saved.');
+        }
+      });
+      section.append(input);
+    }
+    box.append(section);
+    void show();
   }
 
   // ---- loading
@@ -712,6 +774,16 @@ import StepUpSheet from './StepUpSheet.astro';
   }
   .finance-payroll .pr-tabs {
     margin-top: 14px;
+  }
+  .finance-payroll .pr-shots {
+    display: grid;
+    gap: 10px;
+    margin: 8px 0;
+  }
+  .finance-payroll .pr-shot {
+    max-width: 100%;
+    border-radius: var(--radius);
+    box-shadow: 0 0 0 1px var(--tvc-line);
   }
   .finance-payroll .pr-tabs .chip-count {
     margin-left: 6px;
