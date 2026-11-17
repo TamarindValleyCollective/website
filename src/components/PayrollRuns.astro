@@ -54,6 +54,7 @@ import StepUpSheet from './StepUpSheet.astro';
         <div class="pr-actions">
           <button type="button" id="join-btn" class="button button--outline" hidden>A new person is joining</button>
           <button type="button" id="leave-btn" class="button button--outline" hidden>Someone is leaving</button>
+          <button type="button" id="bank-btn" class="button button--outline" hidden>Change bank details</button>
           <button type="button" id="add-person" class="button button--outline" hidden>Add a person to payroll</button>
         </div>
 
@@ -75,10 +76,24 @@ import StepUpSheet from './StepUpSheet.astro';
         <label class="pr-field"><span>Role (optional)</span><input id="j-role" autocomplete="off" maxlength="60" /></label>
         <label class="pr-field"><span>First month paid</span><input id="j-start" type="month" required /></label>
         <label class="pr-field"><span>Agreed monthly pay, in rupees (optional)</span><input id="j-pay" inputmode="numeric" autocomplete="off" placeholder="₹" /></label>
+        <div id="j-bank"></div>
         <p id="join-error" class="pr-error" role="alert" hidden></p>
         <div class="pr-actions">
           <button type="submit" class="button button--primary">Send for approval</button>
           <button type="button" id="join-cancel" class="button">Cancel</button>
+        </div>
+      </form>
+
+      <form id="bank-form" class="pr-card" hidden novalidate>
+        <h2>Change someone's bank details</h2>
+        <p class="hint">Use the details the employee gave you. The old account keeps being paid until the new one starts. A director approves this, and someone else then verifies the new account.</p>
+        <label class="pr-field"><span>Who</span><select id="b-who"></select></label>
+        <label class="pr-field"><span>First salary month paid to the new account</span><input id="b-from" type="month" required /></label>
+        <div id="b-bank"></div>
+        <p id="bank-error" class="pr-error" role="alert" hidden></p>
+        <div class="pr-actions">
+          <button type="submit" class="button button--primary">Send for approval</button>
+          <button type="button" id="bank-cancel" class="button">Cancel</button>
         </div>
       </form>
 
@@ -112,6 +127,7 @@ import StepUpSheet from './StepUpSheet.astro';
   import { StaffAuthError, clearStepUp, clearToken, decodeTokenEmail, getStepUp, getToken, setToken, showToast, staffFetch } from '../../scripts/lib/staff-client.mjs';
   import { initStepUpLock } from '../../scripts/lib/staff-stepup-ui.mjs';
   import { clearState, showFailure, showLoading } from '../../scripts/lib/staff-states.mjs';
+  import { bankNameOfIfsc } from '../../scripts/lib/ifsc-banks.mjs';
 
   declare const google: any;
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
@@ -126,7 +142,7 @@ import StepUpSheet from './StepUpSheet.astro';
   type Me = { id: string; canEnter: boolean; canPrepare: boolean; canApprove: boolean; ready: boolean; hasPasskey: boolean; stepUpValid: boolean };
   type RunRow = { id: string; month: string; runType: string; label: string | null; status: string; paymentDate: string; count: number; totalPaise: number; next: string | null };
   type Person = { id: string; name: string; rollNo: string | null; active: boolean; startMonth: string | null; lastMonth: string | null };
-  type PersonRequest = { id: string; kind: 'join' | 'leave'; status: string; name: string; rollNo: string | null; roleTitle: string | null; startMonth: string | null; agreedPayRupees: number | null; lastMonth: string | null; reason: string | null; decisionNote: string | null; mine: boolean; next: string | null };
+  type PersonRequest = { id: string; kind: 'join' | 'leave' | 'bank_change'; status: string; name: string; rollNo: string | null; roleTitle: string | null; startMonth: string | null; agreedPayRupees: number | null; lastMonth: string | null; reason: string | null; decisionNote: string | null; mine: boolean; next: string | null; hasBank: boolean; last4: string | null; bankName: string | null; hasProof: boolean; effectiveOn: string | null };
   type Line = { id: string; employeeId: string; name: string; netPaise: number; last4: string | null; changed: boolean; problem: string | null; reference: string | null; returned: boolean; agreedPayPaise: number | null; daysWorked: number | null; advanceDeductedPaise: number | null };
   type Detail = {
     run: { id: string; month: string; runType: string; label: string | null; status: string; paymentMode: string; paymentDate: string; cancelledReason: string | null; preparedByMe: boolean; batch: { status: string; totalPaise: number; lineCount: number } | null; stale: boolean; next: string | null };
@@ -356,12 +372,16 @@ import StepUpSheet from './StepUpSheet.astro';
     for (const r of [...open, ...lately]) {
       const card = el('div', 'pr-card');
       const top = el('div', 'pr-run-top');
-      top.append(el('strong', undefined, r.kind === 'join' ? `Joining: ${r.name}` : `Leaving: ${r.rollNo ? `${r.rollNo}. ` : ''}${r.name}`), pill(r.status === 'requested' ? 'draft' : r.status === 'approved' ? 'settled' : 'cancelled', r.status === 'requested' ? 'Waiting' : r.status === 'approved' ? 'Approved' : r.status === 'rejected' ? 'Declined' : 'Withdrawn'));
+      const who = `${r.rollNo ? `${r.rollNo}. ` : ''}${r.name}`;
+      top.append(el('strong', undefined, r.kind === 'join' ? `Joining: ${r.name}` : r.kind === 'bank_change' ? `New bank details: ${who}` : `Leaving: ${who}`), pill(r.status === 'requested' ? 'draft' : r.status === 'approved' ? 'settled' : 'cancelled', r.status === 'requested' ? 'Waiting' : r.status === 'approved' ? 'Approved' : r.status === 'rejected' ? 'Declined' : 'Withdrawn'));
       card.append(top);
       const bits = r.kind === 'join'
         ? [`from ${monthShort(r.startMonth)}`, r.roleTitle, r.agreedPayRupees ? `${rupees(r.agreedPayRupees * 100)} a month` : null]
-        : [`last month paid: ${monthShort(r.lastMonth)}`, r.reason];
+        : r.kind === 'bank_change'
+          ? [`new account paid from ${r.effectiveOn ? dayName(r.effectiveOn) : ''}`]
+          : [`last month paid: ${monthShort(r.lastMonth)}`, r.reason];
       card.append(el('p', 'pr-sub', bits.filter(Boolean).join(' · ')));
+      if (r.hasBank) card.append(el('p', 'pr-sub', `${r.bankName ?? 'Bank'} · account ending ${r.last4} · photo ${r.hasProof ? 'attached' : 'missing'}`));
       if (r.decisionNote) card.append(el('p', 'pr-sub', `Note: ${r.decisionNote}`));
       if (r.status === 'requested') {
         card.append(el('p', 'pr-sub', r.next ?? ''));
@@ -369,6 +389,22 @@ import StepUpSheet from './StepUpSheet.astro';
         const decide = (action: string, extra: Record<string, unknown> = {}, done = 'Done.') => async () => {
           if (await call(`/api/finance-admin/payroll/requests/${r.id}/action`, 'POST', { action, ...extra }, done)) await load();
         };
+        // The person who raised it can attach, or replace, the photo of the passbook or cheque while the request is open.
+        if (r.mine && r.hasBank) {
+          const photo = el('input');
+          photo.type = 'file';
+          photo.accept = 'image/*,application/pdf';
+          photo.setAttribute('aria-label', r.hasProof ? 'Replace the photo' : 'Attach the photo of the passbook or cheque');
+          photo.addEventListener('change', async () => {
+            const file = photo.files?.[0];
+            if (!file) return;
+            const problem = await sendProof(r.id, file);
+            showToast(problem ?? 'Photo saved.');
+            if (!problem) await load();
+          });
+          acts.append(photo);
+        }
+        if (me.canPrepare && r.hasProof) acts.append(btn('View the photo', () => void viewProof(r.id), 'button button--outline'));
         if (me.canPrepare && !r.mine) {
           let pick: HTMLSelectElement | null = null;
           if (r.kind === 'join') {
@@ -384,7 +420,8 @@ import StepUpSheet from './StepUpSheet.astro';
             }
           }
           const chosen = pick;
-          if (r.kind === 'leave' || chosen) acts.append(btn('Approve', () => decide('approve', chosen ? { partyId: chosen.value } : {}, r.kind === 'join' ? 'Added to payroll.' : 'Last month set.')(), 'button button--primary'));
+          const ready = !(r.hasBank && !r.hasProof);
+          if (ready && (r.kind !== 'join' || chosen)) acts.append(btn('Approve', () => decide('approve', chosen ? { partyId: chosen.value } : {}, r.kind === 'join' ? 'Added to payroll.' : r.kind === 'bank_change' ? 'Bank details sent for verification.' : 'Last month set.')(), 'button button--primary'));
           acts.append(btn('Decline', () => {
             const note = prompt('Why? (optional)');
             if (note !== null) void decide('reject', { note }, 'Declined.')();
@@ -417,10 +454,63 @@ import StepUpSheet from './StepUpSheet.astro';
     }
     box.append(list);
   }
+  // The bank details the employee gave the farm manager. The number is typed twice, the IFSC names its bank as it is typed (a typing aid only),
+  // and the photo of the passbook or cancelled cheque goes with them. Nothing is stored in the page: after sending, only the last four show.
+  function mountBankFields(host: HTMLElement, required: boolean) {
+    host.replaceChildren();
+    const field = (label: string, input: HTMLElement) => {
+      const wrap = el('label', 'pr-field');
+      wrap.append(el('span', undefined, label), input);
+      host.append(wrap);
+      return input as HTMLInputElement;
+    };
+    host.append(el('h3', 'pr-section-title', required ? 'New bank details' : 'Bank details (from the employee, optional)'));
+    const account = field('Account number', Object.assign(el('input'), { inputMode: 'numeric', autocomplete: 'off', maxLength: 24 }));
+    const confirm = field('Account number again', Object.assign(el('input'), { inputMode: 'numeric', autocomplete: 'off', maxLength: 24 }));
+    const ifsc = field('IFSC code', Object.assign(el('input'), { autocomplete: 'off', maxLength: 11, placeholder: 'ABCD0123456' }));
+    const hint = el('p', 'hint');
+    hint.setAttribute('aria-live', 'polite');
+    host.append(hint);
+    const photo = field('Photo of the passbook or a cancelled cheque', Object.assign(el('input'), { type: 'file', accept: 'image/*,application/pdf' }));
+    ifsc.addEventListener('input', () => {
+      ifsc.value = ifsc.value.toUpperCase().replace(/\s+/g, '');
+      const name = bankNameOfIfsc(ifsc.value);
+      hint.textContent = ifsc.value.length < 4 ? '' : name ? `${name}. Check this is the right bank.` : 'This bank code is not one we know. Check it against the passbook.';
+    });
+    return {
+      // -> { bank, photo } | { error } | { empty: true } (nothing typed and the bank part is optional)
+      read(): { bank: { account: string; accountConfirm: string; ifsc: string }; photo: File } | { error: string } | { empty: true } {
+        const any = [account, confirm, ifsc].some((i) => i.value.trim()) || photo.files?.length;
+        if (!any && !required) return { empty: true };
+        if (!account.value.trim() || !confirm.value.trim() || !ifsc.value.trim()) return { error: 'Enter the account number twice and the IFSC code.' };
+        const file = photo.files?.[0];
+        if (!file) return { error: 'Attach the photo of the passbook or cancelled cheque. It shows the details are the employee\'s own.' };
+        return { bank: { account: account.value, accountConfirm: confirm.value, ifsc: ifsc.value }, photo: file };
+      },
+    };
+  }
+  // The photo goes as a form upload (staffFetch sends JSON), so this one carries the token itself.
+  async function sendProof(id: string, file: File): Promise<string | null> {
+    const form = new FormData();
+    form.set('file', file);
+    const res = await fetch(`/api/finance-admin/payroll/requests/${id}/proof`, { method: 'POST', headers: { authorization: `Bearer ${getToken() ?? ''}` }, body: form }).catch(() => null);
+    if (res && res.status === 401) throw new StaffAuthError('unauthorized');
+    if (res && res.ok) return null;
+    return ((await res?.json().catch(() => ({}))) as { error?: string } | undefined)?.error ?? 'The photo could not be saved.';
+  }
+  // A director sees the photo only behind the unlock (it shows the whole account number); it opens in a new tab from a local object URL.
+  async function viewProof(id: string) {
+    const res = await fetch(`/api/finance-admin/payroll/requests/${id}/proof`, { headers: { authorization: `Bearer ${getToken() ?? ''}`, ...(getStepUp() ? { 'x-stepup-token': getStepUp() as string } : {}) } }).catch(() => null);
+    if (res && res.status === 403) return void (showToast('Unlock first.'), lock.open());
+    if (!res || !res.ok) return void showToast('Could not open the photo.');
+    window.open(URL.createObjectURL(await res.blob()), '_blank', 'noopener');
+  }
+  let joinBank: ReturnType<typeof mountBankFields> | null = null;
   function openJoin() {
     $<HTMLInputElement>('j-name').value = '';
     $<HTMLInputElement>('j-role').value = '';
     $<HTMLInputElement>('j-pay').value = '';
+    joinBank = mountBankFields($('j-bank'), false);
     $<HTMLInputElement>('j-start').value = new Date(`${data?.today ?? new Date().toISOString().slice(0, 10)}T00:00:00Z`).toISOString().slice(0, 7);
     $('join-error').hidden = true;
     $('join-form').hidden = false;
@@ -431,7 +521,13 @@ import StepUpSheet from './StepUpSheet.astro';
   $('join-form').addEventListener('submit', async (ev) => {
     ev.preventDefault();
     const payRaw = $<HTMLInputElement>('j-pay').value.replace(/[₹,\s]/g, '');
-    const body = { kind: 'join', name: $<HTMLInputElement>('j-name').value, role: $<HTMLInputElement>('j-role').value, startMonth: $<HTMLInputElement>('j-start').value, ...(payRaw ? { agreedPayRupees: Number(payRaw) } : {}) };
+    const bank = joinBank?.read() ?? { empty: true as const };
+    if ('error' in bank) {
+      $('join-error').textContent = bank.error;
+      $('join-error').hidden = false;
+      return;
+    }
+    const body = { kind: 'join', name: $<HTMLInputElement>('j-name').value, role: $<HTMLInputElement>('j-role').value, startMonth: $<HTMLInputElement>('j-start').value, ...(payRaw ? { agreedPayRupees: Number(payRaw) } : {}), ...('bank' in bank ? { bank: bank.bank } : {}) };
     const { status, data: out } = await staffFetch('/api/finance-admin/payroll/requests', { method: 'POST', body }).catch((e) => (fail(e), { status: 0, data: null as any }));
     if (status !== 201) {
       if (status) {
@@ -440,8 +536,50 @@ import StepUpSheet from './StepUpSheet.astro';
       }
       return;
     }
+    if ('bank' in bank) {
+      const problem = await sendProof(out.id, bank.photo);
+      if (problem) showToast(`Sent, but the photo was not saved: ${problem} Attach it on the request.`);
+    }
     showToast('Sent for approval.');
     $('join-form').hidden = true;
+    await load();
+  });
+  let changeBank: ReturnType<typeof mountBankFields> | null = null;
+  function openBank() {
+    if (!data) return;
+    const sel = $<HTMLSelectElement>('b-who');
+    const people = data.employees.filter((e) => e.active);
+    sel.replaceChildren(...people.map((e) => Object.assign(document.createElement('option'), { value: e.id, textContent: e.rollNo ? `${e.rollNo}. ${e.name}` : e.name })));
+    $<HTMLInputElement>('b-from').value = data.today.slice(0, 7);
+    changeBank = mountBankFields($('b-bank'), true);
+    $('bank-error').hidden = !!people.length;
+    $('bank-error').textContent = people.length ? '' : 'No one is on payroll yet.';
+    $('bank-form').hidden = false;
+    $('bank-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  $('bank-btn').addEventListener('click', openBank);
+  $('bank-cancel').addEventListener('click', () => ($('bank-form').hidden = true));
+  $('bank-form').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const bank = changeBank?.read() ?? { error: 'Enter the new bank details.' };
+    if (!('bank' in bank)) {
+      $('bank-error').textContent = 'error' in bank ? bank.error : 'Enter the new bank details.';
+      $('bank-error').hidden = false;
+      return;
+    }
+    const body = { kind: 'bank_change', employeeId: $<HTMLSelectElement>('b-who').value, fromMonth: $<HTMLInputElement>('b-from').value, bank: bank.bank };
+    const { status, data: out } = await staffFetch('/api/finance-admin/payroll/requests', { method: 'POST', body }).catch((e) => (fail(e), { status: 0, data: null as any }));
+    if (status !== 201) {
+      if (status) {
+        $('bank-error').textContent = out?.error ?? 'Could not send it.';
+        $('bank-error').hidden = false;
+      }
+      return;
+    }
+    const problem = await sendProof(out.id, bank.photo);
+    if (problem) showToast(`Sent, but the photo was not saved: ${problem} Attach it on the request.`);
+    showToast('Sent for approval.');
+    $('bank-form').hidden = true;
     await load();
   });
   function openLeave() {
@@ -711,6 +849,7 @@ import StepUpSheet from './StepUpSheet.astro';
       $('add-person').hidden = !data!.me.canPrepare;
       $('join-btn').hidden = !data!.me.canEnter;
       $('leave-btn').hidden = !data!.me.canEnter;
+      $('bank-btn').hidden = !data!.me.canEnter;
       const asked = await staffFetch('/api/finance-admin/payroll/requests').catch(() => null);
       requests = asked && asked.status === 200 ? (asked.data.requests as PersonRequest[]) : [];
       renderPeople();
@@ -774,6 +913,10 @@ import StepUpSheet from './StepUpSheet.astro';
   }
   .finance-payroll .pr-tabs {
     margin-top: 14px;
+  }
+  .finance-payroll #j-bank .hint,
+  .finance-payroll #b-bank .hint {
+    margin: 4px 0 12px;
   }
   .finance-payroll .pr-shots {
     display: grid;

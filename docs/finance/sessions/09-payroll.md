@@ -216,6 +216,15 @@ both directors see it). Reuses the voucher storage, type sniffing and viewing fr
 `scripts/lib` pass), and the migration plus a test block on the real database in a rolled-back transaction (a voucher with no owner refused, one owned by a batch accepted, a bad kind
 refused, and afterwards the column was gone). **Migration 0107 is not applied.** Not done: reading the lines off the screenshot to tick them against the run (settlement matching).
 
+**Bank details on a request, 2026-11-17 (same branch; the second slice of the people-change flow):** migration `0108`, a `bank_change` request kind, bank details on a joining request, the photo of
+the passbook or cheque, and the page's shared bank block (number twice, IFSC with its bank named, photo). Decisions as agreed: the farm manager enters what the employee gave him; the details are
+encrypted at once and held only while the request is open; approving attaches them as an unverified account entered by the farm manager, so someone else verifies; the old account keeps being paid
+until the new one starts. Verified: the unit and endpoint tests (all 1,575 in `scripts/lib` pass; the endpoint tests also check that no account number or IFSC appears in any response or audit
+entry), and the migration plus a test block on the real database in a rolled-back transaction (ten constraint cases: an open change per person, details only while open, a proof only with details,
+a leave or a join carrying the wrong fields). The page was driven headless against a mocked API. **Migration 0108 is not applied**, and until it is the people-request routes fail on the real
+database (they write its new columns). Not done: the bank's registered name beside the number (no validation method yet; an empty "name from bank" is the hook), the branch from the IFSC (needs an
+external lookup), and a look at the real flow by the farm manager.
+
 Decided 2026-11-17 (the owner): the portal accepts today or a future payment date and rejects a past one. So the generator refuses
 only a past date, with no warning for a future one, and a file not uploaded by its payment date goes stale: regenerate it with a
 new date (the run goes back from file generated to confirmed, the old batch is cancelled before upload, and the payee accounts are

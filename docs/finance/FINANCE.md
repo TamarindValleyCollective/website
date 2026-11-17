@@ -1109,6 +1109,17 @@ First slice, on branch `finance-09-payroll`. See `sessions/09-payroll.md` for th
   row, so their number is never reused). `GET /payroll` also lists people on payroll whose Party was deactivated (`partyInactive`), and a run cannot include, or generate
   a file for, such a person. Adding the Party stays a separate step for someone else; bank details are the next slice. "Add a person to payroll" (a director, directly) remains for
   the people already on payroll, and to carry over their old numbers once.
+- **Bank details on a request** (migration `0108_finance_people_bank_details.sql`, **not applied**; `finance-payroll-people.ts`, `scripts/lib/ifsc-banks.mjs`): the employee gives their bank details to
+  the farm manager, so he enters them on a joining request (optional) or raises a third kind of request, `bank_change` (the person, the first salary month the new account is for, the new details).
+  The number is typed twice and an IFSC is required (an account without one cannot be paid); the page names the bank from the IFSC's first four letters as a typing aid only (no branch, nothing
+  checked). A photo of the passbook or a cancelled cheque is required before a director can approve (`POST /payroll/requests/:id/proof`, the person who raised it only; a second one replaces the
+  first). The details are encrypted with the payee-account key on arrival (`details_enc`, `last4`), held ONLY while the request is open (a check constraint refuses them afterwards), and never
+  returned: the list gives the last four digits, the bank's name and whether the photo is there. The photo is read back by the person who raised the request, or by a director behind the
+  step-up (logged). **Approving** (a director, with the step-up, never the requester) claims the request first, then attaches the details to the person's Party through the same code as the
+  Parties page, as an UNVERIFIED account whose `created_by` is the requester, so someone else must verify it; the photo's file becomes evidence on that account (kind `other`, the key reused).
+  A joining request attaches them to the Party the director picks. A `bank_change` is dated: the old account stays payable and is retired on the 1st after the salary month, and the new one starts
+  then; if it is still unverified that day, the file is blocked for that person. Declining or withdrawing discards the details and deletes the photo. If attaching fails after the claim, the
+  approval says so and the details are entered on the Parties page: the request no longer holds them. Verification is the existing step (a `verify-payee` holder, the unlock, not the person who entered it).
 - **The bank's confirmation** (migration `0107_finance_batch_evidence.sql`, **not applied**; `lib/finance-payroll-evidence.ts`): after the file is marked uploaded, the preparer (a `finance`
   `export` director) attaches a screenshot or PDF of the bank portal's page for the batch (`POST /payroll/runs/:id/evidence`, a form upload; at most six per batch, 4 MB each,
   the type read from the file's first bytes). It is a `fin_vouchers` row of kind `payment_screenshot` with a new `batch_id`, in the private bucket under `finance/vouchers/`, audited first.
@@ -1135,5 +1146,5 @@ First slice, on branch `finance-09-payroll`. See `sessions/09-payroll.md` for th
   mocked API in headless Chrome at 390 and 1100 px (screenshots not kept: they show invented names); not yet against real data.
 - **Tests**: `finance-payroll.test.mjs` (rules), `finance-payroll-file.test.mjs` (file and guard), `finance-payroll-endpoint.test.mjs` (the routes through the real function
   against an in-memory database: access, audit-before-write, step-up, preparer cannot approve, stale file regenerated, no account number in any response).
-- **Not built yet**: bank details with a joining request and requests to change them, the history import, settlement matching (the bank debit creates one allocation per person) and returns, editing the optional agreed-pay / days /
+- **Not built yet**: the file drop, the history import, settlement matching (the bank debit creates one allocation per person) and returns, editing the optional agreed-pay / days /
   advance fields on the page (the server and tables accept them), adding a person who has no party yet.
