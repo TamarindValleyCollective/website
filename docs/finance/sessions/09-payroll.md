@@ -254,3 +254,34 @@ right fix is to validate every payee account just before the file is generated, 
 investigated separately). Until there is, `payrollBlockers` lets a verified account through and lists any account that changed since
 the last run; that is a known gap, not a safeguard. When a live check exists it becomes one more check inside `payrollBlockers`, run
 on every line at generation, and a failed or unavailable check should block the file.
+
+### Where we stopped (2026-11-18) and how to resume
+**State.** Draft PR #642 (`finance-09-payroll`), mergeable, 1,575 lib tests and the CSS lint pass. Migrations 0105 to 0108 are applied to TVC ERP and the payroll tables are empty. Built: the file generator, run
+screens (Monthly salaries and People tabs), run types, automatic employee numbers, joining, leaving and bank-change requests with encrypted bank details and a photo, the bank's confirmation screenshot, the
+inactive-party guard. `FINANCE_PAYROLL_DEBIT_ACCOUNT` is set in Netlify. Nothing is in use yet: the farm manager needs `finance-requests` payroll-input, and the people must exist as Parties of kind employee with
+verified accounts before they are added on the People tab. Changelog lines are owed when the PR merges.
+
+**The history import is NOT built.** Everything before it is settled (see "Ledger validation" and the decisions above). The plan for it:
+1. A dry run that writes nothing and prints, per month: the batches that have a file and a bank debit but no ledger entry (10 of them), the matched batches getting a person and the salary-month period (28),
+   the five misdirected entries moving to the new "Losses and write-offs" category, the ten advances left untouched, and anything it cannot place. Names are matched against the file; amounts repeat within a month,
+   so a name is needed to tell three equal amounts apart.
+2. The owner approves the dry run; only then does it create the category, set the parties and periods, and seed employee numbers from the 2023-25 set.
+3. Then settlement matching (one bank debit to one run, split per person) and returns.
+The file drop is a later enhancement. Real files, names, account numbers and amounts stay out of the repo and out of the dry run's saved output; print counts and months.
+
+**Open questions for the owner (nothing is blocked on the first three except the exact write-off list):**
+1. Which payments never reached the person: the five re-paid individually on 5 and 8 Jun 2025 (rows 6 to 10 of the May 2025 file, the five people on the three shared accounts), the three batches where one person's
+   old account was still in the file (Apr to Jun 2025, flagged by the sheet's own helper columns, the account changed in Jul 2025), or both?
+2. Which of those were to people no longer employed, and so also a write-off?
+3. The 2023-25 employee number list (a file outside the repo, or the numbers in order).
+4. Save the Dec 2022 upload (`TVC-PAYPRO Dec-salary-2022.xls`, in Drive) into the `2022` folder of the Salaries folder so the history reaches back a year further.
+5. The category name for the write-offs ("Losses and write-offs" is the default).
+6. The owner also said there may have been a "wrong template" for the incident month; the Jul 2024 tab of the farm manager's sheet matches the uploaded file exactly, so name the month if another file differs.
+
+**What the files and sheets showed (no names or numbers here).** Two shared accounts moved to new account numbers in Nov and Dec 2024 (same bank, branch code changed). One person's account changed in Jul 2025 while the
+upload files for Apr to Jun 2025 still carried the old one. In May 2025 the names on two shared accounts change spelling (a respelling, or new people on the same accounts). Six people appear for short spans
+(from two to five months); the last month of two of them is a partial amount. The 2025-26 sheet has an "Account Details" tab and helper columns that flag any row whose account differs from it: that check
+already exists in the sheet and is what `payrollBlockers` and "account changed since the last run" now do in the app.
+
+**Resume with** (paste into a new session):
+> Read `docs/finance/sessions/09-payroll.md` (the "Where we stopped" section at the end first), `docs/finance/FINANCE.md` ("Payroll") and the memory note for payroll 09a. Work in the `finance-09-payroll` worktree. Build the history import as a dry run first, test-first, using the owner's answers to the open questions (ask for any still missing). The salary files are in `~/Library/CloudStorage/OneDrive-Shell/Personal/Farming/Finance/Salaries`; read them with scripts that print counts, months and amounts only, never names or account numbers. Do not write to the ledger until the owner approves the dry run.
