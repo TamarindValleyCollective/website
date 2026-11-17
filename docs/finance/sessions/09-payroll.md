@@ -94,6 +94,39 @@ Agreed after the first run screens were reviewed. Order of work, each its own co
    the page previews it matched to people by number or name, flags the unmatched, and one confirm creates the draft. Same pattern as
    the statement import. Needs the layout of his sheet, shown with invented names, before it is built.
 
+**Decisions after reading the history of uploaded files (2026-11-17, with the owner).**
+- **Run type (built, same branch):** a month holds one *salary* run plus any number of *bonus* runs, each with a name ("Diwali Bonus"), because Oct 2025 had a
+  salary file and a bonus file. `fin_payroll_runs.run_type`/`label` (migration `0105`, still unapplied, so edited in place); the unique index is per month, type
+  and name. A bonus is worded as the old files were ("<Mon YYYY> <name>", "<name> for <Mon YYYY>", reference `YYYY-Mon-Bonus-Employee-nnn`) and defaults to paying
+  today. The reference is built in one function, `lineReference`, used by the file and by the line snapshot.
+- **Employee numbers are seeded from the 2023-25 set** (the same ten people carried `1, 3-10, 12` every month for about 18 months; two numbers belong to people
+  who left and are never reused). From Apr 2025 the sheet drifted (renumbered 1..N by row in some months, gaps in others), and since Dec 2025 it is `1..10` by row,
+  so one person's number changed. The seed maps each current person to their 2023-25 number, to be confirmed by the owner when the history is imported.
+- **The bank's newer bulk-payment system is out of scope.** Axis offers one that is better integrated with its banking application, but it needs reorganising the
+  process to avoid mistakes and has not been tried. One file in the history (Jan 2026, 29 columns with headers) is an early look at its template; ignore it. The
+  generator keeps writing the layout above.
+- **Inconsistencies in the old files are not blockers and are removed by the generator, going forward:** the month typed in several places and disagreeing (a file
+  named for one month holding another month's sheet name or references, at least four times); month names in the reference varying (`March` and `Mar`, and `Sep-Emp`
+  in 2023); three versions of Oct 2024 and a "Copy" of Sep 2025; a Sep 2026 file that is really the Oct batch (identical, same references); one month
+  (Aug 2026) with no file; one file (Jun 2026) whose amounts are formulas with no stored values.
+
+**What the files and the ledger say about what was actually uploaded (read 2026-11-17; the files and amounts stay outside the repo).** Each file's total was matched
+to a bank debit of exactly that amount.
+- Every file's total appears as exactly one bank debit, so each month's batch was uploaded and paid at the file's amount. Where several versions of a file share one total (the
+  three Oct 2024 versions, the Sep 2025 original and its copy, the Sep 2026 and Oct 2026 files), only one debit exists: only one was uploaded. For Oct 2024 it is the
+  version whose payment date matches the bank date; the other two carry an earlier date and were stale.
+- The bank settles a month about 1 to 4 days after the file's payment date (a weekend or holiday). One batch (Mar 2025) was paid early, on the 28th.
+- **Bank debits with no file in the folder:** three bulk salary debits in the ledger (Jul 2026, Sep 2026, Oct 2026) have no matching file. Sep 2026 and Oct 2026 are the
+  Aug and Sep salaries: their files are missing, or were never saved, and the file named Sep is the Oct batch. The Jul 2026 debit is the Jun file, whose amounts are
+  formulas with no stored value, so it could not be compared.
+- **Bank debits matching a file but with no allocation at all in the ledger (10):** six from before the tracker (Sep 2023 to Mar 2024 files) and four inside it (the
+  Dec 2024, Jul 2025, Mar 2026 and Oct 2026 batches). These are gaps for the history import or settlement matching to fill. The Oct 2026 one is the latest batch.
+- **Salary payments made outside the bulk file:** the ledger holds several single-person "Salaries" debits near month ends that appear in no file (Aug 2024, Mar 2025, Jun 2025 x5,
+  Aug 2025, Nov 2025, Mar 2026): advances or one-offs paid another way. Payroll covers the bulk file only; these stay as they are, or become a later "off-cycle" run type.
+- **Period convention:** the allocations of a month's batch carry the *payment* month as their period (the Apr 2024 salary paid on 1 May 2024 sits in May), not the salary month.
+  The brief says settlement should set `period` = salary month; that differs from how the history was entered. **Open question for the owner:** cash basis (payment month,
+  as entered so far) or the salary month going forward?
+
 **Polish from the first review (small):** disable "Make the bank file" with a reason when someone's account cannot be paid; the
 Finance menu has both "Payroll" and the older "Salaries" and both pages are headed "Salaries", so rename one pair to tell them apart;
 two console errors on the pages (a 404 not traced yet, and a blocked sign-in script in the headless check).
