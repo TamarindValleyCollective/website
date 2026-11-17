@@ -15,13 +15,13 @@ import {
 
 const person = (over = {}) => ({
   name: 'Test Person One',
-  accountNumber: '100000000001',
+  accountNumber: '1000000001',
   ifsc: 'TEST0000001',
   email: 'one@example.invalid',
   netPaise: 1_500_000,
   ...over,
 });
-const run = (over = {}) => ({ month: '2026-10', paymentDate: '2026-11-01', today: '2026-11-01', debitAccount: '900000000009', lines: [person(), person({ name: 'Test Person Two', accountNumber: '100000000002', netPaise: 2_000_000 })], ...over });
+const run = (over = {}) => ({ month: '2026-10', paymentDate: '2026-11-01', today: '2026-11-01', debitAccount: '9000000009', lines: [person(), person({ name: 'Test Person Two', accountNumber: '1000000002', netPaise: 2_000_000 })], ...over });
 
 test('month label and the default payment date (the 1st of the following month, December rolls the year)', () => {
   assert.equal(monthLabel('2026-10'), 'Oct 2026');
@@ -36,7 +36,7 @@ test('rows follow the bank layout: A to L, no header, amount in whole rupees, da
   const { rows, errors } = buildSalaryRows(run());
   assert.deepEqual(errors, []);
   assert.equal(rows.length, 2);
-  assert.deepEqual(rows[0], ['N', 15000, '01-11-2026', 'Test Person One', 100000000001, 'one@example.invalid', 'Oct 2026 Salary', 900000000009, '2026-Oct-Employee-001', 'TEST0000001', '10', 'Salary for Oct 2026']);
+  assert.deepEqual(rows[0], ['N', 15000, '01-11-2026', 'Test Person One', 1000000001, 'one@example.invalid', 'Oct 2026 Salary', 9000000009, '2026-Oct-Employee-001', 'TEST0000001', '10', 'Salary for Oct 2026']);
   assert.equal(rows[1][8], '2026-Oct-Employee-002');
   assert.equal(rows[1][1], 20000);
 });
@@ -59,15 +59,15 @@ test('an amount with paise is refused: the net is whole rupees; zero and negativ
 });
 
 test('an account starting with 0 is written as text and flagged; others are numbers', () => {
-  const { rows, warnings, errors } = buildSalaryRows(run({ lines: [person({ accountNumber: '0123456789012' })] }));
+  const { rows, warnings, errors } = buildSalaryRows(run({ lines: [person({ accountNumber: '0' + '7'.repeat(12) })] }));
   assert.deepEqual(errors, []);
-  assert.equal(rows[0][4], '0123456789012');
+  assert.equal(rows[0][4], '0' + '7'.repeat(12));
   assert.match(warnings.join(' '), /starts with 0/i);
 });
 
 test('an account too large for a spreadsheet number is written as text rather than rounded', () => {
-  const { rows } = buildSalaryRows(run({ lines: [person({ accountNumber: '9999999999999999' })] }));
-  assert.equal(rows[0][4], '9999999999999999');
+  const { rows } = buildSalaryRows(run({ lines: [person({ accountNumber: '9'.repeat(16) })] }));
+  assert.equal(rows[0][4], '9'.repeat(16));
 });
 
 test('account, IFSC and name shape errors name the row', () => {
@@ -124,7 +124,7 @@ test('the file is an xlsx that reads back with the same cells; C stays text, B a
   assert.equal(sheet.rows[0].length, 12);
   assert.equal(sheet.rows[0][1], 15000);
   assert.equal(sheet.rows[0][2], '01-11-2026');
-  assert.equal(sheet.rows[0][4], 100000000001);
+  assert.equal(sheet.rows[0][4], 1000000001);
   assert.equal(sheet.rows[0][10], '10');
   assert.equal(sheet.rows[0][11], 'Salary for Oct 2026');
 });

@@ -41,7 +41,7 @@ process.env.SUPABASE_URL = 'https://db.test';
 process.env.PUBLIC_GOOGLE_CLIENT_ID = 'client';
 process.env.SUPABASE_SERVICE_ROLE_KEY = 'service';
 process.env.STAFF_MFA_KEY = randomBytes(32).toString('base64');
-process.env.FINANCE_PAYROLL_DEBIT_ACCOUNT = '900000000009';
+process.env.FINANCE_PAYROLL_DEBIT_ACCOUNT = '9000000009';
 const { default: handler } = await import(pathToFileURL(out).href);
 const crypto = await import(pathToFileURL(outCrypto).href);
 
@@ -52,8 +52,8 @@ const uid = (n) => `${String(n).repeat(8)}-${String(n).repeat(4)}-4${String(n).r
 const ENT = uid(9);
 const [E1, E2] = [uid(1), uid(2)];
 const [PA1, PA2] = [uid(3), uid(4)];
-const ACC1 = '100000000001';
-const ACC2 = '100000000002';
+const ACC1 = '1000000001';
+const ACC2 = '1000000002';
 
 let db, calls;
 const rowsOf = (t) => db[t];
@@ -254,7 +254,7 @@ test('generating needs the step-up, writes the audit entry first, stores the fil
   assert.match(db.fin_payroll_lines[0].reference, /^\d{4}-[A-Z][a-z]{2}-Employee-001$/);
   const file = readWorkbook([...globalThis.__files.values()][0])[0].rows;
   assert.equal(file.length, 2);
-  assert.equal(file[0][7], 900000000009);
+  assert.equal(file[0][7], 9000000009);
   assert.equal(file[0][4], Number(ACC1));
   noAccountNumbers(body, db.audit);
 });
