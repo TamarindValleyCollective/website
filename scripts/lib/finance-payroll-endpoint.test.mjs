@@ -84,7 +84,7 @@ function dbRules(table, row, before) {
   }
 }
 // The column defaults the real tables have.
-const DEFAULTS = { fin_vouchers: { page_count: 1 }, fin_people_requests: { status: 'requested', decided_by: null, decided_at: null, decision_note: null, employee_id: null }, fin_payroll_runs: { run_type: 'salary', label: null, status: 'draft', confirmed_by: null, prepared_by: null, batch_id: null, approved_by: null }, fin_payment_batches: { status: 'file_generated' }, fin_employees: { active: true } };
+const DEFAULTS = { fin_party_accounts: { status: 'unverified', valid_from: null, retired_on: null, superseded_at: null }, fin_party_account_files: {}, fin_vouchers: { page_count: 1 }, fin_people_requests: { status: 'requested', decided_by: null, decided_at: null, decision_note: null, employee_id: null }, fin_payroll_runs: { run_type: 'salary', label: null, status: 'draft', confirmed_by: null, prepared_by: null, batch_id: null, approved_by: null }, fin_payment_batches: { status: 'file_generated' }, fin_employees: { active: true } };
 globalThis.fetch = async (url, init = {}) => {
   const u = new URL(url);
   const json = (b, status = 200) => new Response(JSON.stringify(b), { status, headers: { 'content-type': 'application/json' } });
@@ -150,7 +150,7 @@ function fresh() {
       { id: PA1, party_id: uid(6), method: 'bank', status: 'verified', valid_from: null, retired_on: null, fingerprint: 'fp1', last4: '0001', details_enc: enc(ACC1), created_at: '2026-01-01' },
       { id: PA2, party_id: uid(7), method: 'bank', status: 'verified', valid_from: null, retired_on: null, fingerprint: 'fp2', last4: '0002', details_enc: enc(ACC2), created_at: '2026-01-01' },
     ],
-    fin_payroll_runs: [], fin_payroll_lines: [], fin_payment_batches: [], fin_people_requests: [], fin_vouchers: [],
+    fin_payroll_runs: [], fin_payroll_lines: [], fin_payment_batches: [], fin_people_requests: [], fin_vouchers: [], fin_party_account_files: [],
   };
   calls = [];
   globalThis.__files = new Map();
@@ -564,4 +564,142 @@ test('the evidence must be a screenshot or a PDF, is limited in number, and a ru
   const { id: bare } = await newRun();
   assert.deepEqual(await (await send('prep', 'GET', `/payroll/runs/${bare}/evidence`)).json(), { files: [] });
   assert.equal((await attach('prep', bare)).status, 409, 'no bank file yet');
+});
+
+// ---- bank details with a request (all numbers invented)
+const NEWACC = '1000000077';
+const bankOf = (over = {}) => ({ account: NEWACC, accountConfirm: NEWACC, ifsc: 'SBIN0000001', ...over });
+const askBank = (over = {}) => send('farm', 'POST', '/payroll/requests', { kind: 'join', name: 'Test Person Three', startMonth: '2026-12', bank: bankOf(), ...over });
+const sendProof = (who, id, bytes = PNG) => {
+  const form = new FormData();
+  form.set('file', new File([bytes], 'passbook.png'));
+  return handler(new Request(`https://x.test/api/finance-admin/payroll/requests/${id}/proof`, { method: 'POST', headers: { authorization: `Bearer ${as(who)}` }, body: form }));
+};
+const noNewAccount = (...things) => {
+  const text = things.map((t) => (typeof t === 'string' ? t : JSON.stringify(t))).join(' ');
+  assert.ok(!text.includes(NEWACC) && !text.includes('SBIN0000001'), 'an account number or IFSC leaked');
+};
+
+test('a joining request keeps its bank details encrypted, shows only the last four digits and the bank, and cannot be approved without its photo', async () => {
+  fresh();
+  addParty(5);
+  const mismatch = await askBank({ bank: bankOf({ accountConfirm: '1000000078' }) });
+  assert.equal(mismatch.status, 400);
+  const made = await askBank();
+  assert.equal(made.status, 201);
+  const { id, needsProof } = await made.json();
+  assert.equal(needsProof, true);
+  const row = db.fin_people_requests[0];
+  assert.ok(row.details_enc && !row.details_enc.includes(NEWACC), 'stored encrypted');
+  assert.equal(row.last4, '0077');
+  assert.ok(!JSON.stringify(db.audit).includes(NEWACC) && !JSON.stringify(db.audit).includes('SBIN0000001'), 'not in the audit log');
+  const list = await send('prep', 'GET', '/payroll/requests');
+  const text = await list.clone().text();
+  noNewAccount(text);
+  const r = (await list.json()).requests[0];
+  assert.deepEqual([r.hasBank, r.last4, r.bankName, r.hasProof], [true, '0077', 'State Bank of India', false]);
+  assert.match(r.next, /Attach the photo/i);
+  const early = await decide('prep', id, 'approve', { partyId: uid(5) });
+  assert.equal(early.status, 409, 'no photo yet');
+  assert.match((await early.json()).error, /photo/i);
+  assert.equal(db.fin_employees.length, 2, 'nobody was added');
+  assert.equal((await sendProof('prep', id)).status, 403, 'only the farm manager attaches it');
+  assert.equal((await sendProof('farm', id, new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]))).status, 400, 'a photo or PDF');
+  assert.equal((await sendProof('farm', id)).status, 201);
+  const firstKey = db.fin_people_requests[0].proof_key;
+  assert.equal((await sendProof('farm', id)).status, 201, 'a second photo replaces the first');
+  assert.notEqual(db.fin_people_requests[0].proof_key, firstKey);
+  assert.equal(globalThis.__files.has(firstKey), false, 'the replaced photo is removed');
+  assert.equal((await (await send('prep', 'GET', '/payroll/requests')).json()).requests[0].hasProof, true);
+});
+
+test('the photo is shown to the person who raised the request, and to a director only behind the step-up', async () => {
+  fresh();
+  const { id } = await (await askBank()).json();
+  await sendProof('farm', id);
+  assert.equal((await send('farm', 'GET', `/payroll/requests/${id}/proof`)).status, 200);
+  const noStep = await send('prep', 'GET', `/payroll/requests/${id}/proof`);
+  assert.equal(noStep.status, 403);
+  assert.equal((await noStep.json()).code, 'STEP_UP_REQUIRED');
+  const seen = await send('prep', 'GET', `/payroll/requests/${id}/proof`, undefined, { step: true });
+  assert.equal(seen.status, 200);
+  assert.deepEqual([seen.headers.get('content-type'), seen.headers.get('cache-control')], ['image/png', 'private, no-store']);
+  assert.equal((await send('viewer', 'GET', `/payroll/requests/${id}/proof`)).status, 403);
+  assert.ok(db.audit.some((a) => a.action === 'finance.payroll_person_proof_viewed'));
+});
+
+test('approving a join with bank details puts the person on payroll and attaches the details to their party as an UNVERIFIED account entered by the farm manager, with the photo as evidence; the request keeps nothing', async () => {
+  fresh();
+  addParty(5);
+  const { id } = await (await askBank()).json();
+  await sendProof('farm', id);
+  const proofKey = db.fin_people_requests[0].proof_key;
+  const res = await decide('prep', id, 'approve', { partyId: uid(5) });
+  assert.equal(res.status, 200);
+  const out = await res.json();
+  assert.deepEqual([out.rollNo, out.bankAttached], ['3', true]);
+  noNewAccount(out);
+  const account = db.fin_party_accounts.find((a) => a.party_id === uid(5));
+  assert.deepEqual([account.status, account.created_by, account.last4, account.method], ['unverified', 'staff-farm', '0077', 'bank']);
+  const stored = JSON.parse(crypto.decryptFinanceText(account.details_enc));
+  assert.deepEqual([stored.account, stored.ifsc], [NEWACC, 'SBIN0000001']);
+  assert.deepEqual(db.fin_party_account_files.map((f) => [f.account_id, f.kind, f.r2_key, f.mime, f.uploaded_by]), [[account.id, 'other', proofKey, 'image/png', 'staff-farm']]);
+  assert.ok(globalThis.__files.has(proofKey), 'the file is kept, now as evidence on the account');
+  const r = db.fin_people_requests[0];
+  assert.deepEqual([r.status, r.details_enc, r.last4, r.proof_key, r.proof_mime], ['approved', null, null, null, null]);
+  assert.equal((await send('prep', 'GET', `/payroll/requests/${id}/proof`, undefined, { step: true })).status, 404, 'nothing left to show on the request');
+  assert.ok(db.order.indexOf('audit:finance.payroll_person_approve') < db.order.indexOf('insert:fin_employees'));
+  noNewAccount(db.audit);
+});
+
+test('declining or withdrawing a request with bank details discards the details and the photo', async () => {
+  fresh();
+  const a = (await (await askBank()).json()).id;
+  const b = (await (await askBank({ name: 'Test Person Four' })).json()).id;
+  await sendProof('farm', a);
+  await sendProof('farm', b);
+  const [keyA, keyB] = [db.fin_people_requests[0].proof_key, db.fin_people_requests[1].proof_key];
+  assert.equal((await decide('prep', a, 'reject', { note: 'not now' }, false)).status, 200);
+  assert.equal((await decide('farm', b, 'cancel', {}, false)).status, 200);
+  for (const r of db.fin_people_requests) assert.deepEqual([r.details_enc, r.last4, r.proof_key, r.proof_mime], [null, null, null, null]);
+  assert.equal(globalThis.__files.has(keyA) || globalThis.__files.has(keyB), false, 'both photos are removed');
+  assert.equal(db.fin_party_accounts.length, 2, 'no account was made');
+});
+
+test('a change of bank details: the old account keeps being paid until the new one starts, the new one is unverified and entered by the farm manager', async () => {
+  fresh();
+  const bad = await send('farm', 'POST', '/payroll/requests', { kind: 'bank_change', employeeId: uid(9), fromMonth: '2026-11', bank: bankOf() });
+  assert.equal(bad.status, 400, 'not on payroll');
+  const made = await send('farm', 'POST', '/payroll/requests', { kind: 'bank_change', employeeId: E1, fromMonth: '2026-11', bank: bankOf() });
+  assert.equal(made.status, 201);
+  const { id } = await made.json();
+  assert.equal(db.fin_people_requests[0].effective_on, '2026-12-01');
+  assert.equal((await send('farm', 'POST', '/payroll/requests', { kind: 'bank_change', employeeId: E1, fromMonth: '2026-12', bank: bankOf({ account: '1000000078', accountConfirm: '1000000078' }) })).status, 409, 'one open change per person');
+  const list = (await (await send('prep', 'GET', '/payroll/requests')).json()).requests[0];
+  assert.deepEqual([list.kind, list.name, list.last4, list.effectiveOn, list.hasProof], ['bank_change', 'Test Person One', '0077', '2026-12-01', false]);
+  assert.equal((await decide('prep', id, 'approve')).status, 409, 'needs the photo');
+  await sendProof('farm', id);
+  assert.equal((await decide('prep', id, 'approve', {}, false)).status, 403, 'needs the step-up');
+  assert.equal((await decide('farm', id, 'approve')).status, 403, 'the farm manager cannot approve');
+  const res = await decide('prep', id, 'approve');
+  assert.equal(res.status, 200);
+  noNewAccount(await res.json());
+  const old = db.fin_party_accounts.find((a) => a.id === PA1);
+  assert.deepEqual([old.status, old.retired_on], ['verified', '2026-12-01'], 'the old account is retired on the day, not at once');
+  const fresh1 = db.fin_party_accounts.find((x) => x.party_id === uid(6) && x.id !== PA1);
+  assert.deepEqual([fresh1.status, fresh1.created_by, fresh1.valid_from, fresh1.last4], ['unverified', 'staff-farm', '2026-12-01', '0077']);
+  assert.equal(db.fin_party_account_files.length, 1);
+  assert.equal(db.fin_people_requests[0].details_enc, null);
+});
+
+test('changing to the details the person already has changes nothing and says nothing is lost', async () => {
+  fresh();
+  db.fin_party_accounts.find((a) => a.id === PA1).fingerprint = crypto.fingerprintFinanceText(ACC1);
+  const same = bankOf({ account: ACC1, accountConfirm: ACC1, ifsc: 'TEST0000001' });
+  const { id } = await (await send('farm', 'POST', '/payroll/requests', { kind: 'bank_change', employeeId: E1, fromMonth: '2026-11', bank: same })).json();
+  await sendProof('farm', id);
+  const res = await decide('prep', id, 'approve');
+  assert.equal(res.status, 200);
+  assert.equal(db.fin_party_accounts.filter((a) => a.party_id === uid(6)).length, 1, 'no second account');
+  assert.equal(db.fin_people_requests[0].status, 'approved');
 });

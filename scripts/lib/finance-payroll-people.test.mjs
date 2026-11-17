@@ -2,15 +2,15 @@
 // Every id, name and amount below is invented.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validatePersonRequest, decidePersonRequest, eligibleForMonth, requestSummary } from './finance-payroll-people.mjs';
+import { validatePersonRequest, decidePersonRequest, eligibleForMonth, requestSummary, proofMissing } from './finance-payroll-people.mjs';
 
 const E1 = '11111111-1111-4111-8111-11111111111a';
 const today = '2026-11-17';
 
 test('a joining request needs a name and a start month; the role and agreed pay are optional and the pay is whole rupees', () => {
   const ok = validatePersonRequest({ kind: 'join', name: '  Test   Person ', startMonth: '2026-12', role: 'Helper', agreedPayRupees: 15000 }, { today });
-  assert.deepEqual(ok.value, { kind: 'join', personName: 'Test Person', roleTitle: 'Helper', startMonth: '2026-12-01', agreedPayPaise: 1_500_000 });
-  assert.deepEqual(validatePersonRequest({ kind: 'join', name: 'Test Person', startMonth: '2026-12' }, { today }).value, { kind: 'join', personName: 'Test Person', roleTitle: null, startMonth: '2026-12-01', agreedPayPaise: null });
+  assert.deepEqual(ok.value, { kind: 'join', personName: 'Test Person', roleTitle: 'Helper', startMonth: '2026-12-01', agreedPayPaise: 1_500_000, bank: null });
+  assert.deepEqual(validatePersonRequest({ kind: 'join', name: 'Test Person', startMonth: '2026-12' }, { today }).value, { kind: 'join', personName: 'Test Person', roleTitle: null, startMonth: '2026-12-01', agreedPayPaise: null, bank: null });
   assert.match(validatePersonRequest({ kind: 'join', name: 'x', startMonth: '2026-12' }, { today }).error, /name/i);
   assert.match(validatePersonRequest({ kind: 'join', name: 'Test Person', startMonth: '2026-13' }, { today }).error, /month/i);
   assert.match(validatePersonRequest({ kind: 'join', name: 'Test Person', startMonth: '2026-12', agreedPayRupees: 1500.5 }, { today }).error, /whole/i);
@@ -27,8 +27,8 @@ test('a leaving request needs the person and the last month to pay, which may be
 });
 
 test('an unknown kind is refused', () => {
-  assert.match(validatePersonRequest({ kind: 'promote' }, { today }).error, /joining or leaving/i);
-  assert.match(validatePersonRequest(null, { today }).error, /joining or leaving/i);
+  assert.match(validatePersonRequest({ kind: 'promote' }, { today }).error, /joining, leaving or changing/i);
+  assert.match(validatePersonRequest(null, { today }).error, /joining, leaving or changing/i);
 });
 
 const req = (over = {}) => ({ kind: 'join', status: 'requested', requestedBy: 'farm', ...over });
@@ -74,4 +74,44 @@ test('a request says in plain words where it stands and what happens next', () =
   assert.equal(requestSummary({ kind: 'join', status: 'rejected' }).next, null);
   assert.equal(requestSummary({ kind: 'leave', status: 'cancelled' }).next, null);
   assert.equal(requestSummary({ kind: 'leave', status: 'approved' }).next, null);
+});
+
+// ---- bank details with a joining request, and a request to change them (invented numbers)
+import { bankNameOfIfsc } from './ifsc-banks.mjs';
+
+const bank = (over = {}) => ({ account: '1000000001', accountConfirm: '1000000001', ifsc: 'test0000001', ...over });
+
+test('a joining request may carry bank details: the number is asked twice, and both the number and the IFSC are checked', () => {
+  const ok = validatePersonRequest({ kind: 'join', name: 'Test Person', startMonth: '2026-12', bank: bank() }, { today });
+  assert.deepEqual(ok.value.bank, { details: { method: 'bank', account: '1000000001', ifsc: 'TEST0000001' }, last4: '0001' });
+  assert.equal(validatePersonRequest({ kind: 'join', name: 'Test Person', startMonth: '2026-12' }, { today }).value.bank, null);
+  assert.match(validatePersonRequest({ kind: 'join', name: 'Test Person', startMonth: '2026-12', bank: bank({ accountConfirm: '1000000002' }) }, { today }).error, /do not match/i);
+  assert.match(validatePersonRequest({ kind: 'join', name: 'Test Person', startMonth: '2026-12', bank: bank({ account: '12ab', accountConfirm: '12ab' }) }, { today }).error, /9 to 18 digits/i);
+  assert.match(validatePersonRequest({ kind: 'join', name: 'Test Person', startMonth: '2026-12', bank: bank({ ifsc: 'nope' }) }, { today }).error, /IFSC/);
+  assert.match(validatePersonRequest({ kind: 'join', name: 'Test Person', startMonth: '2026-12', bank: bank({ ifsc: '' }) }, { today }).error, /IFSC/, 'an account without an IFSC cannot be paid, so it is not accepted here');
+  assert.match(validatePersonRequest({ kind: 'join', name: 'Test Person', startMonth: '2026-12', bank: { ifsc: 'TEST0000001' } }, { today }).error, /9 to 18 digits/i);
+});
+
+test('a change of bank details names the person, the first salary month it applies to, and the new details; it takes effect from the 1st after that month', () => {
+  const ok = validatePersonRequest({ kind: 'bank_change', employeeId: E1, fromMonth: '2026-11', bank: bank() }, { today });
+  assert.deepEqual([ok.value.kind, ok.value.employeeId, ok.value.effectiveOn, ok.value.bank.last4], ['bank_change', E1, '2026-12-01', '0001']);
+  assert.equal(validatePersonRequest({ kind: 'bank_change', employeeId: E1, fromMonth: '2026-12', bank: bank() }, { today }).value.effectiveOn, '2027-01-01');
+  assert.match(validatePersonRequest({ kind: 'bank_change', employeeId: 'nope', fromMonth: '2026-11', bank: bank() }, { today }).error, /person/i);
+  assert.match(validatePersonRequest({ kind: 'bank_change', employeeId: E1, fromMonth: 'soon', bank: bank() }, { today }).error, /month/i);
+  assert.match(validatePersonRequest({ kind: 'bank_change', employeeId: E1, fromMonth: '2026-11' }, { today }).error, /bank details/i);
+  assert.match(validatePersonRequest({ kind: 'bank_change', employeeId: E1, fromMonth: '2026-11', bank: bank({ accountConfirm: 'x' }) }, { today }).error, /do not match/i);
+});
+
+test('the IFSC says which bank it is from its first four letters, and nothing for a code it does not know', () => {
+  assert.equal(bankNameOfIfsc('SBIN0000001'), 'State Bank of India');
+  assert.equal(bankNameOfIfsc('hdfc0000001'), 'HDFC Bank');
+  assert.equal(bankNameOfIfsc('ZZZZ0000001'), null);
+  assert.equal(bankNameOfIfsc('SB'), null);
+  assert.equal(bankNameOfIfsc(null), null);
+});
+
+test('a request that carries bank details cannot be approved without its photo of the passbook or cheque', () => {
+  assert.equal(proofMissing({ hasBank: true, hasProof: false }), true);
+  assert.equal(proofMissing({ hasBank: true, hasProof: true }), false);
+  assert.equal(proofMissing({ hasBank: false, hasProof: false }), false);
 });

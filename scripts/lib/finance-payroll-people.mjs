@@ -5,10 +5,25 @@
 // A request is open ('requested') until a director approves or declines it, or the person who raised it (or a director) withdraws it.
 // Approving a joining request puts the person on payroll from the start month; approving a leaving request sets the last month to pay.
 // Whoever raised a request never decides it, even when they hold both roles.
+import { validatePayeeDetails } from './finance-parties.mjs';
+import { defaultPaymentDate } from './finance-payroll-file.mjs';
+
 const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
 const MAX_RUPEES = 10_000_000;
 const tidy = (s) => (typeof s === 'string' ? s.replace(/\s+/g, ' ').trim() : '');
+
+// Bank details the farm manager was given by the employee. The number is asked twice (the page shows only the last four digits
+// afterwards) and an IFSC is required: an account without one cannot be paid, so it is not accepted here.
+// -> { details: { method, account, ifsc }, last4 } | { error }
+function checkBank(bank) {
+  if (!bank || typeof bank !== 'object') return { error: 'Enter the bank details.' };
+  const squash = (v) => (typeof v === 'string' ? v.replace(/\s+/g, '') : '');
+  if (squash(bank.account) !== squash(bank.accountConfirm)) return { error: 'The two account numbers do not match.' };
+  const checked = validatePayeeDetails({ method: 'bank', account: bank.account, ifsc: bank.ifsc });
+  if (checked.error || !checked.details) return { error: checked.error ?? 'Check the bank details.' };
+  return { details: checked.details, last4: checked.last4 };
+}
 
 // body -> { value } | { error }. Months arrive as "2026-12" and are stored as the first day.
 export function validatePersonRequest(body, { today }) {
@@ -24,7 +39,21 @@ export function validatePersonRequest(body, { today }) {
       if (!Number.isInteger(body.agreedPayRupees) || body.agreedPayRupees <= 0 || body.agreedPayRupees > MAX_RUPEES) return { error: 'The agreed monthly pay must be a whole number of rupees, more than zero.' };
       agreedPayPaise = body.agreedPayRupees * 100;
     }
-    return { value: { kind: 'join', personName, roleTitle, startMonth: `${body.startMonth}-01`, agreedPayPaise } };
+    let bank = null;
+    if (body.bank != null) {
+      const checked = checkBank(body.bank);
+      if (checked.error || !checked.details) return { error: checked.error };
+      bank = { details: checked.details, last4: checked.last4 };
+    }
+    return { value: { kind: 'join', personName, roleTitle, startMonth: `${body.startMonth}-01`, agreedPayPaise, bank } };
+  }
+  if (body?.kind === 'bank_change') {
+    if (typeof body.employeeId !== 'string' || !ID.test(body.employeeId)) return { error: 'Choose the person whose bank details are changing.' };
+    if (typeof body.fromMonth !== 'string' || !MONTH.test(body.fromMonth)) return { error: 'Choose the first salary month the new account is for.' };
+    const checked = checkBank(body.bank ?? null);
+    if (checked.error || !checked.details) return { error: checked.error?.startsWith('Enter') ? 'Enter the new bank details.' : checked.error };
+    // The salary for a month is paid on the 1st of the next, so the new account starts then and the old one stops being paid then.
+    return { value: { kind: 'bank_change', employeeId: body.employeeId, effectiveOn: defaultPaymentDate(body.fromMonth), bank: { details: checked.details, last4: checked.last4 } } };
   }
   if (body?.kind === 'leave') {
     if (typeof body.employeeId !== 'string' || !ID.test(body.employeeId)) return { error: 'Choose the person who is leaving.' };
@@ -33,7 +62,7 @@ export function validatePersonRequest(body, { today }) {
     if (reason && reason.length > 200) return { error: 'The reason is too long (200 characters at most).' };
     return { value: { kind: 'leave', employeeId: body.employeeId, lastMonth: `${body.lastMonth}-01`, reason } };
   }
-  return { error: 'Say whether someone is joining or leaving.' };
+  return { error: 'Say whether someone is joining, leaving or changing their bank details.' };
 }
 
 const no = (error) => ({ ok: false, error });
@@ -52,6 +81,12 @@ export function decidePersonRequest(request, action, actor) {
   return { ok: true, to: action === 'approve' ? 'approved' : 'rejected' };
 }
 
+// A request with bank details needs the photo of the passbook or cancelled cheque (the proof the details are the employee's own) before a
+// director can approve it. request: { hasBank, hasProof } -> true when the proof is still missing.
+export function proofMissing(request) {
+  return Boolean(request.hasBank) && !request.hasProof;
+}
+
 // A person is paid for a month from their start month to their last month; either end may be open (null).
 // person: { startMonth, lastMonth } as "YYYY-MM-01" or null; month: "YYYY-MM".
 export function eligibleForMonth(person, month) {
@@ -63,6 +98,6 @@ export function eligibleForMonth(person, month) {
 
 // One line of plain words: what happens next to this request.
 export function requestSummary(request) {
-  if (request.status === 'requested') return { next: 'Waiting for a director to approve it.' };
+  if (request.status === 'requested') return { next: proofMissing(request) ? "Attach the photo of the passbook or cheque, then a director can approve it." : 'Waiting for a director to approve it.' };
   return { next: null };
 }

@@ -374,6 +374,31 @@ export async function updateParty(req: Request, id: string): Promise<Response> {
 }
 
 // ---------------------------------------------------- new/changed details
+// Attach bank details to a party the way the Parties page does, for a caller that has already decided it may (a payroll approval). The new
+// account is UNVERIFIED and records `actorId` as who entered it, so someone else must verify it. With `effectiveOn` the old account stays
+// payable until that day and the new one starts on it. -> { accountId } | { unchanged } | { error }.
+export async function attachPayeeDetails(partyId: string, actorId: string, payee: Json, effectiveOn: string | null): Promise<{ accountId: string; entityId: string } | { unchanged: true } | { error: string }> {
+  const [party] = await rows(`/fin_parties?id=eq.${partyId}&select=id,merged_into`);
+  if (!party || party.merged_into) return { error: 'That party is not in the register any more.' };
+  const mergedIn = (await rows(`/fin_parties?merged_into=eq.${partyId}&select=id`)).map((p) => p.id as string);
+  const existing = await rows(`/fin_party_accounts?party_id=in.(${[partyId, ...mergedIn].join(',')})&select=${ACCOUNT_COLUMNS},details_enc`);
+  const entity = await entityId();
+  const result = await addAccount(partyId, entity, actorId, payee, existing, effectiveOn);
+  if ('error' in result) return { error: result.error ?? 'Enter the details.' };
+  if ('unchanged' in result) return { unchanged: true };
+  await audit(actorId, entity, 'finance.payee_changed', result.created.id, { partyId, method: result.method, superseded: result.superseded, retiring: result.retiring, ...(effectiveOn ? { effectiveOn } : {}) });
+  return { accountId: result.created.id as string, entityId: entity };
+}
+
+// Record a file already in the private bucket as evidence on an account (kind 'other': a passbook or cheque photo). The key is reused, not copied.
+export async function attachEvidenceFile(accountId: string, entity: string, uploadedBy: string, file: { key: string; mime: string; bytes: number }): Promise<void> {
+  await rest('/fin_party_account_files', {
+    method: 'POST',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({ id: randomUUID(), entity_id: entity, account_id: accountId, kind: 'other', r2_key: file.key, mime: file.mime, bytes: file.bytes, uploaded_by: uploadedBy }),
+  });
+}
+
 export async function addPayeeAccount(req: Request, partyId: string): Promise<Response> {
   const body = await readBody(req);
   if (!body) return fail('Send the details as JSON.');
