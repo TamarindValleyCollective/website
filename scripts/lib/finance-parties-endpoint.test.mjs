@@ -35,7 +35,7 @@ const stubStorage = {
   setup(b) {
     b.onResolve({ filter: /finance-storage$/ }, () => ({ path: 'stub-storage', namespace: 'stub-r2' }));
     b.onLoad({ filter: /.*/, namespace: 'stub-r2' }, () => ({
-      contents: `export async function putFinanceVoucher(k, bytes, mime){ globalThis.__r2.set(k, { bytes, mime }); }
+      contents: `export async function putFinancePayroll(){} export async function getFinancePayroll(){ return null; } export async function putFinanceVoucher(k, bytes, mime){ globalThis.__r2.set(k, { bytes, mime }); }
 export async function getFinanceVoucher(k){ return globalThis.__r2.get(k)?.bytes ?? null; }
 export async function deleteFinanceVoucher(k){ globalThis.__r2.delete(k); }
 export async function putFinanceImport(){} export async function deleteFinanceImport(){}`,
