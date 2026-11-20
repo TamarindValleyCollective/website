@@ -358,6 +358,7 @@ const brand =
                 unitAmount={event.data.razorpayOptions?.[0]?.amount ?? event.data.price![0].amount}
                 unitLabel={event.data.razorpayOptions ? 'per person' : event.data.price![0].label}
                 eventDate={event.data.date.toISOString().slice(0, 10)}
+                questions={event.data.bookingQuestions}
               />
             </div>
           )}

@@ -26,6 +26,9 @@ interface BookingPayload {
   attendeeCount?: number;
   // The WhatsApp-updates checkbox. Only an explicit true counts as consent.
   whatsappOptIn?: boolean;
+  // Answers to the event's own extra questions (content field
+  // `bookingQuestions`), keyed by the question's text.
+  answers?: Record<string, unknown>;
   confirmDuplicate?: boolean;
   botField?: string;
 }
@@ -33,6 +36,18 @@ interface BookingPayload {
 const MAX_ATTENDEES = 10;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+// Keeps only short string-to-string pairs, capped, so the column can't be used
+// to stash arbitrary data. Returns null when nothing was answered.
+function cleanAnswers(raw: unknown): Record<string, string> | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const out: Record<string, string> = {};
+  for (const [label, value] of Object.entries(raw as Record<string, unknown>).slice(0, 10)) {
+    const answer = typeof value === 'string' ? value.trim().slice(0, 3000) : '';
+    if (label && answer) out[label.slice(0, 200)] = answer;
+  }
+  return Object.keys(out).length ? out : null;
+}
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -60,6 +75,7 @@ export default async (req: Request): Promise<Response> => {
   const phone = (payload.phone ?? '').trim();
   const attendeeCount = Math.trunc(Number(payload.attendeeCount));
   const whatsappOptIn = payload.whatsappOptIn === true;
+  const answers = cleanAnswers(payload.answers);
 
   if (!referenceId || !name || !email || !phone) {
     return jsonResponse({ error: 'name, email, and phone are required' }, 400);
@@ -117,6 +133,7 @@ export default async (req: Request): Promise<Response> => {
       phone,
       attendeeCount,
       whatsappOptIn,
+      answers,
     });
   } catch (err) {
     console.error('[event-booking] Failed to save booking request', err);
@@ -131,6 +148,7 @@ export default async (req: Request): Promise<Response> => {
     phone,
     attendee_count: attendeeCount,
     whatsapp_opt_in: whatsappOptIn,
+    answers,
   };
   // Best-effort: the request is saved, so a notification hiccup must not tell
   // the guest their request failed. Both helpers swallow their own errors.

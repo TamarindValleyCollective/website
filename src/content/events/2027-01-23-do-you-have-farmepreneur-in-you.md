@@ -1,14 +1,14 @@
 ---
-title: "Why You Can Never Become a Farmer"
+title: "Do you have farmepreneur in you?"
 date: 2027-01-23
 endDate: 2027-01-24
 excerpt: "An overnight experience-sharing workshop for people who'd like to get into farming — production, markets, value addition and technology, and the economics, behavioural science and spirituality behind them. Stay, food and activities included."
-coverImage: "/images/events/2027-01-23-why-you-can-never-become-a-farmer/hero.jpeg"
+coverImage: "/images/events/2027-01-23-do-you-have-farmepreneur-in-you/hero.jpeg"
 coverImageAlt: "An illustration of a person with a backpack walking from a city skyline along a path toward sunlit farm terraces, with three badges floating above them: a rupee sign for economics, a brain for behavioural science and a lotus for spirituality."
 coverImagePosition: "center top"
 coverImageWidth: 1920
 coverImageHeight: 1280
-shareImage: "/images/events/2027-01-23-why-you-can-never-become-a-farmer/poster.jpeg"
+shareImage: "/images/events/2027-01-23-do-you-have-farmepreneur-in-you/poster.jpeg"
 shareImageWidth: 1080
 shareImageHeight: 1350
 organizer: "Ramesh Agarwal & Venky Ramachandran"
@@ -21,10 +21,18 @@ whatsapp:
   number: "918548065772"
   contactName: "Linger"
 razorpayReferenceId: "farmer-workshop-2027-01-23"
+bookingQuestions:
+  - id: "is-farmerpreneur"
+    label: "Are you a farmerpreneur?"
+    type: "choice"
+    options: ["Yes, I am doing farming", "No, I am aspiring to do farming"]
+  - id: "why-farmerpreneur"
+    label: "Why do you want to become a farmerpreneur?"
+    type: "text"
 stayTypes: ["malabar-hut", "banyan-hut", "bamboo-hut", "portable-tent"]
 ---
 
-**Why You Can Never Become a Farmer — without knowing economics, behavioural science and spirituality.**
+**Do you have farmepreneur in you? Farmer + entrepreneur — it takes economics, behavioural science and spirituality, not just land.**
 
 An experience-sharing workshop for enthusiasts who would like to get into farming. There are a lot of preconceived notions that farming is suffering because farmers are uneducated and don't understand technology and markets. That can give you a false sense of understanding. Like any other domain, farming demands a deep understanding of the domain, physical effort and mental strength.
 
@@ -32,7 +40,7 @@ The workshop brings to the forefront some of the blind spots that come from lack
 
 <figure class="poster">
 
-![Event poster for Why You Can Never Become a Farmer, 23 to 24 January 2027: the five topics, the two hosts, and the ₹6,000 per participant fee](/images/events/2027-01-23-why-you-can-never-become-a-farmer/poster.jpeg)
+![Event poster for Do you have farmepreneur in you?, 23 to 24 January 2027: the five topics, the two hosts, and the ₹6,000 per participant fee](/images/events/2027-01-23-do-you-have-farmepreneur-in-you/poster.jpeg)
 
 <figcaption>The event poster</figcaption>
 
@@ -44,7 +52,7 @@ The workshop brings to the forefront some of the blind spots that come from lack
 
 <div class="host">
 
-![Ramesh Agarwal, smiling, in a dark blazer and glasses](/images/events/2027-01-23-why-you-can-never-become-a-farmer/ramesh-agarwal.png)
+![Ramesh Agarwal, smiling, in a dark blazer and glasses](/images/events/2027-01-23-do-you-have-farmepreneur-in-you/ramesh-agarwal.png)
 
 **Ramesh Agarwal**<br>[LinkedIn →](https://www.linkedin.com/in/notagarwal/)
 
@@ -52,7 +60,7 @@ The workshop brings to the forefront some of the blind spots that come from lack
 
 <div class="host">
 
-![Venky Ramachandran, speaking into a microphone at a talk](/images/events/2027-01-23-why-you-can-never-become-a-farmer/venky-ramachandran.png)
+![Venky Ramachandran, speaking into a microphone at a talk](/images/events/2027-01-23-do-you-have-farmepreneur-in-you/venky-ramachandran.png)
 
 **Venky Ramachandran**<br>[LinkedIn →](https://www.linkedin.com/in/venkinesis/)
 

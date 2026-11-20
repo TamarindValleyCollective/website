@@ -417,6 +417,13 @@
   to = "/people/partners/"
   status = 301
 
+# The January 2027 workshop was renamed from "Why You Can Never Become a Farmer"; keep the old
+# URL (shared in early messages) working.
+[[redirects]]
+  from = "/events/2027-01-23-why-you-can-never-become-a-farmer"
+  to = "/events/2027-01-23-do-you-have-farmepreneur-in-you"
+  status = 301
+
 # 3Bs&1H editions moved from flat, date-prefixed URLs to a versioned series
 # URL (/events/3bs1h/<edition number>) once the series got its own hub page
 # and brand identity (see src/pages/events/3bs1h/ and content.config.ts's

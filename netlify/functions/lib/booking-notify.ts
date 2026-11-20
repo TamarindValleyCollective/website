@@ -66,10 +66,25 @@ export interface BookingRequestSummary {
   phone: string;
   attendee_count: number;
   whatsapp_opt_in: boolean;
+  // Answers to the event's own extra questions, keyed by question text.
+  answers?: Record<string, string> | null;
 }
 
 function peopleLabel(n: number): string {
   return `${n} ${n === 1 ? 'person' : 'people'}`;
+}
+
+// The guest's replies to the event's own extra questions, as question/answer
+// paragraphs (long free text doesn't fit the right-aligned detail table).
+function answersBlock(answers: Record<string, string> | null | undefined): string {
+  const entries = Object.entries(answers ?? {});
+  if (!entries.length) return '';
+  return entries
+    .map(
+      ([question, answer]) =>
+        `\n  <p style="margin:0 0 4px; font-size:13px; color:${EMAIL_COLORS.muted};">${escapeHtml(question)}</p>\n  <p style="margin:0 0 16px; white-space:pre-wrap;">${escapeHtml(answer)}</p>`,
+    )
+    .join('');
 }
 
 // To Linger (+ TVC): a guest wants a spot — talk to them, then approve.
@@ -96,7 +111,7 @@ export async function notifyApprovers(req: BookingRequestSummary, token: string,
       detailRow('Email', escapeHtml(req.email)) +
       detailRow('People', String(req.attendee_count)) +
       detailRow('Event date', escapeHtml(formatEventDate(req.event_date)), { last: true }),
-  )}
+  )}${answersBlock(req.answers)}
   <p><a href="${url}" style="display:inline-block; padding:10px 18px; background:#1f4d2b; color:#ffffff; border-radius:8px; text-decoration:none; font-weight:600;">Review &amp; approve</a></p>
   <p style="font-size:13px; color:#57604f;">Request ${escapeHtml(requestId)}. Anyone with this link can approve or decline, so please don't forward it.</p>`),
     }),

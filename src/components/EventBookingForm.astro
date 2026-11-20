@@ -34,9 +34,13 @@ interface Props {
   // referenceId/unitAmount above are then just the first option's, the
   // pre-selected default.
   options?: { referenceId: string; label: string; amount: string }[];
+  // Event-specific questions (content field `bookingQuestions`), asked after
+  // the standard fields. All required; answers go to event-booking.mts keyed
+  // by the question's label.
+  questions?: { id: string; label: string; type: 'choice' | 'text'; options?: string[] }[];
 }
 
-const { referenceId, unitAmount, unitLabel, eventDate, heading, options } = Astro.props;
+const { referenceId, unitAmount, unitLabel, eventDate, heading, options, questions } = Astro.props;
 const fieldId = referenceId.replace(/[^a-z0-9]+/gi, '-');
 const MAX_ATTENDEES = 10;
 const counts = Array.from({ length: MAX_ATTENDEES }, (_, i) => i + 1);
@@ -87,6 +91,29 @@ const counts = Array.from({ length: MAX_ATTENDEES }, (_, i) => i + 1);
         </select>
       </div>
     </div>
+
+    {questions && questions.length > 0 && (
+      <div class="booking-form__questions">
+        {questions.map((q) =>
+          q.type === 'choice' ? (
+            <fieldset class="booking-form__options">
+              <legend>{q.label}</legend>
+              {(q.options ?? []).map((o, i) => (
+                <label class="booking-form__option" for={`${fieldId}-${q.id}-${i}`}>
+                  <input id={`${fieldId}-${q.id}-${i}`} type="radio" name={`q:${q.id}`} value={o} data-question-label={q.label} required />
+                  <span class="booking-form__option-label">{o}</span>
+                </label>
+              ))}
+            </fieldset>
+          ) : (
+            <div class="booking-form__question">
+              <label for={`${fieldId}-${q.id}`}>{q.label}</label>
+              <textarea id={`${fieldId}-${q.id}`} name={`q:${q.id}`} rows="5" maxlength="3000" data-question-label={q.label} required></textarea>
+            </div>
+          ),
+        )}
+      </div>
+    )}
 
     <label class="booking-form__consent" for={`${fieldId}-whatsapp`}>
       <input id={`${fieldId}-whatsapp`} type="checkbox" name="whatsappOptIn" />
@@ -145,6 +172,10 @@ const counts = Array.from({ length: MAX_ATTENDEES }, (_, i) => i + 1);
     height: 18px;
     margin: 2px 0 0;
     accent-color: var(--tvc-green);
+  }
+
+  .booking-form__question {
+    margin-bottom: 16px;
   }
 
   .booking-form__options {
@@ -335,6 +366,17 @@ const counts = Array.from({ length: MAX_ATTENDEES }, (_, i) => i + 1);
       if (phoneInput && !phoneInput.value) phoneInput.value = saved.phone;
     }
 
+    // Event-specific questions, keyed by the question's label (not read from
+    // `data`, so a re-sent duplicate confirmation picks up any edit too).
+    function collectAnswers(): Record<string, string> {
+      const answers: Record<string, string> = {};
+      form.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('[data-question-label]').forEach((el) => {
+        if (el instanceof HTMLInputElement && !el.checked) return;
+        answers[el.dataset.questionLabel ?? ''] = el.value.trim();
+      });
+      return answers;
+    }
+
     function updateTotal() {
       const unitAmount = currentUnitAmount();
       if (!countSelect || !totalEl || unitAmount === null) return;
@@ -373,6 +415,7 @@ const counts = Array.from({ length: MAX_ATTENDEES }, (_, i) => i + 1);
             phone: data.get('phone'),
             attendeeCount: Number(data.get('attendeeCount')),
             whatsappOptIn: data.get('whatsappOptIn') === 'on',
+            answers: collectAnswers(),
             confirmDuplicate,
           }),
         });

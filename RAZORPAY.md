@@ -41,6 +41,14 @@ for the full technical writeup and diagram).
    actually paying) — confirms the price lookup and per-booking Payment Link creation work
    before relying on it for a real event.
 
+**Extra questions on the booking form (2026-11-20).** An event can list `bookingQuestions` in its
+frontmatter (`id`, `label`, `type` of `choice` with `options`, or `text` for a long answer); the
+form asks them after the standard fields, all required. `event-booking.mts` keeps short string
+answers only (at most 10, 3,000 characters each), saves them in `event_booking_requests.answers`
+(migration `0109`, **apply it to TVC ERP before merging**; the column is only written when there are
+answers, so other events work either way) and lists them in the email to the approvers. First use:
+the January 2027 workshop, "Do you have farmepreneur in you?" (farming status, and why).
+
 **An event sold in more than one option (2026-11-05).** When one event has several per-person
 prices (a day visit and an overnight stay), make one base Payment Link per option and list them
 in the event's `razorpayOptions` frontmatter (`referenceId`, `label`, `amount`) instead of
@@ -327,7 +335,7 @@ kept, leaving TVC at −₹0.20.
 | Event | Amount | Base Payment Link | Reference ID |
 |---|---|---|---|
 | Foraging Day (10 Oct 2026) | ₹2,250/person | https://rzp.io/rzp/RjF4hjJ1 | `foraging-day-2026-10-10` |
-| Why You Can Never Become a Farmer (23–24 Jan 2027) | ₹6,000/person | https://rzp.io/rzp/O68TEbz0 | `farmer-workshop-2027-01-23` |
+| Do you have farmepreneur in you? (23–24 Jan 2027; formerly "Why You Can Never Become a Farmer") | ₹6,000/person | https://rzp.io/rzp/O68TEbz0 | `farmer-workshop-2027-01-23` |
 
 Any new paid event just needs its own base Payment Link + `razorpayReferenceId` (see the
 opt-in steps above) — nothing here is Foraging-Day-specific.

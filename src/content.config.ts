@@ -141,6 +141,17 @@ const events = defineCollection({
       label: z.string(),
       amount: z.string(),
     })).optional(),
+    // Extra questions this event asks on the booking form, after the standard
+    // name/email/phone/people fields. All are required. `choice` shows radio
+    // buttons from `options`; `text` shows a long free-text box. The answers
+    // are saved on the request (event_booking_requests.answers, keyed by
+    // `label`) and listed in the email to the admins who approve it.
+    bookingQuestions: z.array(z.object({
+      id: z.string(),
+      label: z.string(),
+      type: z.enum(['choice', 'text']),
+      options: z.array(z.string()).optional(),
+    })).optional(),
   }),
 });
 
