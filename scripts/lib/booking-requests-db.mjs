@@ -11,7 +11,7 @@ function supabaseUrl() {
 }
 
 /**
- * @typedef {{ id: string, event_reference_id: string, event_title: string, event_date: string | null, name: string, email: string, phone: string, attendee_count: number, whatsapp_opt_in: boolean, status: 'pending' | 'approved' | 'declined', payment_link_id: string | null, payment_link_url: string | null, payment_link_sent_at: string | null }} BookingRequestRow
+ * @typedef {{ id: string, event_reference_id: string, event_title: string, event_date: string | null, name: string, email: string, phone: string, attendee_count: number, whatsapp_opt_in: boolean, status: 'pending' | 'approved' | 'declined', payment_link_id: string | null, payment_link_url: string | null, payment_link_sent_at: string | null, answers: Record<string, string> | null }} BookingRequestRow
  */
 
 export function hashToken(token) {
@@ -19,7 +19,7 @@ export function hashToken(token) {
 }
 
 /**
- * @param {{ eventReferenceId: string, eventTitle: string, eventDate?: string | null, name: string, email: string, phone: string, attendeeCount: number, whatsappOptIn: boolean }} params
+ * @param {{ eventReferenceId: string, eventTitle: string, eventDate?: string | null, name: string, email: string, phone: string, attendeeCount: number, whatsappOptIn: boolean, answers?: Record<string, string> | null }} params
  * @returns {Promise<{ request: BookingRequestRow, token: string }>} token goes in the approve link; only its hash is stored
  */
 export async function createBookingRequest(params) {
@@ -37,6 +37,9 @@ export async function createBookingRequest(params) {
         phone: params.phone,
         attendee_count: params.attendeeCount,
         whatsapp_opt_in: params.whatsappOptIn,
+        // Only sent when there are answers, so events without extra questions
+        // keep working before migration 0109 has been applied.
+        ...(params.answers ? { answers: params.answers } : {}),
         approval_token_hash: hashToken(token),
       },
     ]),
