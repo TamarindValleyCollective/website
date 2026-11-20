@@ -337,6 +337,12 @@ kept, leaving TVC at −₹0.20.
 | Foraging Day (10 Oct 2026) | ₹2,250/person | https://rzp.io/rzp/RjF4hjJ1 | `foraging-day-2026-10-10` |
 | Do you have farmepreneur in you? (23–24 Jan 2027; formerly "Why You Can Never Become a Farmer") | ₹6,000/person | https://rzp.io/rzp/O68TEbz0 | `farmer-workshop-2027-01-23` |
 
+The base link's "Payment For" line still reads the old title, "Why You Can Never Become a Farmer
+(23-24 Jan 2027), per participant": Razorpay doesn't let a link's description be edited. It doesn't matter,
+since nobody pays the base link and `booking-link.ts` takes the event name from `notes.event`
+(edited by hand in the dashboard on 2026-11-20 to the new title) before the description, so
+per-booking links, emails, WhatsApp messages and alerts all use the new name.
+
 Any new paid event just needs its own base Payment Link + `razorpayReferenceId` (see the
 opt-in steps above) — nothing here is Foraging-Day-specific.
 
