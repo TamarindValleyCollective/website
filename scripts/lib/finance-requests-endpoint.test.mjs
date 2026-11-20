@@ -26,7 +26,7 @@ await build({
   entryPoints: ['netlify/functions/finance-admin.mts'], bundle: true, platform: 'node', format: 'esm', outfile: out, logLevel: 'silent',
   plugins: [
     stub(/google-id-token\.mjs$/, 'export async function verifyGoogleIdToken(t){ return { email: t, hd: t.split("@")[1] }; }'),
-    stub(/finance-storage$/, 'export async function putFinanceImport(){} export async function deleteFinanceImport(){} export async function putFinanceVoucher(k){ globalThis.__r2.push(k); } export async function getFinanceVoucher(){ return null; } export async function deleteFinanceVoucher(){}'),
+    stub(/finance-storage$/, 'export async function putFinanceImport(){} export async function deleteFinanceImport(){} export async function putFinancePayroll(){} export async function getFinancePayroll(){ return null; } export async function putFinanceVoucher(k){ globalThis.__r2.push(k); } export async function getFinanceVoucher(){ return null; } export async function deleteFinanceVoucher(){}'),
   ],
 });
 globalThis.__r2 = [];

@@ -50,6 +50,112 @@ bulk-payment file, and split the single bank debit automatically.
   defaults to `N`, and the generator accepts `N` or `I` only. Not confirmed: whether the transfer method chosen at upload
   overrides column A; the export must not assume either way (the preparer still checks it in the portal as today).
 
+## Plan for the next slices of 09a (2026-11-17, with the owner; nothing here is built yet)
+Agreed after the first run screens were reviewed. Order of work, each its own commit and test-first:
+
+1. **Automatic employee numbers.** Today the number is typed by hand and only sorts the list, and the reference in column I uses the
+   row's position in that month's file, so one person's number can change month to month. Instead: the number is assigned on
+   adding a person to payroll (next number, never reused, shown read-only), and column I uses it. *Open question for the owner:* in the
+   files uploaded to the bank today, is the last part of the reference a permanent employee number or the row count? If permanent,
+   seed the existing people with their current numbers when the history is imported.
+2. **People-change requests** (a table and three request kinds, in the style of the payment requests the farm manager already
+   uses). The farm manager decides who joins and leaves, so each change starts with him; a director signs it off, because a joiner
+   or a changed account is money going out. Adding the person as a Party stays a separate step done by someone else, and adding
+   them to payroll stays a separate step done by a director.
+   - **Joining:** the farm manager raises it (name, role, start month, agreed monthly pay, the account and IFSC the employee gave
+     him). An admin creates the Party (kind employee) and the details attach to it. A director approves and the person goes
+     on payroll from the start month. The agreed pay is what the 09b calculation will read.
+   - **Leaving:** the farm manager picks a person on payroll, the last month to pay and an optional reason. A director approves;
+     the person drops out of the new-month form after that month (a final month with a hand-entered amount is still possible).
+     History and past runs are untouched. The payroll page then prompts that the Party can be deactivated.
+   - **Change of bank details:** the farm manager enters the new account and the month it starts from. The old account stays in
+     use until the new one is verified, so salary never goes to an unchecked account. A different person verifies it, never the
+     requester; a director for a change, an admin may verify a new joiner. The existing "account changed since the last run" warning
+     still shows for the first month. Every change is written to the audit log and alerts the directors.
+   - Today deactivating a Party does nothing to payroll, and nothing turns an employee off. Until this is built, treat both as gaps. As
+     a safety net, even without a request: payroll shows "inactive in Parties but still on payroll" with the names, and a line for a
+     deactivated Party blocks the file until it is removed or the Party is reactivated.
+3. **Bank details entered by the farm manager.** The employee gives the details to him, so he may enter them at joining and request a
+   change. He sees only the last four digits afterwards, never the full number. To catch typos the account number is asked twice and
+   the IFSC shows its bank and branch at once. A new or changed account needs a photo of the passbook or a cancelled cheque (the
+   proof the details are the employee's own), stored privately with the payee evidence. Entering the details does not make
+   them the account that is paid: only a check by someone else does.
+4. **Name from the bank, when a method exists.** If bank-account validation is automated, show the bank's registered name beside
+   the masked number when the farm manager adds an account, compare it with the Party's name (a mismatch is flagged for the checker,
+   not blocked), and run the same check on every line just before the file is made (a failed or unavailable check blocks the
+   file; this is the live check `payrollBlockers` is waiting for). Do not build it until the owner reports a working method and
+   provider; leave a "name from bank" field, empty, on the new-account step and one hook in `payrollBlockers`. Known limits: it is a
+   paid per-check service, some providers send a test credit, not every bank returns a name.
+5. **Evidence of the bank's confirmation.** After "I uploaded it to the bank" the preparer may attach a screenshot of the batch
+   as the bank shows it (it lists each line with its status). It is the only proof from a system TVC does not control, and it reuses
+   the private evidence storage. Later it could be read to tick lines against the run, which gives settlement matching a head start.
+   The screenshot holds real names and account numbers: private storage only, never the repo.
+6. **File drop instead of keying.** The farm manager may drop his usual monthly sheet (Excel or CSV) instead of typing amounts;
+   the page previews it matched to people by number or name, flags the unmatched, and one confirm creates the draft. Same pattern as
+   the statement import. Needs the layout of his sheet, shown with invented names, before it is built.
+
+**Decisions after reading the history of uploaded files (2026-11-17, with the owner).**
+- **Run type (built, same branch):** a month holds one *salary* run plus any number of *bonus* runs, each with a name ("Diwali Bonus"), because Oct 2025 had a
+  salary file and a bonus file. `fin_payroll_runs.run_type`/`label` (migration `0105`, edited in place before it was applied); the unique index is per month, type
+  and name. A bonus is worded as the old files were ("<Mon YYYY> <name>", "<name> for <Mon YYYY>", reference `YYYY-Mon-Bonus-Employee-nnn`) and defaults to paying
+  today. The reference is built in one function, `lineReference`, used by the file and by the line snapshot.
+- **Employee numbers are seeded from the 2023-25 set** (the same ten people carried `1, 3-10, 12` every month for about 18 months; two numbers belong to people
+  who left and are never reused). From Apr 2025 the sheet drifted (renumbered 1..N by row in some months, gaps in others), and since Dec 2025 it is `1..10` by row,
+  so one person's number changed. The seed maps each current person to their 2023-25 number, to be confirmed by the owner when the history is imported.
+- **The bank's newer bulk-payment system is out of scope.** Axis offers one that is better integrated with its banking application, but it needs reorganising the
+  process to avoid mistakes and has not been tried. One file in the history (Jan 2026, 29 columns with headers) is an early look at its template; ignore it. The
+  generator keeps writing the layout above.
+- **Inconsistencies in the old files are not blockers and are removed by the generator, going forward:** the month typed in several places and disagreeing (a file
+  named for one month holding another month's sheet name or references, at least four times); month names in the reference varying (`March` and `Mar`, and `Sep-Emp`
+  in 2023); three versions of Oct 2024 and a "Copy" of Sep 2025. (As first read on 2026-11-17 the 2026 files also had a Sep file that was really the Oct batch, no Aug file and a Jun file with no
+  amounts; the owner corrected those the same day, and the Jun to Oct 2026 files now each carry their own month's sheet name, references, narration and payment date.)
+
+**What the files and the ledger say about what was actually uploaded (read 2026-11-17; the files and amounts stay outside the repo).** Each file's total was matched
+to a bank debit of exactly that amount.
+- Every file's total appears as exactly one bank debit, so each month's batch was uploaded and paid at the file's amount. Where several versions of a file share one total (the
+  three Oct 2024 versions, the Sep 2025 original and its copy, the Sep 2026 and Oct 2026 files), only one debit exists: only one was uploaded. For Oct 2024 it is the
+  version whose payment date matches the bank date; the other two carry an earlier date and were stale.
+- The bank settles a month about 1 to 4 days after the file's payment date (a weekend or holiday). One batch (Mar 2025) was paid early, on the 28th.
+- **Bank debits with no file in the folder:** three bulk salary debits in the ledger (Jul 2026, Sep 2026, Oct 2026) have no matching file. Sep 2026 and Oct 2026 are the
+  Aug and Sep salaries: their files are missing, or were never saved, and the file named Sep is the Oct batch. The Jul 2026 debit is the Jun file, whose amounts are
+  formulas with no stored value, so it could not be compared.
+- **Bank debits matching a file but with no allocation at all in the ledger (10):** six from before the tracker (Sep 2023 to Mar 2024 files) and four inside it (the
+  Dec 2024, Jul 2025, Mar 2026 and Oct 2026 batches). These are gaps for the history import or settlement matching to fill. The Oct 2026 one is the latest batch.
+- **Salary payments made outside the bulk file:** the ledger holds several single-person "Salaries" debits near month ends that appear in no file (Aug 2024, Mar 2025, Jun 2025 x5,
+  Aug 2025, Nov 2025, Mar 2026): advances or one-offs paid another way. Payroll covers the bulk file only; these stay as they are, or become a later "off-cycle" run type.
+- **Period convention (decided 2026-11-17, the owner): the salary month.** Settling a batch gives each person's allocation `period` = the salary month (a batch
+  for Apr paid on 1 May sits in April), as this brief always said. The history already in the ledger was entered the other way, under the *payment* month, so the
+  history import must either re-period those allocations or leave them and flag the difference; decide that when the import is built. A bonus run takes the month
+  it is for, in the same way.
+
+**Ledger validation before the history import (2026-11-17; the files and amounts stay outside the repo).** Every bank debit that carries a "Salaries" entry in the ledger (38 of them, since Sep 2023) was
+compared with the 40 files, amount by amount. Result:
+- **Totals agree everywhere:** on all 38 debits the entries add up to the bank amount exactly.
+- **28 of the 38 are batches** (8 to 10 entries). **All 28 match a file entry for entry**, and none has a file with the same total but different entries. On the first read 3 had no file (the debits of 1 Jul, 2 Sep
+  and 3 Oct 2026, the June, August and September 2026 salaries); the owner replaced those files the same day and they now match, so **no batch in the ledger lacks its file.**
+- **10 are single-person payments** with no file (Aug 2024, Mar 2025, 5 in Jun 2025, Aug 2025, Nov 2025, Mar 2026): paid outside the bulk file, most as round amounts (advances or one-offs). **Five of them (5 and 8
+  Jun 2025) repeat five amounts that are also inside the 2 Jun 2025 batch, paid by individual NEFT 3 to 6 days later, with no credit of those amounts coming back in the following 12 days.** Possible double
+  payments or a re-sent return; for the owner to check against the bank. **Owner (2026-11-17): there have been several one-off advance payments, and payments made individually instead of in bulk on a
+  couple of occasions.** So these are advances (and a few individual payments), which belong to the pay arithmetic in 09b (an advance and its monthly deduction), not to a run type: the history import
+  leaves these ten entries untouched in the ledger, lists them in the dry run as "advances, not in a bulk file", and keeps them out of every month's file total. **The five in June 2025 are explained (owner, 2026-11-17): a bank merger changed the employees' accounts and the 2 Jun 2025 file still used the old details. The payments went through but never reached the employees,
+  the money sent to the wrong accounts was never recovered, and the five people were paid again individually on 5 and 8 Jun.** So those five entries in the 2 Jun batch are money lost, not salary received; this is the incident
+  the payee-account guard and the "account changed since the last run" warning exist for. **Decided (owner, 2026-11-17): option B.** The five batch entries move out of Salaries into a new opex category, "Losses and write-offs" (the name is a default the owner may change), with a remark naming the cause, so Salaries
+  shows what employees actually received and the loss shows on its own. The five individual re-payments stay in Salaries. The ledger has no loss category today, so the history import creates it; nothing changes in the ledger until the owner approves the dry run.
+- **10 file batches exist at the bank but have no salary entry at all in the ledger:** six before the tracker (Sep to Dec 2023, Feb and Mar 2024 files) and four inside it (the Dec 2024, Jul 2025, Mar 2026 and
+  Oct 2026 batches). These are what the import fills in. One earlier bank batch (5 Sep 2023, the Aug 2023 salary) has no file in the folder; the folder starts with the Sep 2023 file.
+- **No January 2024 batch exists** at the bank, and no file: that month was paid another way or not at all.
+- **People are not confirmed.** Many entries have no party (4 of 10 in most 2024 months, 7 of 10 in Feb and Mar 2025, 1 to 2 from mid-2025), so the check was on amounts. Amounts repeat within a month (three at the same
+  figure in some months), so naming each file row's person needs the name, and the import supplies the party on every entry.
+- **Periods:** these batches' entries sit in the payment month; the import re-periods them to the salary month (decided 2026-11-17).
+
+**Polish from the first review (small):** disable "Make the bank file" with a reason when someone's account cannot be paid; the
+Finance menu has both "Payroll" and the older "Salaries" and both pages are headed "Salaries", so rename one pair to tell them apart;
+two console errors on the pages (a 404 not traced yet, and a blocked sign-in script in the headless check).
+
+**Still unverified:** the real downloaded `.xlsx` has not been confirmed to open in Excel. The structure tests clean as a zip, and a file
+was opened in Excel on 2026-11-17; the result is not recorded here yet. The first "corrupt file" report came from the preview's stub
+download, not from the generator.
+
 ## Read first
 `DESIGN.md` (Payroll, fin_employees and related tables, Access); the sessions 04 and 05 notes; the payroll
 workbook layout as described in `FINANCE.md`.
@@ -90,4 +196,92 @@ creates allocations with the right period.
 > Read `docs/finance/README.md`, `DESIGN.md`, `sessions/09-payroll.md`, and the notes from sessions 04 and 05. Build session 09 test-first with the tdd skill, starting from the pure payroll arithmetic. Real salary figures and the real template stay outside the repo.
 
 ## Done
-_Fill in at the end of the session._
+**First slice of 09a, 2026-11-17 (branch `finance-09-payroll`, nothing pushed).**
+
+Built:
+- `scripts/lib/finance-payroll-file.mjs` (+ test, 20 passing): the bank bulk file in the layout above (columns A to L, no header),
+  the payment-date validation, a one-sheet `.xlsx` writer (numbers as numbers, everything else text), and the guard that blocks
+  generation when a payee account is not verified, not yet valid, retired or replaced and lists accounts that changed since the
+  last run.
+- Migration `0105_finance_payroll.sql`: `fin_employees`, `fin_payment_batches`, `fin_payroll_runs`, `fin_payroll_lines` with the
+  status chain, maker-is-not-checker as a check constraint, whole-rupee nets, one live run per month, and a trigger that freezes a
+  line once the file is generated.
+
+Verified: the unit tests; the migration run on the real database inside a transaction that was rolled back (whole-rupee check,
+duplicate person, second run for a month, preparer cannot approve, edit and delete refused after the file, RLS on), and
+afterwards the tables did not exist. (Migration 0105 was applied later, 2026-11-17: see below.)
+
+**Run screens, 2026-11-17 (same branch):** `lib/finance-payroll.ts` and its routes, `scripts/lib/finance-payroll.mjs` (input rules, who may move a run, the
+confirmation rows), the shared page component and two pages (directors, farm manager), nav entries, and 16 endpoint tests. Details in `FINANCE.md`, "Payroll".
+Needs from Sharath before it can run for real: apply migration 0105, set `FINANCE_PAYROLL_DEBIT_ACCOUNT` in Netlify, grant the farm manager `finance-requests`, and add
+the people as employee parties and then on the Payroll page. Not built yet: the history import, settlement matching and returns.
+
+**Run type and automatic employee numbers, 2026-11-17 (same branch):** `run_type`/`label` on runs (a month may hold a salary run and named bonus runs) and the employee number
+assigned by a trigger (next number up, never reused, shown not typed, carried over only through the API), used as the `NNN` of the file reference. Verified: the unit and endpoint
+tests, and the migration plus a test block run on the real database in one transaction that was rolled back (afterwards the tables and the function did not exist). That run found
+a real bug the mocked tests could not: the line-reference check rejected a bonus reference; fixed in the migration. **Migration 0105 was applied to TVC ERP on 2026-11-17 (as `finance_payroll`) and checked afterwards: four tables with row security on and no policies, no access for the anon or signed-in roles, both functions locked down with an empty search path, and no rows.** Still to do for the
+numbers: seed the current people with their 2023-25 numbers when the history is imported (a one-off with the owner's list, kept outside the repo).
+
+**Joining and leaving requests, 2026-11-17 (same branch; first slice of the people-change flow):** migration `0106` (`start_month`/`last_month` on employees, `fin_people_requests`), the pure rules
+(`finance-payroll-people.mjs`), the routes and the "Changes of people" section on both payroll pages (the farm manager raises, a director approves with the step-up or declines,
+either may withdraw while open). Verified: the unit and endpoint tests (all 1,563 in `scripts/lib` pass), and the migration plus a test block on the real database in a rolled-back
+transaction (a leave before the start month, a mid-month date, a second open leave, a join with no name, a leave with no person, a decision by the requester, an approval with no
+decider and an approved join with no employee were all refused; a valid approved join was accepted). Also in this slice: a person whose Party is inactive cannot be put on a run and
+blocks the file, and is listed on the page. **Migration 0106 was applied to TVC ERP on 2026-11-17 (as `finance_people_requests`) and checked afterwards: row security on, no access for the anon or signed-in roles, the two new employee columns present, and no rows.** Not in this slice: bank details entered by the farm manager and requests to change them, the
+bank-confirmation screenshot, the file drop, the history import and the 2023-25 number seed.
+
+**The bank's confirmation, 2026-11-17 (same branch):** migration `0107` (a `batch_id` on `fin_vouchers`, and the owner check widened to allocation, request or batch), the routes in
+`finance-payroll-evidence.ts` and an "The bank's confirmation" block on a run's page (the preparer attaches a screenshot or PDF once the file is marked uploaded; the farm manager and
+both directors see it). Reuses the voucher storage, type sniffing and viewing from payment requests rather than a second system. Verified: the unit and endpoint tests (all 1,565 in
+`scripts/lib` pass), and the migration plus a test block on the real database in a rolled-back transaction (a voucher with no owner refused, one owned by a batch accepted, a bad kind
+refused, and afterwards the column was gone). **Migration 0107 was applied to TVC ERP on 2026-11-17 (as `finance_batch_evidence`) and checked afterwards: the `batch_id` column, the widened owner check and the index are there, row security is on, the anon role has no access, and no vouchers exist.** Not done: reading the lines off the screenshot to tick them against the run (settlement matching).
+
+**Bank details on a request, 2026-11-17 (same branch; the second slice of the people-change flow):** migration `0108`, a `bank_change` request kind, bank details on a joining request, the photo of
+the passbook or cheque, and the page's shared bank block (number twice, IFSC with its bank named, photo). Decisions as agreed: the farm manager enters what the employee gave him; the details are
+encrypted at once and held only while the request is open; approving attaches them as an unverified account entered by the farm manager, so someone else verifies; the old account keeps being paid
+until the new one starts. Verified: the unit and endpoint tests (all 1,575 in `scripts/lib` pass; the endpoint tests also check that no account number or IFSC appears in any response or audit
+entry), and the migration plus a test block on the real database in a rolled-back transaction (ten constraint cases: an open change per person, details only while open, a proof only with details,
+a leave or a join carrying the wrong fields). The page was driven headless against a mocked API. **Migration 0108 was applied to TVC ERP on 2026-11-17 (as `finance_people_bank_details`) and checked afterwards: the five new columns, the widened kind check, the six new constraints and the open-change index are there, row security is on, the anon role has no access, and the table is empty.** Not done: the bank's registered name beside the number (no validation method yet; an empty "name from bank" is the hook), the branch from the IFSC (needs an
+external lookup), and a look at the real flow by the farm manager.
+
+Decided 2026-11-17 (the owner): the portal accepts today or a future payment date and rejects a past one. So the generator refuses
+only a past date, with no warning for a future one, and a file not uploaded by its payment date goes stale: regenerate it with a
+new date (the run goes back from file generated to confirmed, the old batch is cancelled before upload, and the payee accounts are
+snapshotted again).
+
+Decided 2026-11-17 (the owner): the real risk with a payee account is a detail that was verified once and is no longer valid. The
+right fix is to validate every payee account just before the file is generated, but there is no way to do that today (being
+investigated separately). Until there is, `payrollBlockers` lets a verified account through and lists any account that changed since
+the last run; that is a known gap, not a safeguard. When a live check exists it becomes one more check inside `payrollBlockers`, run
+on every line at generation, and a failed or unavailable check should block the file.
+
+### Where we stopped (2026-11-18) and how to resume
+**State.** Draft PR #642 (`finance-09-payroll`), mergeable, 1,575 lib tests and the CSS lint pass. Migrations 0105 to 0108 are applied to TVC ERP and the payroll tables are empty. Built: the file generator, run
+screens (Monthly salaries and People tabs), run types, automatic employee numbers, joining, leaving and bank-change requests with encrypted bank details and a photo, the bank's confirmation screenshot, the
+inactive-party guard. `FINANCE_PAYROLL_DEBIT_ACCOUNT` is set in Netlify. Nothing is in use yet: the farm manager needs `finance-requests` payroll-input, and the people must exist as Parties of kind employee with
+verified accounts before they are added on the People tab. Changelog lines are owed when the PR merges.
+
+**The history import is NOT built.** Everything before it is settled (see "Ledger validation" and the decisions above). The plan for it:
+1. A dry run that writes nothing and prints, per month: the batches that have a file and a bank debit but no ledger entry (10 of them), the matched batches getting a person and the salary-month period (28),
+   the five misdirected entries moving to the new "Losses and write-offs" category, the ten advances left untouched, and anything it cannot place. Names are matched against the file; amounts repeat within a month,
+   so a name is needed to tell three equal amounts apart.
+2. The owner approves the dry run; only then does it create the category, set the parties and periods, and seed employee numbers from the 2023-25 set.
+3. Then settlement matching (one bank debit to one run, split per person) and returns.
+The file drop is a later enhancement. Real files, names, account numbers and amounts stay out of the repo and out of the dry run's saved output; print counts and months.
+
+**Open questions for the owner (nothing is blocked on the first three except the exact write-off list):**
+1. Which payments never reached the person: the five re-paid individually on 5 and 8 Jun 2025 (rows 6 to 10 of the May 2025 file, the five people on the three shared accounts), the three batches where one person's
+   old account was still in the file (Apr to Jun 2025, flagged by the sheet's own helper columns, the account changed in Jul 2025), or both?
+2. Which of those were to people no longer employed, and so also a write-off?
+3. The 2023-25 employee number list (a file outside the repo, or the numbers in order).
+4. Save the Dec 2022 upload (`TVC-PAYPRO Dec-salary-2022.xls`, in Drive) into the `2022` folder of the Salaries folder so the history reaches back a year further.
+5. The category name for the write-offs ("Losses and write-offs" is the default).
+6. The owner also said there may have been a "wrong template" for the incident month; the Jul 2024 tab of the farm manager's sheet matches the uploaded file exactly, so name the month if another file differs.
+
+**What the files and sheets showed (no names or numbers here).** Two shared accounts moved to new account numbers in Nov and Dec 2024 (same bank, branch code changed). One person's account changed in Jul 2025 while the
+upload files for Apr to Jun 2025 still carried the old one. In May 2025 the names on two shared accounts change spelling (a respelling, or new people on the same accounts). Six people appear for short spans
+(from two to five months); the last month of two of them is a partial amount. The 2025-26 sheet has an "Account Details" tab and helper columns that flag any row whose account differs from it: that check
+already exists in the sheet and is what `payrollBlockers` and "account changed since the last run" now do in the app.
+
+**Resume with** (paste into a new session):
+> Read `docs/finance/sessions/09-payroll.md` (the "Where we stopped" section at the end first), `docs/finance/FINANCE.md` ("Payroll") and the memory note for payroll 09a. Work in the `finance-09-payroll` worktree. Build the history import as a dry run first, test-first, using the owner's answers to the open questions (ask for any still missing). The salary files are in `~/Library/CloudStorage/OneDrive-Shell/Personal/Farming/Finance/Salaries`; read them with scripts that print counts, months and amounts only, never names or account numbers. Do not write to the ledger until the owner approves the dry run.

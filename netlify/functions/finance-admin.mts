@@ -27,6 +27,9 @@ import { saveOperator } from './lib/finance-upi-operators';
 import { getChannelBreakdown, getChannelLines, getChannels } from './lib/finance-channels';
 import { getDashboard } from './lib/finance-dashboard';
 import { BUDGET_ID, approveDraft, discardDraft, getBudget, saveLines, startDraft } from './lib/finance-budget';
+import { addBatchEvidence, getBatchEvidence, listBatchEvidence } from './lib/finance-payroll-evidence';
+import { listPersonRequests, createPersonRequest, personRequestAction, addRequestProof, getRequestProof } from './lib/finance-payroll-people';
+import { PAYROLL_ID, addEmployee, createRun, downloadFile, getRun, listPayroll, runAction, updateRun } from './lib/finance-payroll';
 import { setPaymentNote } from './lib/finance-notes';
 import { heldCoverage, reconciliationOf, runImport } from './lib/finance-import';
 import { supabaseImportStore } from './lib/finance-import-store';
@@ -272,6 +275,32 @@ const dispatch = async (req: Request): Promise<Response> => {
     return reviewRecord(req, request[1]);
   }
   // Ledger and review (session 05)
+  if (route === '/payroll' && req.method === 'GET') return listPayroll(req);
+  if (route === '/payroll/employees' && req.method === 'POST') return addEmployee(req);
+  if (route === '/payroll/requests' && req.method === 'GET') return listPersonRequests(req);
+  if (route === '/payroll/requests' && req.method === 'POST') return createPersonRequest(req);
+  const personProof = /^\/payroll\/requests\/([^/]+)\/proof$/.exec(route);
+  if (personProof && PAYROLL_ID.test(personProof[1])) {
+    if (req.method === 'POST') return addRequestProof(req, personProof[1]);
+    if (req.method === 'GET') return getRequestProof(req, personProof[1]);
+  }
+  const personRequest = /^\/payroll\/requests\/([^/]+)\/action$/.exec(route);
+  if (personRequest && PAYROLL_ID.test(personRequest[1]) && req.method === 'POST') return personRequestAction(req, personRequest[1]);
+  if (route === '/payroll/runs' && req.method === 'POST') return createRun(req);
+  const payrollRun = /^\/payroll\/runs\/([^/]+)(\/action|\/file)?$/.exec(route);
+  if (payrollRun && PAYROLL_ID.test(payrollRun[1])) {
+    if (!payrollRun[2] && req.method === 'GET') return getRun(req, payrollRun[1]);
+    if (!payrollRun[2] && req.method === 'PUT') return updateRun(req, payrollRun[1]);
+    if (payrollRun[2] === '/action' && req.method === 'POST') return runAction(req, payrollRun[1]);
+    if (payrollRun[2] === '/file' && req.method === 'GET') return downloadFile(req, payrollRun[1]);
+  }
+  const payrollEvidenceOf = /^\/payroll\/runs\/([^/]+)\/evidence$/.exec(route);
+  if (payrollEvidenceOf && PAYROLL_ID.test(payrollEvidenceOf[1])) {
+    if (req.method === 'POST') return addBatchEvidence(req, payrollEvidenceOf[1]);
+    if (req.method === 'GET') return listBatchEvidence(req, payrollEvidenceOf[1]);
+  }
+  const payrollEvidenceFile = /^\/payroll\/evidence\/([^/]+)$/.exec(route);
+  if (payrollEvidenceFile && req.method === 'GET') return getBatchEvidence(req, payrollEvidenceFile[1]);
   if (route === '/upi-lines' && req.method === 'GET') return listUpiLines(req);
   if (route === '/upi-lines/add-parties' && req.method === 'POST') return addUpiParties(req);
   if (route === '/channels' && req.method === 'GET') return getChannels(req);
@@ -342,6 +371,8 @@ export const config = {
     '/api/finance-admin/delegates/*',
     '/api/finance-admin/upi-operators',
     '/api/finance-admin/upi-operators/*',
+    '/api/finance-admin/payroll',
+    '/api/finance-admin/payroll/*',
     '/api/finance-admin/requests',
     '/api/finance-admin/requests/*',
     '/api/finance-admin/vendors',

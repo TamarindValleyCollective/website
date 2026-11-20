@@ -1084,3 +1084,67 @@ salary flag are set with `PATCH /categories/:id {head, isSalary}`, the route cat
   whole flow: read-only, start, type, a bad amount, save, a server error on a row, approve, discard, leaving with changes, an empty year, a reader, a head picker.
 - **Not built yet:** monthly phasing (the table and API keep it; the editor has no screen for it), the import of the existing plan, a diff between two
   versions, and the editor in a browser with a real sign-in or on a phone.
+
+## Payroll (session 09a, migration `0105_finance_payroll.sql`, **applied 2026-11-17**)
+
+First slice, on branch `finance-09-payroll`. See `sessions/09-payroll.md` for the decisions and the file layout.
+
+- **Generator** (`scripts/lib/finance-payroll-file.mjs`, pure): builds the salary bulk file and an `.xlsx` from a run and the decrypted
+  payee details. Refuses a file for a bad payment mode (N or I only), a missing debit account, a net with paise, a bad account
+  number or IFSC, a repeated name, a past payment date (today or a future date is fine; a file not uploaded by its date goes stale and is regenerated, see `fileIsStale`). An account starting with 0, or longer than 15 digits, is written as text and
+  flagged. Month text in columns G, I and L is derived from the month, never typed. Two people may share one account.
+- **Run types** (`run_type`, `label` on `fin_payroll_runs`): a month holds one `salary` run and any number of named `bonus` runs (e.g. "Diwali Bonus"); the unique
+  index is per month, type and name. A bonus is worded "<Mon YYYY> <name>" / "<name> for <Mon YYYY>", its reference is `YYYY-Mon-Bonus-Employee-NNN`, and it defaults to
+  paying today (no due date). One function, `lineReference`, builds the reference for the file and for the line snapshot.
+- **Employee numbers** (`fin_employees.roll_no`): assigned by a database trigger on insert as the next number up for the entity (under an advisory lock), never reused (a leaver stays
+  as an inactive row), numeric only, unique. It is shown, not typed. A number can be given explicitly only to carry over an existing one (the API accepts `rollNo`, the page does
+  not send it). It is the `NNN` in the file's reference (column I), so a person keeps one number across months; the generator refuses a person with no number or two with the same
+  one. Tested on the real database in a rolled-back transaction (next number, a leaver's number not reused, duplicate and bad-format numbers refused, a bonus reference accepted).
+- **People-change requests** (migration `0106_finance_people_requests.sql`, **applied 2026-11-17**; `lib/finance-payroll-people.ts`, rules in `scripts/lib/finance-payroll-people.mjs`):
+  the farm manager decides who joins and leaves, so each change starts as his request (`POST /payroll/requests`: `join` with name, start month, optional role and agreed
+  monthly pay, or `leave` with the person, the last month to pay and an optional reason). A `finance` `export` director approves or declines (`POST /payroll/requests/:id/action`),
+  never the person who raised it (a check constraint too); the person who raised it, or a director, may withdraw it while it is open. Approving needs the MFA step-up. Approving a
+  join takes the Party the director picks (kind employee, active, not already on payroll) and puts the person on payroll from the start month, with the next employee
+  number; approving a leave sets `fin_employees.last_month`. A person is on a run for a month from `start_month` to `last_month` (either end may be open; a leaver keeps their
+  row, so their number is never reused). `GET /payroll` also lists people on payroll whose Party was deactivated (`partyInactive`), and a run cannot include, or generate
+  a file for, such a person. Adding the Party stays a separate step for someone else; bank details are the next slice. "Add a person to payroll" (a director, directly) remains for
+  the people already on payroll, and to carry over their old numbers once.
+- **Bank details on a request** (migration `0108_finance_people_bank_details.sql`, **applied 2026-11-17**; `finance-payroll-people.ts`, `scripts/lib/ifsc-banks.mjs`): the employee gives their bank details to
+  the farm manager, so he enters them on a joining request (optional) or raises a third kind of request, `bank_change` (the person, the first salary month the new account is for, the new details).
+  The number is typed twice and an IFSC is required (an account without one cannot be paid); the page names the bank from the IFSC's first four letters as a typing aid only (no branch, nothing
+  checked). A photo of the passbook or a cancelled cheque is required before a director can approve (`POST /payroll/requests/:id/proof`, the person who raised it only; a second one replaces the
+  first). The details are encrypted with the payee-account key on arrival (`details_enc`, `last4`), held ONLY while the request is open (a check constraint refuses them afterwards), and never
+  returned: the list gives the last four digits, the bank's name and whether the photo is there. The photo is read back by the person who raised the request, or by a director behind the
+  step-up (logged). **Approving** (a director, with the step-up, never the requester) claims the request first, then attaches the details to the person's Party through the same code as the
+  Parties page, as an UNVERIFIED account whose `created_by` is the requester, so someone else must verify it; the photo's file becomes evidence on that account (kind `other`, the key reused).
+  A joining request attaches them to the Party the director picks. A `bank_change` is dated: the old account stays payable and is retired on the 1st after the salary month, and the new one starts
+  then; if it is still unverified that day, the file is blocked for that person. Declining or withdrawing discards the details and deletes the photo. If attaching fails after the claim, the
+  approval says so and the details are entered on the Parties page: the request no longer holds them. Verification is the existing step (a `verify-payee` holder, the unlock, not the person who entered it).
+- **The bank's confirmation** (migration `0107_finance_batch_evidence.sql`, **applied 2026-11-17**; `lib/finance-payroll-evidence.ts`): after the file is marked uploaded, the preparer (a `finance`
+  `export` director) attaches a screenshot or PDF of the bank portal's page for the batch (`POST /payroll/runs/:id/evidence`, a form upload; at most six per batch, 4 MB each,
+  the type read from the file's first bytes). It is a `fin_vouchers` row of kind `payment_screenshot` with a new `batch_id`, in the private bucket under `finance/vouchers/`, audited first.
+  The farm manager and both directors list and view it (`GET /payroll/runs/:id/evidence`, `GET /payroll/evidence/:id`, inline and never cached); nothing is linked. Before the upload
+  is marked there is nothing to attach. It is optional: approval does not need it. It holds the real names and account numbers the bank shows, so it never goes in the repository.
+- **Guard** (`payrollBlockers`): an account that is not verified, not yet valid, retired or replaced blocks the file; an account that
+  differs from the previous run's is listed as changed even when verified.
+- **Tables**: `fin_employees`, `fin_payment_batches` (kind `salary`; holds the file hash and R2 key, never an account number),
+  `fin_payroll_runs` (draft, confirmed, file generated, approved, settled, cancelled), `fin_payroll_lines` (snapshot of the payee
+  account used, net in whole rupees, optional agreed pay, days worked and advance for 09b, the bank reference). The preparer can
+  never be the approver (a check constraint on both the run and the batch). A line is frozen once the file is generated.
+- **Known gap**: verification is a point-in-time check, so a once-verified account that has since gone invalid still passes the guard. A live validation of every payee account before the file is generated is the intended fix; no way to do it exists yet (under investigation). It will be one more check in `payrollBlockers`.
+- **Server** (`netlify/functions/lib/finance-payroll.ts`, routes on `finance-admin.mts`): `GET /payroll` (runs, people on payroll, who may add), `POST /payroll/employees`,
+  `POST /payroll/runs` (a draft), `GET`/`PUT /payroll/runs/:id`, `POST /payroll/runs/:id/action` (`confirm`, `reopen`, `generate`, `mark_uploaded`, `approve`,
+  `regenerate`, `cancel`) and `GET /payroll/runs/:id/file`. Who may: the farm manager (`finance-requests` `payroll-input`) enters and confirms; a `finance`
+  `export` director generates, downloads, records the upload and regenerates; a `finance` `approve-payroll` director approves, never the one who prepared
+  (also a database check). A plain `finance` view, `request` or auditor grant opens nothing. Generate, approve and download need the MFA step-up. Each change writes
+  `fin_audit_log` first (ids and counts only). Generating decrypts the accounts in memory, builds the file, stores it in R2 (`finance/payroll/<batch>.xlsx`),
+  inserts the batch, snapshots each line (account row, last four, fingerprint, `YYYY-Mon-Employee-NNN` reference, NNN being the person's employee number) and moves the run. The debit account (column H)
+  is the Netlify setting `FINANCE_PAYROLL_DEBIT_ACCOUNT`; without it generating refuses. Column F (e-mail) is written blank: parties have no e-mail yet.
+- **Pages**: `/internal/finance/payroll/` (directors) and `/internal/finance-requests/payroll/` (the farm manager, phone-first), one component
+  (`src/components/PayrollRuns.astro`). Months list; start a month (an amount per person, whole rupees); a month's page shows each person with the account as last
+  four digits, "account changed" and "account cannot be paid" marks, the total and only the buttons the person's role allows. Verified with the real page and a
+  mocked API in headless Chrome at 390 and 1100 px (screenshots not kept: they show invented names); not yet against real data.
+- **Tests**: `finance-payroll.test.mjs` (rules), `finance-payroll-file.test.mjs` (file and guard), `finance-payroll-endpoint.test.mjs` (the routes through the real function
+  against an in-memory database: access, audit-before-write, step-up, preparer cannot approve, stale file regenerated, no account number in any response).
+- **Not built yet**: the file drop, the history import, settlement matching (the bank debit creates one allocation per person) and returns, editing the optional agreed-pay / days /
+  advance fields on the page (the server and tables accept them), adding a person who has no party yet.

@@ -27,9 +27,9 @@ test('page ids and paths are unique, and every path is an internal page', () => 
   assert.equal(HOME.path, '/internal/');
 });
 
-test('Finance holds the money pages: Overview, Dashboard, Budget, Ledger, UPI, Approvals, Parties, Import, Rules, Requests and Payments', () => {
+test('Finance holds the money pages: Overview, Dashboard, Budget, Ledger, UPI, Approvals, Payroll, Parties, Import, Rules, Requests, Salaries and Payments', () => {
   const finance = BLOCKS.find((b) => b.id === 'finance');
-  assert.deepEqual(finance.pages.map((p) => p.label), ['Overview', 'Dashboard', 'Budget', 'Ledger', 'UPI', 'Approvals', 'Parties', 'Import', 'Rules', 'Requests', 'Payments']);
+  assert.deepEqual(finance.pages.map((p) => p.label), ['Overview', 'Dashboard', 'Budget', 'Ledger', 'UPI', 'Approvals', 'Payroll', 'Parties', 'Import', 'Rules', 'Requests', 'Salaries', 'Payments']);
 });
 
 test('Community holds Members and Photos; Photos moved out of Operations', () => {
@@ -53,14 +53,15 @@ test('a person sees only the pages their roles open: no roles, only Today', () =
 test('a finance person sees the finance pages their module opens, and Requests only with that module', () => {
   const nav = visibleNav(admin(['finance']), 'finance');
   assert.deepEqual(nav.map((b) => b.id), ['finance']);
-  assert.deepEqual(pageIds(nav), ['finance', 'finance-dashboard', 'finance-budget', 'finance-ledger', 'finance-upi', 'finance-approvals', 'finance-parties', 'finance-import', 'finance-rules']);
+  assert.deepEqual(pageIds(nav), ['finance', 'finance-dashboard', 'finance-budget', 'finance-ledger', 'finance-upi', 'finance-approvals', 'finance-payroll', 'finance-parties', 'finance-import', 'finance-rules']);
   const withRequests = visibleNav(admin(['finance', 'finance-requests']), 'finance');
   assert.ok(pageIds(withRequests).includes('finance-requests'));
+  assert.ok(pageIds(withRequests).includes('finance-salaries'));
 });
 
-test('the farm manager (finance-requests only) sees Requests in Finance and nothing else of it', () => {
+test('the farm manager (finance-requests only) sees Requests and Salaries in Finance and nothing else of it', () => {
   const nav = visibleNav(admin(['finance-requests']), 'finance-requests');
-  assert.deepEqual(pageIds(nav), ['finance-requests']);
+  assert.deepEqual(pageIds(nav), ['finance-requests', 'finance-salaries']);
 });
 
 test('a super admin also sees Rent out under Operations and Access, Security, Preview under Settings', () => {

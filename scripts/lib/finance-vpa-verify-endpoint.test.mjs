@@ -32,7 +32,7 @@ const stubStorage = {
   name: 'stub-storage',
   setup(b) {
     b.onResolve({ filter: /finance-storage$/ }, () => ({ path: 'stub-storage', namespace: 'stub-r2' }));
-    b.onLoad({ filter: /.*/, namespace: 'stub-r2' }, () => ({ contents: 'export async function putFinanceVoucher(){} export async function getFinanceVoucher(){ return null; } export async function deleteFinanceVoucher(){} export async function putFinanceImport(){} export async function deleteFinanceImport(){}', loader: 'js' }));
+    b.onLoad({ filter: /.*/, namespace: 'stub-r2' }, () => ({ contents: 'export async function putFinancePayroll(){} export async function getFinancePayroll(){ return null; } export async function putFinanceVoucher(){} export async function getFinanceVoucher(){ return null; } export async function deleteFinanceVoucher(){} export async function putFinanceImport(){} export async function deleteFinanceImport(){}', loader: 'js' }));
   },
 };
 const dir = mkdtempSync(join(tmpdir(), 'finance-vpa-verify-'));
