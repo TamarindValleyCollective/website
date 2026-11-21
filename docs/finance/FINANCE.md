@@ -1146,5 +1146,13 @@ First slice, on branch `finance-09-payroll`. See `sessions/09-payroll.md` for th
   mocked API in headless Chrome at 390 and 1100 px (screenshots not kept: they show invented names); not yet against real data.
 - **Tests**: `finance-payroll.test.mjs` (rules), `finance-payroll-file.test.mjs` (file and guard), `finance-payroll-endpoint.test.mjs` (the routes through the real function
   against an in-memory database: access, audit-before-write, step-up, preparer cannot approve, stale file regenerated, no account number in any response).
-- **Not built yet**: the file drop, the history import, settlement matching (the bank debit creates one allocation per person) and returns, editing the optional agreed-pay / days /
+- **History import** (`scripts/import-payroll-history.mjs`, rules in `scripts/lib/finance-payroll-history.mjs`; **first run applied 2026-11-21**): splits an old salary bank debit into one `Salaries`
+  allocation per person from its PayPro upload file. A file is matched to the ONE unallocated bank debit of the same total paid within 75 days after its salary month (none or two fits are reported, not
+  guessed); each row takes the person's amount, the salary month as its period, nature "<Mon> Salary", source `import`, and a party found by name among active employee parties, or by an owner-written
+  alias list (`--aliases`, a two-column file kept outside the repo: the name as the file spells it, then the exact party name). A line that already has allocations is never touched, so a re-run changes
+  nothing. A DRY RUN by default (counts, months, totals and rows per party; never a file name or account number); `--apply` saves each line through `fin_save_allocations` and writes a
+  `finance.payroll_history_loaded` audit entry. The files must be `.xlsx` (convert an old `.xls` first) and stay outside the repo. First run: 10 bank lines, 100 allocations, all with a party; it needed the
+  register tidied first (spelling variants renamed, a duplicate merged, missing employees added, a couple whose parties were typed vendor or other changed to employee). Shared accounts (a couple, or a
+  parent and child) are normal, so an account match is only a hint to a person's identity. Not covered: salaries paid as individual transfers (no file; allocate in the ledger), and a batch whose file is missing.
+- **Not built yet**: the file drop, settlement matching (the bank debit creates one allocation per person) and returns, editing the optional agreed-pay / days /
   advance fields on the page (the server and tables accept them), adding a person who has no party yet.
