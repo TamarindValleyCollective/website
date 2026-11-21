@@ -128,6 +128,8 @@ import StepUpSheet from './StepUpSheet.astro';
   import { initStepUpLock } from '../../scripts/lib/staff-stepup-ui.mjs';
   import { clearState, showFailure, showLoading } from '../../scripts/lib/staff-states.mjs';
   import { bankNameOfIfsc } from '../../scripts/lib/ifsc-banks.mjs';
+  import { createDataTable } from '../../scripts/lib/data-table-ui.mjs';
+  import '../styles/data-table.css';
 
   declare const google: any;
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
@@ -433,49 +435,83 @@ import StepUpSheet from './StepUpSheet.astro';
       box.append(card);
     }
   }
-  // Who is on payroll: the number, the name and any limits on their months.
+  // Who is on payroll, as the admin table the other finance pages use: the number, the name, the masked account and IFSC (for the people who
+  // prepare and approve the file; the server sends them to no one else), the months they are paid for, and, for a director, the arrows that
+  // change the order. The number is their place in the bank's file, so moving someone renumbers everyone; the arrows work on the number order
+  // whatever column the table happens to be sorted by.
+  let peopleTable: ReturnType<typeof createDataTable> | null = null;
+  const peopleRoot = el('div');
   function renderStaffList() {
     const box = $('staff-list');
     box.replaceChildren();
     if (!data) return;
     box.append(el('h3', 'pr-section-title', 'On payroll'));
     if (!data.employees.length) return void box.append(el('p', 'hint', 'No one is on payroll yet. A director adds the first people with "Add a person to payroll".'));
+    const me = data.me;
     const inactive = new Set(data.partyInactive.map((p) => p.id));
-    const list = el('div', 'pr-card');
-    const canOrder = Boolean(data.me.canPrepare);
     const ordered = data.employees;
     const thisMonth = (data.today ?? '').slice(0, 7);
-    ordered.forEach((e, at) => {
-      const row = el('div', 'pr-line pr-line--people');
-      const who = el('div', 'pr-who');
-      who.append(el('strong', undefined, e.rollNo ? `${e.rollNo}. ${e.name}` : e.name));
-      // The masked account and the IFSC, for the people who prepare and approve the file (the server leaves them out for anyone else).
-      if (e.bank) who.append(el('span', 'pr-sub pr-bank', `${e.bank.last4 ? `A/c ••••${e.bank.last4}` : 'No account on file'}${e.bank.ifsc ? ` · IFSC ${e.bank.ifsc}` : ''}${e.bank.status && e.bank.status !== 'verified' ? ` · ${e.bank.status.replace(/_/g, ' ')}` : ''}`));
-      const notes = [e.startMonth && e.startMonth > thisMonth ? `starts ${monthShort(e.startMonth)}` : null, e.lastMonth ? `last month paid: ${monthShort(e.lastMonth)}` : null, !e.active ? 'not on payroll' : null].filter(Boolean);
-      if (notes.length) who.append(el('span', 'pr-sub', notes.join(' · ')));
-      row.append(who);
-      if (inactive.has(e.id)) row.append(pill('cancelled', 'Inactive in Parties'));
-      if (canOrder) {
-        // Moving someone renumbers everyone: the number is their place in the bank's file.
-        const move = (by: number) => async () => {
-          const ids = ordered.map((x) => x.id);
-          const [id] = ids.splice(at, 1);
-          ids.splice(at + by, 0, id);
-          if (await call('/api/finance-admin/payroll/employees/order', 'POST', { order: ids }, 'Order changed.')) await load();
-        };
-        const arrows = el('div', 'pr-move');
-        const up = btn('↑', move(-1), 'button button--outline button--small');
+    const state = (e: Person) => (!e.active ? 'Not on payroll' : inactive.has(e.id) ? 'Inactive in Parties' : e.startMonth && e.startMonth > thisMonth ? `Starts ${monthShort(e.startMonth)}` : 'On payroll');
+    if (!peopleTable) {
+      const showBank = me.canPrepare || me.canApprove;
+      const move = (e: Person, by: number) => async () => {
+        const ids = ordered.map((x) => x.id);
+        const at = ids.indexOf(e.id);
+        ids.splice(at + by, 0, ...ids.splice(at, 1));
+        if (await call('/api/finance-admin/payroll/employees/order', 'POST', { order: ids }, 'Order changed.')) await load();
+      };
+      const arrows = (e: Person) => {
+        const at = ordered.indexOf(e);
+        const wrap = el('div', 'pr-move');
+        const up = btn('↑', move(e, -1), 'button button--soft-neutral');
         up.setAttribute('aria-label', `Move ${e.name} up`);
-        up.disabled = at === 0;
-        const down = btn('↓', move(1), 'button button--outline button--small');
+        up.disabled = at <= 0;
+        const down = btn('↓', move(e, 1), 'button button--soft-neutral');
         down.setAttribute('aria-label', `Move ${e.name} down`);
         down.disabled = at === ordered.length - 1;
-        arrows.append(up, down);
-        row.append(arrows);
+        wrap.append(up, down);
+        return wrap;
+      };
+      const columns: any[] = [
+        { id: 'no', label: '#', type: 'count', value: (e: Person) => e.rollNo ?? '', sortValue: (e: Person) => Number(e.rollNo ?? 1e9) },
+        { id: 'name', label: 'Name', value: (e: Person) => e.name },
+      ];
+      if (showBank) {
+        columns.push(
+          { id: 'account', label: 'Account', value: (e: Person) => (e.bank?.last4 ? `••••${e.bank.last4}` : e.bank ? 'None on file' : '') },
+          { id: 'ifsc', label: 'IFSC', value: (e: Person) => e.bank?.ifsc ?? '' },
+          { id: 'bank', label: 'Bank details', value: (e: Person) => (e.bank ? (e.bank.status === 'verified' ? 'Verified' : e.bank.status.replace(/_/g, ' ')) : '') },
+        );
       }
-      list.append(row);
-    });
-    box.append(list);
+      columns.push(
+        { id: 'state', label: 'State', value: state },
+        { id: 'last', label: 'Last month paid', value: (e: Person) => (e.lastMonth ? monthShort(e.lastMonth) : ''), sortValue: (e: Person) => e.lastMonth ?? '' },
+      );
+      if (me.canPrepare) {
+        columns.push({ id: 'order', label: 'Order', sortable: false, sticky: true, filter: 'none', value: () => '', render: arrows });
+      }
+      peopleTable = createDataTable({
+        root: peopleRoot,
+        rowId: (e: Person) => e.id,
+        noun: ['person', 'people'],
+        searchPlaceholder: 'Search people…',
+        defaultSort: ['no', 1],
+        searchText: (e: Person) => [e.rollNo, e.name, e.bank?.ifsc, e.bank?.last4, state(e)].filter(Boolean).join(' '),
+        rowClass: (e: Person) => (e.active ? '' : 'is-off'),
+        empty: { title: 'No one on payroll', text: 'A director adds the first people.' },
+        columns,
+        card: (e: Person) => {
+          const c = el('div', 'pr-person-card');
+          c.append(el('strong', undefined, `${e.rollNo ? `${e.rollNo}. ` : ''}${e.name}`));
+          const bits = [e.bank ? `${e.bank.last4 ? `A/c ••••${e.bank.last4}` : 'No account on file'}${e.bank.ifsc ? ` · IFSC ${e.bank.ifsc}` : ''}` : null, state(e), e.lastMonth ? `Last month paid ${monthShort(e.lastMonth)}` : null].filter(Boolean);
+          c.append(el('span', 'pr-sub', bits.join(' · ')));
+          if (me.canPrepare) c.append(arrows(e));
+          return c;
+        },
+      });
+    }
+    box.append(peopleRoot);
+    peopleTable.setRows(ordered);
   }
   // The bank details the employee gave the farm manager. The number is typed twice, the IFSC names its bank as it is typed (a typing aid only),
   // and the photo of the passbook or cancelled cheque goes with them. Nothing is stored in the page: after sending, only the last four show.
@@ -1026,21 +1062,16 @@ import StepUpSheet from './StepUpSheet.astro';
     align-items: flex-start;
   }
 
-  .finance-payroll .pr-line--people {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: space-between;
-    gap: 8px 12px;
-  }
-
   .finance-payroll .pr-move {
     display: flex;
     gap: 6px;
-    justify-self: end;
   }
 
-  .finance-payroll .pr-bank {
-    font-variant-numeric: tabular-nums;
+  .finance-payroll .pr-person-card {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: flex-start;
   }
 
   .finance-payroll .pr-sub {
