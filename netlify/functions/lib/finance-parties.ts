@@ -132,6 +132,7 @@ async function addAccount(partyId: string, entity: string, actorId: string, paye
       entity_id: entity,
       party_id: partyId,
       has_ifsc: details.method === 'bank' ? Boolean(details.ifsc) : true,
+      ifsc: details.method === 'bank' && details.ifsc ? details.ifsc : null, // plain: an IFSC names a bank branch, only the account number is secret (migration 0111)
       valid_from: plan.validFrom ?? null,
       method: details.method,
       details_enc: encryptFinanceText(JSON.stringify(details)),
@@ -478,7 +479,8 @@ export async function verifyPayeeAccount(req: Request, accountId: string): Promi
     const stored = JSON.parse(decryptFinanceText(account.details_enc));
     if (stored.method === 'bank' && !stored.ifsc) return fail('These bank details have no IFSC code. Add it with "Add or change details" first.');
     const verdict = canVerifyAccount(account, staff.id);
-    if (!verdict.ok) return fail(verdict.error ?? 'Not allowed.', 403);
+    // 409, not 403: a 403 without a step-up code makes the admin pages show their "No access" screen, which is wrong for a rule about this one account.
+    if (!verdict.ok) return fail(verdict.error ?? 'Not allowed.', 409);
     // How it was checked is recorded with who and when (the database refuses a verification without it).
     const how = validateVerification((await readBody(req)) ?? {}) as { error?: string; method?: string; note?: string | null; name?: string | null; evidence?: 'payment' | 'name_check' | null; lookup?: boolean };
     if (how.error || !how.method) return fail(how.error ?? 'Say how you checked these details.');
@@ -622,6 +624,7 @@ export async function addMissingIfsc(req: Request, accountId: string): Promise<R
         last4: account.last4,
         fingerprint: account.fingerprint,
         has_ifsc: true,
+        ifsc: details.ifsc,
         valid_from: account.valid_from ?? null,
         created_by: account.created_by ?? null,
       }),

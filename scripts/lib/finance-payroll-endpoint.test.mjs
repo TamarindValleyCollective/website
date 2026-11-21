@@ -96,6 +96,13 @@ globalThis.fetch = async (url, init = {}) => {
   if (table === 'staff_mfa_factors' || table === 'staff_recovery_codes') return json([]);
   if (table === 'fin_audit_log') { db.audit.push(JSON.parse(init.body)); db.order.push(`audit:${JSON.parse(init.body).action}`); return new Response(null, { status: 201 }); }
   if (table === 'fin_entities') return json([{ id: ENT }]);
+  if (table === 'rpc/fin_reorder_employees') { // the database function: every employee exactly once, then numbered 1..n in the order given
+    const ids = JSON.parse(init.body).p_ids;
+    if (ids.length !== db.fin_employees.length || !ids.every((i) => db.fin_employees.some((e) => e.id === i))) return json({ message: 'list every person on payroll, once each' }, 400);
+    ids.forEach((id, i) => { db.fin_employees.find((e) => e.id === id).roll_no = String(i + 1); });
+    db.order.push('rpc:reorder');
+    return json(ids.length);
+  }
   if (!(table in db)) throw new Error(`unexpected fetch ${method} ${url}`);
   const list = rowsOf(table);
   if (method === 'GET') return json(filterRows(list, u).map((r) => ({ ...r })));
@@ -702,4 +709,42 @@ test('changing to the details the person already has changes nothing and says no
   assert.equal(res.status, 200);
   assert.equal(db.fin_party_accounts.filter((a) => a.party_id === uid(6)).length, 1, 'no second account');
   assert.equal(db.fin_people_requests[0].status, 'approved');
+});
+
+
+test('the people on payroll are listed in number order (10 after 9, not after 1), and a director sees the masked account and IFSC, never the number', async () => {
+  fresh();
+  db.fin_employees.push({ id: uid(5), entity_id: ENT, party_id: uid(8), roll_no: '10', active: true });
+  db.fin_parties.push({ id: uid(8), name: 'Test Person Ten', kind: 'employee', active: true, merged_into: null });
+  const list = await (await send('prep', 'GET', '/payroll')).json();
+  assert.deepEqual(list.employees.map((e) => e.rollNo), ['1', '2', '10']);
+  assert.deepEqual(list.employees[0].bank, { last4: '0001', ifsc: 'TEST0000001', status: 'verified' });
+  assert.equal(list.employees[2].bank, null, 'no account on file');
+  assert.ok(!JSON.stringify(list).includes(ACC1), 'the full number never leaves the server');
+  const farm = await (await send('farm', 'GET', '/payroll')).json();
+  assert.ok(farm.employees.every((e) => e.bank === null), 'the farm manager does not get bank details here');
+});
+
+test('a director can put the people in a new order, which renumbers them; nobody else can, and the list must be complete', async () => {
+  fresh();
+  db.fin_employees.push({ id: uid(5), entity_id: ENT, party_id: uid(8), roll_no: '3', active: true });
+  const ids = db.fin_employees.map((e) => e.id);
+  assert.equal((await send('farm', 'POST', '/payroll/employees/order', { order: ids })).status, 403);
+  assert.equal((await send('prep', 'POST', '/payroll/employees/order', { order: ids.slice(1) })).status, 409, 'someone is missing');
+  assert.equal((await send('prep', 'POST', '/payroll/employees/order', { order: [ids[0], ids[0], ids[1]] })).status, 400, 'someone is listed twice');
+  const reversed = [...ids].reverse();
+  assert.equal((await send('prep', 'POST', '/payroll/employees/order', { order: reversed })).status, 200);
+  assert.deepEqual(reversed.map((id) => db.fin_employees.find((e) => e.id === id).roll_no), ['1', '2', '3']);
+  assert.ok(db.audit.some((a) => a.action === 'finance.payroll_order_changed'));
+  assert.ok(db.order.indexOf('audit:finance.payroll_order_changed') < db.order.indexOf('rpc:reorder'), 'audited before it is done');
+});
+
+test('the IFSC shown to a director comes from its plain column, so it needs no key; an older row falls back to the encrypted details', async () => {
+  fresh();
+  const a1 = db.fin_party_accounts.find((a) => a.id === PA1);
+  a1.ifsc = 'PLAN0000009';
+  a1.details_enc = 'not something the key can open';
+  const list = await (await send('prep', 'GET', '/payroll')).json();
+  assert.equal(list.employees[0].bank.ifsc, 'PLAN0000009', 'read from the column, never decrypted');
+  assert.equal(list.employees[1].bank.ifsc, 'TEST0000001', 'a row with no plain value yet falls back to the encrypted details');
 });

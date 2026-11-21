@@ -128,6 +128,8 @@ import StepUpSheet from './StepUpSheet.astro';
   import { initStepUpLock } from '../../scripts/lib/staff-stepup-ui.mjs';
   import { clearState, showFailure, showLoading } from '../../scripts/lib/staff-states.mjs';
   import { bankNameOfIfsc } from '../../scripts/lib/ifsc-banks.mjs';
+  import { createDataTable } from '../../scripts/lib/data-table-ui.mjs';
+  import '../styles/data-table.css';
 
   declare const google: any;
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
@@ -141,7 +143,7 @@ import StepUpSheet from './StepUpSheet.astro';
 
   type Me = { id: string; canEnter: boolean; canPrepare: boolean; canApprove: boolean; ready: boolean; hasPasskey: boolean; stepUpValid: boolean };
   type RunRow = { id: string; month: string; runType: string; label: string | null; status: string; paymentDate: string; count: number; totalPaise: number; next: string | null };
-  type Person = { id: string; name: string; rollNo: string | null; active: boolean; startMonth: string | null; lastMonth: string | null };
+  type Person = { id: string; name: string; rollNo: string | null; bank: { last4: string | null; ifsc: string | null; status: string } | null; active: boolean; startMonth: string | null; lastMonth: string | null };
   type PersonRequest = { id: string; kind: 'join' | 'leave' | 'bank_change'; status: string; name: string; rollNo: string | null; roleTitle: string | null; startMonth: string | null; agreedPayRupees: number | null; lastMonth: string | null; reason: string | null; decisionNote: string | null; mine: boolean; next: string | null; hasBank: boolean; last4: string | null; bankName: string | null; hasProof: boolean; effectiveOn: string | null };
   type Line = { id: string; employeeId: string; name: string; netPaise: number; last4: string | null; changed: boolean; problem: string | null; reference: string | null; returned: boolean; agreedPayPaise: number | null; daysWorked: number | null; advanceDeductedPaise: number | null };
   type Detail = {
@@ -433,26 +435,145 @@ import StepUpSheet from './StepUpSheet.astro';
       box.append(card);
     }
   }
-  // Who is on payroll: the number, the name and any limits on their months.
+  // Who is on payroll, as the admin table the other finance pages use: the number, the name, the masked account and IFSC (for the people who
+  // prepare and approve the file; the server sends them to no one else), the months they are paid for, and, for a director, a handle to drag a
+  // row to a new place and arrows for the keyboard and touch screens. The number is their place in the bank's file, so moving someone renumbers
+  // everyone; it works on the number order whatever column the table happens to be sorted by. Everything below reads the page's current data,
+  // never what it was when the table was first built (the table is built once, the data is replaced on every load).
+  let peopleTable: ReturnType<typeof createDataTable> | null = null;
+  const peopleRoot = el('div');
+  const people = () => data?.employees ?? [];
+  let dragId: string | null = null;
+  // Puts one person before or after another. The page reorders and renumbers at once, as the server will, and goes back to the server's
+  // order only if the save fails.
+  async function placePerson(id: string, targetId: string, after: boolean) {
+    if (!data || id === targetId) return;
+    const ids = people().map((x) => x.id);
+    const from = ids.indexOf(id);
+    if (from < 0 || ids.indexOf(targetId) < 0) return;
+    ids.splice(from, 1);
+    ids.splice(ids.indexOf(targetId) + (after ? 1 : 0), 0, id);
+    if (ids.every((x, i) => x === people()[i].id)) return;
+    const byId = new Map(people().map((x) => [x.id, x]));
+    const before = data.employees;
+    data.employees = ids.map((x, i) => ({ ...(byId.get(x) as Person), rollNo: String(i + 1) }));
+    renderStaffList();
+    if (!(await call('/api/finance-admin/payroll/employees/order', 'POST', { order: ids }, 'Order changed.'))) {
+      if (data) data.employees = before;
+      await load();
+    }
+  }
   function renderStaffList() {
     const box = $('staff-list');
     box.replaceChildren();
     if (!data) return;
     box.append(el('h3', 'pr-section-title', 'On payroll'));
     if (!data.employees.length) return void box.append(el('p', 'hint', 'No one is on payroll yet. A director adds the first people with "Add a person to payroll".'));
-    const inactive = new Set(data.partyInactive.map((p) => p.id));
-    const list = el('div', 'pr-card');
-    for (const e of data.employees) {
-      const row = el('div', 'pr-line');
-      const who = el('div', 'pr-who');
-      who.append(el('strong', undefined, e.rollNo ? `${e.rollNo}. ${e.name}` : e.name));
-      const notes = [e.startMonth && e.startMonth > (data.today ?? '').slice(0, 7) ? `starts ${monthShort(e.startMonth)}` : null, e.lastMonth ? `last month paid: ${monthShort(e.lastMonth)}` : null, !e.active ? 'not on payroll' : null].filter(Boolean);
-      if (notes.length) who.append(el('span', 'pr-sub', notes.join(' · ')));
-      row.append(who);
-      if (inactive.has(e.id)) row.append(pill('cancelled', 'Inactive in Parties'));
-      list.append(row);
+    const me = data.me;
+    if (me.canPrepare) box.append(el('p', 'hint', "Drag a row by its ⠿ handle, or use the arrows, to change the order. The number is the person's place in the bank's file."));
+    const state = (e: Person) => {
+      const thisMonth = (data?.today ?? '').slice(0, 7);
+      return !e.active ? 'Not on payroll' : (data?.partyInactive ?? []).some((p) => p.id === e.id) ? 'Inactive in Parties' : e.startMonth && e.startMonth > thisMonth ? `Starts ${monthShort(e.startMonth)}` : 'On payroll';
+    };
+    if (!peopleTable) {
+      const showBank = me.canPrepare || me.canApprove;
+      const arrows = (e: Person, withGrip = false) => {
+        const ids = people().map((x) => x.id);
+        const at = ids.indexOf(e.id);
+        const wrap = el('div', 'pr-move');
+        if (withGrip) {
+          const grip = el('span', 'pr-grip', '⠿');
+          grip.draggable = true;
+          grip.dataset.id = e.id;
+          grip.title = 'Drag to change the order';
+          grip.setAttribute('aria-hidden', 'true');
+          wrap.append(grip);
+        }
+        const up = btn('↑', () => void placePerson(e.id, ids[at - 1], false), 'button button--soft-neutral');
+        up.setAttribute('aria-label', `Move ${e.name} up`);
+        up.disabled = at <= 0;
+        const down = btn('↓', () => void placePerson(e.id, ids[at + 1], true), 'button button--soft-neutral');
+        down.setAttribute('aria-label', `Move ${e.name} down`);
+        down.disabled = at === ids.length - 1;
+        wrap.append(up, down);
+        return wrap;
+      };
+      const columns: any[] = [
+        { id: 'no', label: '#', type: 'count', value: (e: Person) => e.rollNo ?? '', sortValue: (e: Person) => Number(e.rollNo ?? 1e9) },
+        { id: 'name', label: 'Name', value: (e: Person) => e.name },
+      ];
+      if (showBank) {
+        columns.push(
+          { id: 'account', label: 'Account', value: (e: Person) => (e.bank?.last4 ? `••••${e.bank.last4}` : e.bank ? 'None on file' : '') },
+          { id: 'ifsc', label: 'IFSC', value: (e: Person) => e.bank?.ifsc ?? '' },
+          { id: 'bank', label: 'Bank details', value: (e: Person) => (e.bank ? (e.bank.status === 'verified' ? 'Verified' : e.bank.status.replace(/_/g, ' ')) : '') },
+        );
+      }
+      columns.push(
+        { id: 'state', label: 'State', value: state },
+        { id: 'last', label: 'Last month paid', value: (e: Person) => (e.lastMonth ? monthShort(e.lastMonth) : ''), sortValue: (e: Person) => e.lastMonth ?? '' },
+      );
+      if (me.canPrepare) {
+        columns.push({ id: 'order', label: 'Order', sortable: false, sticky: true, filter: 'none', value: () => '', render: (e: Person) => arrows(e, true) });
+      }
+      peopleTable = createDataTable({
+        root: peopleRoot,
+        rowId: (e: Person) => e.id,
+        noun: ['person', 'people'],
+        searchPlaceholder: 'Search people…',
+        defaultSort: ['no', 1],
+        searchText: (e: Person) => [e.rollNo, e.name, e.bank?.ifsc, e.bank?.last4, state(e)].filter(Boolean).join(' '),
+        rowClass: (e: Person) => (e.active ? '' : 'is-off'),
+        empty: { title: 'No one on payroll', text: 'A director adds the first people.' },
+        columns,
+        card: (e: Person) => {
+          const c = el('div', 'pr-person-card');
+          c.append(el('strong', undefined, `${e.rollNo ? `${e.rollNo}. ` : ''}${e.name}`));
+          const bits = [e.bank ? `${e.bank.last4 ? `A/c ••••${e.bank.last4}` : 'No account on file'}${e.bank.ifsc ? ` · IFSC ${e.bank.ifsc}` : ''}` : null, state(e), e.lastMonth ? `Last month paid ${monthShort(e.lastMonth)}` : null].filter(Boolean);
+          c.append(el('span', 'pr-sub', bits.join(' · ')));
+          if (me.canPrepare) c.append(arrows(e));
+          return c;
+        },
+      });
+      // Dragging, for the whole table at once (its rows are redrawn on every change): the handle starts it, a row takes the drop, and a line
+      // above or below the row under the pointer shows where the person will land.
+      const rowAt = (ev: Event) => (ev.target as HTMLElement).closest<HTMLElement>('tr.dt-row');
+      const clearMarks = (all = false) => peopleRoot.querySelectorAll(all ? '.pr-drop-before, .pr-drop-after, .pr-dragging' : '.pr-drop-before, .pr-drop-after').forEach((n) => n.classList.remove('pr-drop-before', 'pr-drop-after', ...(all ? ['pr-dragging'] : [])));
+      peopleRoot.addEventListener('dragstart', (ev) => {
+        const grip = (ev.target as HTMLElement).closest<HTMLElement>('.pr-grip');
+        if (!grip || !ev.dataTransfer) return;
+        dragId = grip.dataset.id ?? null;
+        ev.dataTransfer.setData('text/plain', dragId ?? '');
+        ev.dataTransfer.effectAllowed = 'move';
+        grip.closest('tr')?.classList.add('pr-dragging');
+      });
+      peopleRoot.addEventListener('dragover', (ev) => {
+        const tr = rowAt(ev);
+        if (!dragId || !tr) return;
+        ev.preventDefault();
+        if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'move';
+        const box = tr.getBoundingClientRect();
+        clearMarks();
+        tr.classList.add(ev.clientY > box.top + box.height / 2 ? 'pr-drop-after' : 'pr-drop-before');
+      });
+      peopleRoot.addEventListener('drop', (ev) => {
+        const tr = rowAt(ev);
+        if (!dragId || !tr) return;
+        ev.preventDefault();
+        const after = tr.classList.contains('pr-drop-after');
+        const id = dragId;
+        const target = tr.dataset.row;
+        dragId = null;
+        clearMarks(true);
+        if (target) void placePerson(id, target, after);
+      });
+      peopleRoot.addEventListener('dragend', () => {
+        dragId = null;
+        clearMarks(true);
+      });
     }
-    box.append(list);
+    box.append(peopleRoot);
+    peopleTable.setRows(people());
   }
   // The bank details the employee gave the farm manager. The number is typed twice, the IFSC names its bank as it is typed (a typing aid only),
   // and the photo of the passbook or cancelled cheque goes with them. Nothing is stored in the page: after sending, only the last four show.
@@ -1000,6 +1121,42 @@ import StepUpSheet from './StepUpSheet.astro';
     display: flex;
     flex-direction: column;
     gap: 2px;
+    align-items: flex-start;
+  }
+
+  .finance-payroll .pr-move {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .finance-payroll .pr-grip {
+    cursor: grab;
+    padding: 2px 6px;
+    color: var(--tvc-ink-soft);
+    user-select: none;
+  }
+
+  .finance-payroll .pr-grip:active {
+    cursor: grabbing;
+  }
+
+  .finance-payroll .pr-dragging {
+    opacity: 0.45;
+  }
+
+  .finance-payroll .pr-drop-before {
+    box-shadow: inset 0 2px 0 var(--tvc-green);
+  }
+
+  .finance-payroll .pr-drop-after {
+    box-shadow: inset 0 -2px 0 var(--tvc-green);
+  }
+
+  .finance-payroll .pr-person-card {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
     align-items: flex-start;
   }
 

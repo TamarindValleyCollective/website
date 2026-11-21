@@ -114,6 +114,7 @@ const insertAccount = (partyId, account) =>
       last4: account.last4,
       fingerprint: account.fingerprint,
       has_ifsc: account.details.method === 'bank' ? Boolean(account.details.ifsc) : true,
+      ifsc: account.details.method === 'bank' && account.details.ifsc ? account.details.ifsc : null,
     }),
   });
 
