@@ -481,6 +481,7 @@ test('a change with an effective date keeps the old account payable until then a
   assert.equal(fresh.status, 'unverified');
   assert.equal(fresh.valid_from, on);
   assert.equal(fresh.has_ifsc, true);
+  assert.equal(fresh.ifsc, IFSC.toUpperCase(), 'a new account carries its IFSC in the plain column');
   const list = await (await api(director, '/parties')).json();
   const [oldShown, freshShown] = list.parties[0].accounts;
   assert.equal(oldShown.payableNow, true); // still fine today
@@ -682,6 +683,7 @@ test('a missing IFSC is added by a verifier: only that account is replaced, the 
   assert.equal(sibling.status, 'unverified', "the payee's other account is left alone");
   const fresh = db.fin_party_accounts.at(-1);
   assert.equal(fresh.has_ifsc, true);
+  assert.equal(fresh.ifsc, 'ABCD0123456', 'the IFSC is kept in its own plain column too (migration 0111)');
   assert.equal(fresh.status, 'unverified');
   assert.equal(fresh.created_by, null, 'a loaded account stays loaded, so a verifier may confirm it');
   assert.equal(fresh.last4, '0001');

@@ -738,3 +738,13 @@ test('a director can put the people in a new order, which renumbers them; nobody
   assert.ok(db.audit.some((a) => a.action === 'finance.payroll_order_changed'));
   assert.ok(db.order.indexOf('audit:finance.payroll_order_changed') < db.order.indexOf('rpc:reorder'), 'audited before it is done');
 });
+
+test('the IFSC shown to a director comes from its plain column, so it needs no key; an older row falls back to the encrypted details', async () => {
+  fresh();
+  const a1 = db.fin_party_accounts.find((a) => a.id === PA1);
+  a1.ifsc = 'PLAN0000009';
+  a1.details_enc = 'not something the key can open';
+  const list = await (await send('prep', 'GET', '/payroll')).json();
+  assert.equal(list.employees[0].bank.ifsc, 'PLAN0000009', 'read from the column, never decrypted');
+  assert.equal(list.employees[1].bank.ifsc, 'TEST0000001', 'a row with no plain value yet falls back to the encrypted details');
+});

@@ -132,6 +132,7 @@ async function addAccount(partyId: string, entity: string, actorId: string, paye
       entity_id: entity,
       party_id: partyId,
       has_ifsc: details.method === 'bank' ? Boolean(details.ifsc) : true,
+      ifsc: details.method === 'bank' && details.ifsc ? details.ifsc : null, // plain: an IFSC names a bank branch, only the account number is secret (migration 0111)
       valid_from: plan.validFrom ?? null,
       method: details.method,
       details_enc: encryptFinanceText(JSON.stringify(details)),
@@ -622,6 +623,7 @@ export async function addMissingIfsc(req: Request, accountId: string): Promise<R
         last4: account.last4,
         fingerprint: account.fingerprint,
         has_ifsc: true,
+        ifsc: details.ifsc,
         valid_from: account.valid_from ?? null,
         created_by: account.created_by ?? null,
       }),

@@ -1099,8 +1099,16 @@ First slice, on branch `finance-09-payroll`. See `sessions/09-payroll.md` for th
 - **Order and bank details on the People list (2026-11-21).** The list is ordered as a number (`roll_no` is text, so the database alone put 10 after 1). A director can move a
   person up or down: `POST /payroll/employees/order` takes every employee once, in the new order, and `fin_reorder_employees` (migration `0110`, **applied 2026-11-21**, tested first on the real employee list inside a rolled-back transaction) renumbers them 1..n through
   temporary numbers (the number is the position in the bank's file, so the order *is* the number). Runs already generated keep the reference text they were given; only
-  later files use the new numbers. Directors (prepare or approve) also see each person's account as the last four digits and the IFSC; the IFSC is decrypted on its own
-  and the account number is not decrypted for this view. The farm manager's view gets neither.
+  later files use the new numbers. Directors (prepare or approve) also see each person's account as the last four digits and the IFSC; the IFSC comes from its own plain column
+  (below) and the account number is not decrypted for this view. The farm manager's view gets neither.
+- **The IFSC is a plain column (2026-11-21, migration `0111`, applied).** An IFSC names a bank branch and is public; only the account number is secret, but the two used to
+  sit in one encrypted blob (`details_enc`), so nothing could show an IFSC without the payee key (the payroll page showed none on a machine that lacks it). `fin_party_accounts.ifsc`
+  now holds it in the clear (checked against `ABCD0123456`'s shape) for every new bank row: adding details, completing a missing IFSC and the party import write it, and
+  `details_enc` still carries it too, as before, so the bank file and the reveal are unchanged. Like the rest of a payee row it is never overwritten (the guard trigger
+  refuses); the one exception is filling an EMPTY value once, through `fin_backfill_party_account_ifsc`, for rows from before the column. `scripts/backfill-fin-ifsc.mjs` does that:
+  with the payee key in the shell it decrypts each bank row that has no plain IFSC, prints counts only (dry run unless `--apply`), and writes through the function. Until it has
+  run, `GET /payroll` falls back to the encrypted details for an older row. Testing the migration on the real database inside a rolled-back transaction caught a NULL in the guard
+  (an unset session setting made the condition NULL, so a direct write slipped through); the shipped guard wraps it in `coalesce`.
 - **Employee numbers** (`fin_employees.roll_no`): assigned by a database trigger on insert as the next number up for the entity (under an advisory lock), never reused (a leaver stays
   as an inactive row), numeric only, unique. It is shown, not typed. A number can be given explicitly only to carry over an existing one (the API accepts `rollNo`, the page does
   not send it). It is the `NNN` in the file's reference (column I), so a person keeps one number across months; the generator refuses a person with no number or two with the same

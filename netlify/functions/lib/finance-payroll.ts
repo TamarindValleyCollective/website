@@ -79,7 +79,7 @@ async function loadRun(id: string): Promise<Json | null> {
 async function liveAccounts(partyIds: string[]): Promise<Map<string, Json | null>> {
   const out = new Map<string, Json | null>();
   if (!partyIds.length) return out;
-  const accounts = await rows(`/fin_party_accounts?party_id=in.(${partyIds.join(',')})&method=eq.bank&status=neq.superseded&select=id,party_id,status,valid_from,retired_on,fingerprint,last4,details_enc,created_at&order=created_at.desc`);
+  const accounts = await rows(`/fin_party_accounts?party_id=in.(${partyIds.join(',')})&method=eq.bank&status=neq.superseded&select=id,party_id,status,valid_from,retired_on,fingerprint,last4,ifsc,details_enc,created_at&order=created_at.desc`);
   const today = todayIST();
   for (const pid of partyIds) {
     const mine = accounts.filter((a) => a.party_id === pid);
@@ -163,18 +163,21 @@ async function runView(run: Json, access: Access) {
 
 // GET /payroll: the runs, the people who can be paid, and what the caller may do.
 // What a director sees of a person's bank account on the payroll page: the last four digits, the IFSC and whether the account can be paid.
-// The IFSC is decrypted here and returned on its own; the account number is never decrypted for this view.
+// The IFSC is read from its own plain column (migration 0111); the account number is never decrypted for this view. A row from before that
+// column was filled (scripts/backfill-fin-ifsc.mjs) falls back to the encrypted details, which needs the payee key.
 async function bankSummaries(partyIds: string[]): Promise<Map<string, { last4: string | null; ifsc: string | null; status: string }>> {
   const out = new Map<string, { last4: string | null; ifsc: string | null; status: string }>();
   const live = await liveAccounts(partyIds);
   for (const [pid, a] of live) {
     if (!a) continue;
-    let ifsc: string | null = null;
-    try {
-      const d = JSON.parse(decryptFinanceText(a.details_enc as string));
-      ifsc = typeof d.ifsc === 'string' && d.ifsc.trim() ? d.ifsc.trim().toUpperCase() : null;
-    } catch {
-      ifsc = null;
+    let ifsc: string | null = typeof a.ifsc === 'string' && a.ifsc ? a.ifsc : null;
+    if (!ifsc) {
+      try {
+        const d = JSON.parse(decryptFinanceText(a.details_enc as string));
+        ifsc = typeof d.ifsc === 'string' && d.ifsc.trim() ? d.ifsc.trim().toUpperCase() : null;
+      } catch {
+        ifsc = null;
+      }
     }
     out.set(pid, { last4: (a.last4 as string) ?? null, ifsc, status: String(a.status) });
   }
