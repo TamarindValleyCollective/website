@@ -1097,7 +1097,7 @@ First slice, on branch `finance-09-payroll`. See `sessions/09-payroll.md` for th
   index is per month, type and name. A bonus is worded "<Mon YYYY> <name>" / "<name> for <Mon YYYY>", its reference is `YYYY-Mon-Bonus-Employee-NNN`, and it defaults to
   paying today (no due date). One function, `lineReference`, builds the reference for the file and for the line snapshot.
 - **Order and bank details on the People list (2026-11-21).** The list is ordered as a number (`roll_no` is text, so the database alone put 10 after 1). A director can move a
-  person up or down: `POST /payroll/employees/order` takes every employee once, in the new order, and `fin_reorder_employees` (migration `0110`) renumbers them 1..n through
+  person up or down: `POST /payroll/employees/order` takes every employee once, in the new order, and `fin_reorder_employees` (migration `0110`, **applied 2026-11-21**, tested first on the real employee list inside a rolled-back transaction) renumbers them 1..n through
   temporary numbers (the number is the position in the bank's file, so the order *is* the number). Runs already generated keep the reference text they were given; only
   later files use the new numbers. Directors (prepare or approve) also see each person's account as the last four digits and the IFSC; the IFSC is decrypted on its own
   and the account number is not decrypted for this view. The farm manager's view gets neither.
