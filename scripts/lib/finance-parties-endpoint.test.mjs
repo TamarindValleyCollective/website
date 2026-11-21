@@ -341,7 +341,7 @@ test('verifying needs the step-up, and not by whoever entered the details', asyn
 
   assert.equal((await (await api(director2, `/accounts/${acctId}/verify`, { method: 'POST', body: { method: 'cancelled_cheque' } })).json()).code, 'STEP_UP_REQUIRED');
   const self = await api(director1, `/accounts/${acctId}/verify`, { method: 'POST', body: { method: 'cancelled_cheque' }, stepUp: 'u1' });
-  assert.equal(self.status, 403);
+  assert.equal(self.status, 409, 'a rule about this account: a 403 would make the page show its "No access" screen');
   assert.equal(db.fin_party_accounts[0].status, 'unverified');
 
   const ok = await api(director2, `/accounts/${acctId}/verify`, { method: 'POST', body: { method: 'cancelled_cheque' }, stepUp: 'u2' });
