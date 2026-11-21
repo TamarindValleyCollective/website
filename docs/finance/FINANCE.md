@@ -772,7 +772,7 @@ Modelled on how ServiceNow lists work, because the sheet's convenience was selec
   a line under the progress says "a tick only fills a field in; nothing is saved until you tick the lines and press Post", and a note
   says how many lines are filled in but not posted, with a button to tick them; the previous calendar month's status (what is left, or
   Close month when it is done) sits above the table; text boxes and selects have a visible focus ring; sorting and the chips keep focus.
-  **Months live in the table (2026-11-06):** the ledger opens on every line, grouped by month, newest first (a chip only when the address asks for one,
+  **Months live in the table (2026-11-06):** the ledger opens on every line, grouped by financial year and then month (since 2026-11-21; it was month alone), newest first (a chip only when the address asks for one,
   e.g. `?filter=review`). Each month heading shows its state (what is left to allocate or review, Ready to close, or a lock for a closed month) and,
   for someone who can close months, a Close month button once nothing is left. A closed month starts folded away, and a Fold all / Unfold all button beside the chips folds every month at once. The separate Months list under the
   table is gone; the strip above the table still names the previous month's status.

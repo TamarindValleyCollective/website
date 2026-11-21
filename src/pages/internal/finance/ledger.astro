@@ -178,7 +178,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   let chips: [string, string][] = ['unallocated', 'review', 'noparty'].includes(startFilter ?? '') ? [['status', startFilter!]] : [];
   let words: string[] = []; // word chips kept with Enter
   let query = ''; // what is being typed right now; it filters live
-  let groupBy: string[] = ['month']; // months are headings in the table: status, Close month and the lock live there
+  let groupBy: string[] = ['fy', 'month']; // financial years, then months, are headings in the table: status, Close month and the lock live on the month
   const collapsed = new Set<string>();
   type Item = { kind: 'line'; line: Line } | { kind: 'group'; key: string; depth: number; field: string; label: string; count: number; netPaise: number; transfers: number; open: boolean };
   let items: Item[] = []; // what the list shows: group headings and the lines of the groups that are open
@@ -1199,7 +1199,8 @@ import SignInGate from '../../../components/SignInGate.astro';
     // A closed month starts folded away, once: after that the person's own folding is left alone.
     if (!closedFolded) {
       closedFolded = true;
-      for (const m of months) if (m.status === 'closed') collapsed.add(`/month:${m.month.slice(0, 7)}`);
+      const byFy = groupBy[0] === 'fy' && groupBy[1] === 'month'; // the key of a month includes its financial year when the table opens that way
+      for (const m of months) if (m.status === 'closed') collapsed.add(`${byFy ? `/fy:${financialYearOf(m.month.slice(0, 10))}` : ''}/month:${m.month.slice(0, 7)}`);
     }
     applyView();
   }
