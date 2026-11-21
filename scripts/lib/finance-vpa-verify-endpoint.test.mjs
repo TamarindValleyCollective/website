@@ -154,7 +154,9 @@ test('whoever added the UPI details still cannot verify them', async () => {
   reset();
   razorpay.answers[VPA] = { vpa: VPA, success: true, customer_name: 'TEST VENDOR WORKS' };
   const { maker, accountId } = await addUpiParty();
-  assert.equal((await verify(maker, accountId)).status, 403);
+  const refused = await verify(maker, accountId);
+  assert.equal(refused.status, 409, 'a rule about this account, not a lack of access (a 403 would show the page\'s "No access" screen)');
+  assert.match((await refused.json()).error, /Someone else must verify/);
   assert.equal(db.fin_party_accounts[0].status, 'unverified');
 });
 
