@@ -141,7 +141,7 @@ import StepUpSheet from './StepUpSheet.astro';
 
   type Me = { id: string; canEnter: boolean; canPrepare: boolean; canApprove: boolean; ready: boolean; hasPasskey: boolean; stepUpValid: boolean };
   type RunRow = { id: string; month: string; runType: string; label: string | null; status: string; paymentDate: string; count: number; totalPaise: number; next: string | null };
-  type Person = { id: string; name: string; rollNo: string | null; active: boolean; startMonth: string | null; lastMonth: string | null };
+  type Person = { id: string; name: string; rollNo: string | null; bank: { last4: string | null; ifsc: string | null; status: string } | null; active: boolean; startMonth: string | null; lastMonth: string | null };
   type PersonRequest = { id: string; kind: 'join' | 'leave' | 'bank_change'; status: string; name: string; rollNo: string | null; roleTitle: string | null; startMonth: string | null; agreedPayRupees: number | null; lastMonth: string | null; reason: string | null; decisionNote: string | null; mine: boolean; next: string | null; hasBank: boolean; last4: string | null; bankName: string | null; hasProof: boolean; effectiveOn: string | null };
   type Line = { id: string; employeeId: string; name: string; netPaise: number; last4: string | null; changed: boolean; problem: string | null; reference: string | null; returned: boolean; agreedPayPaise: number | null; daysWorked: number | null; advanceDeductedPaise: number | null };
   type Detail = {
@@ -442,16 +442,39 @@ import StepUpSheet from './StepUpSheet.astro';
     if (!data.employees.length) return void box.append(el('p', 'hint', 'No one is on payroll yet. A director adds the first people with "Add a person to payroll".'));
     const inactive = new Set(data.partyInactive.map((p) => p.id));
     const list = el('div', 'pr-card');
-    for (const e of data.employees) {
-      const row = el('div', 'pr-line');
+    const canOrder = Boolean(data.me.canPrepare);
+    const ordered = data.employees;
+    const thisMonth = (data.today ?? '').slice(0, 7);
+    ordered.forEach((e, at) => {
+      const row = el('div', 'pr-line pr-line--people');
       const who = el('div', 'pr-who');
       who.append(el('strong', undefined, e.rollNo ? `${e.rollNo}. ${e.name}` : e.name));
-      const notes = [e.startMonth && e.startMonth > (data.today ?? '').slice(0, 7) ? `starts ${monthShort(e.startMonth)}` : null, e.lastMonth ? `last month paid: ${monthShort(e.lastMonth)}` : null, !e.active ? 'not on payroll' : null].filter(Boolean);
+      // The masked account and the IFSC, for the people who prepare and approve the file (the server leaves them out for anyone else).
+      if (e.bank) who.append(el('span', 'pr-sub pr-bank', `${e.bank.last4 ? `A/c ••••${e.bank.last4}` : 'No account on file'}${e.bank.ifsc ? ` · IFSC ${e.bank.ifsc}` : ''}${e.bank.status && e.bank.status !== 'verified' ? ` · ${e.bank.status.replace(/_/g, ' ')}` : ''}`));
+      const notes = [e.startMonth && e.startMonth > thisMonth ? `starts ${monthShort(e.startMonth)}` : null, e.lastMonth ? `last month paid: ${monthShort(e.lastMonth)}` : null, !e.active ? 'not on payroll' : null].filter(Boolean);
       if (notes.length) who.append(el('span', 'pr-sub', notes.join(' · ')));
       row.append(who);
       if (inactive.has(e.id)) row.append(pill('cancelled', 'Inactive in Parties'));
+      if (canOrder) {
+        // Moving someone renumbers everyone: the number is their place in the bank's file.
+        const move = (by: number) => async () => {
+          const ids = ordered.map((x) => x.id);
+          const [id] = ids.splice(at, 1);
+          ids.splice(at + by, 0, id);
+          if (await call('/api/finance-admin/payroll/employees/order', 'POST', { order: ids }, 'Order changed.')) await load();
+        };
+        const arrows = el('div', 'pr-move');
+        const up = btn('↑', move(-1), 'button button--outline button--small');
+        up.setAttribute('aria-label', `Move ${e.name} up`);
+        up.disabled = at === 0;
+        const down = btn('↓', move(1), 'button button--outline button--small');
+        down.setAttribute('aria-label', `Move ${e.name} down`);
+        down.disabled = at === ordered.length - 1;
+        arrows.append(up, down);
+        row.append(arrows);
+      }
       list.append(row);
-    }
+    });
     box.append(list);
   }
   // The bank details the employee gave the farm manager. The number is typed twice, the IFSC names its bank as it is typed (a typing aid only),
@@ -1001,6 +1024,23 @@ import StepUpSheet from './StepUpSheet.astro';
     flex-direction: column;
     gap: 2px;
     align-items: flex-start;
+  }
+
+  .finance-payroll .pr-line--people {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 8px 12px;
+  }
+
+  .finance-payroll .pr-move {
+    display: flex;
+    gap: 6px;
+    justify-self: end;
+  }
+
+  .finance-payroll .pr-bank {
+    font-variant-numeric: tabular-nums;
   }
 
   .finance-payroll .pr-sub {

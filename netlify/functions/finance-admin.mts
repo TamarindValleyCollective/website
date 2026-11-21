@@ -29,7 +29,7 @@ import { getDashboard } from './lib/finance-dashboard';
 import { BUDGET_ID, approveDraft, discardDraft, getBudget, saveLines, startDraft } from './lib/finance-budget';
 import { addBatchEvidence, getBatchEvidence, listBatchEvidence } from './lib/finance-payroll-evidence';
 import { listPersonRequests, createPersonRequest, personRequestAction, addRequestProof, getRequestProof } from './lib/finance-payroll-people';
-import { PAYROLL_ID, addEmployee, createRun, downloadFile, getRun, listPayroll, runAction, updateRun } from './lib/finance-payroll';
+import { PAYROLL_ID, addEmployee, createRun, downloadFile, getRun, listPayroll, reorderEmployees, runAction, updateRun } from './lib/finance-payroll';
 import { setPaymentNote } from './lib/finance-notes';
 import { heldCoverage, reconciliationOf, runImport } from './lib/finance-import';
 import { supabaseImportStore } from './lib/finance-import-store';
@@ -277,6 +277,7 @@ const dispatch = async (req: Request): Promise<Response> => {
   // Ledger and review (session 05)
   if (route === '/payroll' && req.method === 'GET') return listPayroll(req);
   if (route === '/payroll/employees' && req.method === 'POST') return addEmployee(req);
+  if (route === '/payroll/employees/order' && req.method === 'POST') return reorderEmployees(req);
   if (route === '/payroll/requests' && req.method === 'GET') return listPersonRequests(req);
   if (route === '/payroll/requests' && req.method === 'POST') return createPersonRequest(req);
   const personProof = /^\/payroll\/requests\/([^/]+)\/proof$/.exec(route);

@@ -162,18 +162,41 @@ async function runView(run: Json, access: Access) {
 }
 
 // GET /payroll: the runs, the people who can be paid, and what the caller may do.
+// What a director sees of a person's bank account on the payroll page: the last four digits, the IFSC and whether the account can be paid.
+// The IFSC is decrypted here and returned on its own; the account number is never decrypted for this view.
+async function bankSummaries(partyIds: string[]): Promise<Map<string, { last4: string | null; ifsc: string | null; status: string }>> {
+  const out = new Map<string, { last4: string | null; ifsc: string | null; status: string }>();
+  const live = await liveAccounts(partyIds);
+  for (const [pid, a] of live) {
+    if (!a) continue;
+    let ifsc: string | null = null;
+    try {
+      const d = JSON.parse(decryptFinanceText(a.details_enc as string));
+      ifsc = typeof d.ifsc === 'string' && d.ifsc.trim() ? d.ifsc.trim().toUpperCase() : null;
+    } catch {
+      ifsc = null;
+    }
+    out.set(pid, { last4: (a.last4 as string) ?? null, ifsc, status: String(a.status) });
+  }
+  return out;
+}
+
 export async function listPayroll(req: Request): Promise<Response> {
   const gate = await payrollAccess(req);
   if (!gate.ok) return gate.response;
   const { access } = gate;
   try {
-    const [runs, employees, lines] = await Promise.all([
+    const [runs, employeesRaw, lines] = await Promise.all([
       rows(`/fin_payroll_runs?select=${RUN_COLUMNS}&order=month.desc,created_at.desc&limit=36`),
-      rows('/fin_employees?select=id,party_id,roll_no,active,start_month,last_month&order=roll_no.asc'),
+      rows('/fin_employees?select=id,party_id,roll_no,active,start_month,last_month'),
       rows('/fin_payroll_lines?select=run_id,net_paise&limit=5000'),
     ]);
     const batches = runs.some((r) => r.batch_id) ? await rows(`/fin_payment_batches?id=in.(${runs.filter((r) => r.batch_id).map((r) => r.batch_id).join(',')})&select=id,status`) : [];
     const batchStatus = new Map(batches.map((b) => [b.id, b.status]));
+    // The employee number is text in the database, so the database would put 10 before 2: order it as a number here.
+    const employees = [...employeesRaw].sort((a, b) => Number(a.roll_no) - Number(b.roll_no));
+    // Bank details for the people who prepare and approve the file: the last four digits and the IFSC. The number itself never leaves the server.
+    const bankOf = access.canPrepare || access.canApprove ? await bankSummaries(employees.map((e) => e.party_id as string)) : null;
     const parties = employees.length ? await rows(`/fin_parties?id=in.(${employees.map((e) => e.party_id).join(',')})&select=id,name,active`) : [];
     const nameOf = new Map(parties.map((p) => [p.id, p.name]));
     const inactiveParty = new Set(parties.filter((p) => p.active === false).map((p) => p.id));
@@ -196,7 +219,7 @@ export async function listPayroll(req: Request): Promise<Response> {
         id: r.id, month: String(r.month).slice(0, 7), runType: r.run_type, label: r.label, status: r.status, paymentDate: r.payment_date, count: totals.get(r.id)?.count ?? 0, totalPaise: totals.get(r.id)?.total ?? 0,
         ...runSummary({ status: r.status, batchStatus: batchStatus.get(r.batch_id) ?? null }),
       })),
-      employees: employees.map((e) => ({ id: e.id, name: nameOf.get(e.party_id) ?? 'Unknown', rollNo: e.roll_no, active: e.active, startMonth: e.start_month ? String(e.start_month).slice(0, 7) : null, lastMonth: e.last_month ? String(e.last_month).slice(0, 7) : null })),
+      employees: employees.map((e) => ({ id: e.id, name: nameOf.get(e.party_id) ?? 'Unknown', rollNo: e.roll_no, bank: bankOf?.get(e.party_id as string) ?? null, active: e.active, startMonth: e.start_month ? String(e.start_month).slice(0, 7) : null, lastMonth: e.last_month ? String(e.last_month).slice(0, 7) : null })),
       // People who are on payroll but whose party has been deactivated: a director removes them, or reactivates the party.
       partyInactive: employees.filter((e) => e.active && inactiveParty.has(e.party_id)).map((e) => ({ id: e.id, name: nameOf.get(e.party_id) ?? 'Unknown' })),
       candidates,
@@ -219,6 +242,27 @@ export async function getRun(req: Request, id: string): Promise<Response> {
 }
 
 // POST /payroll/employees: make a party of kind employee payable by payroll.
+// Puts the people on payroll in a new order. The employee number is the position in the bank's file, so this renumbers everyone 1..n.
+export async function reorderEmployees(req: Request): Promise<Response> {
+  const gate = await payrollAccess(req);
+  if (!gate.ok) return gate.response;
+  const { access } = gate;
+  if (!access.canPrepare) return fail('Only a director can change the order.', 403);
+  const b = await body(req);
+  const ids: string[] = Array.isArray(b?.order) ? (b!.order as unknown[]).map(String) : [];
+  if (!ids.length || ids.length > 500 || !ids.every((i) => ID.test(i)) || new Set(ids).size !== ids.length) return fail('List every person on payroll, once each.');
+  try {
+    const entity = await entityId();
+    const all = await rows(`/fin_employees?entity_id=eq.${entity}&select=id`);
+    if (all.length !== ids.length || !all.every((e) => ids.includes(e.id as string))) return fail('The list changed while you were looking at it. Reload and try again.', 409);
+    await logFinanceAction({ actorId: access.staff.id, entityId: entity, action: 'finance.payroll_order_changed', detail: { count: ids.length } });
+    await rest('/rpc/fin_reorder_employees', { method: 'POST', body: JSON.stringify({ p_ids: ids }) });
+    return json({ ok: true });
+  } catch (err) {
+    return serverError(err, 'reorder employees');
+  }
+}
+
 export async function addEmployee(req: Request): Promise<Response> {
   const gate = await payrollAccess(req);
   if (!gate.ok) return gate.response;

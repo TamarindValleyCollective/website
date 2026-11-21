@@ -1096,6 +1096,11 @@ First slice, on branch `finance-09-payroll`. See `sessions/09-payroll.md` for th
 - **Run types** (`run_type`, `label` on `fin_payroll_runs`): a month holds one `salary` run and any number of named `bonus` runs (e.g. "Diwali Bonus"); the unique
   index is per month, type and name. A bonus is worded "<Mon YYYY> <name>" / "<name> for <Mon YYYY>", its reference is `YYYY-Mon-Bonus-Employee-NNN`, and it defaults to
   paying today (no due date). One function, `lineReference`, builds the reference for the file and for the line snapshot.
+- **Order and bank details on the People list (2026-11-21).** The list is ordered as a number (`roll_no` is text, so the database alone put 10 after 1). A director can move a
+  person up or down: `POST /payroll/employees/order` takes every employee once, in the new order, and `fin_reorder_employees` (migration `0110`) renumbers them 1..n through
+  temporary numbers (the number is the position in the bank's file, so the order *is* the number). Runs already generated keep the reference text they were given; only
+  later files use the new numbers. Directors (prepare or approve) also see each person's account as the last four digits and the IFSC; the IFSC is decrypted on its own
+  and the account number is not decrypted for this view. The farm manager's view gets neither.
 - **Employee numbers** (`fin_employees.roll_no`): assigned by a database trigger on insert as the next number up for the entity (under an advisory lock), never reused (a leaver stays
   as an inactive row), numeric only, unique. It is shown, not typed. A number can be given explicitly only to carry over an existing one (the API accepts `rollNo`, the page does
   not send it). It is the `NNN` in the file's reference (column I), so a person keeps one number across months; the generator refuses a person with no number or two with the same
