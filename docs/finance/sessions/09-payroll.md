@@ -255,6 +255,13 @@ investigated separately). Until there is, `payrollBlockers` lets a verified acco
 the last run; that is a known gap, not a safeguard. When a live check exists it becomes one more check inside `payrollBlockers`, run
 on every line at generation, and a failed or unavailable check should block the file.
 
+### History import, first slice (2026-11-21)
+Built test-first as `scripts/import-payroll-history.mjs` plus `scripts/lib/finance-payroll-history.mjs` (8 tests). It covers the salary batches that had a file and a bank debit but no ledger allocation (the "10 file
+batches with no ledger entry" above, minus the one with no file yet): it split 10 bank lines into 100 `Salaries` allocations, each with a party, after a reviewed dry run. See `FINANCE.md` ("Payroll", "History import").
+What it does NOT do yet: re-period the 28 batches that were already split (their period is still the payment month), set employee numbers from the 2023-25 set, move the five misdirected June 2025 entries to a
+write-off category, or touch the individual payments. Findings from the run: the Sep 2023 batch has no file; the Jan 2024 salaries were paid as individual transfers (no file, allocate by hand in the ledger); an
+alias list is needed where a file misspells a name; partners and parents sharing one account is normal, so never merge parties on an account match alone.
+
 ### Where we stopped (2026-11-18) and how to resume
 **State.** Draft PR #642 (`finance-09-payroll`), mergeable, 1,575 lib tests and the CSS lint pass. Migrations 0105 to 0108 are applied to TVC ERP and the payroll tables are empty. Built: the file generator, run
 screens (Monthly salaries and People tabs), run types, automatic employee numbers, joining, leaving and bank-change requests with encrypted bank details and a photo, the bank's confirmation screenshot, the
