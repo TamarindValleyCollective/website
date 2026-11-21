@@ -233,3 +233,15 @@ test('a group total leaves out money moved between TVC\'s own accounts, and says
   assert.equal(oneSided.netPaise, 150000, 'a transfer whose other side is not in the view still does not count');
   assert.equal(buildItems(lines.slice(0, 3), ['month']).items[0].netPaise, 150000 - 5000000, 'without the rule it would');
 });
+
+test('grouping by financial year then month nests the months under their year, newest first', () => {
+  const ls = [
+    { ...LINES[0], id: 'x1', date: '2026-04-02' },
+    { ...LINES[0], id: 'x2', date: '2026-03-30' },
+    { ...LINES[0], id: 'x3', date: '2026-05-01' },
+  ];
+  const groups = (collapsed) => buildItems(ls, ['fy', 'month'], collapsed, (m) => m).items.filter((i) => i.kind === 'group');
+  assert.deepEqual(groups(new Set()).map((g) => g.key), ['/fy:2026-27', '/fy:2026-27/month:2026-05', '/fy:2026-27/month:2026-04', '/fy:2025-26', '/fy:2025-26/month:2026-03']);
+  const folded = groups(new Set(['/fy:2026-27/month:2026-05'])).find((g) => g.key.endsWith('2026-05'));
+  assert.equal(folded.open, false, 'a month folds by its full path');
+});
