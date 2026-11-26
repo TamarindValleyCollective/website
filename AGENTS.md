@@ -69,20 +69,8 @@ wording pass. Migration comments and the change log are history and are left as 
 
 ## Design language
 
-`src/styles/global.css` is the single source of truth for TVC's design tokens; the design-system
-artifact is a derived copy, so if the two disagree `global.css` wins. In any `.astro` or `.css` file:
-
-- Use a `--tvc-*` color token, never a raw hex. Add a token to `global.css` first if one is missing.
-- Never reference a custom property that `global.css` doesn't define (CI fails on this).
-- Orange has three jobs: `--tvc-orange-cta` fills the primary `.button` only; `--tvc-orange` is for
-  non-text marks; small orange text uses `--tvc-orange-text`, and orange on dark green uses
-  `--tvc-orange-light`. Never white text on `--tvc-orange-cta`.
-- The admin shell (`StaffLayout.astro`) and member portal (`members/index.astro`) have their own look and
-  shared primitives; read `docs/design-language.md` before touching `.astro`/`.css` there, and don't
-  restyle shared primitives per page.
-
-`npm run lint:css` checks this (Stylelint) and the `Design language` GitHub Action runs it on every PR.
-Update `docs/design-language.md` (and this section if the core rules change) in the same change.
+In any `.astro` or `.css` file: `--tvc-*` tokens only, never a raw hex. The full rules are in
+`src/AGENTS.md` (also `src/CLAUDE.md`; loaded when working under `src/`) and `docs/design-language.md`.
 
 ## Change log
 
@@ -135,5 +123,19 @@ astro dev --background
 ```
 
 Manage the background server with `astro dev stop`, `astro dev status`, and `astro dev logs`.
+
+Bare `astro dev` does not serve `/.netlify/functions/*` or the redirects to them, so any page that
+calls a Netlify Function (Google sign-in, everything under `/internal`, the member portal, API
+routes) silently fails or 404s there. For those pages, layer Netlify Dev on top of your Astro server
+(`netlify.toml`'s `[dev]` block only proxies; it never starts Astro itself) and test on port 8888:
+
+```
+netlify dev --port 8888 --target-port <your astro port> --no-open
+```
+
+- Always pass `--target-port` of the Astro server you started; without it Netlify Dev attaches to
+  whatever holds 4321, which may be another worktree's server running other code.
+- Port 8888 is the only port Google sign-in works on (the OAuth client's authorized origin is
+  `http://localhost:8888`). If something else holds 8888, stop it; never use another port.
 
 Always render changes in the dev server and verify them with the user before closing it.
