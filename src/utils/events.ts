@@ -17,21 +17,21 @@ const localeTag: Record<Locale, string> = { en: 'en-IN', kn: 'kn-IN', ta: 'ta-IN
 const uiStrings: Record<Locale, { day: string; overnight: (days: number) => string; today: string; tomorrow: string; daysToGo: (n: number) => string }> = {
   en: {
     day: 'Day event',
-    overnight: (d) => `Overnight event (${d} days)`,
+    overnight: (d) => `Multi-day event (${d} days)`,
     today: 'Today',
     tomorrow: 'Tomorrow',
     daysToGo: (n) => `${n} days to go`,
   },
   kn: {
     day: 'ಒಂದು ದಿನದ ಕಾರ್ಯಕ್ರಮ',
-    overnight: (d) => `${d} ದಿನಗಳ ಕಾರ್ಯಕ್ರಮ (ರಾತ್ರಿ ವಾಸ್ತವ್ಯ)`,
+    overnight: (d) => `${d} ದಿನಗಳ ಕಾರ್ಯಕ್ರಮ`,
     today: 'ಇಂದು',
     tomorrow: 'ನಾಳೆ',
     daysToGo: (n) => `${n} ದಿನಗಳಲ್ಲಿ`,
   },
   ta: {
     day: 'ஒரு நாள் நிகழ்வு',
-    overnight: (d) => `${d} நாட்கள் நிகழ்வு (இரவு தங்குமிடம்)`,
+    overnight: (d) => `${d} நாட்கள் நிகழ்வு`,
     today: 'இன்று',
     tomorrow: 'நாளை',
     daysToGo: (n) => `${n} நாட்களில்`,

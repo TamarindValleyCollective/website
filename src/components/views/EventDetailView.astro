@@ -2,11 +2,9 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHero from '../PageHero.astro';
 import AddToCalendar from '../AddToCalendar.astro';
-import BookingInquiry from '../BookingInquiry.astro';
 import WhatsAppButton from '../WhatsAppButton.astro';
-import AccommodationGallery from '../AccommodationGallery.astro';
 import EventBookingForm from '../EventBookingForm.astro';
-import { render, getCollection, type CollectionEntry } from 'astro:content';
+import { render, type CollectionEntry } from 'astro:content';
 import { getRelativeLocaleUrl } from 'astro:i18n';
 import { formatDateRange, durationTag } from '../../utils/events';
 import { icsDataUri, googleCalendarUrl } from '../../utils/calendar';
@@ -27,15 +25,6 @@ const { Content } = await render(event);
 // fragmenting the tally per locale.
 const canonicalId = event.id.replace(/^(kn|ta)\//, '');
 
-// Only 3bs1h editions render this (see the isUpcoming && series === '3bs1h'
-// gate below) - fetched unconditionally anyway since it's a cheap read and
-// keeps this block next to the other data prep above rather than deep in
-// the template.
-const accommodationTypes = (await getCollection('accommodationTypes')).sort(
-  (a, b) => (a.data.order ?? 0) - (b.data.order ?? 0)
-);
-const facilities = (await getCollection('facilities')).sort((a, b) => (a.data.order ?? 0) - (b.data.order ?? 0));
-
 // Only worth offering on events that haven't happened yet -- adding a past
 // event to your calendar is a dead end, not a conversion.
 const isUpcoming = event.data.date >= new Date();
@@ -45,8 +34,7 @@ const isUpcoming = event.data.date >= new Date();
 // (see content.config.ts) - a past event's price is no longer actionable,
 // so it falls back to highlights instead of repeating price/booking.
 const showSidebar = (isUpcoming && Boolean(event.data.price?.length)) || (!isUpcoming && Boolean(event.data.highlights?.length));
-// Shared by the sidebar's WhatsApp button and (for 3bs1h) BookingInquiry's
-// own wa.me link - one message per event regardless of which CTA sent it.
+// Used by the sidebar's WhatsApp button.
 const whatsappMessage = `Hi! I'd like to book a spot for ${event.data.title} (${formatDateRange(event.data.date, event.data.endDate, lang)}).`;
 // Only pass a custom social-preview image when its real dimensions are also
 // known - BaseLayout's og:image:width/height must match the actual file or
@@ -115,10 +103,6 @@ const content = {
     msgCountPluralTemplate: '{n} people want this again.',
     msgRegistered: "You're in — we'll factor this into what we plan next.",
     msgError: "That didn't go through — check your connection and try again.",
-    accommodationHeading: 'Where you’ll stay',
-    accommodationHint: 'A look at each type of tent and hut on offer, so you know what to expect.',
-    facilitiesHeading: 'Facilities',
-    facilitiesHint: 'Shared facilities used by everyone staying on site.',
     preferChatFirst: 'Prefer to chat first?',
     messageContact: (contactName: string) => `Message ${contactName}`,
   },
@@ -134,10 +118,6 @@ const content = {
     msgCountPluralTemplate: '{n} ಜನರು ಇದು ಮತ್ತೆ ಆಗಬೇಕೆಂದು ಬಯಸುತ್ತಾರೆ.',
     msgRegistered: 'ನೀವು ಸೇರಿದ್ದೀರಿ — ಮುಂದಿನ ಯೋಜನೆಯಲ್ಲಿ ನಾವು ಇದನ್ನು ಪರಿಗಣಿಸುತ್ತೇವೆ.',
     msgError: 'ಅದು ಕಳುಹಿಸಲಾಗಲಿಲ್ಲ — ನಿಮ್ಮ ಸಂಪರ್ಕವನ್ನು ಪರಿಶೀಲಿಸಿ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.',
-    accommodationHeading: 'ನೀವು ಎಲ್ಲಿ ಉಳಿಯುವಿರಿ',
-    accommodationHint: 'ಯಾವ ರೀತಿಯ ಟೆಂಟ್ ಮತ್ತು ಹಟ್ ಲಭ್ಯವಿದೆ ಎಂಬುದನ್ನು ನೋಡಿ, ಏನನ್ನು ನಿರೀಕ್ಷಿಸಬಹುದು ಎಂದು ತಿಳಿಯಿರಿ.',
-    facilitiesHeading: 'ಸೌಲಭ್ಯಗಳು',
-    facilitiesHint: 'ಸ್ಥಳದಲ್ಲಿ ಉಳಿಯುವ ಎಲ್ಲರೂ ಬಳಸುವ ಹಂಚಿಕೆಯ ಸೌಲಭ್ಯಗಳು.',
     preferChatFirst: 'ಮೊದಲು ಚಾಟ್ ಮಾಡಲು ಬಯಸುವಿರಾ?',
     messageContact: (contactName: string) => `${contactName} ಅವರಿಗೆ ಸಂದೇಶ ಕಳುಹಿಸಿ`,
   },
@@ -153,10 +133,6 @@ const content = {
     msgCountPluralTemplate: '{n} பேர் இது மீண்டும் நடக்க வேண்டும் என விரும்புகிறார்கள்.',
     msgRegistered: 'நீங்கள் இணைந்துவிட்டீர்கள் — அடுத்த திட்டமிடலில் இதைக் கருத்தில் கொள்வோம்.',
     msgError: 'அது அனுப்பப்படவில்லை — உங்கள் இணைப்பைச் சரிபார்த்து மீண்டும் முயற்சிக்கவும்.',
-    accommodationHeading: 'நீங்கள் எங்கு தங்குவீர்கள்',
-    accommodationHint: 'என்ன எதிர்பார்க்கலாம் என்பதை அறிய, கிடைக்கும் ஒவ்வொரு வகை கூடாரம் மற்றும் குடிசையையும் பாருங்கள்.',
-    facilitiesHeading: 'வசதிகள்',
-    facilitiesHint: 'தளத்தில் தங்கும் அனைவரும் பயன்படுத்தும் பகிரப்பட்ட வசதிகள்.',
     preferChatFirst: 'முதலில் அரட்டையடிக்க விரும்புகிறீர்களா?',
     messageContact: (contactName: string) => `${contactName} க்கு செய்தி அனுப்பவும்`,
   },
@@ -280,67 +256,6 @@ const brand =
             </ul>
           </div>
           <Content />
-          {/* 3Bs&1H editions book through TVC's hospitality partner Linger,
-              not through TVC directly - reuses the same visit-inquiry
-              Netlify form as /visit/camping etc. (already wired to notify
-              stay@linger.in) rather than a bespoke booking flow. Other
-              events carry their own CTA inside `<Content />` itself (see
-              #cta above), so nothing extra renders here for them. Gated on
-              isUpcoming too, not just showSidebar - showSidebar alone is no
-              longer proof of "upcoming" now that a past event with
-              `highlights` also takes this branch (see showSidebar above),
-              and a past event has nothing left to book. */}
-          {isUpcoming && event.data.series === '3bs1h' && (
-            <div id="cta">
-              <h2>{c.accommodationHeading}</h2>
-              <p>{c.accommodationHint}</p>
-              <AccommodationGallery items={accommodationTypes.map((accType) => accType.data)} lang={lang} />
-
-              <h2>{c.facilitiesHeading}</h2>
-              <p>{c.facilitiesHint}</p>
-              <AccommodationGallery items={facilities.map((facility) => facility.data)} lang={lang} />
-
-              <BookingInquiry
-                lang={lang}
-                type={event.data.title}
-                heading="Request to book"
-                packageOptions={[
-                  { label: 'Deck-based tent / bamboo hut — ₹3,500 per person', adultRate: 3500, childRate: 0 },
-                  { label: 'Campground tent / DIY camping — ₹3,200 per person', adultRate: 3200, childRate: 0 },
-                ]}
-                note="Choose your accommodation tier, then send your details to Linger by form or WhatsApp."
-                whatsappMessage={whatsappMessage}
-                fixedDates={formatDateRange(event.data.date, event.data.endDate, lang)}
-                showWhatsapp={!event.data.whatsapp}
-              />
-              {/* 3bs1h has no edition-specific cancellation terms (unlike
-                  Melagiri, which states its own inline) - the sitewide
-                  policy applies by default in that case, so this points
-                  there rather than leaving the question unanswered right
-                  where money changes hands. */}
-              <p class="cancellation-note">
-                Need to cancel or reschedule? TVC's standard <a href="/refund-policy/">cancellation &amp; refund policy</a> applies.
-              </p>
-            </div>
-          )}
-          {/* Opt-in stay details for non-3bs1h events (see content.config.ts's
-              stayTypes) - same galleries as the 3bs1h block above. */}
-          {isUpcoming && event.data.series !== '3bs1h' && event.data.stayTypes?.length && (
-            <div>
-              <h2>{c.accommodationHeading}</h2>
-              <p>{c.accommodationHint}</p>
-              <AccommodationGallery
-                items={accommodationTypes
-                  .filter((accType) => event.data.stayTypes!.includes(accType.id))
-                  .map((accType) => accType.data)}
-                lang={lang}
-              />
-
-              <h2>{c.facilitiesHeading}</h2>
-              <p>{c.facilitiesHint}</p>
-              <AccommodationGallery items={facilities.map((facility) => facility.data)} lang={lang} />
-            </div>
-          )}
           {/* The reusable direct-payment flow (see content.config.ts's
               razorpayReferenceId, EventBookingForm.astro,
               netlify/functions/event-booking.mts) - rendered here rather

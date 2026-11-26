@@ -38,7 +38,7 @@ and can issue a real Razorpay refund) — live as of 2026-09-24, see `RAZORPAY.m
 (public storage for the event-interest counter — the site's only *readable* server-side state
 that isn't gated behind a secret; everything else below is either write-only or, for photo-pool,
 gated), and Netlify Forms (the membership enquiry form on `/join`, the general enquiry form on
-`/contact`, the Host an Event inquiry, the shared Visit inquiry form on the camping/day-visit/
+`/contact`, the Host an Event inquiry, the shared Visit inquiry form on the day-visit/
 trekking pages, and — when an email is given — the event-interest widget).
 The old Friends of TVC signup form (name + phone, added to the WhatsApp group by hand) has been
 replaced by a direct invite link to that same group — no form, no manual step. See
@@ -154,7 +154,7 @@ flowchart TD
         APIFN18["Netlify Function: whatsapp-event-reminders<br/>Scheduled (cron, daily 09:00 IST), no HTTP path —<br/>built, dormant until template approved"]
         APIFN_PLAN["Netlify Function: whatsapp-stays-daily-plan<br/>Scheduled (cron, daily 06:30 IST), no HTTP path —<br/>built, dormant until template approved"]
         BLOBS["Netlify Blobs<br/>'event-interest' store — one JSON record per<br/>past event id, {count, emails[]}, optimistic-<br/>concurrency writes. Reset via netlify blobs:delete<br/>event-interest &lt;id&gt;.<br/>'search-ai-rate-limit' store — per-IP window +<br/>daily Anthropic-fallback budget records.<br/>'chat-rate-limit' store — per-IP window +<br/>global daily message cap for /api/chat"]
-        FORMS["Netlify Forms<br/>Captures /contact membership + general<br/>enquiries, /visit/host-an-event inquiries,<br/>/visit camping·day-visit·trekking inquiries,<br/>and event-interest submissions with an email"]
+        FORMS["Netlify Forms<br/>Captures /contact membership + general<br/>enquiries, /visit/host-an-event inquiries,<br/>/visit day-visit·trekking inquiries,<br/>and event-interest submissions with an email"]
     end
 
     CF["Cloudflare<br/>DNS + CDN for tvc.farm,<br/>proxies to Netlify"]
@@ -166,7 +166,7 @@ flowchart TD
         MEMBERFORM["Membership enquiry form (/join)<br/>data-netlify=true + honeypot,<br/>also sendBeacons to /api/enquiry"]
         GENERALFORM["General enquiry form (/contact)<br/>data-netlify=true + honeypot,<br/>also sendBeacons to /api/enquiry;<br/>plus a WhatsApp link to Madhavan"]
         HOSTFORM["Host an Event inquiry form<br/>Plain HTML POST,<br/>data-netlify=true + honeypot"]
-        BOOKING["Visit inquiry form (camping,<br/>day-visit, trekking pages)<br/>One shared form + WhatsApp link,<br/>data-netlify=true + honeypot"]
+        BOOKING["Visit inquiry form (day-visit,<br/>trekking pages)<br/>One shared form + WhatsApp link,<br/>data-netlify=true + honeypot"]
         INTEREST["Event interest widget (past events)<br/>Reads/writes /api/event-interest;<br/>if an email is given, also POSTs<br/>into Netlify Forms"]
         BIODIV["BiodiversityExplorer<br/>Fetches sightings directly from<br/>iNaturalist's public API"]
         PHOTOS["PhotoGallery (/in-pictures)<br/>Filters, Grid/Map toggle, lightbox —<br/>images served directly from R2"]
@@ -1563,7 +1563,7 @@ trusting this note, since it's already flipped once.)
   redirecting to `/visit/host-an-event/thanks` — pushed to `main` and deployed, but not
   independently re-verified against production; the Visit inquiry form
   (`src/components/BookingInquiry.astro`), one shared `visit-inquiry` Netlify Form reused on
-  `/visit/camping`, `/visit/day-visit`, and `/visit/trekking-trails` with a hidden `type`
+  `/visit/day-visit`, and `/visit/trekking-trails` with a hidden `type`
   field noting which page it came from, redirecting to `/visit/thanks` — replaces the old
   external "Book via Linger" redirect, with pricing/inclusions now published on TVC's own
   pages and a WhatsApp link offered alongside the form; pushed to `main` and deployed, with
@@ -1621,12 +1621,18 @@ never touches Netlify either.
   `/api/enquiry`. The general enquiry form additionally offers a `wa.me` WhatsApp link straight
   to Madhavan, alongside the form rather than instead of it; `/join`'s form instead links back to
   `/contact` for anyone reaching out for a different reason.
-- **Visit inquiry** (`/visit/camping`, `/visit/day-visit`, `/visit/trekking-trails`) — pushed
+- **Visit inquiry** (`/visit/day-visit`, `/visit/trekking-trails`) — pushed
   to `main` and deployed. Each page presents its own pricing/inclusions plus a shared
   `BookingInquiry.astro` block: a plain HTML form (name, email, phone, dates, headcount,
   message, plus an itinerary picker on the Day Visit page) submitting to the same
   `visit-inquiry` Netlify Form, and a `wa.me` WhatsApp link pre-filled with a page-specific
   message. Replaces the previous external redirect to Linger's own booking pages.
+  **Overnight stays are not offered on the public site (2026-11-26, pending the forest department's
+  query about hospitality in the buffer zone):** the `/visit/camping` page (en/kn/ta), its nav, home,
+  Visit and legal-page entries, the `accommodationTypes`/`facilities` content collections, the
+  `LodgingBusiness` JSON-LD node and the "Where you'll stay" blocks on event pages were removed;
+  `/visit/camping` 301s to `/visit/` (`netlify.toml`). Events that sold overnight places are
+  `draft: true`. The login-gated `/internal` stays tools and the member portal are unchanged.
 - **BiodiversityExplorer** — fetches live biodiversity sightings directly from iNaturalist's
   public API on every page load; no TVC backend involved.
 - **PhotoGallery** (`/in-pictures`) — date/camera filter chips and a Grid/Map view toggle over
@@ -2117,7 +2123,7 @@ never touches Netlify either.
 | Friends of TVC WhatsApp group (direct invite link) | ✅ Live — `/contact` links straight to the group, no form or manual step |
 | Membership + general enquiry forms (Netlify Forms + `/api/enquiry`) | ✅ Live — Sheet ids set and shared with the service account, verified with real `POST`s against production for both form types; email goes to `core-team@tvc.farm` via the site-wide Netlify Forms notification rule (moved from `contact@tvc.farm` on 2026-08-19) |
 | Host an Event inquiry form (Netlify Forms) | 🟢 Deployed and registered — confirmed directly via Netlify's Forms API (`host-event-inquiry`, correct field schema: name/organization/email/phone/event-type/group-size/dates/message/honeypot); **0 submissions to date**, so the full round-trip hasn't actually been exercised yet |
-| Visit inquiry form + WhatsApp CTA (Netlify Forms) | ✅ Live and verified — confirmed via Netlify's Forms API (`visit-inquiry`), **1 real submission recorded** (2026-08-04); replaces the "Book via Linger" redirect on `/visit/camping`, `/visit/day-visit`, `/visit/trekking-trails` |
+| Visit inquiry form + WhatsApp CTA (Netlify Forms) | ✅ Live and verified — confirmed via Netlify's Forms API (`visit-inquiry`), **1 real submission recorded** (2026-08-04); replaces the "Book via Linger" redirect on `/visit/day-visit`, `/visit/trekking-trails` |
 | Event interest widget + counter (Netlify Function, Blobs, Forms) | ✅ Live — "Want this to happen again?" on past event pages (`/events/<slug>`), public count via `/api/event-interest` + Netlify Blobs, optional-email entries via Netlify Forms; verified `/api/event-interest` responds live in production |
 | Google Analytics (GA4) | ✅ Live — `G-795FTPB47P`, loaded site-wide from `BaseLayout.astro`, skipped on localhost, consent-gated via `CookieConsent.astro` and `/privacy`. Was silently broken 2026-08-21 to 2026-09-19: CSP allowlisted the wrong collect domain, then (2026-09-17) a wildcard that didn't cover the bare apex domain the real hit lands on - fixed and verified for real this time (triggered a `securitypolicyviolation` DOM event against production to confirm zero remaining blocks) |
 | Microsoft Clarity | ✅ Live — deployed, tag firing (script tag, bundle, and collect beacon confirmed unblocked under the `*.clarity.ms` CSP wildcard), same consent gate as GA. Project id `xttq21yf39`, reusing the one Bing Webmaster Tools had already auto-provisioned. The `contact@tvc.farm` dashboard sign-in issue (see below) is resolved as of 2026-09-21 — sign-in confirmed working |

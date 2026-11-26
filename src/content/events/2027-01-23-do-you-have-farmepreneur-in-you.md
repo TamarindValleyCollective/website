@@ -13,7 +13,7 @@ shareImageWidth: 1080
 shareImageHeight: 1350
 organizer: "Ramesh Agarwal & Venky Ramachandran"
 tags: ["workshop", "farming", "overnight"]
-draft: false
+draft: true
 price:
   - amount: "₹6,000"
     label: "per participant, includes shared tent stay, food and all activities"
@@ -29,7 +29,6 @@ bookingQuestions:
   - id: "why-farmerpreneur"
     label: "Why do you want to become a farmerpreneur?"
     type: "text"
-stayTypes: ["malabar-hut", "banyan-hut", "bamboo-hut", "portable-tent"]
 ---
 
 **Do you have farmepreneur in you? Farmer + entrepreneur — it takes economics, behavioural science and spirituality, not just land.**

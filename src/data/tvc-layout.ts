@@ -18,12 +18,10 @@ export interface LayoutFeature {
 }
 
 export const TVC_LAYOUT: LayoutFeature[] = [
-  { name: 'Camping Ground', category: 'structures', type: 'polygon', coords: [[12.3528487, 77.6460709], [12.3529118, 77.6462135], [12.3530709, 77.646232], [12.3531036, 77.6462172], [12.3531253, 77.646151], [12.3531163, 77.646082], [12.3528487, 77.6460709]] },
   { name: 'Lunch Hut', category: 'structures', type: 'point', coords: [12.3523516, 77.6456526] },
   { name: 'New Lunch Hut', category: 'structures', type: 'point', coords: [12.3528483, 77.6463631] },
   { name: 'Store Room (Mud Hut)', category: 'structures', type: 'point', coords: [12.3520697, 77.6454005] },
   { name: 'Tank & Bathroom', category: 'structures', type: 'point', coords: [12.3518388, 77.645215] },
-  { name: 'Bamboo Huts', category: 'structures', type: 'point', coords: [12.3531713, 77.6461396] },
   { name: 'Well', category: 'water', type: 'point', coords: [12.3513887, 77.6450587] },
   { name: 'Staff Quarters 1', category: 'housing', type: 'point', coords: [12.3510861, 77.6464874] },
   { name: 'Cow Shed', category: 'structures', type: 'point', coords: [12.3510503, 77.6461932] },
@@ -51,12 +49,9 @@ export const TVC_LAYOUT: LayoutFeature[] = [
   { name: 'Tamarind Valley Collective (TVC)', category: 'landmark', type: 'point', coords: [12.3507391, 77.6472574] },
   { name: 'BSNL Tower', category: 'infrastructure', type: 'point', coords: [12.3511976, 77.6408699] },
   { name: 'Temple', category: 'structures', type: 'point', coords: [12.3507417, 77.6412991] },
-  { name: 'Lower Camp Deck (Malabar)', category: 'structures', type: 'point', coords: [12.3529347, 77.6459735] },
-  { name: 'Upper Camp Deck (Banyan)', category: 'structures', type: 'point', coords: [12.3530814, 77.6465797] },
   { name: 'Toilets', category: 'structures', type: 'point', coords: [12.3530267, 77.6464045] },
   { name: 'New Kitchen', category: 'structures', type: 'point', coords: [12.3527162, 77.6463791] },
   { name: 'Kaveri-1 (~ 2.8 Acres)', category: 'farmPlots', type: 'polygon', coords: [[12.3497295, 77.6456436], [12.3493614, 77.6456154], [12.34936, 77.6455015], [12.3493017, 77.6452983], [12.3491963, 77.6454867], [12.3491792, 77.6456168], [12.3490482, 77.6456168], [12.3489303, 77.6456489], [12.3487653, 77.6457214], [12.3487181, 77.6457428], [12.3486493, 77.6459536], [12.3486224, 77.6461911], [12.3490711, 77.6462279], [12.3491078, 77.6464098], [12.3494183, 77.6464149], [12.3494098, 77.6466172], [12.349396, 77.646796], [12.349704, 77.646871], [12.349981, 77.646965], [12.3501146, 77.6470196], [12.350112, 77.6468747], [12.3500806, 77.6467031], [12.3500229, 77.6465797], [12.3498972, 77.6465797], [12.349701, 77.646594], [12.3497059, 77.6463248], [12.3497164, 77.6461559], [12.3497374, 77.6459735], [12.3497399, 77.6458474], [12.3497426, 77.6457455], [12.3497295, 77.6456436]] },
-  { name: 'Bamboo Hut', category: 'structures', type: 'point', coords: [12.3496878, 77.6467808] },
   { name: 'Nursery', category: 'farmPlots', type: 'point', coords: [12.3488494, 77.6460271] },
   { name: 'Staff Quarters 2', category: 'housing', type: 'point', coords: [12.349688, 77.645685] },
   { name: 'Big Main Gate', category: 'infrastructure', type: 'point', coords: [12.34872, 77.645793] },

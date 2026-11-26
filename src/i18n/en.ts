@@ -26,7 +26,6 @@ export default {
     events: 'Events',
     visitTvc: 'Visit Us',
     dayVisit: 'Day Visit',
-    camping: 'Overnight Stay',
     hostAnEvent: 'Host an Event',
     trekkingTrails: 'Trekking Trails',
     howToReach: 'How to Reach',
@@ -53,7 +52,7 @@ export default {
     message: 'Message',
     sendInquiry: 'Send inquiry',
     sendEnquiry: 'Send enquiry',
-    // Used only by BookingInquiry.astro (camping/day-visit/trekking/event
+    // Used only by BookingInquiry.astro (day-visit/trekking/event
     // booking forms) - unlike the general-purpose sendInquiry/sendEnquiry
     // above, these forms are always a request to book a specific paid
     // slot, not an open-ended question, so the button should say so rather

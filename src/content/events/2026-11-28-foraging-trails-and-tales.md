@@ -12,7 +12,7 @@ shareImageWidth: 1080
 shareImageHeight: 1350
 organizer: "Foraging Trails & Tales"
 tags: ["workshop", "food", "foraging"]
-draft: false
+draft: true
 price:
   - amount: "₹2,500"
     label: "day visit, per person"

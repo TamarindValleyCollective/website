@@ -22,7 +22,7 @@ export interface SiteLink {
   key: string;
   href: string;
   // Sub-pages of this link (e.g. Ecosystem's Geography/Weather, Visit's
-  // Day Visit/Camping/...) - one level deep only. Rendered indented under
+  // Day Visit/Host an Event/...) - one level deep only. Rendered indented under
   // their parent in Nav's dropdown instead of as flat top-level siblings,
   // since they're genuinely children of that page's URL, not independent
   // sections in their own right.
@@ -39,7 +39,6 @@ export type NavSection =
 
 const VISIT_CHILDREN: SiteLink[] = [
   { label: 'Day Visit', key: 'dayVisit', href: '/visit/day-visit' },
-  { label: 'Overnight Stay', key: 'camping', href: '/visit/camping' },
   { label: 'Host an Event', key: 'hostAnEvent', href: '/visit/host-an-event' },
   { label: 'Trekking Trails', key: 'trekkingTrails', href: '/visit/trekking-trails' },
   { label: 'How to Reach', key: 'howToReach', href: '/visit/how-to-reach' },

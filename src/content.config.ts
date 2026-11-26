@@ -42,13 +42,6 @@ const events = defineCollection({
     shareImage: z.string().optional(),
     shareImageWidth: z.number().int().positive().optional(),
     shareImageHeight: z.number().int().positive().optional(),
-    // Shows the "Where you'll stay" and "Facilities" (toilets) galleries on an
-    // upcoming event's page, just above its booking form - the same blocks
-    // 3bs1h editions always get. List the accommodationTypes to show, by file
-    // slug (e.g. ["portable-tent", "bamboo-hut"]); the shared facilities always
-    // come with them. Omit for events with no stay, or ones that render their
-    // own (3bs1h). See _template.md.
-    stayTypes: z.array(z.string()).optional(),
     organizer: z.string().optional(),
     tags: z.array(z.string()).default([]),
     // Groups editions of the same recurring event under one visual identity
@@ -124,7 +117,7 @@ const events = defineCollection({
     // uses it; see RAZORPAY.md.
     razorpayReferenceId: z.string().optional(),
     // For an event sold in more than one option at different per-person prices
-    // (e.g. a day visit and an overnight stay). Each option is its own base
+    // (e.g. two ticket tiers or session choices). Each option is its own base
     // Payment Link, set up exactly as for razorpayReferenceId above, with its
     // own reference_id and its own notes.event (put the option in the title so
     // alerts, receipts and the payments dashboard say which one was booked).
@@ -237,50 +230,4 @@ const photos = defineCollection({
   }),
 });
 
-// Shared shape behind AccommodationGallery.astro's generic `items` prop
-// (name/description/optional-capacity/images/order) - used by both
-// collections below. `capacity` only means something for accommodationTypes
-// (facilities entries just omit it, e.g. toilets have no "sleeps N").
-const galleryItemSchema = z.object({
-  name: z.string(),
-  description: z.string(),
-  // Rough sleeping capacity, shown alongside the description - e.g. "Fits
-  // 2 adults" - not a hard booking constraint, just orientation for a
-  // guest browsing photos. Meaningless for `facilities` entries, so those
-  // just leave it unset.
-  capacity: z.string().optional(),
-  images: z.array(z.object({ src: z.string(), alt: z.string() })).min(1),
-  // Manual display order across the gallery/grid (ascending) - falls back
-  // to filename order when omitted, but explicit is clearer than relying
-  // on a handful of files staying alphabetically sorted forever.
-  order: z.number().int().optional(),
-});
-
-// Common, sitewide registry of TVC's physical accommodation structures
-// (Malabar Hut, Bamboo Hut, portable tent, etc.) with real photos - built
-// for the camping booking form (see AccommodationGallery.astro /
-// CampingView.astro) but deliberately not scoped to that one page, since the
-// same structures come up in prose on VisitView/HostAnEventView and in
-// booking-form packageOptions elsewhere (e.g. EventDetailView's 3bs1h
-// options) - any of those can pull this collection instead of re-describing
-// the same huts/tents from scratch. Names/descriptions stay English-only,
-// same as those existing packageOptions strings and event titles -
-// proper-noun-ish labels for a physical structure, not prose that needs
-// translating per locale.
-const accommodationTypes = defineCollection({
-  loader: glob({ pattern: '**/*.md', base: './src/content/accommodation-types' }),
-  schema: galleryItemSchema,
-});
-
-// Same gallery pattern as accommodationTypes, but for shared facilities
-// (toilets, the lunch hut, etc.) that aren't a bookable accommodation
-// option in their own right - kept out of accommodationTypes specifically
-// so a facility never accidentally shows up as a BookingInquiry
-// packageOptions choice (see CampingView.astro's
-// accommodationTypes.map(...) into packageOptions).
-const facilities = defineCollection({
-  loader: glob({ pattern: '**/*.md', base: './src/content/facilities' }),
-  schema: galleryItemSchema,
-});
-
-export const collections = { events, communityOutreach, partners, photos, accommodationTypes, facilities };
+export const collections = { events, communityOutreach, partners, photos };

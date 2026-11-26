@@ -33,11 +33,6 @@ export const WHATSAPP_QUICK_REPLIES: ReadonlyArray<QuickReply> = [
     text: 'Details about a day visit are here: https://tvc.farm/visit/day-visit',
   },
   {
-    label: 'Camping',
-    category: 'Visiting',
-    text: 'Details about camping are here: https://tvc.farm/visit/camping',
-  },
-  {
     label: 'Events',
     category: 'Events and membership',
     pinned: true,

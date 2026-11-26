@@ -25,7 +25,6 @@ export default {
     events: 'ಕಾರ್ಯಕ್ರಮಗಳು',
     visitTvc: 'ನಮ್ಮನ್ನು ಭೇಟಿ ಮಾಡಿ',
     dayVisit: 'ಒಂದು ದಿನದ ಭೇಟಿ',
-    camping: 'ರಾತ್ರಿ ವಾಸ್ತವ್ಯ',
     hostAnEvent: 'ಕಾರ್ಯಕ್ರಮ ಆಯೋಜಿಸಿ',
     trekkingTrails: 'ಚಾರಣ ಮಾರ್ಗಗಳು',
     howToReach: 'ತಲುಪುವುದು ಹೇಗೆ',

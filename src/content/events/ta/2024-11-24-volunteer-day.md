@@ -14,5 +14,3 @@ tags: ["தன்னார்வத் தொண்டு"]
 உங்கள் வீட்டில் வளரும் ஏதேனும் நாற்றுகள் இருந்தால், தயவுசெய்து அவற்றையும் கொண்டு வாருங்கள்.
 
 தயவுசெய்து இங்கே உங்கள் விவரங்களை பதிவு செய்யவும் [https://forms.gle/CpbMB8UJxtNSbf95A](https://l.facebook.com/l.php?u=https%3A%2F%2Fforms.gle%2FCpbMB8UJxtNSbf95A%3Ffbclid%3DIwZXh0bgNhZW0CMTAAAR0CPAcs0CARX3AN70HC7ZGPln4pPxkPzx4ekVLDC5Mrwnn7o8JwJXwHnZ8_aem_SNkBH5z5H3WcJHl77lnnsQ&h=AT1TAHhmp1Kx_Wcc3t0ZpDUiKcUsMhblb_i_14XLN79duehq5kS9vyEW-sykoY4CZg4wSjn5mn0itneFl3eOAMqzAR-Gkyidsc558hlf7-njAJCOlsbgYuO2Q3KSHMPg4XCUGAn6iTnJ_r-8Vmb0ziU&__tn__=q&c[0]=AT21v8Sq0g1XB53bY6XPzncEMTSvL2gqyoyQzz8L6EcyX0t4RtuwupsVaxNSc8jJbaIbZWYDIXmHV-jq9jcOBkILqJZgy5OIJfk9WwpmBcwOTAWorPL9ignwUgwVGvtwoVOuZhNjkZxjQvxWN4DKzCYgTj1PoZ-_XIN9sQ) இதனால் நாங்கள் முன்கூட்டியே திட்டமிடலாம்.
-
-நீங்கள் இரவு முகாமிடும் பயணத்தை பதிவு செய்ய விரும்பினால், தயவுசெய்து எங்கள் விருந்தோம்பல் கூட்டாளர் [stay@linger.in](mailto:stay@linger.in) ஐ தொடர்பு கொள்ளவும்

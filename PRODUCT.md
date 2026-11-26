@@ -25,7 +25,7 @@ into bookings and enquiries.
 ## Positioning
 
 A working, collectively-owned regenerative farm (not a resort or a single-owner retreat) that
-opens its land to camping, day visits, treks, and events, and documents its own ecosystem
+opens its land to day visits, treks, and events, and documents its own ecosystem
 (iNaturalist-backed biodiversity data) as evidence of the regeneration it claims.
 
 ## Operating Context
@@ -34,7 +34,7 @@ Static Astro site, prerendered at build time; content lives in Markdown content 
 (`events`, `partners`, `community-outreach`, `photos`), not a CMS or database. A few narrow
 serverless exceptions (Netlify Functions): the chat widget, the event-interest counter, the
 internal photo-pool dashboard, and the `/contact` and visit-inquiry forms' Sheets logging.
-Visit/camping/day-visit/trekking/host-an-event/membership/general enquiries all submit through
+Visit/day-visit/trekking/host-an-event/membership/general enquiries all submit through
 plain Netlify Forms (name, email, optional phone, message) with email notification to
 `contact@tvc.farm`, redirecting to a `/…/thanks` page — this is the durable pattern for any new
 enquiry surface, not a custom booking system. A "Friends of TVC" WhatsApp group is offered as a
