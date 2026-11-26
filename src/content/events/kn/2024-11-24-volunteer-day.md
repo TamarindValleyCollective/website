@@ -14,5 +14,3 @@ tags: ["ಸ್ವಯಂಸೇವೆ"]
 ನಿಮ್ಮ ಮನೆಯಲ್ಲಿ ಬೆಳೆಯುತ್ತಿರುವ ಯಾವುದೇ ಸಸಿಗಳಿದ್ದರೆ, ದಯವಿಟ್ಟು ಅವುಗಳನ್ನೂ ತನ್ನಿ.
 
 ದಯವಿಟ್ಟು ಇಲ್ಲಿ ನಿಮ್ಮ ವಿವರಗಳನ್ನು ನಮೂದಿಸಿ [https://forms.gle/CpbMB8UJxtNSbf95A](https://l.facebook.com/l.php?u=https%3A%2F%2Fforms.gle%2FCpbMB8UJxtNSbf95A%3Ffbclid%3DIwZXh0bgNhZW0CMTAAAR0CPAcs0CARX3AN70HC7ZGPln4pPxkPzx4ekVLDC5Mrwnn7o8JwJXwHnZ8_aem_SNkBH5z5H3WcJHl77lnnsQ&h=AT1TAHhmp1Kx_Wcc3t0ZpDUiKcUsMhblb_i_14XLN79duehq5kS9vyEW-sykoY4CZg4wSjn5mn0itneFl3eOAMqzAR-Gkyidsc558hlf7-njAJCOlsbgYuO2Q3KSHMPg4XCUGAn6iTnJ_r-8Vmb0ziU&__tn__=q&c[0]=AT21v8Sq0g1XB53bY6XPzncEMTSvL2gqyoyQzz8L6EcyX0t4RtuwupsVaxNSc8jJbaIbZWYDIXmHV-jq9jcOBkILqJZgy5OIJfk9WwpmBcwOTAWorPL9ignwUgwVGvtwoVOuZhNjkZxjQvxWN4DKzCYgTj1PoZ-_XIN9sQ) ಇದರಿಂದ ನಾವು ಮುಂಚಿತವಾಗಿ ಯೋಜಿಸಬಹುದು.
-
-ನೀವು ರಾತ್ರಿ ಕ್ಯಾಂಪಿಂಗ್ ಪ್ರವಾಸವನ್ನು ಬುಕ್ ಮಾಡಲು ಬಯಸಿದರೆ, ದಯವಿಟ್ಟು ನಮ್ಮ ಆತಿಥ್ಯ ಪಾಲುದಾರ [stay@linger.in](mailto:stay@linger.in) ಅನ್ನು ಸಂಪರ್ಕಿಸಿ

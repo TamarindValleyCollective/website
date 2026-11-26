@@ -4,7 +4,7 @@ import PageHero from '../PageHero.astro';
 import WhatsAppButton from '../WhatsAppButton.astro';
 import { getCollection } from 'astro:content';
 import { formatDateRange } from '../../utils/events';
-import { FARM_AREA_ACRES, NIGHT_SKY_BRIGHTNESS_UCD_M2 } from '../../data/site-facts';
+import { FARM_AREA_ACRES } from '../../data/site-facts';
 import { useTranslations, type Locale } from '../../i18n/utils';
 import { getRelativeLocaleUrl } from 'astro:i18n';
 import { organizationId } from '../../utils/schema';
@@ -16,7 +16,7 @@ interface Props {
 const { lang } = Astro.props;
 const t = useTranslations(lang);
 
-// Same visit-bookings line BookingInquiry.astro's camping/day-visit/
+// Same visit-bookings line BookingInquiry.astro's day-visit/
 // trekking forms already message (this page also lives under /visit/) -
 // this was the one booking form on the site with no WhatsApp fallback at
 // all, unlike every sibling form.
@@ -40,11 +40,11 @@ const content = {
   en: {
     pageTitle: 'Host Your Event at TVC',
     metaDescription:
-      'Bring your retreat, workshop, or camp to Tamarind Valley Collective — a 98-acre hillslope in the Melagiri Hills with some of the darkest skies around, on-site camping, and a track record hosting everything from biodiversity walks to a week-long computation retreat.',
+      'Bring your workshop, team outing, or day-long retreat to Tamarind Valley Collective — a 98-acre hillslope in the Melagiri Hills, with a track record hosting everything from biodiversity walks to deep-focus working sessions.',
     heroIntro:
-      '98 acres of hill country, some of the darkest skies around, and room to camp — the setting for team outings, workshops, retreats, and camps of every kind.',
+      '98 acres of hill country and room to gather — the setting for team outings, workshops, and day-long retreats.',
     whyHereHeading: 'Why here',
-    whyHereText1: `TVC is ${FARM_AREA_ACRES} acres of the Melagiri Hills, on a west-facing hillslope an hour or two outside Bangalore depending on where you're coming from — far enough to feel like a real break, close enough to reach for a weekend. The valley measures just ${NIGHT_SKY_BRIGHTNESS_UCD_M2} μcd/m² of artificial brightness, so on a clear night the stars and galaxies are bright and unmistakable — a real draw whether you're running a stargazing session or just want a group to disconnect for a few days.`,
+    whyHereText1: `TVC is ${FARM_AREA_ACRES} acres of the Melagiri Hills, on a west-facing hillslope an hour or two outside Bangalore depending on where you're coming from — far enough to feel like a real break, close enough to reach for a weekend.`,
     whyHereText2:
       "That disconnection is literal, not just a figure of speech: there's WiFi via BSNL, which should tell you all you need to know about its reliability, and power is grid-fed with a solar backup and a generator for the rare bad day. Bring a hotspot if your event genuinely needs guaranteed connectivity — otherwise, treat the unreliability as part of the pitch.",
     possibleHeading: "What's possible here",
@@ -54,16 +54,16 @@ const content = {
       "Biodiversity walks, birding, foraging, wellness retreats, or a workshop on permaculture design, bamboo craft, or growing your own food — the land's food forest, water works, and forest edge are the whole point. Over 100 bird species have been recorded here.",
     track2Heading: 'Tech, maker & deep-focus retreats',
     track2Text:
-      'No open-plan office, no city noise, no reliable WiFi to half-pay-attention through — just a small group, a shared table, and days at a time to go deep on something hard.',
+      'No open-plan office, no city noise, no reliable WiFi to half-pay-attention through — just a small group, a shared table, and a full day to go deep on something hard.',
     track3Heading: 'Team offsites & anything else',
     track3Text:
-      "Team outings, brainstorming sessions, leadership programs — facilitators from the community are available on request. Or something we haven't listed here: if your event needs a quiet, off-grid setting for a few days, tell us about it and we'll work out whether it fits.",
+      "Team outings, brainstorming sessions, leadership programs — facilitators from the community are available on request. Or something we haven't listed here: if your event needs a quiet, off-grid setting for a day, tell us about it and we'll work out whether it fits.",
     proofLabel: 'Proof it works:',
     whatsHereHeading: "What's here",
     whatsHereText1:
-      "Tented accommodation across the Malabar hut (two tents, each fitting up to 3 adults), the Banyan hut (one tent + deck), two bamboo huts, and dome tents — the site accommodates up to 22 people overnight. There's a lunch hut next to the kitchen for group meals, sessions, or just sitting and talking. Food is freshly prepared and mostly vegetarian, sourced on-site as far as possible, with non-veg on request. Common toilets have western closets and showers (no hot water on tap, but the kitchen can heat some up).",
+      "There's a lunch hut next to the kitchen for group meals, sessions, or just sitting and talking. Food is freshly prepared and mostly vegetarian, sourced on-site as far as possible, with non-veg on request. Common toilets have western closets and showers (no hot water on tap, but the kitchen can heat some up).",
     whatsHereText2:
-      "Day-only events aren't capped at 20 — that limit is specifically the overnight camping capacity. Get in touch with your headcount and we'll work out what fits.",
+      "Get in touch with your headcount and we'll work out what fits.",
     getInTouchHeading: 'Get in touch',
     getInTouchHint: "Tell us about your event and we'll get back to you with availability and a quote.",
     organizationLabel: 'Organization (optional)',
@@ -80,11 +80,11 @@ const content = {
   kn: {
     pageTitle: 'TVC ನಲ್ಲಿ ನಿಮ್ಮ ಕಾರ್ಯಕ್ರಮವನ್ನು ಆಯೋಜಿಸಿ',
     metaDescription:
-      'ನಿಮ್ಮ ರಿಟ್ರೀಟ್, ಕಾರ್ಯಾಗಾರ ಅಥವಾ ಶಿಬಿರವನ್ನು ತಮರಿಂಡ್ ವ್ಯಾಲಿ ಕಲೆಕ್ಟಿವ್‌ಗೆ ತನ್ನಿ — ಮೇಲಗಿರಿ ಬೆಟ್ಟಗಳಲ್ಲಿ 98 ಎಕರೆಗಳ ಇಳಿಜಾರು, ಸುತ್ತಮುತ್ತಲಿನ ಅತ್ಯಂತ ಕತ್ತಲಾದ ಆಕಾಶ, ಸ್ಥಳದಲ್ಲೇ ಕ್ಯಾಂಪಿಂಗ್, ಮತ್ತು ಜೀವವೈವಿಧ್ಯ ನಡಿಗೆಗಳಿಂದ ಹಿಡಿದು ವಾರ-ಉದ್ದದ ಕಂಪ್ಯೂಟೇಶನ್ ರಿಟ್ರೀಟ್‌ವರೆಗೆ ಎಲ್ಲವನ್ನೂ ಆಯೋಜಿಸಿದ ಅನುಭವ.',
+      'ನಿಮ್ಮ ಕಾರ್ಯಾಗಾರ, ತಂಡದ ಪ್ರವಾಸ ಅಥವಾ ಒಂದು ದಿನದ ರಿಟ್ರೀಟ್ ಅನ್ನು ತಮರಿಂಡ್ ವ್ಯಾಲಿ ಕಲೆಕ್ಟಿವ್‌ಗೆ ತನ್ನಿ — ಮೇಲಗಿರಿ ಬೆಟ್ಟಗಳಲ್ಲಿ 98 ಎಕರೆಗಳ ಇಳಿಜಾರು, ಮತ್ತು ಜೀವವೈವಿಧ್ಯ ನಡಿಗೆಗಳಿಂದ ಹಿಡಿದು ಆಳವಾದ-ಗಮನದ ಕೆಲಸದ ಅಧಿವೇಶನಗಳವರೆಗೆ ಎಲ್ಲವನ್ನೂ ಆಯೋಜಿಸಿದ ಅನುಭವ.',
     heroIntro:
-      '98 ಎಕರೆ ಬೆಟ್ಟ ಪ್ರದೇಶ, ಸುತ್ತಮುತ್ತಲಿನ ಅತ್ಯಂತ ಕತ್ತಲಾದ ಆಕಾಶ, ಮತ್ತು ಕ್ಯಾಂಪ್ ಮಾಡಲು ಸ್ಥಳ — ತಂಡದ ಪ್ರವಾಸಗಳು, ಕಾರ್ಯಾಗಾರಗಳು, ರಿಟ್ರೀಟ್‌ಗಳು ಮತ್ತು ಎಲ್ಲ ರೀತಿಯ ಶಿಬಿರಗಳಿಗೆ ಸೂಕ್ತ ಸ್ಥಳ.',
+      '98 ಎಕರೆ ಬೆಟ್ಟ ಪ್ರದೇಶ ಮತ್ತು ಸೇರಲು ಸ್ಥಳ — ತಂಡದ ಪ್ರವಾಸಗಳು, ಕಾರ್ಯಾಗಾರಗಳು ಮತ್ತು ಒಂದು ದಿನದ ರಿಟ್ರೀಟ್‌ಗಳಿಗೆ ಸೂಕ್ತ ಸ್ಥಳ.',
     whyHereHeading: 'ಇಲ್ಲೇಕೆ',
-    whyHereText1: `TVC ಎಂಬುದು ಮೇಲಗಿರಿ ಬೆಟ್ಟಗಳ ${FARM_AREA_ACRES} ಎಕರೆ ಭೂಮಿ, ಬೆಂಗಳೂರಿನಿಂದ ಒಂದೆರಡು ಗಂಟೆಗಳ ದೂರದಲ್ಲಿ ಪಶ್ಚಿಮಾಭಿಮುಖ ಇಳಿಜಾರಿನಲ್ಲಿದೆ — ನಿಜವಾದ ಬ್ರೇಕ್ ಎನಿಸುವಷ್ಟು ದೂರ, ವಾರಾಂತ್ಯಕ್ಕೆ ತಲುಪುವಷ್ಟು ಹತ್ತಿರ. ಈ ಕಣಿವೆಯಲ್ಲಿ ಕೃತಕ ಬೆಳಕು ಕೇವಲ ${NIGHT_SKY_BRIGHTNESS_UCD_M2} μcd/m² ಇದೆ, ಹಾಗಾಗಿ ಸ್ಪಷ್ಟ ರಾತ್ರಿಯಲ್ಲಿ ನಕ್ಷತ್ರಗಳು ಮತ್ತು ಗ್ಯಾಲಕ್ಸಿಗಳು ಪ್ರಕಾಶಮಾನವಾಗಿ, ಸ್ಪಷ್ಟವಾಗಿ ಕಾಣುತ್ತವೆ — ನೀವು ನಕ್ಷತ್ರ ವೀಕ್ಷಣಾ ಅಧಿವೇಶನ ನಡೆಸುತ್ತಿರಲಿ ಅಥವಾ ಒಂದು ಗುಂಪು ಕೆಲವು ದಿನ ಸಂಪರ್ಕ ಕಡಿದುಕೊಳ್ಳಲು ಬಯಸುತ್ತಿರಲಿ, ಇದೊಂದು ನಿಜವಾದ ಆಕರ್ಷಣೆ.`,
+    whyHereText1: `TVC ಎಂಬುದು ಮೇಲಗಿರಿ ಬೆಟ್ಟಗಳ ${FARM_AREA_ACRES} ಎಕರೆ ಭೂಮಿ, ಬೆಂಗಳೂರಿನಿಂದ ಒಂದೆರಡು ಗಂಟೆಗಳ ದೂರದಲ್ಲಿ ಪಶ್ಚಿಮಾಭಿಮುಖ ಇಳಿಜಾರಿನಲ್ಲಿದೆ — ನಿಜವಾದ ಬ್ರೇಕ್ ಎನಿಸುವಷ್ಟು ದೂರ, ವಾರಾಂತ್ಯಕ್ಕೆ ತಲುಪುವಷ್ಟು ಹತ್ತಿರ.`,
     whyHereText2:
       'ಆ ಸಂಪರ್ಕ ಕಡಿತ ಕೇವಲ ಮಾತಿನ ಮಾತಲ್ಲ, ಅಕ್ಷರಶಃ ನಿಜ: ಇಲ್ಲಿ BSNL ಮೂಲಕ ವೈಫೈ ಇದೆ, ಅದರ ವಿಶ್ವಾಸಾರ್ಹತೆಯ ಬಗ್ಗೆ ನಿಮಗೆ ಎಲ್ಲವೂ ತಿಳಿಸುತ್ತದೆ ಎಂಬ ಹೆಸರೇ, ಮತ್ತು ವಿದ್ಯುತ್ ಗ್ರಿಡ್‌ನಿಂದ ಪೂರೈಕೆಯಾಗುತ್ತದೆ, ಸೋಲಾರ್ ಬ್ಯಾಕಪ್ ಮತ್ತು ಅಪರೂಪದ ಕೆಟ್ಟ ದಿನಕ್ಕೆ ಜನರೇಟರ್ ಇದೆ. ನಿಮ್ಮ ಕಾರ್ಯಕ್ರಮಕ್ಕೆ ನಿಜವಾಗಿಯೂ ಖಚಿತ ಸಂಪರ್ಕ ಬೇಕಿದ್ದರೆ ಹಾಟ್‌ಸ್ಪಾಟ್ ತನ್ನಿ — ಇಲ್ಲದಿದ್ದರೆ, ಈ ಅನಿಶ್ಚಿತತೆಯನ್ನೇ ಆಕರ್ಷಣೆಯ ಭಾಗವಾಗಿ ಪರಿಗಣಿಸಿ.',
     possibleHeading: 'ಇಲ್ಲಿ ಏನೆಲ್ಲಾ ಸಾಧ್ಯ',
@@ -94,16 +94,16 @@ const content = {
       'ಜೀವವೈವಿಧ್ಯ ನಡಿಗೆಗಳು, ಪಕ್ಷಿ ವೀಕ್ಷಣೆ, ಆಹಾರ ಸಂಗ್ರಹಣೆ, ಸ್ವಾಸ್ಥ್ಯ ರಿಟ್ರೀಟ್‌ಗಳು, ಅಥವಾ ಪರ್ಮಾಕಲ್ಚರ್ ವಿನ್ಯಾಸ, ಬಿದಿರು ಕರಕುಶಲ ಅಥವಾ ಸ್ವಂತ ಆಹಾರ ಬೆಳೆಸುವ ಕುರಿತ ಕಾರ್ಯಾಗಾರ — ಭೂಮಿಯ ಆಹಾರ ಅರಣ್ಯ, ಜಲಕಾಮಗಾರಿಗಳು ಮತ್ತು ಅರಣ್ಯದಂಚು ಇದಕ್ಕೆ ಅಸಲಿ ಕಾರಣ. ಇಲ್ಲಿ 100ಕ್ಕೂ ಹೆಚ್ಚು ಪಕ್ಷಿ ಪ್ರಭೇದಗಳನ್ನು ದಾಖಲಿಸಲಾಗಿದೆ.',
     track2Heading: 'ತಂತ್ರಜ್ಞಾನ, ಮೇಕರ್ ಮತ್ತು ಆಳ-ಗಮನ ರಿಟ್ರೀಟ್‌ಗಳು',
     track2Text:
-      'ಓಪನ್-ಪ್ಲಾನ್ ಆಫೀಸ್ ಇಲ್ಲ, ನಗರದ ಗದ್ದಲವಿಲ್ಲ, ಅರೆಮನಸ್ಸಿನಿಂದ ಗಮನಿಸಬೇಕಾದ ವಿಶ್ವಾಸಾರ್ಹ ವೈಫೈ ಇಲ್ಲ — ಕೇವಲ ಒಂದು ಸಣ್ಣ ಗುಂಪು, ಹಂಚಿಕೆಯ ಮೇಜು, ಮತ್ತು ಕಷ್ಟದ ವಿಷಯದ ಆಳಕ್ಕೆ ಇಳಿಯಲು ಹಲವು ದಿನಗಳ ಸಮಯ.',
+      'ಓಪನ್-ಪ್ಲಾನ್ ಆಫೀಸ್ ಇಲ್ಲ, ನಗರದ ಗದ್ದಲವಿಲ್ಲ, ಅರೆಮನಸ್ಸಿನಿಂದ ಗಮನಿಸಬೇಕಾದ ವಿಶ್ವಾಸಾರ್ಹ ವೈಫೈ ಇಲ್ಲ — ಕೇವಲ ಒಂದು ಸಣ್ಣ ಗುಂಪು, ಹಂಚಿಕೆಯ ಮೇಜು, ಮತ್ತು ಕಷ್ಟದ ವಿಷಯದ ಆಳಕ್ಕೆ ಇಳಿಯಲು ಒಂದು ಪೂರ್ಣ ದಿನ.',
     track3Heading: 'ತಂಡದ ಆಫ್‌ಸೈಟ್‌ಗಳು ಮತ್ತು ಇತರೆ',
     track3Text:
       'ತಂಡದ ಪ್ರವಾಸಗಳು, ಚಿಂತನ-ಮಂಥನ ಅಧಿವೇಶನಗಳು, ನಾಯಕತ್ವ ಕಾರ್ಯಕ್ರಮಗಳು — ಸಮುದಾಯದ ಸೌಲಭ್ಯಕಾರರು ವಿನಂತಿಯ ಮೇರೆಗೆ ಲಭ್ಯರಿದ್ದಾರೆ. ಅಥವಾ ಇಲ್ಲಿ ಪಟ್ಟಿ ಮಾಡದ ಬೇರೇನಾದರೂ: ನಿಮ್ಮ ಕಾರ್ಯಕ್ರಮಕ್ಕೆ ಕೆಲವು ದಿನಗಳ ಶಾಂತ, ಆಫ್-ಗ್ರಿಡ್ ಸ್ಥಳ ಬೇಕಿದ್ದರೆ, ನಮಗೆ ತಿಳಿಸಿ, ಅದು ಸೂಕ್ತವೇ ಎಂದು ನಾವು ನಿರ್ಧರಿಸೋಣ.',
     proofLabel: 'ಇದು ಕಾರ್ಯನಿರ್ವಹಿಸುತ್ತದೆ ಎಂಬ ಪುರಾವೆ:',
     whatsHereHeading: 'ಇಲ್ಲಿ ಏನಿದೆ',
     whatsHereText1:
-      'ಮಲಬಾರ್ ಗುಡಿಸಲಿನಾದ್ಯಂತ (ಎರಡು ಟೆಂಟ್‌ಗಳು, ಪ್ರತಿಯೊಂದೂ 3 ವಯಸ್ಕರವರೆಗೆ ಹಿಡಿಸುತ್ತದೆ), ಬನ್ಯನ್ ಗುಡಿಸಲು (ಒಂದು ಟೆಂಟ್ + ಡೆಕ್), ಎರಡು ಬಿದಿರು ಗುಡಿಸಲುಗಳು, ಮತ್ತು ಡೋಮ್ ಟೆಂಟ್‌ಗಳಲ್ಲಿ ಟೆಂಟ್ ವಸತಿ — ಈ ಸ್ಥಳ ರಾತ್ರಿ ಉಳಿಯಲು 22 ಜನರವರೆಗೆ ಅವಕಾಶ ನೀಡುತ್ತದೆ. ಅಡುಗೆಮನೆಯ ಪಕ್ಕದಲ್ಲಿ ಗುಂಪು ಊಟ, ಅಧಿವೇಶನ, ಅಥವಾ ಬರೀ ಕುಳಿತು ಮಾತನಾಡಲು ಒಂದು ಲಂಚ್ ಹಟ್ ಇದೆ. ಆಹಾರವನ್ನು ತಾಜಾವಾಗಿ ತಯಾರಿಸಲಾಗುತ್ತದೆ, ಹೆಚ್ಚಾಗಿ ಸಸ್ಯಾಹಾರಿ, ಸಾಧ್ಯವಾದಷ್ಟು ಸ್ಥಳದಲ್ಲೇ ಸಂಗ್ರಹಿಸಲಾಗುತ್ತದೆ, ಮಾಂಸಾಹಾರ ಬೇಕಿದ್ದರೆ ವಿನಂತಿಯ ಮೇರೆಗೆ ಲಭ್ಯ. ಸಾಮಾನ್ಯ ಶೌಚಾಲಯಗಳಲ್ಲಿ ವೆಸ್ಟರ್ನ್ ಕಮೋಡ್ ಮತ್ತು ಶವರ್‌ಗಳಿವೆ (ನಳ್ಳಿಯಲ್ಲಿ ಬಿಸಿನೀರು ಇಲ್ಲ, ಆದರೆ ಅಡುಗೆಮನೆಯಲ್ಲಿ ಸ್ವಲ್ಪ ಬಿಸಿ ಮಾಡಿಕೊಡಬಹುದು).',
+      'ಅಡುಗೆಮನೆಯ ಪಕ್ಕದಲ್ಲಿ ಗುಂಪು ಊಟ, ಅಧಿವೇಶನ, ಅಥವಾ ಬರೀ ಕುಳಿತು ಮಾತನಾಡಲು ಒಂದು ಲಂಚ್ ಹಟ್ ಇದೆ. ಆಹಾರವನ್ನು ತಾಜಾವಾಗಿ ತಯಾರಿಸಲಾಗುತ್ತದೆ, ಹೆಚ್ಚಾಗಿ ಸಸ್ಯಾಹಾರಿ, ಸಾಧ್ಯವಾದಷ್ಟು ಸ್ಥಳದಲ್ಲೇ ಸಂಗ್ರಹಿಸಲಾಗುತ್ತದೆ, ಮಾಂಸಾಹಾರ ಬೇಕಿದ್ದರೆ ವಿನಂತಿಯ ಮೇರೆಗೆ ಲಭ್ಯ. ಸಾಮಾನ್ಯ ಶೌಚಾಲಯಗಳಲ್ಲಿ ವೆಸ್ಟರ್ನ್ ಕಮೋಡ್ ಮತ್ತು ಶವರ್‌ಗಳಿವೆ (ನಳ್ಳಿಯಲ್ಲಿ ಬಿಸಿನೀರು ಇಲ್ಲ, ಆದರೆ ಅಡುಗೆಮನೆಯಲ್ಲಿ ಸ್ವಲ್ಪ ಬಿಸಿ ಮಾಡಿಕೊಡಬಹುದು).',
     whatsHereText2:
-      'ಹಗಲು-ಮಾತ್ರದ ಕಾರ್ಯಕ್ರಮಗಳಿಗೆ 20ರ ಮಿತಿ ಇಲ್ಲ — ಆ ಮಿತಿ ನಿರ್ದಿಷ್ಟವಾಗಿ ರಾತ್ರಿ ಕ್ಯಾಂಪಿಂಗ್ ಸಾಮರ್ಥ್ಯಕ್ಕೆ ಸಂಬಂಧಿಸಿದ್ದು. ನಿಮ್ಮ ಜನಸಂಖ್ಯೆಯೊಂದಿಗೆ ನಮ್ಮನ್ನು ಸಂಪರ್ಕಿಸಿ, ಏನು ಸೂಕ್ತ ಎಂದು ನಾವು ನಿರ್ಧರಿಸೋಣ.',
+      'ನಿಮ್ಮ ಜನಸಂಖ್ಯೆಯೊಂದಿಗೆ ನಮ್ಮನ್ನು ಸಂಪರ್ಕಿಸಿ, ಏನು ಸೂಕ್ತ ಎಂದು ನಾವು ನಿರ್ಧರಿಸೋಣ.',
     getInTouchHeading: 'ನಮ್ಮನ್ನು ಸಂಪರ್ಕಿಸಿ',
     getInTouchHint: 'ನಿಮ್ಮ ಕಾರ್ಯಕ್ರಮದ ಬಗ್ಗೆ ನಮಗೆ ತಿಳಿಸಿ, ಲಭ್ಯತೆ ಮತ್ತು ಉಲ್ಲೇಖದೊಂದಿಗೆ ನಾವು ನಿಮ್ಮನ್ನು ಸಂಪರ್ಕಿಸುತ್ತೇವೆ.',
     organizationLabel: 'ಸಂಸ್ಥೆ (ಐಚ್ಛಿಕ)',
@@ -120,11 +120,11 @@ const content = {
   ta: {
     pageTitle: 'TVC-யில் உங்கள் நிகழ்வை நடத்துங்கள்',
     metaDescription:
-      'உங்கள் ரிட்ரீட், பட்டறை அல்லது முகாமை டமரிண்ட் வேலி கலெக்டிவுக்கு கொண்டு வாருங்கள் — மேலகிரி மலைகளில் 98 ஏக்கர் மலைச்சரிவு, சுற்றியுள்ள மிக இருண்ட வானம், இடத்திலேயே முகாமிடும் வசதி, மற்றும் பல்லுயிர் நடைப்பயணங்கள் முதல் ஒரு வார கம்ப்யூடேஷன் ரிட்ரீட் வரை அனைத்தையும் நடத்திய அனுபவம்.',
+      'உங்கள் பட்டறை, குழு உல்லாசப் பயணம் அல்லது ஒரு நாள் ரிட்ரீட்டை டமரிண்ட் வேலி கலெக்டிவுக்கு கொண்டு வாருங்கள் — மேலகிரி மலைகளில் 98 ஏக்கர் மலைச்சரிவு, மற்றும் பல்லுயிர் நடைப்பயணங்கள் முதல் ஆழ்-கவன பணி அமர்வுகள் வரை அனைத்தையும் நடத்திய அனுபவம்.',
     heroIntro:
-      '98 ஏக்கர் மலை நாடு, சுற்றியுள்ள மிக இருண்ட வானம், மற்றும் முகாமிட இடம் — குழு உல்லாசப் பயணங்கள், பட்டறைகள், ரிட்ரீட்கள், மற்றும் அனைத்து வகை முகாம்களுக்கும் ஏற்ற இடம்.',
+      '98 ஏக்கர் மலை நாடு மற்றும் கூடுவதற்கு இடம் — குழு உல்லாசப் பயணங்கள், பட்டறைகள், மற்றும் ஒரு நாள் ரிட்ரீட்களுக்கு ஏற்ற இடம்.',
     whyHereHeading: 'ஏன் இங்கே',
-    whyHereText1: `TVC என்பது மேலகிரி மலைகளின் ${FARM_AREA_ACRES} ஏக்கர் நிலம், நீங்கள் எங்கிருந்து வருகிறீர்கள் என்பதைப் பொறுத்து பெங்களூருவிலிருந்து ஒன்று அல்லது இரண்டு மணி நேரத் தொலைவில் மேற்கு நோக்கிய மலைச்சரிவில் அமைந்துள்ளது — ஒரு உண்மையான இடைவெளியாக உணரும் அளவுக்கு தொலைவிலும், வார இறுதியில் சென்றடையக்கூடிய அளவுக்கு அருகிலும். இந்த பள்ளத்தாக்கில் செயற்கை வெளிச்சம் வெறும் ${NIGHT_SKY_BRIGHTNESS_UCD_M2} μcd/m² மட்டுமே, எனவே தெளிவான இரவில் நட்சத்திரங்களும் விண்மீன் திரள்களும் பிரகாசமாகவும் தெளிவாகவும் தெரிகின்றன — நீங்கள் நட்சத்திர பார்வை அமர்வை நடத்தினாலும் சரி, ஒரு குழு சில நாட்கள் துண்டிக்கப்பட விரும்பினாலும் சரி, இது ஒரு உண்மையான ஈர்ப்பு.`,
+    whyHereText1: `TVC என்பது மேலகிரி மலைகளின் ${FARM_AREA_ACRES} ஏக்கர் நிலம், நீங்கள் எங்கிருந்து வருகிறீர்கள் என்பதைப் பொறுத்து பெங்களூருவிலிருந்து ஒன்று அல்லது இரண்டு மணி நேரத் தொலைவில் மேற்கு நோக்கிய மலைச்சரிவில் அமைந்துள்ளது — ஒரு உண்மையான இடைவெளியாக உணரும் அளவுக்கு தொலைவிலும், வார இறுதியில் சென்றடையக்கூடிய அளவுக்கு அருகிலும்.`,
     whyHereText2:
       'அந்த துண்டிப்பு வெறும் சொல் அல்ல, உண்மையிலேயே அப்படித்தான்: இங்கே BSNL மூலம் வைஃபை உள்ளது, அதன் நம்பகத்தன்மையைப் பற்றி அந்த பெயரே உங்களுக்குத் தேவையான அனைத்தையும் சொல்லிவிடும், மற்றும் மின்சாரம் கிரிட் மூலம் வழங்கப்படுகிறது, சோலார் பேக்அப் மற்றும் அரிதான மோசமான நாளுக்கு ஒரு ஜெனரேட்டரும் உள்ளது. உங்கள் நிகழ்வுக்கு உண்மையிலேயே உறுதியான இணைப்பு தேவைப்பட்டால் ஹாட்ஸ்பாட் கொண்டு வாருங்கள் — இல்லையெனில், இந்த நம்பகத்தன்மையின்மையையே ஈர்ப்பின் ஒரு பகுதியாகக் கருதுங்கள்.',
     possibleHeading: 'இங்கே என்னென்ன சாத்தியம்',
@@ -134,16 +134,16 @@ const content = {
       'பல்லுயிர் நடைப்பயணங்கள், பறவை பார்வையிடல், உணவு சேகரிப்பு, நல்வாழ்வு ரிட்ரீட்கள், அல்லது இயற்கை வேளாண்மை வடிவமைப்பு, மூங்கில் கைவினை அல்லது சொந்தமாக உணவு வளர்ப்பது பற்றிய பட்டறை — நிலத்தின் உணவுக் காடு, நீர் பணிகள் மற்றும் காட்டு எல்லை ஆகியவையே இதன் முழுப் பொருள். இங்கே 100க்கும் மேற்பட்ட பறவை இனங்கள் பதிவு செய்யப்பட்டுள்ளன.',
     track2Heading: 'தொழில்நுட்பம், மேக்கர் மற்றும் ஆழ்ந்த-கவனம் ரிட்ரீட்கள்',
     track2Text:
-      'திறந்த அலுவலகம் இல்லை, நகர இரைச்சல் இல்லை, பாதி கவனத்துடன் கடக்க வேண்டிய நம்பகமான வைஃபை இல்லை — வெறும் ஒரு சிறிய குழு, பகிரப்பட்ட மேசை, மற்றும் கடினமான ஒன்றில் ஆழமாக இறங்க பல நாட்கள்.',
+      'திறந்த அலுவலகம் இல்லை, நகர இரைச்சல் இல்லை, பாதி கவனத்துடன் கடக்க வேண்டிய நம்பகமான வைஃபை இல்லை — வெறும் ஒரு சிறிய குழு, பகிரப்பட்ட மேசை, மற்றும் கடினமான ஒன்றில் ஆழமாக இறங்க ஒரு முழு நாள்.',
     track3Heading: 'குழு ஆஃப்சைட்கள் மற்றும் மற்றவை',
     track3Text:
       'குழு உல்லாசப் பயணங்கள், சிந்தனை-மோதல் அமர்வுகள், தலைமைத்துவ திட்டங்கள் — சமூகத்தைச் சேர்ந்த வசதிகாரர்கள் கோரிக்கையின் பேரில் கிடைக்கிறார்கள். அல்லது இங்கே பட்டியலிடப்படாத வேறு ஏதேனும்: உங்கள் நிகழ்வுக்கு சில நாட்களுக்கு அமைதியான, ஆஃப்-கிரிட் இடம் தேவைப்பட்டால், எங்களிடம் சொல்லுங்கள், அது பொருந்துமா என்று நாங்கள் பார்ப்போம்.',
     proofLabel: 'இது செயல்படுகிறது என்பதற்கான சான்று:',
     whatsHereHeading: 'இங்கே என்ன இருக்கிறது',
     whatsHereText1:
-      'மலபார் குடிசை முழுவதும் (இரண்டு கூடாரங்கள், ஒவ்வொன்றும் 3 பெரியவர்கள் வரை கொள்ளும்), பன்யன் குடிசை (ஒரு கூடாரம் + தளம்), இரண்டு மூங்கில் குடிசைகள், மற்றும் டோம் கூடாரங்களில் கூடார தங்குமிடம் — இந்த இடம் இரவில் தங்க 22 பேர் வரை இடமளிக்கும். சமையலறைக்கு அடுத்து குழு உணவு, அமர்வுகள், அல்லது வெறுமனே அமர்ந்து பேசுவதற்கான ஒரு லஞ்ச் ஹட் உள்ளது. உணவு புதிதாகத் தயாரிக்கப்படுகிறது, பெரும்பாலும் சைவம், முடிந்தவரை இடத்திலேயே பெறப்படுகிறது, கோரிக்கையின் பேரில் அசைவமும் கிடைக்கும். பொது கழிவறைகளில் மேற்கத்திய கழிப்பறைகளும் குளியலறைகளும் உள்ளன (குழாயில் சூடு நீர் இல்லை, ஆனால் சமையலறையில் கொஞ்சம் சூடாக்கிக் கொடுக்க முடியும்).',
+      'சமையலறைக்கு அடுத்து குழு உணவு, அமர்வுகள், அல்லது வெறுமனே அமர்ந்து பேசுவதற்கான ஒரு லஞ்ச் ஹட் உள்ளது. உணவு புதிதாகத் தயாரிக்கப்படுகிறது, பெரும்பாலும் சைவம், முடிந்தவரை இடத்திலேயே பெறப்படுகிறது, கோரிக்கையின் பேரில் அசைவமும் கிடைக்கும். பொது கழிவறைகளில் மேற்கத்திய கழிப்பறைகளும் குளியலறைகளும் உள்ளன (குழாயில் சூடு நீர் இல்லை, ஆனால் சமையலறையில் கொஞ்சம் சூடாக்கிக் கொடுக்க முடியும்).',
     whatsHereText2:
-      'பகல்-நேர நிகழ்வுகளுக்கு 20 என்ற வரம்பு இல்லை — அந்த வரம்பு குறிப்பாக இரவு முகாமிடும் திறனுக்கு மட்டுமே. உங்கள் தலைவண்ணத்துடன் எங்களைத் தொடர்பு கொள்ளுங்கள், எது பொருந்தும் என்று நாங்கள் பார்ப்போம்.',
+      'உங்கள் தலைவண்ணத்துடன் எங்களைத் தொடர்பு கொள்ளுங்கள், எது பொருந்தும் என்று நாங்கள் பார்ப்போம்.',
     getInTouchHeading: 'எங்களைத் தொடர்பு கொள்ளுங்கள்',
     getInTouchHint: 'உங்கள் நிகழ்வைப் பற்றி எங்களிடம் சொல்லுங்கள், கிடைக்கும் தன்மை மற்றும் மதிப்பீட்டுடன் நாங்கள் உங்களைத் தொடர்பு கொள்வோம்.',
     organizationLabel: 'நிறுவனம் (விருப்பம்)',
@@ -161,7 +161,7 @@ const content = {
 
 const c = content[lang];
 
-// A bookable venue-for-hire, not a fixed-price product like Camping/Day
+// A bookable venue-for-hire, not a fixed-price product like Day
 // Visit (pricing here is quote-based per event) - Service is the schema.org
 // type for that, with areaServed left off since this isn't a service you
 // travel to elsewhere, it's the venue itself.

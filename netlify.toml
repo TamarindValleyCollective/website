@@ -418,10 +418,11 @@
   status = 301
 
 # The January 2027 workshop was renamed from "Why You Can Never Become a Farmer"; keep the old
-# URL (shared in early messages) working.
+# URL (shared in early messages) working. The workshop itself is unpublished for now (overnight
+# format, see the camping redirect below), so the old URL goes to the events list instead.
 [[redirects]]
   from = "/events/2027-01-23-why-you-can-never-become-a-farmer"
-  to = "/events/2027-01-23-do-you-have-farmepreneur-in-you"
+  to = "/events/"
   status = 301
 
 # 3Bs&1H editions moved from flat, date-prefixed URLs to a versioned series
@@ -642,6 +643,39 @@
 [[redirects]]
   from = "/stem-experiential-learning-classes.html"
   to = "/people/outreach/"
+  status = 301
+
+# Overnight stays are not offered while the forest department's query about
+# hospitality in the buffer zone is open. The Overnight Stay page was removed
+# (en/kn/ta); old links, search results and shared messages land on Visit.
+[[redirects]]
+  from = "/visit/camping"
+  to = "/visit/"
+  status = 301
+
+[[redirects]]
+  from = "/visit/camping/"
+  to = "/visit/"
+  status = 301
+
+[[redirects]]
+  from = "/kn/visit/camping"
+  to = "/kn/visit/"
+  status = 301
+
+[[redirects]]
+  from = "/kn/visit/camping/"
+  to = "/kn/visit/"
+  status = 301
+
+[[redirects]]
+  from = "/ta/visit/camping"
+  to = "/ta/visit/"
+  status = 301
+
+[[redirects]]
+  from = "/ta/visit/camping/"
+  to = "/ta/visit/"
   status = 301
 
 # Linger was the old external booking partner, replaced by TVC's own

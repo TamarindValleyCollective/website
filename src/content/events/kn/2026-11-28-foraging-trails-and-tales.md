@@ -11,7 +11,7 @@ shareImageWidth: 1080
 shareImageHeight: 1350
 organizer: "Foraging Trails & Tales"
 tags: ["ಕಾರ್ಯಾಗಾರ", "ಆಹಾರ", "ಆಹಾರ ಸಂಗ್ರಹ"]
-draft: false
+draft: true
 price:
   - amount: "₹2,500"
     label: "ಒಂದು ದಿನದ ಭೇಟಿ, ಪ್ರತಿ ವ್ಯಕ್ತಿಗೆ"

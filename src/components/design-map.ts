@@ -30,7 +30,7 @@ const CATEGORY_COLORS: Record<LayoutCategory, string> = {
 
 const CATEGORY_LABELS: Record<'en' | 'kn' | 'ta', Record<LayoutCategory, string>> = {
   en: {
-    structures: 'Structures & camp',
+    structures: 'Structures',
     farmPlots: 'Farm plots',
     foodForest: 'Food forest',
     water: 'Water',
@@ -39,7 +39,7 @@ const CATEGORY_LABELS: Record<'en' | 'kn' | 'ta', Record<LayoutCategory, string>
     landmark: 'Landmarks',
   },
   kn: {
-    structures: 'ರಚನೆಗಳು ಮತ್ತು ಶಿಬಿರ',
+    structures: 'ರಚನೆಗಳು',
     farmPlots: 'ಕೃಷಿ ಪ್ಲಾಟ್‌ಗಳು',
     foodForest: 'ಆಹಾರ ಅರಣ್ಯ',
     water: 'ನೀರು',
@@ -48,7 +48,7 @@ const CATEGORY_LABELS: Record<'en' | 'kn' | 'ta', Record<LayoutCategory, string>
     landmark: 'ಹೆಗ್ಗುರುತುಗಳು',
   },
   ta: {
-    structures: 'கட்டமைப்புகள் & முகாம்',
+    structures: 'கட்டமைப்புகள்',
     farmPlots: 'பண்ணை நிலங்கள்',
     foodForest: 'உணவு காடு',
     water: 'நீர்',

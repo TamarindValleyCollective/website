@@ -14,7 +14,7 @@ const { lang, translated = true } = Astro.props;
 const t = useTranslations(lang);
 
 // Strip the current locale prefix so switching languages lands on the
-// equivalent page (e.g. /kn/visit/camping -> /ta/visit/camping) instead of
+// equivalent page (e.g. /kn/visit/day-visit -> /ta/visit/day-visit) instead of
 // bouncing back to the homepage.
 const barePath = translated ? stripLocalePrefix(Astro.url.pathname) : '/';
 const options = SUPPORTED_LOCALES.map((locale) => ({
