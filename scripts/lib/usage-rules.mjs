@@ -192,6 +192,13 @@ export function resendAutomaticIsFresh(snapshots, now = new Date()) {
   return age !== null && age <= RESEND_STALE_DAYS;
 }
 
+// [snapshot key, alert key, plural noun, unit] for the readings of today's Workers and D1 traffic.
+export const CLOUDFLARE_DAILY_METERS = [
+  ['cloudflare.workers_requests_daily', 'cloudflare:workers-requests', 'Workers requests', 'requests'],
+  ['cloudflare.d1_rows_read_daily', 'cloudflare:d1-rows-read', 'D1 rows read', 'rows read'],
+  ['cloudflare.d1_rows_written_daily', 'cloudflare:d1-rows-written', 'D1 rows written', 'rows written'],
+];
+
 // Cloudflare R2 storage is read from Cloudflare's GraphQL analytics API by usage-collect.mts.
 // Same pattern as Resend: a fresh automatic reading supersedes the typed-in
 // 'cloudflare.r2_storage_gb' meter; if it stops, the typed-in one carries on.
@@ -424,6 +431,10 @@ const ALERT_ACTIONS = {
   'resend:stale': 'Tell the developer: the Resend usage key may have been revoked or expired.',
   'cloudflare:r2-storage': 'The photo store is close to its free size. Ask the developer to remove or shrink unused photos, or accept a small monthly charge.',
   'cloudflare:r2-stale': 'Tell the developer: the Cloudflare analytics token this page uses may have expired.',
+  'cloudflare:workers-requests': 'The admin app is getting close to its free requests for today. Ask the developer to check for something calling it in a loop; the count restarts at midnight UTC.',
+  'cloudflare:d1-rows-read': 'The second-factor database is reading far more rows than expected today. Ask the developer to check for a runaway query; the count restarts at midnight UTC.',
+  'cloudflare:d1-rows-written': 'The second-factor database is writing far more rows than expected today. Ask the developer to check for a runaway write; the count restarts at midnight UTC.',
+  'cloudflare:workers-stale': 'Tell the developer: the Cloudflare analytics token this page uses may have expired, or lacks permission to read Workers and D1.',
   'manual:netlify.credits_remaining': 'Check Netlify → Team → Billing and usage, and merge changes to the main branch less often: each merge costs 15 credits.',
   'manual:supabase.egress_gb': 'Egress is data the database sends out. If it keeps climbing, tell the developer; if it is a one-off spike, no action is needed.',
 };
@@ -614,6 +625,19 @@ export function evaluateAlerts({ now = new Date(), daily = [], snapshots: rawSna
     } else if (isPositiveNumber(Number(r2.limit_value))) {
       const gb = (b) => `${(Number(b) / 1e9).toFixed(2)} GB`;
       add('cloudflare:r2-storage', levelForUsed(Number(r2.value), Number(r2.limit_value)), 'cloudflare', `Cloudflare R2 storage is at ${pct(Number(r2.value) / Number(r2.limit_value))} of the free allowance`, `${gb(r2.value)} of ${gb(r2.limit_value)} used, read from Cloudflare ${utcDay(new Date(r2.captured_at))}. Past the free tier R2 storage is billed per GB-month.`);
+    }
+  }
+
+  // Cloudflare Workers requests and D1 rows, per UTC day: nearing today's free allowance, and a warning if the readings
+  // stop (once one has existed). A daily figure only means something while it is recent, so an old one is not judged.
+  for (const [key, alertKey, noun, what] of CLOUDFLARE_DAILY_METERS) {
+    const m = snapshots[key];
+    if (!m) continue;
+    if ((now.getTime() - new Date(m.captured_at).getTime()) / DAY_MS > R2_STALE_DAYS) {
+      add('cloudflare:workers-stale', 'warn', 'cloudflare', 'Cloudflare Workers and D1 data has stopped refreshing', `The last reading from Cloudflare's analytics API was on ${utcDay(new Date(m.captured_at))}. Check CLOUDFLARE_ANALYTICS_TOKEN (it may have expired, or may not be allowed to read Workers and D1) and the usage-collect logs.`);
+      break; // the three readings stop together; say so once
+    } else if (isPositiveNumber(Number(m.limit_value))) {
+      add(alertKey, levelForUsed(Number(m.value), Number(m.limit_value)), 'cloudflare', `Cloudflare ${noun} are at ${pct(Number(m.value) / Number(m.limit_value))} of today's free allowance`, `${Number(m.value).toLocaleString('en-US')} of ${Number(m.limit_value).toLocaleString('en-US')} ${what} so far on ${utcDay(new Date(m.captured_at))} (UTC), read from Cloudflare. The count restarts at midnight UTC.`);
     }
   }
 

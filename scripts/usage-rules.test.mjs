@@ -498,3 +498,24 @@ test('Supabase connections: warn at 70% / critical at 90% of the limit, quiet be
   assert.equal(at(45).level, 'warn');
   assert.equal(at(55).level, 'critical');
 });
+
+// ---- Cloudflare Workers and D1, per UTC day ----------------------------------------------------------------------
+const cfDaily = (value, limit_value, captured_at = '2026-10-10T06:00:00Z') => ({ value, limit_value, unit: 'requests', captured_at });
+const cfAlerts = (snapshots) => evaluateAlerts({ now: NOW, snapshots }).filter((a) => a.service === 'cloudflare');
+
+test('Workers requests and D1 rows warn at 70% and go critical at 90% of the day\'s free allowance', () => {
+  assert.deepEqual(cfAlerts({ 'cloudflare.workers_requests_daily': cfDaily(50_000, 100_000) }), []);
+  assert.equal(cfAlerts({ 'cloudflare.workers_requests_daily': cfDaily(75_000, 100_000) })[0].level, 'warn');
+  assert.equal(cfAlerts({ 'cloudflare.d1_rows_read_daily': cfDaily(4_600_000, 5_000_000) })[0].key, 'cloudflare:d1-rows-read');
+  assert.equal(cfAlerts({ 'cloudflare.d1_rows_written_daily': cfDaily(95_000, 100_000) })[0].level, 'critical');
+});
+
+test('stopped Workers and D1 readings give one warning, not one per meter', () => {
+  const old = '2026-10-05T00:00:00Z';
+  const alerts = cfAlerts({
+    'cloudflare.workers_requests_daily': cfDaily(99_000, 100_000, old),
+    'cloudflare.d1_rows_read_daily': cfDaily(1, 5_000_000, old),
+    'cloudflare.d1_rows_written_daily': cfDaily(1, 100_000, old),
+  });
+  assert.deepEqual(alerts.map((a) => a.key), ['cloudflare:workers-stale']);
+});
