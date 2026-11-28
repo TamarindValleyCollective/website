@@ -434,6 +434,8 @@ const ALERT_ACTIONS = {
   'cloudflare:workers-requests': 'The admin app is getting close to its free requests for today. Ask the developer to check for something calling it in a loop; the count restarts at midnight UTC.',
   'cloudflare:d1-rows-read': 'The second-factor database is reading far more rows than expected today. Ask the developer to check for a runaway query; the count restarts at midnight UTC.',
   'cloudflare:d1-rows-written': 'The second-factor database is writing far more rows than expected today. Ask the developer to check for a runaway write; the count restarts at midnight UTC.',
+  'cloudflare:d1-storage': 'Tell the developer: the D1 databases are close to the free 5 GB; look for a table that grows without bound.',
+  'cloudflare:d1-storage-stale': 'Tell the developer: the Cloudflare analytics token this page uses may have expired, or lacks permission to read D1.',
   'cloudflare:workers-stale': 'Tell the developer: the Cloudflare analytics token this page uses may have expired, or lacks permission to read Workers and D1.',
   'manual:netlify.credits_remaining': 'Check Netlify → Team → Billing and usage, and merge changes to the main branch less often: each merge costs 15 credits.',
   'manual:supabase.egress_gb': 'Egress is data the database sends out. If it keeps climbing, tell the developer; if it is a one-off spike, no action is needed.',
@@ -638,6 +640,18 @@ export function evaluateAlerts({ now = new Date(), daily = [], snapshots: rawSna
       break; // the three readings stop together; say so once
     } else if (isPositiveNumber(Number(m.limit_value))) {
       add(alertKey, levelForUsed(Number(m.value), Number(m.limit_value)), 'cloudflare', `Cloudflare ${noun} are at ${pct(Number(m.value) / Number(m.limit_value))} of today's free allowance`, `${Number(m.value).toLocaleString('en-US')} of ${Number(m.limit_value).toLocaleString('en-US')} ${what} so far on ${utcDay(new Date(m.captured_at))} (UTC), read from Cloudflare. The count restarts at midnight UTC.`);
+    }
+  }
+
+  // Cloudflare D1 storage, a level across every database: nearing the free 5 GB, and a warning if the reading stops (once
+  // one has existed). Its own stale warning, since it comes from a different dataset than the daily counts above.
+  const d1Storage = snapshots['cloudflare.d1_storage_bytes'];
+  if (d1Storage) {
+    if ((now.getTime() - new Date(d1Storage.captured_at).getTime()) / DAY_MS > R2_STALE_DAYS) {
+      add('cloudflare:d1-storage-stale', 'warn', 'cloudflare', 'Cloudflare D1 storage data has stopped refreshing', `The last reading from Cloudflare's analytics API was on ${utcDay(new Date(d1Storage.captured_at))}. Check CLOUDFLARE_ANALYTICS_TOKEN (it may have expired, or may not be allowed to read D1) and the usage-collect logs.`);
+    } else if (isPositiveNumber(Number(d1Storage.limit_value))) {
+      const gb = (b) => `${(Number(b) / 1e9).toFixed(2)} GB`;
+      add('cloudflare:d1-storage', levelForUsed(Number(d1Storage.value), Number(d1Storage.limit_value)), 'cloudflare', `Cloudflare D1 storage is at ${pct(Number(d1Storage.value) / Number(d1Storage.limit_value))} of the free allowance`, `${gb(d1Storage.value)} of ${gb(d1Storage.limit_value)} used across all databases, read from Cloudflare ${utcDay(new Date(d1Storage.captured_at))}. Past the free tier D1 storage is billed per GB-month.`);
     }
   }
 
