@@ -15,6 +15,7 @@
 // And Cloudflare R2 storage (current bytes across all buckets) from Cloudflare's GraphQL
 // analytics API, using a read-only token (Account Analytics: Read) in CLOUDFLARE_ANALYTICS_TOKEN
 // plus the non-secret CLOUDFLARE_ACCOUNT_ID. Without them the typed-in R2 reading carries on.
+// The same token also reads today's Workers requests and D1 rows read and written (the admin rebuild runs on both).
 //
 // And the number of open database connections (usage_db_connections(), migration 0033) against
 // the plan's max_connections, as an early warning that the Netlify functions are hogging the pool.
@@ -282,6 +283,65 @@ async function recordR2Storage(base: string): Promise<string> {
   }
 }
 
+// Workers and D1 free tiers, per UTC day (developers.cloudflare.com/workers/platform/pricing, /d1/platform/pricing; the
+// Cloudflare dashboard is the authority). Counted from 00:00 UTC to now, which is when Cloudflare resets them, so the
+// 00:00 run reads near zero and the 18:00 run is the day's last full picture.
+const WORKERS_FREE_REQUESTS_PER_DAY = 100_000;
+const D1_FREE_ROWS_READ_PER_DAY = 5_000_000;
+const D1_FREE_ROWS_WRITTEN_PER_DAY = 100_000;
+
+const WORKERS_D1_QUERY = `query WorkersD1($accountTag: string!, $start: Time!, $end: Time!) {
+  viewer { accounts(filter: { accountTag: $accountTag }) {
+    workersInvocationsAdaptive(limit: 1000, filter: { datetime_geq: $start, datetime_leq: $end }) {
+      sum { requests errors }
+      dimensions { scriptName }
+    }
+    d1AnalyticsAdaptiveGroups(limit: 1000, filter: { datetime_geq: $start, datetime_leq: $end }) {
+      sum { rowsRead rowsWritten }
+      dimensions { databaseId }
+    }
+  } }
+}`;
+
+// Records today's Workers requests and D1 rows read and written, summed over every Worker and database on the account
+// (the free tiers are per account). Never throws: a failure here must not stop the other readings.
+async function recordWorkersD1Usage(base: string): Promise<string> {
+  const token = process.env.CLOUDFLARE_ANALYTICS_TOKEN;
+  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+  if (!token || !accountId) return 'skipped (no CLOUDFLARE_ANALYTICS_TOKEN / CLOUDFLARE_ACCOUNT_ID)';
+  try {
+    const now = new Date();
+    const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const res = await fetch('https://api.cloudflare.com/client/v4/graphql', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: WORKERS_D1_QUERY, variables: { accountTag: accountId, start: dayStart.toISOString(), end: now.toISOString() } }),
+    });
+    const body = await res.json().catch(() => null);
+    if (!res.ok || body?.errors?.length) throw new Error(`cloudflare graphql failed: ${res.status} ${JSON.stringify(body?.errors ?? null).slice(0, 300)}`);
+    const account = body?.data?.viewer?.accounts?.[0];
+    const workers: any[] = account?.workersInvocationsAdaptive ?? [];
+    const d1: any[] = account?.d1AnalyticsAdaptiveGroups ?? [];
+    const requests = workers.reduce((n, g) => n + Number(g.sum?.requests ?? 0), 0);
+    const errors = workers.reduce((n, g) => n + Number(g.sum?.errors ?? 0), 0);
+    const rowsRead = d1.reduce((n, g) => n + Number(g.sum?.rowsRead ?? 0), 0);
+    const rowsWritten = d1.reduce((n, g) => n + Number(g.sum?.rowsWritten ?? 0), 0);
+    for (const v of [requests, rowsRead, rowsWritten]) if (!Number.isFinite(v) || v < 0) throw new Error(`unexpected Cloudflare figure: ${v}`);
+    const day = dayStart.toISOString().slice(0, 10);
+    const rows = [
+      { service: 'cloudflare', metric: 'workers_requests_daily', value: requests, unit: 'requests', limit_value: WORKERS_FREE_REQUESTS_PER_DAY, detail: { source: 'cloudflare-graphql', day, workers: new Set(workers.map((g) => g.dimensions?.scriptName)).size, errors } },
+      { service: 'cloudflare', metric: 'd1_rows_read_daily', value: rowsRead, unit: 'rows', limit_value: D1_FREE_ROWS_READ_PER_DAY, detail: { source: 'cloudflare-graphql', day, databases: d1.length } },
+      { service: 'cloudflare', metric: 'd1_rows_written_daily', value: rowsWritten, unit: 'rows', limit_value: D1_FREE_ROWS_WRITTEN_PER_DAY, detail: { source: 'cloudflare-graphql', day, databases: d1.length } },
+    ];
+    const insertRes = await fetch(`${base}/usage_snapshots`, { method: 'POST', headers: restHeaders({ Prefer: 'return=minimal' }), body: JSON.stringify(rows) });
+    if (!insertRes.ok) throw new Error(`workers/d1 snapshot insert failed: ${insertRes.status} ${await insertRes.text()}`);
+    return `recorded ${requests} requests, ${rowsRead} rows read, ${rowsWritten} rows written`;
+  } catch (err) {
+    console.error('[usage-collect] workers/d1 usage failed', err);
+    return 'failed';
+  }
+}
+
 export default async (): Promise<Response> => {
   const base = `${process.env.SUPABASE_URL}/rest/v1`;
   try {
@@ -313,7 +373,8 @@ export default async (): Promise<Response> => {
     const netlifyActivity = await recordNetlifyActivity(base, netlifyPlan.account);
     const resend = await recordResendUsage(base);
     const r2 = await recordR2Storage(base);
-    return new Response(JSON.stringify({ ok: true, bytes, connections, tables, netlify: netlifyPlan.result, netlifyActivity, resend, r2 }), { status: 200 });
+    const workersD1 = await recordWorkersD1Usage(base);
+    return new Response(JSON.stringify({ ok: true, bytes, connections, tables, netlify: netlifyPlan.result, netlifyActivity, resend, r2, workersD1 }), { status: 200 });
   } catch (err) {
     console.error('[usage-collect] failed', err);
     return new Response('Failed to record usage snapshot', { status: 500 });
