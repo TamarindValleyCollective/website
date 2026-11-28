@@ -1,0 +1,26 @@
+# Fails when the lockfile contains a dependency with a known high or critical vulnerability (npm audit).
+# Runs on every pull request that touches the lockfile or manifest, and every Monday so a newly published
+# advisory shows up as a red run even when nobody is changing dependencies. Needs no secrets.
+# Dependabot security updates open the fix pull requests; each merge to main is a production deploy (15 Netlify
+# credits), so batch them rather than merging one by one.
+name: Dependency audit
+
+on:
+  pull_request:
+    paths: [package.json, package-lock.json]
+  schedule:
+    - cron: '23 6 * * 1' # Mondays, 06:23 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm audit --audit-level=high
