@@ -67,6 +67,14 @@ admin register, admin shell, admin alert. Existing identifiers keep their names 
 `tvc_*staff*` Meta template names, `needsStaff`); renaming those needs a migration and a real reason, not a
 wording pass. Migration comments and the change log are history and are left as written.
 
+## Files copied into the admin app
+
+27 shared helper files (listed in `tvc-admin-next`'s `vendor/website/FILES.txt`: the WhatsApp, Razorpay, notification and
+staff-access helpers in `netlify/functions/lib`, the `scripts/lib` files they import, and `src/data/site-facts.ts`) are
+copied byte-for-byte into the private `tvc-admin-next` repo. **Change them here as usual; do not rename, move or delete
+them without also updating that list.** A weekly check there fails when a copy differs, and its owner runs
+`npm run vendor:sync` to refresh it. See `docs/VENDORED.md` in that repo.
+
 ## Design language
 
 In any `.astro` or `.css` file: `--tvc-*` tokens only, never a raw hex. The full rules are in
