@@ -342,6 +342,53 @@ async function recordWorkersD1Usage(base: string): Promise<string> {
   }
 }
 
+// D1 storage: the free tier is 5 GB across the account's databases (developers.cloudflare.com/d1/platform/pricing; the
+// dashboard is the authority). A level, not a daily count, so it is read like R2 storage: the newest point per database.
+const D1_FREE_STORAGE_BYTES = 5_000_000_000;
+
+const D1_STORAGE_QUERY = `query D1Storage($accountTag: string!, $start: Time!, $end: Time!) {
+  viewer { accounts(filter: { accountTag: $accountTag }) {
+    d1StorageAdaptiveGroups(limit: 1000, filter: { datetime_geq: $start, datetime_leq: $end }, orderBy: [datetime_DESC]) {
+      max { databaseSizeBytes }
+      dimensions { datetime databaseId }
+    }
+  } }
+}`;
+
+// Records total D1 storage right now (the newest data point of each database, summed). Never throws.
+async function recordD1Storage(base: string): Promise<string> {
+  const token = process.env.CLOUDFLARE_ANALYTICS_TOKEN;
+  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+  if (!token || !accountId) return 'skipped (no CLOUDFLARE_ANALYTICS_TOKEN / CLOUDFLARE_ACCOUNT_ID)';
+  try {
+    const now = new Date();
+    const res = await fetch('https://api.cloudflare.com/client/v4/graphql', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: D1_STORAGE_QUERY, variables: { accountTag: accountId, start: new Date(now.getTime() - 3 * 86_400_000).toISOString(), end: now.toISOString() } }),
+    });
+    const body = await res.json().catch(() => null);
+    if (!res.ok || body?.errors?.length) throw new Error(`cloudflare graphql failed: ${res.status} ${JSON.stringify(body?.errors ?? null).slice(0, 300)}`);
+    const groups: any[] = body?.data?.viewer?.accounts?.[0]?.d1StorageAdaptiveGroups ?? [];
+    // Rows are newest first: keep each database's most recent data point and add them up.
+    const latest = new Map<string, number>();
+    for (const g of groups) if (!latest.has(g.dimensions.databaseId)) latest.set(g.dimensions.databaseId, Number(g.max?.databaseSizeBytes));
+    if (latest.size === 0) throw new Error('cloudflare returned no D1 storage data');
+    const bytes = [...latest.values()].reduce((n, v) => n + v, 0);
+    if (!Number.isFinite(bytes) || bytes < 0) throw new Error(`unexpected D1 size: ${bytes}`);
+    const insertRes = await fetch(`${base}/usage_snapshots`, {
+      method: 'POST',
+      headers: restHeaders({ Prefer: 'return=minimal' }),
+      body: JSON.stringify({ service: 'cloudflare', metric: 'd1_storage_bytes', value: bytes, unit: 'bytes', limit_value: D1_FREE_STORAGE_BYTES, detail: { source: 'cloudflare-graphql', databases: latest.size } }),
+    });
+    if (!insertRes.ok) throw new Error(`d1 storage snapshot insert failed: ${insertRes.status} ${await insertRes.text()}`);
+    return `recorded ${bytes} bytes`;
+  } catch (err) {
+    console.error('[usage-collect] d1 storage failed', err);
+    return 'failed';
+  }
+}
+
 export default async (): Promise<Response> => {
   const base = `${process.env.SUPABASE_URL}/rest/v1`;
   try {
@@ -374,7 +421,8 @@ export default async (): Promise<Response> => {
     const resend = await recordResendUsage(base);
     const r2 = await recordR2Storage(base);
     const workersD1 = await recordWorkersD1Usage(base);
-    return new Response(JSON.stringify({ ok: true, bytes, connections, tables, netlify: netlifyPlan.result, netlifyActivity, resend, r2, workersD1 }), { status: 200 });
+    const d1Storage = await recordD1Storage(base);
+    return new Response(JSON.stringify({ ok: true, bytes, connections, tables, netlify: netlifyPlan.result, netlifyActivity, resend, r2, workersD1, d1Storage }), { status: 200 });
   } catch (err) {
     console.error('[usage-collect] failed', err);
     return new Response('Failed to record usage snapshot', { status: 500 });

@@ -519,3 +519,16 @@ test('stopped Workers and D1 readings give one warning, not one per meter', () =
   });
   assert.deepEqual(alerts.map((a) => a.key), ['cloudflare:workers-stale']);
 });
+
+test('D1 storage warns at 70% and goes critical at 90% of the free 5 GB, quiet below', () => {
+  const at = (n, captured_at = '2026-10-10T06:00:00Z') => cfAlerts({ 'cloudflare.d1_storage_bytes': { value: n, limit_value: 5_000_000_000, unit: 'bytes', captured_at } });
+  assert.deepEqual(at(1_000_000_000), []);
+  assert.equal(at(3_600_000_000)[0].level, 'warn');
+  assert.equal(at(4_600_000_000)[0].level, 'critical');
+  assert.equal(at(4_600_000_000)[0].key, 'cloudflare:d1-storage');
+});
+
+test('a stopped D1 storage reading gives its own warning and is not judged', () => {
+  const alerts = cfAlerts({ 'cloudflare.d1_storage_bytes': { value: 4_900_000_000, limit_value: 5_000_000_000, unit: 'bytes', captured_at: '2026-10-05T00:00:00Z' } });
+  assert.deepEqual(alerts.map((a) => a.key), ['cloudflare:d1-storage-stale']);
+});
